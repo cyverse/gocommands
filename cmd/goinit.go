@@ -23,7 +23,30 @@ func Execute() error {
 }
 
 func processCommand(command *cobra.Command, args []string) {
-	commons.ProcessCommonFlags(command)
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "processCommand",
+	})
+
+	cont, err := commons.ProcessCommonFlags(command)
+	if err != nil {
+		logger.Error(err)
+	}
+
+	if !cont {
+		return
+	}
+
+	// handle local flags
+
+	account := commons.GetAccount()
+	if account == nil {
+		// empty
+		logger.Debugf("Account is not set yet")
+
+	} else {
+		logger.Printf("Connecting to %s:%d\n", account.Host, account.Port)
+	}
 }
 
 func main() {
