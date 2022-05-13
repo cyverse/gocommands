@@ -45,10 +45,20 @@ func processCommand(command *cobra.Command, args []string) error {
 		return err
 	}
 
-	err = listCurrentCollection()
-	if err != nil {
-		logger.Error(err)
-		return err
+	if len(args) == 0 {
+		err = listCurrentCollection()
+		if err != nil {
+			logger.Error(err)
+			return err
+		}
+	} else {
+		for _, coll := range args {
+			err = listColletion(coll)
+			if err != nil {
+				logger.Error(err)
+				return err
+			}
+		}
 	}
 
 	return nil
