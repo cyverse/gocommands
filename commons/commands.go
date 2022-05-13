@@ -1,21 +1,30 @@
 package commons
 
 import (
+	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
+	"syscall"
 
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsclient_icommands "github.com/cyverse/go-irodsclient/utils/icommands"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
+
+	"github.com/jedib0t/go-pretty/v6/table"
 )
 
 var (
-	account *irodsclient_types.IRODSAccount
+	environmentMgr *irodsclient_icommands.ICommandsEnvironmentManager
+	account        *irodsclient_types.IRODSAccount
 )
+
+func GetEnvironmentManager() *irodsclient_icommands.ICommandsEnvironmentManager {
+	return environmentMgr
+}
 
 func GetAccount() *irodsclient_types.IRODSAccount {
 	return account
@@ -76,15 +85,97 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		homePath, err := os.UserHomeDir()
 		if err == nil {
 			irodsPath := filepath.Join(homePath, ".irods")
-			err := loadConfigFile(command, irodsPath)
-			if err != nil {
-				logger.Error(err)
-				// ignore error
-			}
+			loadConfigFile(command, irodsPath)
+			//if err != nil {
+			//logger.Error(err)
+			// ignore error
+			//}
 		}
 	}
 
 	return true, nil // contiue
+}
+
+// InputMissingFields inputs missing fields
+func InputMissingFields() (bool, error) {
+	if environmentMgr == nil {
+		envMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManagerWithDefault()
+		if err != nil {
+			return false, err
+		}
+
+		environmentMgr = envMgr
+		account, err = envMgr.ToIRODSAccount()
+		if err != nil {
+			return false, err
+		}
+	}
+
+	updated := false
+
+	env := environmentMgr.Environment
+	if len(env.Host) == 0 {
+		fmt.Print("iRODS Host [data.cyverse.org]: ")
+		fmt.Scanln(&env.Host)
+		if len(env.Host) == 0 {
+			env.Host = "data.cyverse.org"
+		}
+
+		fmt.Print("iRODS Port [1247]: ")
+		fmt.Scanln(&env.Port)
+		if env.Port == 0 {
+			env.Port = 1247
+		}
+
+		updated = true
+	}
+
+	if len(env.Zone) == 0 {
+		fmt.Print("iRODS Zone [iplant]: ")
+		fmt.Scanln(&env.Zone)
+		if len(env.Zone) == 0 {
+			env.Zone = "iplant"
+		}
+
+		updated = true
+	}
+
+	for len(env.Username) == 0 {
+		fmt.Print("iRODS Username: ")
+		fmt.Scanln(&env.Username)
+		if len(env.Username) == 0 {
+			fmt.Println("Please provide username\n")
+		} else {
+			updated = true
+		}
+	}
+
+	password := environmentMgr.Password
+	for len(password) == 0 {
+		fmt.Print("iRODS Password: ")
+		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return false, err
+		}
+
+		fmt.Print("\n")
+		password = string(bytePassword)
+
+		if len(password) == 0 {
+			fmt.Println("Please provide password\n")
+		} else {
+			updated = true
+		}
+	}
+	environmentMgr.Password = password
+
+	newAccount, err := environmentMgr.ToIRODSAccount()
+	if err != nil {
+		return updated, err
+	}
+
+	account = newAccount
+	return updated, nil
 }
 
 func isICommandsEnvDir(filePath string) bool {
@@ -129,39 +220,34 @@ func loadConfigFile(command *cobra.Command, configFilePath string) error {
 
 	logger.Debugf("reading config file - %s", configFilePath)
 	// check if it is a file or a dir
-	st, err := os.Stat(configFilePath)
+	_, err := os.Stat(configFilePath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			// not exists
-			return err
-		}
+		return err
 	}
 
 	if isICommandsEnvDir(configFilePath) {
 		logger.Debugf("reading icommands environment file - %s", configFilePath)
-		loadedAccount, err := irodsclient_icommands.CreateAccountFromDir(configFilePath, 0)
+		iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager(configFilePath, 0)
 		if err != nil {
 			return err
 		}
 
-		account = loadedAccount
-		return nil
-	}
-
-	if !st.IsDir() {
-		logger.Debugf("reading gocommands config file - %s", configFilePath)
-		// file
-		// Read account configuration from YAML file
-		yamlBytes, err := ioutil.ReadFile(configFilePath)
+		err = iCommandsEnvMgr.Load()
 		if err != nil {
 			return err
 		}
 
-		loadedAccount, err := irodsclient_types.CreateIRODSAccountFromYAML(yamlBytes)
+		if iCommandsEnvMgr.Environment.LogLevel > 0 {
+			logLevel := log.Level(iCommandsEnvMgr.Environment.LogLevel / 2)
+			log.SetLevel(logLevel)
+		}
+
+		loadedAccount, err := iCommandsEnvMgr.ToIRODSAccount()
 		if err != nil {
 			return err
 		}
 
+		environmentMgr = iCommandsEnvMgr
 		account = loadedAccount
 		return nil
 	}
@@ -181,4 +267,35 @@ func printVersion(command *cobra.Command) error {
 
 func printHelp(command *cobra.Command) error {
 	return command.Usage()
+}
+
+func PrintAccount(command *cobra.Command) error {
+	envMgr := GetEnvironmentManager()
+	if envMgr == nil {
+		return errors.New("environment is not set")
+	}
+
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+
+	t.AppendRows([]table.Row{
+		{
+			"iRODS Host",
+			envMgr.Environment.Host,
+		},
+		{
+			"iRODS Port",
+			envMgr.Environment.Port,
+		},
+		{
+			"iRODS Zone",
+			envMgr.Environment.Zone,
+		},
+		{
+			"iRODS Username",
+			envMgr.Environment.Username,
+		},
+	}, table.RowConfig{})
+	t.Render()
+	return nil
 }
