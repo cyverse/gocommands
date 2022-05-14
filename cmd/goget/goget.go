@@ -12,7 +12,7 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "goget",
+	Use:   "goget [data-object1] [data-object2] [collection1] ... [local dir]",
 	Short: "Download iRODS data-objects or collections",
 	Long:  `This downloads iRODS data-objects or collections to the given local path.`,
 	RunE:  processCommand,
@@ -96,7 +96,7 @@ func getOne(filesystem *irodsclient_fs.FileSystem, objPath string, targetPath st
 	objPath = commons.MakeIRODSPath(cwd, objPath)
 	targetPath = commons.MakeLocalPath(targetPath)
 
-	entry, err := filesystem.StatFile(objPath)
+	entry, err := filesystem.Stat(objPath)
 	if err != nil {
 		return err
 	}
@@ -110,14 +110,18 @@ func getOne(filesystem *irodsclient_fs.FileSystem, objPath string, targetPath st
 			return err
 		}
 
-		// make parent dir
-		err = os.MkdirAll(filepath.Join(targetPath, entry.Name), 0666)
+		// make target dir
+		targetDir := filepath.Join(targetPath, entry.Name)
+		err = os.MkdirAll(targetDir, 0766)
 		if err != nil {
 			return err
 		}
 
 		for _, entryInDir := range entries {
-			return getOne(filesystem, entryInDir.Path, filepath.Join(targetPath, entryInDir.Name))
+			err = getOne(filesystem, entryInDir.Path, targetDir)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -131,28 +135,10 @@ func getDataObject(filesystem *irodsclient_fs.FileSystem, objPath string, target
 
 	logger.Debugf("downloading a data object %s to a local dir %s\n", objPath, targetPath)
 
-	entry, err := filesystem.StatFile(objPath)
-	if err != nil {
-		return err
-	}
-
-	threadNum := calcThreadNum(entry.Size)
-	err = filesystem.DownloadFileParallel(objPath, "", targetPath, threadNum)
+	err := filesystem.DownloadFileParallel(objPath, "", targetPath, 0)
 	if err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func calcThreadNum(size int64) int {
-	mb := int64(1024 * 1024)
-	if size < 5*mb {
-		return 1
-	} else if size < 40*mb {
-		return 2
-	} else if size < 100*mb {
-		return 3
-	}
-	return 4
 }

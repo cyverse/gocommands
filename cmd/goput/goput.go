@@ -12,8 +12,8 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "goput",
-	Short: "Upload iRODS data-objects or collections",
+	Use:   "goput [local file1] [local file2] [local dir1] ... [collection]",
+	Short: "Upload files or directories",
 	Long:  `This uploads files or directories to the given iRODS collection.`,
 	RunE:  processCommand,
 }
@@ -55,7 +55,7 @@ func processCommand(command *cobra.Command, args []string) error {
 	defer filesystem.Release()
 
 	if len(args) == 1 {
-		// download to current dir
+		// upload to current collection
 		err = putOne(filesystem, args[0], "./")
 		if err != nil {
 			logger.Error(err)
@@ -63,8 +63,8 @@ func processCommand(command *cobra.Command, args []string) error {
 		}
 	} else if len(args) >= 2 {
 		irodsPath := args[len(args)-1]
-		for _, objPath := range args[:len(args)-1] {
-			err = putOne(filesystem, objPath, irodsPath)
+		for _, filePath := range args[:len(args)-1] {
+			err = putOne(filesystem, filePath, irodsPath)
 			if err != nil {
 				logger.Error(err)
 				return err
@@ -91,69 +91,54 @@ func main() {
 	}
 }
 
-func putOne(filesystem *irodsclient_fs.FileSystem, objPath string, targetPath string) error {
-	objPath = commons.MakeLocalPath(objPath)
+func putOne(filesystem *irodsclient_fs.FileSystem, filePath string, targetPath string) error {
+	filePath = commons.MakeLocalPath(filePath)
 	cwd := commons.GetCWD()
 	targetPath = commons.MakeIRODSPath(cwd, targetPath)
 
-	st, err := os.Stat(objPath)
+	st, err := os.Stat(filePath)
 	if err != nil {
 		return err
 	}
 
 	if !st.IsDir() {
-		return putDataObject(filesystem, objPath, targetPath)
+		return putDataObject(filesystem, filePath, targetPath)
 	} else {
 		// dir
-		entries, err := os.ReadDir(objPath)
+		entries, err := os.ReadDir(filePath)
 		if err != nil {
 			return err
 		}
 
-		// make parent dir
-		err = filesystem.MakeDir(filepath.Join(targetPath, filepath.Base(objPath)), true)
+		// make target dir
+		targetDir := filepath.Join(targetPath, filepath.Base(filePath))
+		err = filesystem.MakeDir(targetDir, true)
 		if err != nil {
 			return err
 		}
 
 		for _, entryInDir := range entries {
-
-			return putOne(filesystem, filepath.Join(objPath, entryInDir.Name()), filepath.Join(targetPath, entryInDir.Name()))
+			err = putOne(filesystem, filepath.Join(filePath, entryInDir.Name()), targetDir)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
-func putDataObject(filesystem *irodsclient_fs.FileSystem, objPath string, targetPath string) error {
+func putDataObject(filesystem *irodsclient_fs.FileSystem, filePath string, targetPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "putDataObject",
 	})
 
-	logger.Debugf("uploading a file %s to an iRODS collection %s\n", objPath, targetPath)
+	logger.Debugf("uploading a file %s to an iRODS collection %s\n", filePath, targetPath)
 
-	st, err := os.Stat(objPath)
-	if err != nil {
-		return err
-	}
-
-	threadNum := calcThreadNum(st.Size())
-	err = filesystem.UploadFileParallel(objPath, "", targetPath, threadNum, true)
+	err := filesystem.UploadFileParallel(filePath, targetPath, "", 0, false)
 	if err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func calcThreadNum(size int64) int {
-	mb := int64(1024 * 1024)
-	if size < 5*mb {
-		return 1
-	} else if size < 40*mb {
-		return 2
-	} else if size < 100*mb {
-		return 3
-	}
-	return 4
 }

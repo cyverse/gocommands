@@ -12,7 +12,7 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "gols",
+	Use:   "gols [collection1] [collection2] ...",
 	Short: "List current iRODS collection",
 	Long:  `This lists data objects and collections in current iRODS collection.`,
 	RunE:  processCommand,

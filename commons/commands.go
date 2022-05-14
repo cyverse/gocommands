@@ -42,9 +42,10 @@ func GetCWD() string {
 }
 
 func SetCommonFlags(command *cobra.Command) {
-	command.Flags().StringP("config", "c", "", "config file (default is $HOME/.irods/irods_environment.json)")
+	command.Flags().StringP("config", "c", "", "Set config file (default is $HOME/.irods/irods_environment.json)")
 	command.Flags().BoolP("version", "v", false, "Print version")
 	command.Flags().BoolP("help", "h", false, "Print help")
+	command.Flags().BoolP("debug", "d", false, "Enable debug mode")
 }
 
 func ProcessCommonFlags(command *cobra.Command) (bool, error) {
@@ -52,6 +53,18 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		"package":  "main",
 		"function": "ProcessCommonFlags",
 	})
+
+	debugFlag := command.Flags().Lookup("debug")
+	if debugFlag != nil {
+		debug, err := strconv.ParseBool(debugFlag.Value.String())
+		if err != nil {
+			debug = false
+		}
+
+		if debug {
+			log.SetLevel(log.DebugLevel)
+		}
+	}
 
 	helpFlag := command.Flags().Lookup("help")
 	if helpFlag != nil {
