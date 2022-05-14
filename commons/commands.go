@@ -30,6 +30,17 @@ func GetAccount() *irodsclient_types.IRODSAccount {
 	return account
 }
 
+func GetCWD() string {
+	env := environmentMgr.Environment
+	currentWorkingDir := env.CurrentWorkingDir
+	if len(currentWorkingDir) == 0 {
+		// set new
+		currentWorkingDir = fmt.Sprintf("/%s/home/%s", env.Zone, env.Username)
+	}
+
+	return currentWorkingDir
+}
+
 func SetCommonFlags(command *cobra.Command) {
 	command.Flags().StringP("config", "c", "", "config file (default is $HOME/.irods/irods_environment.json)")
 	command.Flags().BoolP("version", "v", false, "Print version")

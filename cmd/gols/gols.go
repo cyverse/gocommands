@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/gocommands/commons"
@@ -45,15 +44,25 @@ func processCommand(command *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Create a file system
+	account := commons.GetAccount()
+
+	filesystem, err := irodsclient_fs.NewFileSystemWithDefault(account, "gocommands-ls")
+	if err != nil {
+		return err
+	}
+
+	defer filesystem.Release()
+
 	if len(args) == 0 {
-		err = listCurrentCollection()
+		err = listColletion(filesystem, ".")
 		if err != nil {
 			logger.Error(err)
 			return err
 		}
 	} else {
 		for _, coll := range args {
-			err = listColletion(coll)
+			err = listColletion(filesystem, coll)
 			if err != nil {
 				logger.Error(err)
 				return err
@@ -80,30 +89,16 @@ func main() {
 	}
 }
 
-func listCurrentCollection() error {
-	envMgr := commons.GetEnvironmentManager()
-	env := envMgr.Environment
-	currentWorkingDir := env.CurrentWorkingDir
-	if len(currentWorkingDir) == 0 {
-		// set new
-		currentWorkingDir = fmt.Sprintf("/%s/home/%s", env.Zone, env.Username)
-	}
+func listColletion(filesystem *irodsclient_fs.FileSystem, collectionPath string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "listColletion",
+	})
 
-	return listColletion(currentWorkingDir)
-}
+	cwd := commons.GetCWD()
+	collectionPath = commons.MakeIRODSPath(cwd, collectionPath)
 
-func listColletion(collectionPath string) error {
-	collectionPath = filepath.Clean(collectionPath)
-
-	// Create a file system
-	account := commons.GetAccount()
-
-	filesystem, err := irodsclient_fs.NewFileSystemWithDefault(account, "gocommands-ls")
-	if err != nil {
-		return err
-	}
-
-	defer filesystem.Release()
+	logger.Debugf("listing collection: %s\n", collectionPath)
 
 	entries, err := filesystem.List(collectionPath)
 	if err != nil {

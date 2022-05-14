@@ -14,3 +14,4 @@ build:
 	mkdir -p bin
 	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/goinit ./cmd/goinit/goinit.go
 	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/gols ./cmd/gols/gols.go
+	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/goget ./cmd/goget/goget.go
