@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
@@ -30,15 +31,48 @@ func GetAccount() *irodsclient_types.IRODSAccount {
 	return account
 }
 
-func GetCWD() string {
-	env := environmentMgr.Environment
+func getCWD(env *irodsclient_icommands.ICommandsEnvironment) string {
 	currentWorkingDir := env.CurrentWorkingDir
 	if len(currentWorkingDir) == 0 {
-		// set new
-		currentWorkingDir = fmt.Sprintf("/%s/home/%s", env.Zone, env.Username)
+		return ""
 	}
 
-	return currentWorkingDir
+	if !strings.HasPrefix(currentWorkingDir, "/") {
+		// relative path from home
+		currentWorkingDir = fmt.Sprintf("/%s/home/%s/%s", env.Zone, env.Username, currentWorkingDir)
+	}
+
+	return filepath.Clean(currentWorkingDir)
+}
+
+func GetCWD() string {
+	session := environmentMgr.Session
+	sessionPath := getCWD(session)
+
+	if len(sessionPath) > 0 {
+		return sessionPath
+	}
+
+	env := environmentMgr.Environment
+	envPath := getCWD(env)
+
+	if len(envPath) == 0 {
+		// set new
+		return fmt.Sprintf("/%s/home/%s", env.Zone, env.Username)
+	}
+	return envPath
+}
+
+func SetCWD(cwd string) {
+	env := environmentMgr.Environment
+	session := environmentMgr.Session
+	if !strings.HasPrefix(cwd, "/") {
+		// relative path from home
+		cwd = fmt.Sprintf("/%s/home/%s/%s", env.Zone, env.Username, cwd)
+	}
+
+	session.CurrentWorkingDir = filepath.Clean(cwd)
+	environmentMgr.SaveSession()
 }
 
 func SetCommonFlags(command *cobra.Command) {

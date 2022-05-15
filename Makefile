@@ -16,3 +16,5 @@ build:
 	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/gols ./cmd/gols/gols.go
 	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/goget ./cmd/goget/goget.go
 	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/goput ./cmd/goput/goput.go
+	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/gocd ./cmd/gocd/gocd.go
+	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/gopwd ./cmd/gopwd/gopwd.go
