@@ -18,3 +18,9 @@ build:
 	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/goput ./cmd/goput/goput.go
 	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/gocd ./cmd/gocd/gocd.go
 	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/gopwd ./cmd/gopwd/gopwd.go
+	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/gomv ./cmd/gomv/gomv.go
+	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/gocp ./cmd/gocp/gocp.go
+	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/gorm ./cmd/gorm/gorm.go
+	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/gormdir ./cmd/gormdir/gormdir.go
+	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/gomkdir ./cmd/gomkdir/gomkdir.go
+	

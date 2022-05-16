@@ -12,9 +12,9 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "gols [collection1] [collection2] ...",
-	Short: "List current iRODS collection",
-	Long:  `This lists data objects and collections in current iRODS collection.`,
+	Use:   "gormdir [collection1] [collection2] ...",
+	Short: "Remove iRODS collections",
+	Long:  `This removes iRODS collections.`,
 	RunE:  processCommand,
 }
 
@@ -47,26 +47,18 @@ func processCommand(command *cobra.Command, args []string) error {
 	// Create a file system
 	account := commons.GetAccount()
 
-	filesystem, err := irodsclient_fs.NewFileSystemWithDefault(account, "gocommands-ls")
+	filesystem, err := irodsclient_fs.NewFileSystemWithDefault(account, "gocommands-rmdir")
 	if err != nil {
 		return err
 	}
 
 	defer filesystem.Release()
 
-	if len(args) == 0 {
-		err = listColletion(filesystem, ".")
+	for _, targetPath := range args {
+		err = removeOne(filesystem, targetPath)
 		if err != nil {
 			logger.Error(err)
 			return err
-		}
-	} else {
-		for _, sourcePath := range args {
-			err = listColletion(filesystem, sourcePath)
-			if err != nil {
-				logger.Error(err)
-				return err
-			}
 		}
 	}
 
@@ -89,43 +81,30 @@ func main() {
 	}
 }
 
-func listColletion(filesystem *irodsclient_fs.FileSystem, collectionPath string) error {
+func removeOne(filesystem *irodsclient_fs.FileSystem, targetPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "listColletion",
+		"function": "removeOne",
 	})
 
 	cwd := commons.GetCWD()
-	collectionPath = commons.MakeIRODSPath(cwd, collectionPath)
+	targetPath = commons.MakeIRODSPath(cwd, targetPath)
 
-	logger.Debugf("listing collection: %s\n", collectionPath)
-
-	entries, err := filesystem.List(collectionPath)
+	sourceEntry, err := filesystem.Stat(targetPath)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("%s:\n", collectionPath)
-	objs := []*irodsclient_fs.Entry{}
-	colls := []*irodsclient_fs.Entry{}
-
-	for _, entry := range entries {
-		if entry.Type == irodsclient_fs.FileEntry {
-			objs = append(objs, entry)
-		} else {
-			// dir
-			colls = append(colls, entry)
+	if sourceEntry.Type == irodsclient_fs.FileEntry {
+		// file
+		return fmt.Errorf("%s is not a collection", targetPath)
+	} else {
+		// dir
+		logger.Debugf("removing a collection %s\n", targetPath)
+		err = filesystem.RemoveDir(targetPath, false, false)
+		if err != nil {
+			return err
 		}
-	}
-
-	// print data objects first
-	for _, entry := range objs {
-		fmt.Printf("  %s\n", entry.Name)
-	}
-
-	// print collections next
-	for _, entry := range colls {
-		fmt.Printf("  C- %s\n", entry.Path)
 	}
 	return nil
 }

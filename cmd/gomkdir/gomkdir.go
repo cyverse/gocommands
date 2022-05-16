@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"os"
+	"strconv"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/gocommands/commons"
@@ -12,9 +12,9 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "gols [collection1] [collection2] ...",
-	Short: "List current iRODS collection",
-	Long:  `This lists data objects and collections in current iRODS collection.`,
+	Use:   "gomkdir [collection1] [collection2] ...",
+	Short: "Make iRODS collections",
+	Long:  `This makes iRODS collections.`,
 	RunE:  processCommand,
 }
 
@@ -44,29 +44,30 @@ func processCommand(command *cobra.Command, args []string) error {
 		return err
 	}
 
+	parent := false
+	parentFlag := command.Flags().Lookup("parent")
+	if parentFlag != nil {
+		parent, err = strconv.ParseBool(parentFlag.Value.String())
+		if err != nil {
+			parent = false
+		}
+	}
+
 	// Create a file system
 	account := commons.GetAccount()
 
-	filesystem, err := irodsclient_fs.NewFileSystemWithDefault(account, "gocommands-ls")
+	filesystem, err := irodsclient_fs.NewFileSystemWithDefault(account, "gocommands-mkdir")
 	if err != nil {
 		return err
 	}
 
 	defer filesystem.Release()
 
-	if len(args) == 0 {
-		err = listColletion(filesystem, ".")
+	for _, targetPath := range args {
+		err = makeOne(filesystem, targetPath, parent)
 		if err != nil {
 			logger.Error(err)
 			return err
-		}
-	} else {
-		for _, sourcePath := range args {
-			err = listColletion(filesystem, sourcePath)
-			if err != nil {
-				logger.Error(err)
-				return err
-			}
 		}
 	}
 
@@ -81,6 +82,7 @@ func main() {
 
 	// attach common flags
 	commons.SetCommonFlags(rootCmd)
+	rootCmd.Flags().BoolP("parents", "p", false, "Make parent collections")
 
 	err := Execute()
 	if err != nil {
@@ -89,43 +91,19 @@ func main() {
 	}
 }
 
-func listColletion(filesystem *irodsclient_fs.FileSystem, collectionPath string) error {
+func makeOne(filesystem *irodsclient_fs.FileSystem, targetPath string, parent bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "listColletion",
+		"function": "makeOne",
 	})
 
 	cwd := commons.GetCWD()
-	collectionPath = commons.MakeIRODSPath(cwd, collectionPath)
+	targetPath = commons.MakeIRODSPath(cwd, targetPath)
 
-	logger.Debugf("listing collection: %s\n", collectionPath)
-
-	entries, err := filesystem.List(collectionPath)
+	logger.Debugf("making a collection %s\n", targetPath)
+	err := filesystem.MakeDir(targetPath, parent)
 	if err != nil {
 		return err
-	}
-
-	fmt.Printf("%s:\n", collectionPath)
-	objs := []*irodsclient_fs.Entry{}
-	colls := []*irodsclient_fs.Entry{}
-
-	for _, entry := range entries {
-		if entry.Type == irodsclient_fs.FileEntry {
-			objs = append(objs, entry)
-		} else {
-			// dir
-			colls = append(colls, entry)
-		}
-	}
-
-	// print data objects first
-	for _, entry := range objs {
-		fmt.Printf("  %s\n", entry.Name)
-	}
-
-	// print collections next
-	for _, entry := range colls {
-		fmt.Printf("  C- %s\n", entry.Path)
 	}
 	return nil
 }

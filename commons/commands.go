@@ -21,6 +21,8 @@ import (
 var (
 	environmentMgr *irodsclient_icommands.ICommandsEnvironmentManager
 	account        *irodsclient_types.IRODSAccount
+
+	resourceServer string
 )
 
 func GetEnvironmentManager() *irodsclient_icommands.ICommandsEnvironmentManager {
@@ -80,6 +82,7 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().BoolP("version", "v", false, "Print version")
 	command.Flags().BoolP("help", "h", false, "Print help")
 	command.Flags().BoolP("debug", "d", false, "Enable debug mode")
+	command.Flags().StringP("resource", "", "", "Set resource server")
 }
 
 func ProcessCommonFlags(command *cobra.Command) (bool, error) {
@@ -151,6 +154,12 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		}
 	}
 
+	resourceFlag := command.Flags().Lookup("resource")
+	if resourceFlag != nil {
+		// load to global variable
+		resourceServer = resourceFlag.Value.String()
+	}
+
 	return true, nil // contiue
 }
 
@@ -202,7 +211,8 @@ func InputMissingFields() (bool, error) {
 		fmt.Print("iRODS Username: ")
 		fmt.Scanln(&env.Username)
 		if len(env.Username) == 0 {
-			fmt.Println("Please provide username\n")
+			fmt.Println("Please provide username")
+			fmt.Println("")
 		} else {
 			updated = true
 		}
@@ -220,7 +230,8 @@ func InputMissingFields() (bool, error) {
 		password = string(bytePassword)
 
 		if len(password) == 0 {
-			fmt.Println("Please provide password\n")
+			fmt.Println("Please provide password")
+			fmt.Println("")
 		} else {
 			updated = true
 		}
@@ -230,6 +241,10 @@ func InputMissingFields() (bool, error) {
 	newAccount, err := environmentMgr.ToIRODSAccount()
 	if err != nil {
 		return updated, err
+	}
+
+	if len(resourceServer) > 0 {
+		newAccount.DefaultResource = resourceServer
 	}
 
 	account = newAccount

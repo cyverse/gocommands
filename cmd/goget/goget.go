@@ -62,9 +62,9 @@ func processCommand(command *cobra.Command, args []string) error {
 			return err
 		}
 	} else if len(args) >= 2 {
-		localPath := args[len(args)-1]
-		for _, objPath := range args[:len(args)-1] {
-			err = getOne(filesystem, objPath, localPath)
+		targetPath := args[len(args)-1]
+		for _, sourcePath := range args[:len(args)-1] {
+			err = getOne(filesystem, sourcePath, targetPath)
 			if err != nil {
 				logger.Error(err)
 				return err
@@ -91,18 +91,18 @@ func main() {
 	}
 }
 
-func getOne(filesystem *irodsclient_fs.FileSystem, objPath string, targetPath string) error {
+func getOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string) error {
 	cwd := commons.GetCWD()
-	objPath = commons.MakeIRODSPath(cwd, objPath)
+	sourcePath = commons.MakeIRODSPath(cwd, sourcePath)
 	targetPath = commons.MakeLocalPath(targetPath)
 
-	entry, err := filesystem.Stat(objPath)
+	entry, err := filesystem.Stat(sourcePath)
 	if err != nil {
 		return err
 	}
 
 	if entry.Type == irodsclient_fs.FileEntry {
-		return getDataObject(filesystem, objPath, targetPath)
+		return getDataObject(filesystem, sourcePath, targetPath)
 	} else {
 		// dir
 		entries, err := filesystem.List(entry.Path)
@@ -127,15 +127,15 @@ func getOne(filesystem *irodsclient_fs.FileSystem, objPath string, targetPath st
 	return nil
 }
 
-func getDataObject(filesystem *irodsclient_fs.FileSystem, objPath string, targetPath string) error {
+func getDataObject(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "getDataObject",
 	})
 
-	logger.Debugf("downloading a data object %s to a local dir %s\n", objPath, targetPath)
+	logger.Debugf("downloading a data object %s to a local dir %s\n", sourcePath, targetPath)
 
-	err := filesystem.DownloadFileParallel(objPath, "", targetPath, 0)
+	err := filesystem.DownloadFileParallel(sourcePath, "", targetPath, 0)
 	if err != nil {
 		return err
 	}
