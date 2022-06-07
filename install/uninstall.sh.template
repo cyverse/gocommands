@@ -1,0 +1,8 @@
+#! /bin/bash
+
+BINS=($BIN_NAMES)
+
+for i in "${BINS[@]}"
+do
+    rm /usr/bin/$i
+done
