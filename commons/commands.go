@@ -111,7 +111,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		}
 
 		if help {
-			printHelp(command)
+			PrintHelp(command)
 			return false, nil // stop here
 		}
 	}
@@ -338,7 +338,7 @@ func printVersion(command *cobra.Command) error {
 	return nil
 }
 
-func printHelp(command *cobra.Command) error {
+func PrintHelp(command *cobra.Command) error {
 	return command.Usage()
 }
 

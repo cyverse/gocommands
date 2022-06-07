@@ -1,8 +1,7 @@
-package main
+package subcmd
 
 import (
 	"fmt"
-	"os"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/gocommands/commons"
@@ -10,22 +9,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "gormdir [collection1] [collection2] ...",
+var rmdirCmd = &cobra.Command{
+	Use:   "rmdir [collection1] [collection2] ...",
 	Short: "Remove iRODS collections",
 	Long:  `This removes iRODS collections.`,
-	RunE:  processCommand,
+	RunE:  processRmdirCommand,
 }
 
-func Execute() error {
-	return rootCmd.Execute()
+func AddRmdirCommand(rootCmd *cobra.Command) {
+	// attach common flags
+	commons.SetCommonFlags(rmdirCmd)
+
+	rootCmd.AddCommand(rmdirCmd)
 }
 
-func processCommand(command *cobra.Command, args []string) error {
+func processRmdirCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "processCommand",
+		"function": "processRmdirCommand",
 	})
 
 	cont, err := commons.ProcessCommonFlags(command)
@@ -46,45 +47,31 @@ func processCommand(command *cobra.Command, args []string) error {
 
 	// Create a file system
 	account := commons.GetAccount()
-
-	filesystem, err := irodsclient_fs.NewFileSystemWithDefault(account, "gocommands-rmdir")
+	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
 		return err
 	}
 
 	defer filesystem.Release()
 
+	if len(args) == 0 {
+		return fmt.Errorf("arguments given are not sufficent")
+	}
+
 	for _, targetPath := range args {
-		err = removeOne(filesystem, targetPath)
+		err = removeDirOne(filesystem, targetPath)
 		if err != nil {
 			logger.Error(err)
 			return err
 		}
 	}
-
 	return nil
 }
 
-func main() {
+func removeDirOne(filesystem *irodsclient_fs.FileSystem, targetPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "main",
-	})
-
-	// attach common flags
-	commons.SetCommonFlags(rootCmd)
-
-	err := Execute()
-	if err != nil {
-		logger.Fatal(err)
-		os.Exit(1)
-	}
-}
-
-func removeOne(filesystem *irodsclient_fs.FileSystem, targetPath string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "removeOne",
+		"function": "removeDirOne",
 	})
 
 	cwd := commons.GetCWD()

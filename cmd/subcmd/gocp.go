@@ -1,8 +1,7 @@
-package main
+package subcmd
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 
@@ -12,22 +11,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "gocp [data-object1] [data-object2] [collection1] ... [target collection]",
+var cpCmd = &cobra.Command{
+	Use:   "cp [data-object1] [data-object2] [collection1] ... [target collection]",
 	Short: "Copy iRODS data-objects or collections to target collection",
 	Long:  `This copies iRODS data-objects or collections to the given target collection.`,
-	RunE:  processCommand,
+	RunE:  processCpCommand,
 }
 
-func Execute() error {
-	return rootCmd.Execute()
+func AddCpCommand(rootCmd *cobra.Command) {
+	// attach common flags
+	commons.SetCommonFlags(cpCmd)
+
+	cpCmd.Flags().BoolP("recurse", "r", false, "Copy recursively")
+
+	rootCmd.AddCommand(cpCmd)
 }
 
-func processCommand(command *cobra.Command, args []string) error {
+func processCpCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "processCommand",
+		"function": "processCpCommand",
 	})
 
 	cont, err := commons.ProcessCommonFlags(command)
@@ -57,8 +60,7 @@ func processCommand(command *cobra.Command, args []string) error {
 
 	// Create a file system
 	account := commons.GetAccount()
-
-	filesystem, err := irodsclient_fs.NewFileSystemWithDefault(account, "gocommands-cp")
+	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
 		return err
 	}
@@ -86,23 +88,6 @@ func processCommand(command *cobra.Command, args []string) error {
 		return fmt.Errorf("arguments given are not sufficent")
 	}
 	return nil
-}
-
-func main() {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "main",
-	})
-
-	// attach common flags
-	commons.SetCommonFlags(rootCmd)
-	rootCmd.Flags().BoolP("recurse", "r", false, "Copy recursively")
-
-	err := Execute()
-	if err != nil {
-		logger.Fatal(err)
-		os.Exit(1)
-	}
 }
 
 func copyOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, recurse bool) error {

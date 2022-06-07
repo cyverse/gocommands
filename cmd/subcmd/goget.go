@@ -1,6 +1,7 @@
-package main
+package subcmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -10,22 +11,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "goget [data-object1] [data-object2] [collection1] ... [local dir]",
+var getCmd = &cobra.Command{
+	Use:   "get [data-object1] [data-object2] [collection1] ... [local dir]",
 	Short: "Download iRODS data-objects or collections",
 	Long:  `This downloads iRODS data-objects or collections to the given local path.`,
-	RunE:  processCommand,
+	RunE:  processGetCommand,
 }
 
-func Execute() error {
-	return rootCmd.Execute()
+func AddGetCommand(rootCmd *cobra.Command) {
+	// attach common flags
+	commons.SetCommonFlags(getCmd)
+
+	rootCmd.AddCommand(getCmd)
 }
 
-func processCommand(command *cobra.Command, args []string) error {
+func processGetCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "processCommand",
+		"function": "processGetCommand",
 	})
 
 	cont, err := commons.ProcessCommonFlags(command)
@@ -46,8 +49,7 @@ func processCommand(command *cobra.Command, args []string) error {
 
 	// Create a file system
 	account := commons.GetAccount()
-
-	filesystem, err := irodsclient_fs.NewFileSystemWithDefault(account, "gocommands-get")
+	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
 		return err
 	}
@@ -70,25 +72,10 @@ func processCommand(command *cobra.Command, args []string) error {
 				return err
 			}
 		}
+	} else {
+		return fmt.Errorf("arguments given are not sufficent")
 	}
-
 	return nil
-}
-
-func main() {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "main",
-	})
-
-	// attach common flags
-	commons.SetCommonFlags(rootCmd)
-
-	err := Execute()
-	if err != nil {
-		logger.Fatal(err)
-		os.Exit(1)
-	}
 }
 
 func getOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string) error {
@@ -139,6 +126,5 @@ func getDataObject(filesystem *irodsclient_fs.FileSystem, sourcePath string, tar
 	if err != nil {
 		return err
 	}
-
 	return nil
 }

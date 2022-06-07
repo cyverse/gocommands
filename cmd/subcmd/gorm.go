@@ -1,8 +1,7 @@
-package main
+package subcmd
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -11,22 +10,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "gorm [data-object1] [data-object2] [collection1] ...",
+var rmCmd = &cobra.Command{
+	Use:   "rm [data-object1] [data-object2] [collection1] ...",
 	Short: "Remove iRODS data-objects or collections",
 	Long:  `This removes iRODS data-objects or collections.`,
-	RunE:  processCommand,
+	RunE:  processRmCommand,
 }
 
-func Execute() error {
-	return rootCmd.Execute()
+func AddRmCommand(rootCmd *cobra.Command) {
+	// attach common flags
+	commons.SetCommonFlags(rmCmd)
+	rmCmd.Flags().BoolP("recurse", "r", false, "Remove non-empty collections")
+	rmCmd.Flags().BoolP("force", "f", false, "Remove forcefully")
+
+	rootCmd.AddCommand(rmCmd)
 }
 
-func processCommand(command *cobra.Command, args []string) error {
+func processRmCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "processCommand",
+		"function": "processRmCommand",
 	})
 
 	cont, err := commons.ProcessCommonFlags(command)
@@ -65,13 +68,16 @@ func processCommand(command *cobra.Command, args []string) error {
 
 	// Create a file system
 	account := commons.GetAccount()
-
-	filesystem, err := irodsclient_fs.NewFileSystemWithDefault(account, "gocommands-rm")
+	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
 		return err
 	}
 
 	defer filesystem.Release()
+
+	if len(args) == 0 {
+		return fmt.Errorf("arguments given are not sufficent")
+	}
 
 	for _, sourcePath := range args {
 		err = removeOne(filesystem, sourcePath, force, recurse)
@@ -80,26 +86,7 @@ func processCommand(command *cobra.Command, args []string) error {
 			return err
 		}
 	}
-
 	return nil
-}
-
-func main() {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "main",
-	})
-
-	// attach common flags
-	commons.SetCommonFlags(rootCmd)
-	rootCmd.Flags().BoolP("recurse", "r", false, "Remove non-empty collections")
-	rootCmd.Flags().BoolP("force", "f", false, "Remove forcefully")
-
-	err := Execute()
-	if err != nil {
-		logger.Fatal(err)
-		os.Exit(1)
-	}
 }
 
 func removeOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, force bool, recurse bool) error {

@@ -1,7 +1,6 @@
-package main
+package subcmd
 
 import (
-	"os"
 	"strconv"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -10,22 +9,25 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "gomkdir [collection1] [collection2] ...",
+var mkdirCmd = &cobra.Command{
+	Use:   "mkdir [collection1] [collection2] ...",
 	Short: "Make iRODS collections",
 	Long:  `This makes iRODS collections.`,
-	RunE:  processCommand,
+	RunE:  processMkdirCommand,
 }
 
-func Execute() error {
-	return rootCmd.Execute()
+func AddMkdirCommand(rootCmd *cobra.Command) {
+	// attach common flags
+	commons.SetCommonFlags(mkdirCmd)
+	mkdirCmd.Flags().BoolP("parents", "p", false, "Make parent collections")
+
+	rootCmd.AddCommand(mkdirCmd)
 }
 
-func processCommand(command *cobra.Command, args []string) error {
+func processMkdirCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "processCommand",
+		"function": "processMkdirCommand",
 	})
 
 	cont, err := commons.ProcessCommonFlags(command)
@@ -55,8 +57,7 @@ func processCommand(command *cobra.Command, args []string) error {
 
 	// Create a file system
 	account := commons.GetAccount()
-
-	filesystem, err := irodsclient_fs.NewFileSystemWithDefault(account, "gocommands-mkdir")
+	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
 		return err
 	}
@@ -70,25 +71,7 @@ func processCommand(command *cobra.Command, args []string) error {
 			return err
 		}
 	}
-
 	return nil
-}
-
-func main() {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "main",
-	})
-
-	// attach common flags
-	commons.SetCommonFlags(rootCmd)
-	rootCmd.Flags().BoolP("parents", "p", false, "Make parent collections")
-
-	err := Execute()
-	if err != nil {
-		logger.Fatal(err)
-		os.Exit(1)
-	}
 }
 
 func makeOne(filesystem *irodsclient_fs.FileSystem, targetPath string, parent bool) error {

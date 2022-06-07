@@ -3,8 +3,10 @@
 main()
 {
   mkdir -p $1
+
   expand_tmpl install.sh.template > $1/install.sh
   chmod 700 $1/install.sh
+
   expand_tmpl uninstall.sh.template > $1/uninstall.sh
   chmod 700 $1/uninstall.sh
 }
@@ -24,10 +26,10 @@ escape()
 
 expand_tmpl()
 {
-  local BIN_NAMES=$(ls -1 ../cmd)
+  local SUBCOMMAND_NAMES=$(ls -1 ../cmd/subcmd | sed -e 's/\.go$//' | sed -e 's/^go//')
 
   cat <<EOF | sed --file - $1
-s/\$BIN_NAMES/$(escape $BIN_NAMES)/g
+s/\$SUBCOMMAND_NAMES/$(escape $SUBCOMMAND_NAMES)/g
 EOF
 }
 

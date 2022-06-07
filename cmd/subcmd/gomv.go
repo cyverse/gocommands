@@ -1,8 +1,7 @@
-package main
+package subcmd
 
 import (
 	"fmt"
-	"os"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/gocommands/commons"
@@ -10,22 +9,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "gomv [data-object1] [data-object2] [collection1] ... [target collection]",
+var mvCmd = &cobra.Command{
+	Use:   "mv [data-object1] [data-object2] [collection1] ... [target collection]",
 	Short: "Move iRODS data-objects or collections to target collection, or rename data-object or collection",
 	Long:  `This moves iRODS data-objects or collections to the given target collection, or rename a single data-object or collection.`,
-	RunE:  processCommand,
+	RunE:  processMvCommand,
 }
 
-func Execute() error {
-	return rootCmd.Execute()
+func AddMvCommand(rootCmd *cobra.Command) {
+	// attach common flags
+	commons.SetCommonFlags(mvCmd)
+
+	rootCmd.AddCommand(mvCmd)
 }
 
-func processCommand(command *cobra.Command, args []string) error {
+func processMvCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "processCommand",
+		"function": "processMvCommand",
 	})
 
 	cont, err := commons.ProcessCommonFlags(command)
@@ -46,8 +47,7 @@ func processCommand(command *cobra.Command, args []string) error {
 
 	// Create a file system
 	account := commons.GetAccount()
-
-	filesystem, err := irodsclient_fs.NewFileSystemWithDefault(account, "gocommands-mv")
+	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
 		return err
 	}
@@ -75,22 +75,6 @@ func processCommand(command *cobra.Command, args []string) error {
 		return fmt.Errorf("arguments given are not sufficent")
 	}
 	return nil
-}
-
-func main() {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "main",
-	})
-
-	// attach common flags
-	commons.SetCommonFlags(rootCmd)
-
-	err := Execute()
-	if err != nil {
-		logger.Fatal(err)
-		os.Exit(1)
-	}
 }
 
 func moveOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string) error {

@@ -1,8 +1,7 @@
-package main
+package subcmd
 
 import (
 	"fmt"
-	"os"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/gocommands/commons"
@@ -10,22 +9,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "gols [collection1] [collection2] ...",
+var lsCmd = &cobra.Command{
+	Use:   "ls [collection1] [collection2] ...",
 	Short: "List current iRODS collection",
 	Long:  `This lists data objects and collections in current iRODS collection.`,
-	RunE:  processCommand,
+	RunE:  processLsCommand,
 }
 
-func Execute() error {
-	return rootCmd.Execute()
+func AddLsCommand(rootCmd *cobra.Command) {
+	// attach common flags
+	commons.SetCommonFlags(lsCmd)
+
+	rootCmd.AddCommand(lsCmd)
 }
 
-func processCommand(command *cobra.Command, args []string) error {
+func processLsCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "processCommand",
+		"function": "processLsCommand",
 	})
 
 	cont, err := commons.ProcessCommonFlags(command)
@@ -46,8 +47,7 @@ func processCommand(command *cobra.Command, args []string) error {
 
 	// Create a file system
 	account := commons.GetAccount()
-
-	filesystem, err := irodsclient_fs.NewFileSystemWithDefault(account, "gocommands-ls")
+	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
 		return err
 	}
@@ -71,22 +71,6 @@ func processCommand(command *cobra.Command, args []string) error {
 	}
 
 	return nil
-}
-
-func main() {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "main",
-	})
-
-	// attach common flags
-	commons.SetCommonFlags(rootCmd)
-
-	err := Execute()
-	if err != nil {
-		logger.Fatal(err)
-		os.Exit(1)
-	}
 }
 
 func listColletion(filesystem *irodsclient_fs.FileSystem, collectionPath string) error {

@@ -1,6 +1,6 @@
 github.com/cpuguy83/go-md2man/v2 v2.0.1/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46tRHOmNcaadrF8o=
-github.com/cyverse/go-irodsclient v0.9.1-0.20220513225927-484337e3f496 h1:h4i2s1z3+61LaVW2df2Uq+PGNrndvH5MlIDYTfQ8zx8=
-github.com/cyverse/go-irodsclient v0.9.1-0.20220513225927-484337e3f496/go.mod h1:vEllPYPlJhNUp/op6e4/zDKt/wOIeN8Y7Nyy4QpR/F0=
+github.com/cyverse/go-irodsclient v0.9.3 h1:ERfEZJYOH8ZvAceKD68iCfesWyMyqGf/VBVUwxudD9Y=
+github.com/cyverse/go-irodsclient v0.9.3/go.mod h1:vEllPYPlJhNUp/op6e4/zDKt/wOIeN8Y7Nyy4QpR/F0=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

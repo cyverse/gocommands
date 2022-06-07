@@ -1,8 +1,10 @@
 #! /bin/bash
 
-BINS=($BIN_NAMES)
+SUBCOMMANDS=($SUBCOMMAND_NAMES)
 
-for i in "${BINS[@]}"
+rm /usr/bin/gocmd
+
+for i in "${SUBCOMMANDS[@]}"
 do
-    rm /usr/bin/$i
+    rm /usr/bin/go$i
 done

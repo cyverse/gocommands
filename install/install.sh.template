@@ -1,8 +1,10 @@
 #! /bin/bash
 
-BINS=($BIN_NAMES)
+SUBCOMMANDS=($SUBCOMMAND_NAMES)
 
-for i in "${BINS[@]}"
+cp ./gocmd /usr/bin
+
+for i in "${SUBCOMMANDS[@]}"
 do
-    cp ./$i /usr/bin
+    cp ./go$i /usr/bin
 done

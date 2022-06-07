@@ -1,6 +1,7 @@
-package main
+package subcmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -10,22 +11,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "goput [local file1] [local file2] [local dir1] ... [collection]",
+var putCmd = &cobra.Command{
+	Use:   "put [local file1] [local file2] [local dir1] ... [collection]",
 	Short: "Upload files or directories",
 	Long:  `This uploads files or directories to the given iRODS collection.`,
-	RunE:  processCommand,
+	RunE:  processPutCommand,
 }
 
-func Execute() error {
-	return rootCmd.Execute()
+func AddPutCommand(rootCmd *cobra.Command) {
+	// attach common flags
+	commons.SetCommonFlags(putCmd)
+
+	rootCmd.AddCommand(putCmd)
 }
 
-func processCommand(command *cobra.Command, args []string) error {
+func processPutCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "processCommand",
+		"function": "processPutCommand",
 	})
 
 	cont, err := commons.ProcessCommonFlags(command)
@@ -46,8 +49,7 @@ func processCommand(command *cobra.Command, args []string) error {
 
 	// Create a file system
 	account := commons.GetAccount()
-
-	filesystem, err := irodsclient_fs.NewFileSystemWithDefault(account, "gocommands-put")
+	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
 		return err
 	}
@@ -70,30 +72,15 @@ func processCommand(command *cobra.Command, args []string) error {
 				return err
 			}
 		}
+	} else {
+		return fmt.Errorf("arguments given are not sufficent")
 	}
-
 	return nil
 }
 
-func main() {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "main",
-	})
-
-	// attach common flags
-	commons.SetCommonFlags(rootCmd)
-
-	err := Execute()
-	if err != nil {
-		logger.Fatal(err)
-		os.Exit(1)
-	}
-}
-
 func putOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string) error {
-	sourcePath = commons.MakeLocalPath(sourcePath)
 	cwd := commons.GetCWD()
+	sourcePath = commons.MakeLocalPath(sourcePath)
 	targetPath = commons.MakeIRODSPath(cwd, targetPath)
 
 	st, err := os.Stat(sourcePath)
@@ -139,6 +126,5 @@ func putDataObject(filesystem *irodsclient_fs.FileSystem, sourcePath string, tar
 	if err != nil {
 		return err
 	}
-
 	return nil
 }

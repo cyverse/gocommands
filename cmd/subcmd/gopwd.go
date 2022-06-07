@@ -1,30 +1,31 @@
-package main
+package subcmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "gopwd",
+var pwdCmd = &cobra.Command{
+	Use:   "pwd",
 	Short: "Print current working iRODS collection",
 	Long:  `This prints current working iRODS collection.`,
-	RunE:  processCommand,
+	RunE:  processPwdCommand,
 }
 
-func Execute() error {
-	return rootCmd.Execute()
+func AddPwdCommand(rootCmd *cobra.Command) {
+	// attach common flags
+	commons.SetCommonFlags(pwdCmd)
+
+	rootCmd.AddCommand(pwdCmd)
 }
 
-func processCommand(command *cobra.Command, args []string) error {
+func processPwdCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "processCommand",
+		"function": "processPwdCommand",
 	})
 
 	cont, err := commons.ProcessCommonFlags(command)
@@ -47,24 +48,7 @@ func processCommand(command *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-
 	return nil
-}
-
-func main() {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "main",
-	})
-
-	// attach common flags
-	commons.SetCommonFlags(rootCmd)
-
-	err := Execute()
-	if err != nil {
-		logger.Fatal(err)
-		os.Exit(1)
-	}
 }
 
 func printCurrentWorkingDir() error {
