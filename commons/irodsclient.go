@@ -14,7 +14,12 @@ const (
 
 // returns a file system client
 func GetIRODSFSClient(account *irodsclient_types.IRODSAccount) (*irodsclient_fs.FileSystem, error) {
-	return irodsclient_fs.NewFileSystemWithDefault(account, ClientProgramName)
+
+	fsConfig := irodsclient_fs.NewFileSystemConfig(ClientProgramName, irodsclient_fs.ConnectionLifespanDefault,
+		irodsclient_fs.FileSystemTimeoutDefault, irodsclient_fs.FileSystemTimeoutDefault, irodsclient_fs.FileSystemConnectionMaxDefault,
+		irodsclient_fs.FileSystemTimeoutDefault, irodsclient_fs.FileSystemTimeoutDefault, []irodsclient_fs.MetadataCacheTimeoutSetting{}, false, true)
+
+	return irodsclient_fs.NewFileSystem(account, fsConfig)
 }
 
 // TestConnect just test connection creation

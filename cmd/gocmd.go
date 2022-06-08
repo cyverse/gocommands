@@ -43,6 +43,11 @@ func processCommand(command *cobra.Command, args []string) error {
 }
 
 func main() {
+	log.SetFormatter(&log.TextFormatter{
+		TimestampFormat: "2006-01-02 15:04:05.000",
+		FullTimestamp:   true,
+	})
+
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "main",
