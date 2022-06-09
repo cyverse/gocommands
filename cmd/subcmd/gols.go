@@ -2,6 +2,7 @@ package subcmd
 
 import (
 	"fmt"
+	"sort"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/gocommands/commons"
@@ -101,6 +102,15 @@ func listColletion(filesystem *irodsclient_fs.FileSystem, collectionPath string)
 			colls = append(colls, entry)
 		}
 	}
+
+	// sort by name
+	sort.SliceStable(objs, func(i int, j int) bool {
+		return objs[i].Name < objs[j].Name
+	})
+
+	sort.SliceStable(colls, func(i int, j int) bool {
+		return colls[i].Name < colls[j].Name
+	})
 
 	// print data objects first
 	for _, entry := range objs {
