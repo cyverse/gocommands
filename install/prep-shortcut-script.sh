@@ -9,7 +9,7 @@ main()
   
   for i in "${SUBCOMMANDS[@]}"
   do
-    echo -e "#!/bin/bash\nbaseDir=\$(dirname \"\$0\")\n\$baseDir/gocmd $i \$@" > $1/go$i
+    echo -e "#!/bin/bash\nbaseDir=\$(dirname \"\$0\")\n\$baseDir/gocmd -s \$PPID $i \$@" > $1/go$i
     chmod 700 $1/go$i
   done  
 }

@@ -22,6 +22,7 @@ var (
 	environmentMgr *irodsclient_icommands.ICommandsEnvironmentManager
 	account        *irodsclient_types.IRODSAccount
 
+	sessionID      int
 	resourceServer string
 )
 
@@ -74,7 +75,7 @@ func SetCWD(cwd string) {
 	}
 
 	session.CurrentWorkingDir = filepath.Clean(cwd)
-	environmentMgr.SaveSession()
+	environmentMgr.SaveSession(sessionID)
 }
 
 func SetCommonFlags(command *cobra.Command) {
@@ -82,6 +83,7 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().BoolP("version", "v", false, "Print version")
 	command.Flags().BoolP("help", "h", false, "Print help")
 	command.Flags().BoolP("debug", "d", false, "Enable debug mode")
+	command.Flags().Int32P("session", "s", -1, "Set session ID")
 	command.Flags().StringP("resource", "", "", "Set resource server")
 }
 
@@ -128,6 +130,24 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 			return false, nil // stop here
 		}
 	}
+
+	sessionFlag := command.Flags().Lookup("session")
+	if sessionFlag != nil {
+		// load to global variable
+		sessionIDString := sessionFlag.Value.String()
+		sessionIDInt, err := strconv.ParseInt(sessionIDString, 10, 32)
+		if err != nil {
+			logger.Error(err)
+			return false, err // stop here
+		}
+		sessionID = int(sessionIDInt)
+	}
+
+	if sessionID < 0 {
+		sessionID = os.Getppid()
+	}
+
+	logger.Debugf("use sessionID - %d", sessionID)
 
 	configFlag := command.Flags().Lookup("config")
 	if configFlag != nil {
@@ -305,7 +325,7 @@ func loadConfigFile(command *cobra.Command, configFilePath string) error {
 			return err
 		}
 
-		err = iCommandsEnvMgr.Load()
+		err = iCommandsEnvMgr.Load(sessionID)
 		if err != nil {
 			return err
 		}
