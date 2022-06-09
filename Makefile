@@ -67,16 +67,12 @@ build-release:
 
 # 	i386_windows
 	mkdir -p release/i386_windows
-	cd install && ./prep-install-script.sh ../release/i386_windows && cd ..
-	cd install && ./prep-shortcut-script.sh ../release/i386_windows && cd ..
-	CGO_ENABLED=0 GOARCH=386 GOOS=windows go build -ldflags=${LDFLAGS} -o release/i386_windows/gocmd cmd/*.go
-	cd release/i386_windows && tar cf gocommands_i386_windows_${VERSION}.tar * && mv *.tar .. && cd ../..
+	CGO_ENABLED=0 GOARCH=386 GOOS=windows go build -ldflags=${LDFLAGS} -o release/i386_windows/gocmd.exe cmd/*.go
+	cd release/i386_windows && zip gocommands_i386_windows_${VERSION}.zip * && mv *.zip .. && cd ../..
 	rm -rf release/i386_windows
 
 # 	amd64_windows
 	mkdir -p release/amd64_windows
-	cd install && ./prep-install-script.sh ../release/amd64_windows && cd ..
-	cd install && ./prep-shortcut-script.sh ../release/amd64_windows && cd ..
-	CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -ldflags=${LDFLAGS} -o release/amd64_windows/gocmd cmd/*.go
-	cd release/amd64_windows && tar cf gocommands_amd64_windows_${VERSION}.tar * && mv *.tar .. && cd ../..
+	CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -ldflags=${LDFLAGS} -o release/amd64_windows/gocmd.exe cmd/*.go
+	cd release/amd64_windows && zip gocommands_amd64_windows_${VERSION}.zip * && mv *.zip .. && cd ../..
 	rm -rf release/amd64_windows
