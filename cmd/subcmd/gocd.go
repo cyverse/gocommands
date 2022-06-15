@@ -3,7 +3,8 @@ package subcmd
 import (
 	"fmt"
 
-	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_conn "github.com/cyverse/go-irodsclient/irods/connection"
+	irodsclient_fs "github.com/cyverse/go-irodsclient/irods/fs"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -45,14 +46,14 @@ func processCdCommand(command *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Create a file system
+	// Create a connection
 	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	irodsConn, err := commons.GetIRODSConnection(account)
 	if err != nil {
 		return err
 	}
 
-	defer filesystem.Release()
+	defer irodsConn.Disconnect()
 
 	if len(args) == 0 {
 		// do nothing
@@ -61,7 +62,7 @@ func processCdCommand(command *cobra.Command, args []string) error {
 		return fmt.Errorf("too many arguments (%d) are given", len(args))
 	} else {
 		// cd
-		err = changeWorkingDir(filesystem, args[0])
+		err = changeWorkingDir(irodsConn, args[0])
 		if err != nil {
 			return err
 		}
@@ -69,7 +70,7 @@ func processCdCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func changeWorkingDir(filesystem *irodsclient_fs.FileSystem, collectionPath string) error {
+func changeWorkingDir(connection *irodsclient_conn.IRODSConnection, collectionPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "changeWorkingDir",
@@ -80,7 +81,12 @@ func changeWorkingDir(filesystem *irodsclient_fs.FileSystem, collectionPath stri
 
 	logger.Debugf("changing working dir: %s\n", collectionPath)
 
-	if !filesystem.ExistsDir(collectionPath) {
+	collection, err := irodsclient_fs.GetCollection(connection, collectionPath)
+	if err != nil {
+		return err
+	}
+
+	if collection.ID <= 0 {
 		return fmt.Errorf("collection %s does not exist", collectionPath)
 	}
 

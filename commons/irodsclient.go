@@ -9,12 +9,12 @@ import (
 )
 
 const (
-	ClientProgramName string = "gocommands"
+	ClientProgramName string        = "gocommands"
+	connectionTimeout time.Duration = 1 * time.Minute
 )
 
-// returns a file system client
+// GetIRODSFSClient returns a file system client
 func GetIRODSFSClient(account *irodsclient_types.IRODSAccount) (*irodsclient_fs.FileSystem, error) {
-
 	fsConfig := irodsclient_fs.NewFileSystemConfig(ClientProgramName, irodsclient_fs.ConnectionLifespanDefault,
 		irodsclient_fs.FileSystemTimeoutDefault, irodsclient_fs.FileSystemTimeoutDefault, irodsclient_fs.FileSystemConnectionMaxDefault,
 		irodsclient_fs.FileSystemTimeoutDefault, irodsclient_fs.FileSystemTimeoutDefault, []irodsclient_fs.MetadataCacheTimeoutSetting{}, false, true)
@@ -22,12 +22,20 @@ func GetIRODSFSClient(account *irodsclient_types.IRODSAccount) (*irodsclient_fs.
 	return irodsclient_fs.NewFileSystem(account, fsConfig)
 }
 
+// GetIRODSConnection returns a connection
+func GetIRODSConnection(account *irodsclient_types.IRODSAccount) (*irodsclient_conn.IRODSConnection, error) {
+	conn := irodsclient_conn.NewIRODSConnection(account, connectionTimeout, ClientProgramName)
+	err := conn.Connect()
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
+}
+
 // TestConnect just test connection creation
 func TestConnect(account *irodsclient_types.IRODSAccount) error {
-	oneMin := 1 * time.Minute
-	conn := irodsclient_conn.NewIRODSConnection(account, oneMin, ClientProgramName)
-
-	err := conn.Connect()
+	conn, err := GetIRODSConnection(account)
 	if err != nil {
 		return err
 	}
