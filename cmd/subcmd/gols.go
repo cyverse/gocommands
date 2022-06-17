@@ -14,8 +14,8 @@ import (
 
 var lsCmd = &cobra.Command{
 	Use:   "ls [collection1] [collection2] ...",
-	Short: "List current iRODS collection",
-	Long:  `This lists data objects and collections in current iRODS collection.`,
+	Short: "List entries in iRODS collections",
+	Long:  `This lists data objects and collections in iRODS collections.`,
 	RunE:  processLsCommand,
 }
 
@@ -23,7 +23,8 @@ func AddLsCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(lsCmd)
 
-	lsCmd.Flags().BoolP("long", "l", false, "List data objects in long formnat")
+	lsCmd.Flags().BoolP("long", "l", false, "List data objects in a long format")
+	lsCmd.Flags().BoolP("verylong", "L", false, "List data objects in a very long format")
 
 	rootCmd.AddCommand(lsCmd)
 }
@@ -59,6 +60,15 @@ func processLsCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
+	veryLongFormat := false
+	veryLongFlag := command.Flags().Lookup("verylong")
+	if veryLongFlag != nil {
+		veryLongFormat, err = strconv.ParseBool(veryLongFlag.Value.String())
+		if err != nil {
+			veryLongFormat = false
+		}
+	}
+
 	// Create a connection
 	account := commons.GetAccount()
 	irodsConn, err := commons.GetIRODSConnection(account)
@@ -69,14 +79,14 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	defer irodsConn.Disconnect()
 
 	if len(args) == 0 {
-		err = listColletion(irodsConn, ".", longFormat)
+		err = listColletion(irodsConn, ".", longFormat, veryLongFormat)
 		if err != nil {
 			logger.Error(err)
 			return err
 		}
 	} else {
 		for _, sourcePath := range args {
-			err = listColletion(irodsConn, sourcePath, longFormat)
+			err = listColletion(irodsConn, sourcePath, longFormat, veryLongFormat)
 			if err != nil {
 				logger.Error(err)
 				return err
@@ -87,7 +97,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func listColletion(connection *irodsclient_conn.IRODSConnection, collectionPath string, longFormat bool) error {
+func listColletion(connection *irodsclient_conn.IRODSConnection, collectionPath string, longFormat bool, veryLongFormat bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "listColletion",
@@ -126,7 +136,13 @@ func listColletion(connection *irodsclient_conn.IRODSConnection, collectionPath 
 
 	// print data objects first
 	for _, entry := range objs {
-		if longFormat {
+		if veryLongFormat {
+			for _, replica := range entry.Replicas {
+				modTime := commons.MakeDateTimeString(replica.ModifyTime)
+				fmt.Printf("  %s\t%d\t%s\t%d\t%s\t&\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, entry.Size, modTime, entry.Name)
+				fmt.Printf("    %s\t%s\n", replica.CheckSum, replica.Path)
+			}
+		} else if longFormat {
 			for _, replica := range entry.Replicas {
 				modTime := commons.MakeDateTimeString(replica.ModifyTime)
 				fmt.Printf("  %s\t%d\t%s\t%d\t%s\t&\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, entry.Size, modTime, entry.Name)
