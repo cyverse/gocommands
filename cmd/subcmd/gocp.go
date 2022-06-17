@@ -23,6 +23,7 @@ func AddCpCommand(rootCmd *cobra.Command) {
 	commons.SetCommonFlags(cpCmd)
 
 	cpCmd.Flags().BoolP("recurse", "r", false, "Copy recursively")
+	cpCmd.Flags().BoolP("force", "f", false, "Copy forcefully")
 
 	rootCmd.AddCommand(cpCmd)
 }
@@ -58,6 +59,15 @@ func processCpCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
+	force := false
+	forceFlag := command.Flags().Lookup("force")
+	if forceFlag != nil {
+		force, err = strconv.ParseBool(forceFlag.Value.String())
+		if err != nil {
+			force = false
+		}
+	}
+
 	// Create a file system
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
@@ -69,7 +79,7 @@ func processCpCommand(command *cobra.Command, args []string) error {
 
 	if len(args) == 2 {
 		// copy to another
-		err = copyOne(filesystem, args[0], args[1], recurse)
+		err = copyOne(filesystem, args[0], args[1], recurse, force)
 		if err != nil {
 			logger.Error(err)
 			return err
@@ -78,7 +88,7 @@ func processCpCommand(command *cobra.Command, args []string) error {
 		// copy
 		destPath := args[len(args)-1]
 		for _, sourcePath := range args[:len(args)-1] {
-			err = copyOne(filesystem, sourcePath, destPath, recurse)
+			err = copyOne(filesystem, sourcePath, destPath, recurse, force)
 			if err != nil {
 				logger.Error(err)
 				return err
@@ -90,7 +100,7 @@ func processCpCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func copyOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, recurse bool) error {
+func copyOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, recurse bool, force bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "copyOne",
@@ -109,18 +119,34 @@ func copyOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPat
 
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
 		// file
-		logger.Debugf("copying a data object %s to %s\n", sourcePath, targetPath)
-		err = filesystem.CopyFile(sourcePath, targetPath)
+		targetFilePath := commons.EnsureTargetIRODSFilePath(filesystem, sourcePath, targetPath)
+
+		if filesystem.ExistsFile(targetFilePath) {
+			// already exists!
+			if force {
+				// delete first
+				logger.Debugf("deleting an existing data object %s")
+				err := filesystem.RemoveFile(targetFilePath, true)
+				if err != nil {
+					return err
+				}
+			} else {
+				return fmt.Errorf("file %s already exists, turn on 'force' option to overwrite", targetFilePath)
+			}
+		}
+
+		logger.Debugf("copying a data object %s to %s", sourcePath, targetFilePath)
+		err = filesystem.CopyFileToFile(sourcePath, targetFilePath)
 		if err != nil {
 			return err
 		}
 	} else {
 		// dir
 		if !recurse {
-			return fmt.Errorf("cannot copy a collection, recurse is set")
+			return fmt.Errorf("cannot copy a collection, turn on 'recurse' option")
 		}
 
-		logger.Debugf("copying a collection %s to %s\n", sourcePath, targetPath)
+		logger.Debugf("copying a collection %s to %s", sourcePath, targetPath)
 
 		entries, err := filesystem.List(sourceEntry.Path)
 		if err != nil {
@@ -135,7 +161,7 @@ func copyOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPat
 			}
 
 			for _, entryInDir := range entries {
-				err = copyOne(filesystem, entryInDir.Path, targetPath, recurse)
+				err = copyOne(filesystem, entryInDir.Path, targetPath, recurse, force)
 				if err != nil {
 					return err
 				}
@@ -149,7 +175,7 @@ func copyOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPat
 			}
 
 			for _, entryInDir := range entries {
-				err = copyOne(filesystem, entryInDir.Path, targetDir, recurse)
+				err = copyOne(filesystem, entryInDir.Path, targetDir, recurse, force)
 				if err != nil {
 					return err
 				}

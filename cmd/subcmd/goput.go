@@ -122,9 +122,9 @@ func putDataObject(filesystem *irodsclient_fs.FileSystem, sourcePath string, tar
 		"function": "putDataObject",
 	})
 
-	logger.Debugf("uploading a file %s to an iRODS collection %s\n", sourcePath, targetPath)
+	logger.Debugf("uploading a file %s to an iRODS collection %s", sourcePath, targetPath)
 
-	err := filesystem.UploadFileParallel(sourcePath, targetPath, "", 0, false)
+	err := filesystem.UploadFileParallel(sourcePath, targetPath, "", 0, true)
 	if err != nil {
 		return err
 	}

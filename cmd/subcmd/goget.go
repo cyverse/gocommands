@@ -122,7 +122,7 @@ func getDataObject(filesystem *irodsclient_fs.FileSystem, sourcePath string, tar
 		"function": "getDataObject",
 	})
 
-	logger.Debugf("downloading a data object %s to a local dir %s\n", sourcePath, targetPath)
+	logger.Debugf("downloading a data object %s to a local dir %s", sourcePath, targetPath)
 
 	err := filesystem.DownloadFileParallel(sourcePath, "", targetPath, 0)
 	if err != nil {

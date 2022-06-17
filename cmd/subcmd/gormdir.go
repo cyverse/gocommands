@@ -89,7 +89,7 @@ func removeDirOne(filesystem *irodsclient_fs.FileSystem, targetPath string) erro
 		return fmt.Errorf("%s is not a collection", targetPath)
 	} else {
 		// dir
-		logger.Debugf("removing a collection %s\n", targetPath)
+		logger.Debugf("removing a collection %s", targetPath)
 		err = filesystem.RemoveDir(targetPath, false, false)
 		if err != nil {
 			return err

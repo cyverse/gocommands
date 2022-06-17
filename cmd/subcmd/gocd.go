@@ -84,7 +84,7 @@ func changeWorkingDir(connection *irodsclient_conn.IRODSConnection, collectionPa
 	zone := commons.GetZone()
 	collectionPath = commons.MakeIRODSPath(cwd, home, zone, collectionPath)
 
-	logger.Debugf("changing working dir: %s\n", collectionPath)
+	logger.Debugf("changing working dir: %s", collectionPath)
 
 	collection, err := irodsclient_fs.GetCollection(connection, collectionPath)
 	if err != nil {

@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 )
 
 func MakeIRODSPath(cwd string, homedir string, zone string, path string) string {
@@ -41,4 +43,13 @@ func MakeLocalPath(path string) string {
 
 	newPath := filepath.Join(wd, path)
 	return filepath.Clean(newPath)
+}
+
+func EnsureTargetIRODSFilePath(filesystem *irodsclient_fs.FileSystem, source string, target string) string {
+	if filesystem.ExistsDir(target) {
+		// make full file name for target
+		filename := filepath.Base(source)
+		return filepath.Join(target, filename)
+	}
+	return target
 }

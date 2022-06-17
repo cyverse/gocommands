@@ -98,7 +98,7 @@ func listColletion(connection *irodsclient_conn.IRODSConnection, collectionPath 
 	zone := commons.GetZone()
 	collectionPath = commons.MakeIRODSPath(cwd, home, zone, collectionPath)
 
-	logger.Debugf("listing collection: %s\n", collectionPath)
+	logger.Debugf("listing collection: %s", collectionPath)
 
 	collection, err := irodsclient_fs.GetCollection(connection, collectionPath)
 	if err != nil {

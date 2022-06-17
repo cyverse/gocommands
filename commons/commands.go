@@ -94,7 +94,7 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().BoolP("help", "h", false, "Print help")
 	command.Flags().BoolP("debug", "d", false, "Enable debug mode")
 	command.Flags().Int32P("session", "s", -1, "Set session ID")
-	command.Flags().StringP("resource", "", "", "Set resource server")
+	command.Flags().StringP("resource", "R", "", "Set resource server")
 }
 
 func ProcessCommonFlags(command *cobra.Command) (bool, error) {

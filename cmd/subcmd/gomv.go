@@ -96,14 +96,14 @@ func moveOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPat
 
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
 		// file
-		logger.Debugf("renaming a data object %s to %s\n", sourcePath, targetPath)
+		logger.Debugf("renaming a data object %s to %s", sourcePath, targetPath)
 		err = filesystem.RenameFile(sourcePath, targetPath)
 		if err != nil {
 			return err
 		}
 	} else {
 		// dir
-		logger.Debugf("renaming a collection %s to %s\n", sourcePath, targetPath)
+		logger.Debugf("renaming a collection %s to %s", sourcePath, targetPath)
 		err = filesystem.RenameDir(sourcePath, targetPath)
 		if err != nil {
 			return err

@@ -107,7 +107,7 @@ func removeOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, force b
 
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
 		// file
-		logger.Debugf("removing a data object %s\n", sourcePath)
+		logger.Debugf("removing a data object %s", sourcePath)
 		err = filesystem.RemoveFile(sourcePath, force)
 		if err != nil {
 			return err
@@ -118,7 +118,7 @@ func removeOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, force b
 			return fmt.Errorf("cannot remove a collection, recurse is set")
 		}
 
-		logger.Debugf("removing a collection %s\n", sourcePath)
+		logger.Debugf("removing a collection %s", sourcePath)
 		err = filesystem.RemoveDir(sourcePath, recurse, force)
 		if err != nil {
 			return err
