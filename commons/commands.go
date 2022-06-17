@@ -402,3 +402,22 @@ func PrintAccount(command *cobra.Command) error {
 	t.Render()
 	return nil
 }
+
+// InputYN inputs Y or N
+// true for Y, false for N
+func InputYN(msg string) bool {
+	userInput := ""
+
+	for {
+		fmt.Printf("%s [y/n]: ", msg)
+
+		fmt.Scanln(&userInput)
+		userInput = strings.ToLower(userInput)
+
+		if userInput == "y" || userInput == "yes" {
+			return true
+		} else if userInput == "n" || userInput == "no" {
+			return false
+		}
+	}
+}

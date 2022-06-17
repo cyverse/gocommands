@@ -131,7 +131,19 @@ func copyOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPat
 					return err
 				}
 			} else {
-				return fmt.Errorf("file %s already exists, turn on 'force' option to overwrite", targetFilePath)
+				// ask
+				overwrite := commons.InputYN(fmt.Sprintf("file %s already exists. Overwrite?", targetFilePath))
+				if overwrite {
+					logger.Debugf("deleting an existing data object %s")
+					err := filesystem.RemoveFile(targetFilePath, true)
+					if err != nil {
+						return err
+					}
+				} else {
+					fmt.Printf("skip copying a file %s. The file already exists!\n", targetFilePath)
+					//return fmt.Errorf("file %s already exists, turn on 'force' option to overwrite", targetFilePath)
+					return nil
+				}
 			}
 		}
 
