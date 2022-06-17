@@ -84,8 +84,10 @@ func moveOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPat
 	})
 
 	cwd := commons.GetCWD()
-	sourcePath = commons.MakeIRODSPath(cwd, sourcePath)
-	targetPath = commons.MakeIRODSPath(cwd, targetPath)
+	home := commons.GetHomeDir()
+	zone := commons.GetZone()
+	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
+	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	sourceEntry, err := filesystem.Stat(sourcePath)
 	if err != nil {

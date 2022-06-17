@@ -55,17 +55,20 @@ func processCdCommand(command *cobra.Command, args []string) error {
 
 	defer irodsConn.Disconnect()
 
+	targetPath := ""
 	if len(args) == 0 {
-		// do nothing
-		return nil
-	} else if len(args) >= 2 {
-		return fmt.Errorf("too many arguments (%d) are given", len(args))
+		// move to home dir
+		targetPath = "~"
+	} else if len(args) == 1 {
+		targetPath = args[0]
 	} else {
-		// cd
-		err = changeWorkingDir(irodsConn, args[0])
-		if err != nil {
-			return err
-		}
+		return fmt.Errorf("too many arguments (%d) are given", len(args))
+	}
+
+	// cd
+	err = changeWorkingDir(irodsConn, targetPath)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -77,7 +80,9 @@ func changeWorkingDir(connection *irodsclient_conn.IRODSConnection, collectionPa
 	})
 
 	cwd := commons.GetCWD()
-	collectionPath = commons.MakeIRODSPath(cwd, collectionPath)
+	home := commons.GetHomeDir()
+	zone := commons.GetZone()
+	collectionPath = commons.MakeIRODSPath(cwd, home, zone, collectionPath)
 
 	logger.Debugf("changing working dir: %s\n", collectionPath)
 

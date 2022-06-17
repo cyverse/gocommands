@@ -82,7 +82,9 @@ func makeOne(connection *irodsclient_conn.IRODSConnection, targetPath string, pa
 	})
 
 	cwd := commons.GetCWD()
-	targetPath = commons.MakeIRODSPath(cwd, targetPath)
+	home := commons.GetHomeDir()
+	zone := commons.GetZone()
+	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	logger.Debugf("making a collection %s\n", targetPath)
 

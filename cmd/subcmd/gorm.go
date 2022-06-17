@@ -96,7 +96,9 @@ func removeOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, force b
 	})
 
 	cwd := commons.GetCWD()
-	sourcePath = commons.MakeIRODSPath(cwd, sourcePath)
+	home := commons.GetHomeDir()
+	zone := commons.GetZone()
+	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 
 	sourceEntry, err := filesystem.Stat(sourcePath)
 	if err != nil {

@@ -80,8 +80,10 @@ func processPutCommand(command *cobra.Command, args []string) error {
 
 func putOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string) error {
 	cwd := commons.GetCWD()
+	home := commons.GetHomeDir()
+	zone := commons.GetZone()
 	sourcePath = commons.MakeLocalPath(sourcePath)
-	targetPath = commons.MakeIRODSPath(cwd, targetPath)
+	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	st, err := os.Stat(sourcePath)
 	if err != nil {

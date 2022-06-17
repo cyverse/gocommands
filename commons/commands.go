@@ -66,6 +66,16 @@ func GetCWD() string {
 	return envPath
 }
 
+func GetZone() string {
+	env := environmentMgr.Environment
+	return env.Zone
+}
+
+func GetHomeDir() string {
+	env := environmentMgr.Environment
+	return fmt.Sprintf("/%s/home/%s", env.Zone, env.Username)
+}
+
 func SetCWD(cwd string) {
 	env := environmentMgr.Environment
 	session := environmentMgr.Session

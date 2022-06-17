@@ -80,7 +80,9 @@ func processGetCommand(command *cobra.Command, args []string) error {
 
 func getOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string) error {
 	cwd := commons.GetCWD()
-	sourcePath = commons.MakeIRODSPath(cwd, sourcePath)
+	home := commons.GetHomeDir()
+	zone := commons.GetZone()
+	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 	targetPath = commons.MakeLocalPath(targetPath)
 
 	entry, err := filesystem.Stat(sourcePath)
