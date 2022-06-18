@@ -65,6 +65,7 @@ func main() {
 	subcmd.AddMvCommand(rootCmd)
 	subcmd.AddGetCommand(rootCmd)
 	subcmd.AddPutCommand(rootCmd)
+	subcmd.AddSyncCommand(rootCmd)
 	subcmd.AddMkdirCommand(rootCmd)
 	subcmd.AddRmCommand(rootCmd)
 	subcmd.AddRmdirCommand(rootCmd)

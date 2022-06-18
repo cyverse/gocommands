@@ -114,7 +114,7 @@ func putOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath
 			// already exists!
 			if force {
 				// delete first
-				logger.Debugf("deleting an existing data object %s")
+				logger.Debugf("deleting an existing data object %s", targetFilePath)
 				err := filesystem.RemoveFile(targetFilePath, true)
 				if err != nil {
 					return err
@@ -123,14 +123,13 @@ func putOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath
 				// ask
 				overwrite := commons.InputYN(fmt.Sprintf("file %s already exists. Overwrite?", targetFilePath))
 				if overwrite {
-					logger.Debugf("deleting an existing data object %s")
+					logger.Debugf("deleting an existing data object %s", targetFilePath)
 					err := filesystem.RemoveFile(targetFilePath, true)
 					if err != nil {
 						return err
 					}
 				} else {
-					fmt.Printf("skip uploading a file %s. The file already exists!\n", targetFilePath)
-					//return fmt.Errorf("file %s already exists, turn on 'force' option to overwrite", targetFilePath)
+					fmt.Printf("skip uploading a file %s. The data object already exists!\n", targetFilePath)
 					return nil
 				}
 			}
@@ -143,6 +142,8 @@ func putOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath
 		}
 	} else {
 		// dir
+		logger.Debugf("uploading a collection %s to %s", sourcePath, targetPath)
+
 		entries, err := os.ReadDir(sourcePath)
 		if err != nil {
 			return err

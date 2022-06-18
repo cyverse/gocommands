@@ -53,3 +53,15 @@ func EnsureTargetIRODSFilePath(filesystem *irodsclient_fs.FileSystem, source str
 	}
 	return target
 }
+
+func EnsureTargetLocalFilePath(source string, target string) string {
+	st, err := os.Stat(target)
+	if err == nil {
+		if st.IsDir() {
+			// make full file name for target
+			filename := filepath.Base(source)
+			return filepath.Join(target, filename)
+		}
+	}
+	return target
+}

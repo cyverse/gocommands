@@ -125,7 +125,7 @@ func copyOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPat
 			// already exists!
 			if force {
 				// delete first
-				logger.Debugf("deleting an existing data object %s")
+				logger.Debugf("deleting an existing data object %s", targetFilePath)
 				err := filesystem.RemoveFile(targetFilePath, true)
 				if err != nil {
 					return err
@@ -134,14 +134,13 @@ func copyOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPat
 				// ask
 				overwrite := commons.InputYN(fmt.Sprintf("file %s already exists. Overwrite?", targetFilePath))
 				if overwrite {
-					logger.Debugf("deleting an existing data object %s")
+					logger.Debugf("deleting an existing data object %s", targetFilePath)
 					err := filesystem.RemoveFile(targetFilePath, true)
 					if err != nil {
 						return err
 					}
 				} else {
 					fmt.Printf("skip copying a file %s. The file already exists!\n", targetFilePath)
-					//return fmt.Errorf("file %s already exists, turn on 'force' option to overwrite", targetFilePath)
 					return nil
 				}
 			}
@@ -181,9 +180,11 @@ func copyOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPat
 		} else {
 			// make a sub dir
 			targetDir := filepath.Join(targetPath, sourceEntry.Name)
-			err = filesystem.MakeDir(targetDir, true)
-			if err != nil {
-				return err
+			if !filesystem.ExistsDir(targetDir) {
+				err = filesystem.MakeDir(targetDir, true)
+				if err != nil {
+					return err
+				}
 			}
 
 			for _, entryInDir := range entries {
