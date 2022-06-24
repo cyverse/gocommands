@@ -68,9 +68,11 @@ func processGetCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
+	parallelTransferManager := commons.NewParallelTransferManager(commons.MaxThreadNum)
+
 	if len(args) == 1 {
 		// download to current dir
-		err = getOne(filesystem, args[0], "./", force)
+		err = getOne(parallelTransferManager, filesystem, args[0], "./", force)
 		if err != nil {
 			logger.Error(err)
 			return err
@@ -78,7 +80,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	} else if len(args) >= 2 {
 		targetPath := args[len(args)-1]
 		for _, sourcePath := range args[:len(args)-1] {
-			err = getOne(filesystem, sourcePath, targetPath, force)
+			err = getOne(parallelTransferManager, filesystem, sourcePath, targetPath, force)
 			if err != nil {
 				logger.Error(err)
 				return err
@@ -87,10 +89,17 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	} else {
 		return fmt.Errorf("arguments given are not sufficent")
 	}
+
+	err = parallelTransferManager.Go()
+	if err != nil {
+		logger.Error(err)
+		return err
+	}
+
 	return nil
 }
 
-func getOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, force bool) error {
+func getOne(transferManager *commons.ParallelTransferManager, filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, force bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "getOne",
@@ -102,22 +111,22 @@ func getOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath
 	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 	targetPath = commons.MakeLocalPath(targetPath)
 
-	entry, err := filesystem.Stat(sourcePath)
+	sourceEntry, err := filesystem.Stat(sourcePath)
 	if err != nil {
 		return err
 	}
 
-	if entry.Type == irodsclient_fs.FileEntry {
+	if sourceEntry.Type == irodsclient_fs.FileEntry {
 		targetFilePath := commons.EnsureTargetLocalFilePath(sourcePath, targetPath)
 
-		st, err := os.Stat(targetFilePath)
+		targetStat, err := os.Stat(targetFilePath)
 		if err != nil {
 			if !os.IsNotExist(err) {
 				return err
 			}
 		} else {
 			// file/dir exists
-			if st.IsDir() {
+			if targetStat.IsDir() {
 				// dir
 				return fmt.Errorf("local path %s is a directory", targetFilePath)
 			}
@@ -145,30 +154,26 @@ func getOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath
 			}
 		}
 
-		logger.Debugf("downloading a data object %s to %s", sourcePath, targetFilePath)
-		err = filesystem.DownloadFileParallel(sourcePath, "", targetPath, 0)
-		if err != nil {
-			return err
-		}
-
+		logger.Debugf("scheduled a data object download %s to %s", sourcePath, targetFilePath)
+		transferManager.ScheduleDownload(filesystem, sourcePath, targetFilePath)
 	} else {
 		// dir
 		logger.Debugf("downloading a collection %s to %s", sourcePath, targetPath)
 
-		entries, err := filesystem.List(entry.Path)
+		entries, err := filesystem.List(sourceEntry.Path)
 		if err != nil {
 			return err
 		}
 
 		// make target dir
-		targetDir := filepath.Join(targetPath, entry.Name)
+		targetDir := filepath.Join(targetPath, sourceEntry.Name)
 		err = os.MkdirAll(targetDir, 0766)
 		if err != nil {
 			return err
 		}
 
 		for _, entryInDir := range entries {
-			err = getOne(filesystem, entryInDir.Path, targetDir, force)
+			err = getOne(transferManager, filesystem, entryInDir.Path, targetDir, force)
 			if err != nil {
 				return err
 			}

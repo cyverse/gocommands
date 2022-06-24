@@ -77,9 +77,11 @@ func processCpCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
+	parallelTransferManager := commons.NewParallelTransferManager(commons.MaxThreadNum)
+
 	if len(args) == 2 {
 		// copy to another
-		err = copyOne(filesystem, args[0], args[1], recurse, force)
+		err = copyOne(parallelTransferManager, filesystem, args[0], args[1], recurse, force)
 		if err != nil {
 			logger.Error(err)
 			return err
@@ -88,7 +90,7 @@ func processCpCommand(command *cobra.Command, args []string) error {
 		// copy
 		destPath := args[len(args)-1]
 		for _, sourcePath := range args[:len(args)-1] {
-			err = copyOne(filesystem, sourcePath, destPath, recurse, force)
+			err = copyOne(parallelTransferManager, filesystem, sourcePath, destPath, recurse, force)
 			if err != nil {
 				logger.Error(err)
 				return err
@@ -97,10 +99,17 @@ func processCpCommand(command *cobra.Command, args []string) error {
 	} else {
 		return fmt.Errorf("arguments given are not sufficent")
 	}
+
+	err = parallelTransferManager.Go()
+	if err != nil {
+		logger.Error(err)
+		return err
+	}
+
 	return nil
 }
 
-func copyOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, recurse bool, force bool) error {
+func copyOne(transferManager *commons.ParallelTransferManager, filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, recurse bool, force bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "copyOne",
@@ -146,11 +155,8 @@ func copyOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPat
 			}
 		}
 
-		logger.Debugf("copying a data object %s to %s", sourcePath, targetFilePath)
-		err = filesystem.CopyFileToFile(sourcePath, targetFilePath)
-		if err != nil {
-			return err
-		}
+		logger.Debugf("scheduled a data object copy %s to %s", sourcePath, targetFilePath)
+		transferManager.ScheduleCopy(filesystem, sourcePath, targetFilePath)
 	} else {
 		// dir
 		if !recurse {
@@ -172,7 +178,7 @@ func copyOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPat
 			}
 
 			for _, entryInDir := range entries {
-				err = copyOne(filesystem, entryInDir.Path, targetPath, recurse, force)
+				err = copyOne(transferManager, filesystem, entryInDir.Path, targetPath, recurse, force)
 				if err != nil {
 					return err
 				}
@@ -188,7 +194,7 @@ func copyOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPat
 			}
 
 			for _, entryInDir := range entries {
-				err = copyOne(filesystem, entryInDir.Path, targetDir, recurse, force)
+				err = copyOne(transferManager, filesystem, entryInDir.Path, targetDir, recurse, force)
 				if err != nil {
 					return err
 				}

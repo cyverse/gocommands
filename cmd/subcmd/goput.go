@@ -68,9 +68,11 @@ func processPutCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
+	parallelTransferManager := commons.NewParallelTransferManager(commons.MaxThreadNum)
+
 	if len(args) == 1 {
 		// upload to current collection
-		err = putOne(filesystem, args[0], "./", force)
+		err = putOne(parallelTransferManager, filesystem, args[0], "./", force)
 		if err != nil {
 			logger.Error(err)
 			return err
@@ -78,7 +80,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	} else if len(args) >= 2 {
 		targetPath := args[len(args)-1]
 		for _, sourcePath := range args[:len(args)-1] {
-			err = putOne(filesystem, sourcePath, targetPath, force)
+			err = putOne(parallelTransferManager, filesystem, sourcePath, targetPath, force)
 			if err != nil {
 				logger.Error(err)
 				return err
@@ -87,10 +89,17 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	} else {
 		return fmt.Errorf("arguments given are not sufficent")
 	}
+
+	err = parallelTransferManager.Go()
+	if err != nil {
+		logger.Error(err)
+		return err
+	}
+
 	return nil
 }
 
-func putOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, force bool) error {
+func putOne(transferManager *commons.ParallelTransferManager, filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, force bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "putOne",
@@ -102,12 +111,12 @@ func putOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath
 	sourcePath = commons.MakeLocalPath(sourcePath)
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	st, err := os.Stat(sourcePath)
+	sourceStat, err := os.Stat(sourcePath)
 	if err != nil {
 		return err
 	}
 
-	if !st.IsDir() {
+	if !sourceStat.IsDir() {
 		targetFilePath := commons.EnsureTargetIRODSFilePath(filesystem, sourcePath, targetPath)
 
 		if filesystem.ExistsFile(targetFilePath) {
@@ -135,11 +144,8 @@ func putOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath
 			}
 		}
 
-		logger.Debugf("uploading a local file %s to %s", sourcePath, targetFilePath)
-		err := filesystem.UploadFileParallel(sourcePath, targetPath, "", 0, true)
-		if err != nil {
-			return err
-		}
+		logger.Debugf("scheduled a local file upload %s to %s", sourcePath, targetFilePath)
+		transferManager.ScheduleUpload(filesystem, sourcePath, targetFilePath)
 	} else {
 		// dir
 		logger.Debugf("uploading a collection %s to %s", sourcePath, targetPath)
@@ -157,7 +163,7 @@ func putOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath
 		}
 
 		for _, entryInDir := range entries {
-			err = putOne(filesystem, filepath.Join(sourcePath, entryInDir.Name()), targetDir, force)
+			err = putOne(transferManager, filesystem, filepath.Join(sourcePath, entryInDir.Name()), targetDir, force)
 			if err != nil {
 				return err
 			}
