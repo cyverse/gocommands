@@ -290,7 +290,7 @@ func (manager *ParallelTransferManager) ScheduleUploadIfDifferent(filesystem *ir
 
 		// up
 		logger.Debugf("uploading a local file %s to %s", source, target)
-		err = filesystem.UploadFileParallel(source, "", target, 0, true)
+		err = filesystem.UploadFileParallel(source, target, "", 0, true)
 		if err != nil {
 			manager.mutex.Lock()
 			defer manager.mutex.Unlock()
@@ -334,7 +334,7 @@ func (manager *ParallelTransferManager) ScheduleUpload(filesystem *irodsclient_f
 
 	task := func() {
 		logger.Debugf("uploading a local file %s to %s", source, target)
-		err := filesystem.UploadFileParallel(source, "", target, 0, true)
+		err := filesystem.UploadFileParallel(source, target, "", 0, true)
 		if err != nil {
 			manager.mutex.Lock()
 			defer manager.mutex.Unlock()
