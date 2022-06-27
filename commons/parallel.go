@@ -241,8 +241,6 @@ func (manager *ParallelTransferManager) ScheduleUploadIfDifferent(filesystem *ir
 				manager.errors.PushBack(err)
 				return
 			}
-
-			logger.Debugf("there is no file %s at remote", target)
 		} else {
 			// file/dir exists
 			if targetEntry.Type == irodsclient_fs.DirectoryEntry {
@@ -422,7 +420,7 @@ func (manager *ParallelTransferManager) ScheduleCopyIfDifferent(filesystem *irod
 
 		targetEntry, err := filesystem.Stat(target)
 		if err != nil {
-			if !os.IsNotExist(err) {
+			if !irodsclient_types.IsFileNotFoundError(err) {
 				manager.mutex.Lock()
 				defer manager.mutex.Unlock()
 
