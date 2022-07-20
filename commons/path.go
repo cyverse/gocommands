@@ -65,3 +65,13 @@ func EnsureTargetLocalFilePath(source string, target string) string {
 	}
 	return target
 }
+
+func GetFileExtension(path string) string {
+	base := filepath.Base(path)
+
+	idx := strings.Index(base, ".")
+	if idx >= 0 {
+		return path[idx:]
+	}
+	return path
+}

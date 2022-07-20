@@ -69,6 +69,8 @@ func main() {
 	subcmd.AddMkdirCommand(rootCmd)
 	subcmd.AddRmCommand(rootCmd)
 	subcmd.AddRmdirCommand(rootCmd)
+	subcmd.AddBunCommand(rootCmd)
+	subcmd.AddBputCommand(rootCmd)
 
 	err := Execute()
 	if err != nil {

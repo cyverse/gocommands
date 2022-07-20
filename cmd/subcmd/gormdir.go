@@ -79,12 +79,12 @@ func removeDirOne(filesystem *irodsclient_fs.FileSystem, targetPath string) erro
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	sourceEntry, err := filesystem.Stat(targetPath)
+	targetEntry, err := filesystem.Stat(targetPath)
 	if err != nil {
 		return err
 	}
 
-	if sourceEntry.Type == irodsclient_fs.FileEntry {
+	if targetEntry.Type == irodsclient_fs.FileEntry {
 		// file
 		return fmt.Errorf("%s is not a collection", targetPath)
 	} else {

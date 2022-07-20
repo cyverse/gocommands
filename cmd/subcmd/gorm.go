@@ -89,7 +89,7 @@ func processRmCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func removeOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, force bool, recurse bool) error {
+func removeOne(filesystem *irodsclient_fs.FileSystem, targetPath string, force bool, recurse bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "removeOne",
@@ -98,17 +98,17 @@ func removeOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, force b
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
-	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
+	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	sourceEntry, err := filesystem.Stat(sourcePath)
+	targetEntry, err := filesystem.Stat(targetPath)
 	if err != nil {
 		return err
 	}
 
-	if sourceEntry.Type == irodsclient_fs.FileEntry {
+	if targetEntry.Type == irodsclient_fs.FileEntry {
 		// file
-		logger.Debugf("removing a data object %s", sourcePath)
-		err = filesystem.RemoveFile(sourcePath, force)
+		logger.Debugf("removing a data object %s", targetPath)
+		err = filesystem.RemoveFile(targetPath, force)
 		if err != nil {
 			return err
 		}
@@ -118,8 +118,8 @@ func removeOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, force b
 			return fmt.Errorf("cannot remove a collection, recurse is set")
 		}
 
-		logger.Debugf("removing a collection %s", sourcePath)
-		err = filesystem.RemoveDir(sourcePath, recurse, force)
+		logger.Debugf("removing a collection %s", targetPath)
+		err = filesystem.RemoveDir(targetPath, recurse, force)
 		if err != nil {
 			return err
 		}

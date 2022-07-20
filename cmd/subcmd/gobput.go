@@ -1,0 +1,165 @@
+package subcmd
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+
+	"github.com/cyverse/gocommands/commons"
+	log "github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
+)
+
+var bputCmd = &cobra.Command{
+	Use:   "bput [local file1] [local file2] [local dir1] ... [collection]",
+	Short: "Bundle-upload files or directories",
+	Long:  `This uploads files or directories to the given iRODS collection. The files or directories are bundled with TAR to maximize data transfer bandwidth, then extracted in the iRODS.`,
+	RunE:  processBputCommand,
+}
+
+func AddBputCommand(rootCmd *cobra.Command) {
+	// attach common flags
+	commons.SetCommonFlags(bputCmd)
+
+	bputCmd.Flags().BoolP("force", "f", false, "Put forcefully (overwrite)")
+	bputCmd.Flags().IntP("max_file_num", "", commons.MaxBundleFileNum, "Specify max file number in a bundle file")
+	bputCmd.Flags().Int64P("max_file_size", "", commons.MaxBundleFileSize, "Specify max file size of a bundle file")
+
+	rootCmd.AddCommand(bputCmd)
+}
+
+func processBputCommand(command *cobra.Command, args []string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "processBputCommand",
+	})
+
+	cont, err := commons.ProcessCommonFlags(command)
+	if err != nil {
+		logger.Error(err)
+	}
+
+	if !cont {
+		return err
+	}
+
+	// handle local flags
+	_, err = commons.InputMissingFields()
+	if err != nil {
+		logger.Error(err)
+		return err
+	}
+
+	force := false
+	forceFlag := command.Flags().Lookup("force")
+	if forceFlag != nil {
+		force, err = strconv.ParseBool(forceFlag.Value.String())
+		if err != nil {
+			force = false
+		}
+	}
+
+	maxFileNum := commons.MaxBundleFileNum
+	maxFileNumFlag := command.Flags().Lookup("max_file_num")
+	if maxFileNumFlag != nil {
+		n, err := strconv.ParseInt(maxFileNumFlag.Value.String(), 10, 32)
+		if err == nil {
+			maxFileNum = int(n)
+		}
+	}
+
+	maxFileSize := commons.MaxBundleFileSize
+	maxFileSizeFlag := command.Flags().Lookup("max_file_size")
+	if maxFileSizeFlag != nil {
+		n, err := strconv.ParseInt(maxFileSizeFlag.Value.String(), 10, 64)
+		if err == nil {
+			maxFileSize = n
+		}
+	}
+
+	// Create a file system
+	account := commons.GetAccount()
+	filesystem, err := commons.GetIRODSFSClient(account)
+	if err != nil {
+		return err
+	}
+
+	defer filesystem.Release()
+
+	bundleTransferManager := commons.NewBundleTransferManager(maxFileNum, maxFileSize)
+
+	targetPath := ""
+
+	if len(args) == 1 {
+		targetPath = "./"
+
+		// upload to current collection
+		err = bputOne(bundleTransferManager, args[0])
+		if err != nil {
+			logger.Error(err)
+			return err
+		}
+	} else if len(args) >= 2 {
+		targetPath = args[len(args)-1]
+
+		for _, sourcePath := range args[:len(args)-1] {
+			err = bputOne(bundleTransferManager, sourcePath)
+			if err != nil {
+				logger.Error(err)
+				return err
+			}
+		}
+	} else {
+		return fmt.Errorf("arguments given are not sufficent")
+	}
+
+	cwd := commons.GetCWD()
+	home := commons.GetHomeDir()
+	zone := commons.GetZone()
+	tempPath := commons.MakeIRODSPath(cwd, home, zone, "./")
+	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+
+	err = bundleTransferManager.Go(filesystem, tempPath, targetPath, force)
+	if err != nil {
+		logger.Error(err)
+		return err
+	}
+
+	return nil
+}
+
+func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "bputOne",
+	})
+
+	sourcePath = commons.MakeLocalPath(sourcePath)
+
+	sourceStat, err := os.Stat(sourcePath)
+	if err != nil {
+		return err
+	}
+
+	if !sourceStat.IsDir() {
+		logger.Debugf("scheduled a local file bundle-upload %s", sourcePath)
+		bundleManager.ScheduleBundleUpload(sourcePath, sourceStat.Size())
+	} else {
+		// dir
+		logger.Debugf("bundle-uploading a local directory %s", sourcePath)
+
+		entries, err := os.ReadDir(sourcePath)
+		if err != nil {
+			return err
+		}
+
+		for _, entryInDir := range entries {
+			err = bputOne(bundleManager, filepath.Join(sourcePath, entryInDir.Name()))
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}

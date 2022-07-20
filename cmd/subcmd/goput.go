@@ -148,7 +148,7 @@ func putOne(transferManager *commons.ParallelTransferManager, filesystem *irodsc
 		transferManager.ScheduleUpload(filesystem, sourcePath, targetFilePath)
 	} else {
 		// dir
-		logger.Debugf("uploading a collection %s to %s", sourcePath, targetPath)
+		logger.Debugf("uploading a local directory %s to %s", sourcePath, targetPath)
 
 		entries, err := os.ReadDir(sourcePath)
 		if err != nil {
