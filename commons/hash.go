@@ -31,3 +31,22 @@ func HashLocalFile(sourcePath string, hashAlg hash.Hash) (string, error) {
 
 	return sumString, nil
 }
+
+func HashStringsMD5(strs []string) (string, error) {
+	hashAlg := md5.New()
+	return HashStrings(strs, hashAlg)
+}
+
+func HashStrings(strs []string, hashAlg hash.Hash) (string, error) {
+	for _, str := range strs {
+		_, err := hashAlg.Write([]byte(str))
+		if err != nil {
+			return "", err
+		}
+	}
+
+	sumBytes := hashAlg.Sum(nil)
+	sumString := hex.EncodeToString(sumBytes)
+
+	return sumString, nil
+}

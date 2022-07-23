@@ -13,7 +13,6 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/jedib0t/go-pretty/v6/progress"
-	"github.com/rs/xid"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -23,7 +22,7 @@ const (
 )
 
 type Bundle struct {
-	index           int
+	name            string
 	files           []string
 	size            int64
 	localBundlePath string
@@ -31,13 +30,10 @@ type Bundle struct {
 }
 
 func NewBundle() *Bundle {
-	bundleID := xid.New().String()
-	tempDir := os.TempDir()
-
 	return &Bundle{
 		files:           []string{},
 		size:            0,
-		localBundlePath: filepath.Join(tempDir, fmt.Sprintf("bundle_%s.tar", bundleID)),
+		localBundlePath: "",
 		irodsBundlePath: "",
 	}
 }
@@ -47,8 +43,24 @@ func (bundle *Bundle) AddFile(path string, size int64) {
 	bundle.size += size
 }
 
-func (bundle *Bundle) GetName() string {
-	return fmt.Sprintf("bundle %d", bundle.index)
+func (bundle *Bundle) Seal(name string) error {
+	// id
+	strs := []string{}
+	strs = append(strs, bundle.files...)
+	strs = append(strs, fmt.Sprintf("%d", bundle.size))
+
+	bundleID, err := HashStringsMD5(strs)
+	if err != nil {
+		return err
+	}
+
+	// name
+	bundle.name = name
+
+	// set local bundle path
+	tempDir := os.TempDir()
+	bundle.localBundlePath = filepath.Join(tempDir, fmt.Sprintf("%s_%s.tar", bundle.name, bundleID))
+	return nil
 }
 
 type BundleTransferManager struct {
@@ -99,11 +111,9 @@ func (manager *BundleTransferManager) ScheduleBundleUpload(source string, size i
 			if lastBundle.size >= manager.maxBundleFileSize || len(lastBundle.files) >= manager.maxBundleFileNum {
 				// exceed bundle size or file num
 				// create a new
-
 				currentBundle = NewBundle()
-				currentBundle.index = manager.pendingBundles.Len()
 
-				logger.Debugf("assigning a new bundle - %s", currentBundle.localBundlePath)
+				logger.Debugf("assigning a new bundle %d", manager.pendingBundles.Len())
 				manager.pendingBundles.PushBack(currentBundle)
 			} else {
 				// safe to add
@@ -115,9 +125,8 @@ func (manager *BundleTransferManager) ScheduleBundleUpload(source string, size i
 	} else {
 		// add new
 		currentBundle = NewBundle()
-		currentBundle.index = manager.pendingBundles.Len()
 
-		logger.Debugf("assigning a new bundle - %s", currentBundle.localBundlePath)
+		logger.Debugf("assigning a new bundle %d", manager.pendingBundles.Len())
 		manager.pendingBundles.PushBack(currentBundle)
 	}
 
@@ -150,6 +159,10 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 	bundlePtr := manager.pendingBundles.Front()
 	for bundlePtr != nil {
 		if bundle, ok := bundlePtr.Value.(*Bundle); ok {
+			// seal
+			bundleName := fmt.Sprintf("bundle_%d", manager.pendingBundles.Len()-1)
+			bundle.Seal(bundleName)
+
 			sourceFiles = append(sourceFiles, bundle.files...)
 		}
 
@@ -303,19 +316,25 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 					}
 				}
 
-				err = filesystem.UploadFileParallel(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false, callback)
-				if err != nil {
-					manager.mutex.Lock()
-					defer manager.mutex.Unlock()
+				if filesystem.ExistsFile(bundle.irodsBundlePath) {
+					// exists - skip
+					logger.Debugf("bundle file already exists in iRODS, skip uploading - %s", bundle.irodsBundlePath)
+				} else {
+					err = filesystem.UploadFileParallel(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false, callback)
+					if err != nil {
+						manager.mutex.Lock()
+						defer manager.mutex.Unlock()
 
-					logger.WithError(err).Errorf("error while uploading a local bundle file %s to %s", bundle.localBundlePath, bundle.irodsBundlePath)
-					manager.errors.PushBack(err)
-					break
+						logger.WithError(err).Errorf("error while uploading a local bundle file %s to %s", bundle.localBundlePath, bundle.irodsBundlePath)
+						manager.errors.PushBack(err)
+						break
+					}
+
+					logger.Debugf("uploaded a local bundle file %s to %s", bundle.localBundlePath, bundle.irodsBundlePath)
 				}
 
+				// remove local bundle file
 				os.Remove(bundle.localBundlePath)
-
-				logger.Debugf("uploaded a local bundle file %s to %s", bundle.localBundlePath, bundle.irodsBundlePath)
 
 				manager.transferredBundles <- bundle
 			} else {
@@ -386,11 +405,11 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 }
 
 func (manager *BundleTransferManager) getTarProgressName(bundle *Bundle) string {
-	return fmt.Sprintf("%s - TAR", bundle.GetName())
+	return fmt.Sprintf("%s - TAR", bundle.name)
 }
 
 func (manager *BundleTransferManager) getUploadProgressName(bundle *Bundle) string {
-	return fmt.Sprintf("%s - Upload", bundle.GetName())
+	return fmt.Sprintf("%s - Upload", bundle.name)
 }
 
 func (manager *BundleTransferManager) isProgressNameForUpload(name string) bool {
@@ -398,5 +417,5 @@ func (manager *BundleTransferManager) isProgressNameForUpload(name string) bool 
 }
 
 func (manager *BundleTransferManager) getExtractProgressName(bundle *Bundle) string {
-	return fmt.Sprintf("%s - Extract", bundle.GetName())
+	return fmt.Sprintf("%s - Extract", bundle.name)
 }
