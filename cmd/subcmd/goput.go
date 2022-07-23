@@ -3,6 +3,7 @@ package subcmd
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 
@@ -24,6 +25,7 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	commons.SetCommonFlags(putCmd)
 
 	putCmd.Flags().BoolP("force", "f", false, "Put forcefully")
+	putCmd.Flags().BoolP("progress", "", false, "Display progress bar")
 
 	rootCmd.AddCommand(putCmd)
 }
@@ -59,6 +61,15 @@ func processPutCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
+	progress := false
+	progressFlag := command.Flags().Lookup("progress")
+	if progressFlag != nil {
+		progress, err = strconv.ParseBool(progressFlag.Value.String())
+		if err != nil {
+			progress = false
+		}
+	}
+
 	// Create a file system
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
@@ -90,7 +101,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 		return fmt.Errorf("arguments given are not sufficent")
 	}
 
-	err = parallelTransferManager.Go()
+	err = parallelTransferManager.Go(progress)
 	if err != nil {
 		logger.Error(err)
 		return err
@@ -156,7 +167,7 @@ func putOne(transferManager *commons.ParallelTransferManager, filesystem *irodsc
 		}
 
 		// make target dir
-		targetDir := filepath.Join(targetPath, filepath.Base(sourcePath))
+		targetDir := path.Join(targetPath, filepath.Base(sourcePath))
 		err = filesystem.MakeDir(targetDir, true)
 		if err != nil {
 			return err

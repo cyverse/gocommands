@@ -25,6 +25,7 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	bputCmd.Flags().BoolP("force", "f", false, "Put forcefully (overwrite)")
 	bputCmd.Flags().IntP("max_file_num", "", commons.MaxBundleFileNum, "Specify max file number in a bundle file")
 	bputCmd.Flags().Int64P("max_file_size", "", commons.MaxBundleFileSize, "Specify max file size of a bundle file")
+	bputCmd.Flags().BoolP("progress", "", false, "Display progress bar")
 
 	rootCmd.AddCommand(bputCmd)
 }
@@ -78,6 +79,15 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
+	progress := false
+	progressFlag := command.Flags().Lookup("progress")
+	if progressFlag != nil {
+		progress, err = strconv.ParseBool(progressFlag.Value.String())
+		if err != nil {
+			progress = false
+		}
+	}
+
 	// Create a file system
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
@@ -120,7 +130,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	tempPath := commons.MakeIRODSPath(cwd, home, zone, "./")
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	err = bundleTransferManager.Go(filesystem, tempPath, targetPath, force)
+	err = bundleTransferManager.Go(filesystem, tempPath, targetPath, force, progress)
 	if err != nil {
 		logger.Error(err)
 		return err

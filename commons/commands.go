@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -45,7 +46,7 @@ func getCWD(env *irodsclient_icommands.ICommandsEnvironment) string {
 		currentWorkingDir = fmt.Sprintf("/%s/home/%s/%s", env.Zone, env.Username, currentWorkingDir)
 	}
 
-	return filepath.Clean(currentWorkingDir)
+	return path.Clean(currentWorkingDir)
 }
 
 func GetCWD() string {
@@ -84,7 +85,7 @@ func SetCWD(cwd string) {
 		cwd = fmt.Sprintf("/%s/home/%s/%s", env.Zone, env.Username, cwd)
 	}
 
-	session.CurrentWorkingDir = filepath.Clean(cwd)
+	session.CurrentWorkingDir = path.Clean(cwd)
 	environmentMgr.SaveSession(sessionID)
 }
 

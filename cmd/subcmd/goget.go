@@ -24,6 +24,7 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	commons.SetCommonFlags(getCmd)
 
 	getCmd.Flags().BoolP("force", "f", false, "Get forcefully")
+	getCmd.Flags().BoolP("progress", "", false, "Display progress bar")
 
 	rootCmd.AddCommand(getCmd)
 }
@@ -59,6 +60,15 @@ func processGetCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
+	progress := false
+	progressFlag := command.Flags().Lookup("progress")
+	if progressFlag != nil {
+		progress, err = strconv.ParseBool(progressFlag.Value.String())
+		if err != nil {
+			progress = false
+		}
+	}
+
 	// Create a file system
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
@@ -90,7 +100,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 		return fmt.Errorf("arguments given are not sufficent")
 	}
 
-	err = parallelTransferManager.Go()
+	err = parallelTransferManager.Go(progress)
 	if err != nil {
 		logger.Error(err)
 		return err

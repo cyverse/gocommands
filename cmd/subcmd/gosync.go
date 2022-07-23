@@ -3,7 +3,9 @@ package subcmd
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -22,6 +24,8 @@ var syncCmd = &cobra.Command{
 func AddSyncCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(syncCmd)
+
+	syncCmd.Flags().BoolP("progress", "", false, "Display progress bar")
 
 	rootCmd.AddCommand(syncCmd)
 }
@@ -46,6 +50,15 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 	if err != nil {
 		logger.Error(err)
 		return err
+	}
+
+	progress := false
+	progressFlag := command.Flags().Lookup("progress")
+	if progressFlag != nil {
+		progress, err = strconv.ParseBool(progressFlag.Value.String())
+		if err != nil {
+			progress = false
+		}
 	}
 
 	// Create a file system
@@ -96,7 +109,7 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 		return fmt.Errorf("arguments given are not sufficent")
 	}
 
-	err = parallelTransferManager.Go()
+	err = parallelTransferManager.Go(progress)
 	if err != nil {
 		logger.Error(err)
 		return err
@@ -193,7 +206,7 @@ func syncPutOne(transferManager *commons.ParallelTransferManager, filesystem *ir
 		}
 
 		for _, entryInDir := range entries {
-			targetEntryPath := filepath.Join(targetPath, entryInDir.Name())
+			targetEntryPath := path.Join(targetPath, entryInDir.Name())
 			err = syncPutOne(transferManager, filesystem, filepath.Join(sourcePath, entryInDir.Name()), targetEntryPath)
 			if err != nil {
 				return err
@@ -244,7 +257,7 @@ func syncCopyOne(transferManager *commons.ParallelTransferManager, filesystem *i
 		}
 
 		for _, entryInDir := range entries {
-			targetEntryPath := filepath.Join(targetPath, entryInDir.Name)
+			targetEntryPath := path.Join(targetPath, entryInDir.Name)
 			err = syncCopyOne(transferManager, filesystem, entryInDir.Path, targetEntryPath)
 			if err != nil {
 				return err

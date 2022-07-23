@@ -4,9 +4,11 @@ import (
 	"container/list"
 	"os"
 	"sync"
+	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -27,25 +29,33 @@ func NewParallelTransferJob(task func(), threads int) *ParallelTransferJob {
 }
 
 type ParallelTransferManager struct {
-	pendingJobs    *list.List // *ParallelTransferJob
-	currentThreads int
-	maxThreads     int
-	errors         *list.List // error
-	mutex          sync.Mutex
-	condition      *sync.Cond
+	pendingJobs             *list.List // *ParallelTransferJob
+	currentThreads          int
+	maxThreads              int
+	errors                  *list.List // error
+	progressTrackerCallback ProgressTrackerCallback
+	mutex                   sync.Mutex
+	condition               *sync.Cond
 }
 
 // NewParallelTransferManager creates a new ParallelTransferManager
 func NewParallelTransferManager(maxThreads int) *ParallelTransferManager {
 	manager := &ParallelTransferManager{
-		pendingJobs:    list.New(),
-		currentThreads: 0,
-		maxThreads:     maxThreads,
-		errors:         list.New(),
+		pendingJobs:             list.New(),
+		currentThreads:          0,
+		maxThreads:              maxThreads,
+		errors:                  list.New(),
+		progressTrackerCallback: nil,
 	}
 
 	manager.condition = sync.NewCond(&manager.mutex)
 	return manager
+}
+
+func (manager *ParallelTransferManager) progressCallback(path string, processed int64, total int64) {
+	if manager.progressTrackerCallback != nil {
+		manager.progressTrackerCallback(path, processed, total)
+	}
 }
 
 // ScheduleDownloadIfDifferent schedules a file download only if data is changed
@@ -129,7 +139,11 @@ func (manager *ParallelTransferManager) ScheduleDownloadIfDifferent(filesystem *
 
 		// down
 		logger.Debugf("downloading a data object %s to %s", source, target)
-		err = filesystem.DownloadFileParallel(source, "", target, 0)
+		callback := func(processed int64, total int64) {
+			manager.progressCallback(source, processed, total)
+		}
+
+		err = filesystem.DownloadFileParallel(source, "", target, 0, callback)
 		if err != nil {
 			manager.mutex.Lock()
 			defer manager.mutex.Unlock()
@@ -175,7 +189,11 @@ func (manager *ParallelTransferManager) ScheduleDownload(filesystem *irodsclient
 
 	task := func() {
 		logger.Debugf("downloading a data object %s to %s", source, target)
-		err := filesystem.DownloadFileParallel(source, "", target, 0)
+		callback := func(processed int64, total int64) {
+			manager.progressCallback(source, processed, total)
+		}
+
+		err := filesystem.DownloadFileParallel(source, "", target, 0, callback)
 		if err != nil {
 			manager.mutex.Lock()
 			defer manager.mutex.Unlock()
@@ -290,7 +308,11 @@ func (manager *ParallelTransferManager) ScheduleUploadIfDifferent(filesystem *ir
 
 		// up
 		logger.Debugf("uploading a local file %s to %s", source, target)
-		err = filesystem.UploadFileParallel(source, target, "", 0, true)
+		callback := func(processed int64, total int64) {
+			manager.progressCallback(target, processed, total)
+		}
+
+		err = filesystem.UploadFileParallel(source, target, "", 0, true, callback)
 		if err != nil {
 			manager.mutex.Lock()
 			defer manager.mutex.Unlock()
@@ -334,7 +356,11 @@ func (manager *ParallelTransferManager) ScheduleUpload(filesystem *irodsclient_f
 
 	task := func() {
 		logger.Debugf("uploading a local file %s to %s", source, target)
-		err := filesystem.UploadFileParallel(source, target, "", 0, true)
+		callback := func(processed int64, total int64) {
+			manager.progressCallback(target, processed, total)
+		}
+
+		err := filesystem.UploadFileParallel(source, target, "", 0, true, callback)
 		if err != nil {
 			manager.mutex.Lock()
 			defer manager.mutex.Unlock()
@@ -490,7 +516,7 @@ func (manager *ParallelTransferManager) ScheduleCopyIfDifferent(filesystem *irod
 }
 
 // run jobs
-func (manager *ParallelTransferManager) Go() error {
+func (manager *ParallelTransferManager) Go(showProgress bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "commons",
 		"struct":   "ParallelTransferManager",
@@ -507,6 +533,58 @@ func (manager *ParallelTransferManager) Go() error {
 	}
 
 	wg := sync.WaitGroup{}
+
+	var pw progress.Writer
+	if showProgress {
+		pw = progress.NewWriter()
+		pw.SetAutoStop(false)
+		pw.SetTrackerLength(25)
+		pw.SetMessageWidth(50)
+		pw.SetNumTrackersExpected(pendingJobs)
+		pw.SetStyle(progress.StyleDefault)
+		pw.SetTrackerPosition(progress.PositionRight)
+		pw.SetUpdateFrequency(time.Millisecond * 100)
+		pw.Style().Colors = progress.StyleColorsExample
+		pw.Style().Options.PercentFormat = "%4.1f%%"
+		pw.Style().Visibility.ETA = true
+		pw.Style().Visibility.Percentage = true
+		pw.Style().Visibility.Time = true
+		pw.Style().Visibility.Value = true
+
+		go pw.Render()
+
+		trackers := map[string]*progress.Tracker{}
+		trackerMutex := sync.Mutex{}
+
+		// add progress tracker callback
+		trackerCB := func(name string, processed, total int64) {
+			trackerMutex.Lock()
+			defer trackerMutex.Unlock()
+
+			var tracker *progress.Tracker
+			if t, ok := trackers[name]; !ok {
+				// not created yet
+				tracker = &progress.Tracker{
+					Message: GetBasename(name),
+					Total:   total,
+					Units:   progress.UnitsBytes,
+				}
+
+				pw.AppendTracker(tracker)
+				trackers[name] = tracker
+			} else {
+				tracker = t
+			}
+
+			tracker.SetValue(processed)
+
+			if processed >= total {
+				tracker.MarkAsDone()
+			}
+		}
+
+		manager.progressTrackerCallback = trackerCB
+	}
 
 	for {
 		manager.mutex.Lock()
@@ -548,6 +626,10 @@ func (manager *ParallelTransferManager) Go() error {
 	}
 
 	wg.Wait()
+
+	if showProgress {
+		pw.Stop()
+	}
 
 	// check error
 	var errReturn error

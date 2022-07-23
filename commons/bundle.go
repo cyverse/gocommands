@@ -4,10 +4,15 @@ import (
 	"container/list"
 	"fmt"
 	"os"
+	"path"
+	"path/filepath"
+	"strings"
 	"sync"
+	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/go-irodsclient/irods/types"
+	"github.com/jedib0t/go-pretty/v6/progress"
 	"github.com/rs/xid"
 	log "github.com/sirupsen/logrus"
 )
@@ -18,6 +23,7 @@ const (
 )
 
 type Bundle struct {
+	index           int
 	files           []string
 	size            int64
 	localBundlePath string
@@ -31,7 +37,7 @@ func NewBundle() *Bundle {
 	return &Bundle{
 		files:           []string{},
 		size:            0,
-		localBundlePath: fmt.Sprintf("/%s/%s.tar", tempDir, bundleID),
+		localBundlePath: filepath.Join(tempDir, fmt.Sprintf("bundle_%s.tar", bundleID)),
 		irodsBundlePath: "",
 	}
 }
@@ -41,26 +47,38 @@ func (bundle *Bundle) AddFile(path string, size int64) {
 	bundle.size += size
 }
 
+func (bundle *Bundle) GetName() string {
+	return fmt.Sprintf("bundle %d", bundle.index)
+}
+
 type BundleTransferManager struct {
-	pendingBundles     *list.List   // *Bundle
-	transferredBundles chan *Bundle // *Bundle
-	maxBundleFileNum   int
-	maxBundleFileSize  int64
-	errors             *list.List // error
-	mutex              sync.Mutex
+	pendingBundles          *list.List   // *Bundle
+	transferredBundles      chan *Bundle // *Bundle
+	maxBundleFileNum        int
+	maxBundleFileSize       int64
+	errors                  *list.List // error
+	progressTrackerCallback ProgressTrackerCallback
+	mutex                   sync.Mutex
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
 func NewBundleTransferManager(maxBundleFileNum int, maxBundleFileSize int64) *BundleTransferManager {
 	manager := &BundleTransferManager{
-		pendingBundles:     list.New(),
-		transferredBundles: make(chan *Bundle),
-		maxBundleFileNum:   maxBundleFileNum,
-		maxBundleFileSize:  maxBundleFileSize,
-		errors:             list.New(),
+		pendingBundles:          list.New(),
+		transferredBundles:      make(chan *Bundle),
+		maxBundleFileNum:        maxBundleFileNum,
+		maxBundleFileSize:       maxBundleFileSize,
+		errors:                  list.New(),
+		progressTrackerCallback: nil,
 	}
 
 	return manager
+}
+
+func (manager *BundleTransferManager) progressCallback(name string, processed int64, total int64) {
+	if manager.progressTrackerCallback != nil {
+		manager.progressTrackerCallback(name, processed, total)
+	}
 }
 
 // ScheduleBundleUpload schedules a file bundle upload
@@ -83,6 +101,8 @@ func (manager *BundleTransferManager) ScheduleBundleUpload(source string, size i
 				// create a new
 
 				currentBundle = NewBundle()
+				currentBundle.index = manager.pendingBundles.Len()
+
 				logger.Debugf("assigning a new bundle - %s", currentBundle.localBundlePath)
 				manager.pendingBundles.PushBack(currentBundle)
 			} else {
@@ -95,6 +115,8 @@ func (manager *BundleTransferManager) ScheduleBundleUpload(source string, size i
 	} else {
 		// add new
 		currentBundle = NewBundle()
+		currentBundle.index = manager.pendingBundles.Len()
+
 		logger.Debugf("assigning a new bundle - %s", currentBundle.localBundlePath)
 		manager.pendingBundles.PushBack(currentBundle)
 	}
@@ -105,7 +127,7 @@ func (manager *BundleTransferManager) ScheduleBundleUpload(source string, size i
 }
 
 // run jobs
-func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, tempPath string, targetPath string, force bool) error {
+func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, tempPath string, targetPath string, force bool, showProgress bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "commons",
 		"struct":   "BundleTransferManager",
@@ -121,9 +143,114 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 		return nil
 	}
 
+	// do some precheck
+	sourceFiles := []string{}
+
+	manager.mutex.Lock()
+	bundlePtr := manager.pendingBundles.Front()
+	for bundlePtr != nil {
+		if bundle, ok := bundlePtr.Value.(*Bundle); ok {
+			sourceFiles = append(sourceFiles, bundle.files...)
+		}
+
+		bundlePtr = bundlePtr.Next()
+	}
+	manager.mutex.Unlock()
+
+	// calculate tar root
+	shortestSourceFile, err := GetShortedLocalPath(sourceFiles)
+	if err != nil {
+		logger.Debug("failed to calculate shortest local path")
+		return nil
+	}
+
+	tarBaseDir := filepath.Dir(shortestSourceFile)
+
+	// check if files exist on the target -- to support 'force' option
+	// even with 'force' option, ibun fails if files exist
+	if force {
+		for _, source := range sourceFiles {
+			rel, err := filepath.Rel(tarBaseDir, source)
+			if err != nil {
+				logger.Debugf("failed to calculate relative path for source %s", source)
+				return nil
+			}
+
+			targetFilepath := path.Join(targetPath, filepath.ToSlash(rel))
+
+			if filesystem.ExistsFile(targetFilepath) {
+				logger.Debugf("deleting exising data object %s", targetFilepath)
+				err = filesystem.RemoveFile(targetFilepath, true)
+				if err != nil {
+					logger.Debugf("failed to delete existing data object %s", targetFilepath)
+					return nil
+				}
+			}
+		}
+	}
+
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
+
+	var pw progress.Writer
+	if showProgress {
+		pw = progress.NewWriter()
+		pw.SetAutoStop(false)
+		pw.SetTrackerLength(25)
+		pw.SetMessageWidth(50)
+		pw.SetNumTrackersExpected(pendingBundles * 3)
+		pw.SetStyle(progress.StyleDefault)
+		pw.SetTrackerPosition(progress.PositionRight)
+		pw.SetUpdateFrequency(time.Millisecond * 100)
+		pw.Style().Colors = progress.StyleColorsExample
+		pw.Style().Options.PercentFormat = "%4.1f%%"
+		pw.Style().Visibility.ETA = true
+		pw.Style().Visibility.Percentage = true
+		pw.Style().Visibility.Time = true
+		pw.Style().Visibility.Value = true
+		pw.Style().Visibility.ETAOverall = true
+		pw.Style().Visibility.TrackerOverall = true
+
+		go pw.Render()
+
+		trackers := map[string]*progress.Tracker{}
+		trackerMutex := sync.Mutex{}
+
+		// add progress tracker callback
+		trackerCB := func(name string, processed int64, total int64) {
+			trackerMutex.Lock()
+			defer trackerMutex.Unlock()
+
+			var tracker *progress.Tracker
+			unit := progress.UnitsDefault
+			if manager.isProgressNameForUpload(name) {
+				unit = progress.UnitsBytes
+			}
+
+			if t, ok := trackers[name]; !ok {
+				// not created yet
+				tracker = &progress.Tracker{
+					Message: name,
+					Total:   total,
+					Units:   unit,
+				}
+
+				pw.AppendTracker(tracker)
+				trackers[name] = tracker
+			} else {
+				tracker = t
+			}
+
+			tracker.SetValue(processed)
+
+			if processed >= total {
+				tracker.MarkAsDone()
+			}
+		}
+
+		manager.progressTrackerCallback = trackerCB
+	}
 
 	// tar
 	go func() {
@@ -143,7 +270,11 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 				// do bundle
 				logger.Debugf("bundling (tar) files to %s", bundle.localBundlePath)
 
-				err := Tar(bundle.files, bundle.localBundlePath)
+				if showProgress {
+					manager.progressCallback(manager.getTarProgressName(bundle), 0, 100)
+				}
+
+				err := Tar(tarBaseDir, bundle.files, bundle.localBundlePath)
 				if err != nil {
 					manager.mutex.Lock()
 					defer manager.mutex.Unlock()
@@ -153,6 +284,10 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 					break
 				}
 
+				if showProgress {
+					manager.progressCallback(manager.getTarProgressName(bundle), 100, 100)
+				}
+
 				logger.Debugf("created a bundle (tar) file %s", bundle.localBundlePath)
 
 				// update target irods file path
@@ -160,7 +295,15 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 
 				// upload
 				logger.Debugf("uploading a local bundle file %s to %s", bundle.localBundlePath, bundle.irodsBundlePath)
-				err = filesystem.UploadFileParallel(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false)
+				var callback func(processed int64, total int64)
+				if showProgress {
+					uploadProgressName := manager.getUploadProgressName(bundle)
+					callback = func(processed int64, total int64) {
+						manager.progressCallback(uploadProgressName, processed, total)
+					}
+				}
+
+				err = filesystem.UploadFileParallel(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false, callback)
 				if err != nil {
 					manager.mutex.Lock()
 					defer manager.mutex.Unlock()
@@ -190,6 +333,10 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 			if bundle, ok := <-manager.transferredBundles; ok {
 				// do extract
 				logger.Debugf("extracting a bundle file %s", bundle.irodsBundlePath)
+				if showProgress {
+					manager.progressCallback(manager.getExtractProgressName(bundle), 0, 100)
+				}
+
 				err := filesystem.ExtractStructFile(bundle.irodsBundlePath, targetPath, "", types.TAR_FILE_DT, force)
 				if err != nil {
 					manager.mutex.Lock()
@@ -201,6 +348,10 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 				}
 
 				filesystem.RemoveFile(bundle.irodsBundlePath, true)
+
+				if showProgress {
+					manager.progressCallback(manager.getExtractProgressName(bundle), 100, 100)
+				}
 
 				logger.Debugf("extracted a bundle file %s to %s", bundle.irodsBundlePath, targetPath)
 			} else {
@@ -215,6 +366,10 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 
 	wg.Wait()
 
+	if showProgress {
+		pw.Stop()
+	}
+
 	// check error
 	var errReturn error
 	manager.mutex.Lock()
@@ -228,4 +383,20 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 	}
 	manager.mutex.Unlock()
 	return errReturn
+}
+
+func (manager *BundleTransferManager) getTarProgressName(bundle *Bundle) string {
+	return fmt.Sprintf("%s - TAR", bundle.GetName())
+}
+
+func (manager *BundleTransferManager) getUploadProgressName(bundle *Bundle) string {
+	return fmt.Sprintf("%s - Upload", bundle.GetName())
+}
+
+func (manager *BundleTransferManager) isProgressNameForUpload(name string) bool {
+	return strings.HasSuffix(name, " Upload")
+}
+
+func (manager *BundleTransferManager) getExtractProgressName(bundle *Bundle) string {
+	return fmt.Sprintf("%s - Extract", bundle.GetName())
 }

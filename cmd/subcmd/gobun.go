@@ -104,7 +104,7 @@ func processBunCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func getDataType(path string, dataType string) (irodsclient_types.DataType, error) {
+func getDataType(irodsPath string, dataType string) (irodsclient_types.DataType, error) {
 	switch strings.ToLower(dataType) {
 	case "tar", "t", "tar file":
 		return irodsclient_types.TAR_FILE_DT, nil
@@ -121,7 +121,7 @@ func getDataType(path string, dataType string) (irodsclient_types.DataType, erro
 	}
 
 	// auto
-	ext := commons.GetFileExtension(path)
+	ext := commons.GetFileExtension(irodsPath)
 	switch strings.ToLower(ext) {
 	case ".tar":
 		return irodsclient_types.TAR_FILE_DT, nil
