@@ -2,6 +2,7 @@ package subcmd
 
 import (
 	"fmt"
+	"os"
 	"path"
 	"strconv"
 
@@ -37,18 +38,20 @@ func processCpCommand(command *cobra.Command, args []string) error {
 
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	if !cont {
-		return err
+		return nil
 	}
 
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
 		logger.Error(err)
-		return err
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	recurse := false
@@ -82,7 +85,9 @@ func processCpCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		return err
+		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	defer filesystem.Release()
@@ -94,7 +99,8 @@ func processCpCommand(command *cobra.Command, args []string) error {
 		err = copyOne(parallelTransferManager, filesystem, args[0], args[1], recurse, force)
 		if err != nil {
 			logger.Error(err)
-			return err
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
 		}
 	} else if len(args) >= 3 {
 		// copy
@@ -103,17 +109,22 @@ func processCpCommand(command *cobra.Command, args []string) error {
 			err = copyOne(parallelTransferManager, filesystem, sourcePath, destPath, recurse, force)
 			if err != nil {
 				logger.Error(err)
-				return err
+				fmt.Fprintln(os.Stderr, err.Error())
+				return nil
 			}
 		}
 	} else {
-		return fmt.Errorf("arguments given are not sufficent")
+		err := fmt.Errorf("not enough input arguments")
+		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	err = parallelTransferManager.Go(progress)
 	if err != nil {
 		logger.Error(err)
-		return err
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	return nil

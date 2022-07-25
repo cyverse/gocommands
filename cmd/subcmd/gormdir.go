@@ -2,6 +2,7 @@ package subcmd
 
 import (
 	"fmt"
+	"os"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/gocommands/commons"
@@ -31,38 +32,46 @@ func processRmdirCommand(command *cobra.Command, args []string) error {
 
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	if !cont {
-		return err
+		return nil
 	}
 
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
 		logger.Error(err)
-		return err
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	// Create a file system
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		return err
+		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	defer filesystem.Release()
 
 	if len(args) == 0 {
-		return fmt.Errorf("arguments given are not sufficent")
+		err := fmt.Errorf("not enough input arguments")
+		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	for _, targetPath := range args {
 		err = removeDirOne(filesystem, targetPath)
 		if err != nil {
 			logger.Error(err)
-			return err
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
 		}
 	}
 	return nil

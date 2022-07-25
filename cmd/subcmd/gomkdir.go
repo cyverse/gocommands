@@ -1,6 +1,8 @@
 package subcmd
 
 import (
+	"fmt"
+	"os"
 	"strconv"
 
 	irodsclient_conn "github.com/cyverse/go-irodsclient/irods/connection"
@@ -33,18 +35,20 @@ func processMkdirCommand(command *cobra.Command, args []string) error {
 
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	if !cont {
-		return err
+		return nil
 	}
 
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
 		logger.Error(err)
-		return err
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	parent := false
@@ -60,7 +64,9 @@ func processMkdirCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	irodsConn, err := commons.GetIRODSConnection(account)
 	if err != nil {
-		return err
+		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	defer irodsConn.Disconnect()
@@ -69,7 +75,8 @@ func processMkdirCommand(command *cobra.Command, args []string) error {
 		err = makeOne(irodsConn, targetPath, parent)
 		if err != nil {
 			logger.Error(err)
-			return err
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
 		}
 	}
 	return nil

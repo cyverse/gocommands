@@ -2,6 +2,7 @@ package subcmd
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 
@@ -37,18 +38,20 @@ func processLsCommand(command *cobra.Command, args []string) error {
 
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	if !cont {
-		return err
+		return nil
 	}
 
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
 		logger.Error(err)
-		return err
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	longFormat := false
@@ -73,7 +76,9 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	irodsConn, err := commons.GetIRODSConnection(account)
 	if err != nil {
-		return err
+		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	defer irodsConn.Disconnect()
@@ -82,14 +87,16 @@ func processLsCommand(command *cobra.Command, args []string) error {
 		err = listColletion(irodsConn, ".", longFormat, veryLongFormat)
 		if err != nil {
 			logger.Error(err)
-			return err
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
 		}
 	} else {
 		for _, sourcePath := range args {
 			err = listColletion(irodsConn, sourcePath, longFormat, veryLongFormat)
 			if err != nil {
 				logger.Error(err)
-				return err
+				fmt.Fprintln(os.Stderr, err.Error())
+				return nil
 			}
 		}
 	}

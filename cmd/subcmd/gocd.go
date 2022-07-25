@@ -2,6 +2,7 @@ package subcmd
 
 import (
 	"fmt"
+	"os"
 
 	irodsclient_conn "github.com/cyverse/go-irodsclient/irods/connection"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/irods/fs"
@@ -32,25 +33,29 @@ func processCdCommand(command *cobra.Command, args []string) error {
 
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	if !cont {
-		return err
+		return nil
 	}
 
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
 		logger.Error(err)
-		return err
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	// Create a connection
 	account := commons.GetAccount()
 	irodsConn, err := commons.GetIRODSConnection(account)
 	if err != nil {
-		return err
+		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	defer irodsConn.Disconnect()
@@ -62,13 +67,18 @@ func processCdCommand(command *cobra.Command, args []string) error {
 	} else if len(args) == 1 {
 		targetPath = args[0]
 	} else {
-		return fmt.Errorf("too many arguments (%d) are given", len(args))
+		err := fmt.Errorf("too many arguments")
+		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	// cd
 	err = changeWorkingDir(irodsConn, targetPath)
 	if err != nil {
-		return err
+		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 	return nil
 }

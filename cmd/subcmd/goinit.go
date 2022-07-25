@@ -2,6 +2,7 @@ package subcmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
@@ -32,30 +33,34 @@ func processInitCommand(command *cobra.Command, args []string) error {
 
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	if !cont {
-		return err
+		return nil
 	}
 
 	// handle local flags
 	updated, err := commons.InputMissingFields()
 	if err != nil {
 		logger.Error(err)
-		return err
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	account, err := commons.GetEnvironmentManager().ToIRODSAccount()
 	if err != nil {
 		logger.Error(err)
-		return err
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	err = commons.TestConnect(account)
 	if err != nil {
 		logger.Error(err)
-		return err
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
 	}
 
 	if updated {
@@ -63,14 +68,16 @@ func processInitCommand(command *cobra.Command, args []string) error {
 		err := commons.GetEnvironmentManager().Save()
 		if err != nil {
 			logger.Error(err)
-			return err
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
 		}
 	} else {
 		fmt.Println("gocommands is already configured for following account:")
 		err := commons.PrintAccount(command)
 		if err != nil {
 			logger.Error(err)
-			return err
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
 		}
 	}
 	return nil

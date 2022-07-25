@@ -48,6 +48,8 @@ func main() {
 		FullTimestamp:   true,
 	})
 
+	log.SetLevel(log.FatalLevel)
+
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "main",
