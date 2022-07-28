@@ -3,6 +3,7 @@ package commons
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -90,7 +91,8 @@ func SetCWD(cwd string) {
 }
 
 func SetCommonFlags(command *cobra.Command) {
-	command.Flags().StringP("config", "c", "", "Set config file (default is $HOME/.irods/irods_environment.json)")
+	command.Flags().StringP("config", "c", "", "Set config file (default is $HOME/.irods)")
+	command.Flags().BoolP("envconfig", "e", false, "Read config from environmental variables")
 	command.Flags().BoolP("version", "v", false, "Print version")
 	command.Flags().BoolP("help", "h", false, "Print help")
 	command.Flags().BoolP("debug", "d", false, "Enable debug mode")
@@ -160,6 +162,8 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 
 	logger.Debugf("use sessionID - %d", sessionID)
 
+	readConfig := false
+
 	configFlag := command.Flags().Lookup("config")
 	if configFlag != nil {
 		config := configFlag.Value.String()
@@ -169,10 +173,32 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 				logger.Error(err)
 				return false, err // stop here
 			}
+
+			readConfig = true
 		}
 	}
 
-	if configFlag == nil || len(configFlag.Value.String()) == 0 {
+	envConfigFlag := command.Flags().Lookup("envconfig")
+	if envConfigFlag != nil {
+		envConfig, err := strconv.ParseBool(envConfigFlag.Value.String())
+		if err != nil {
+			logger.Error(err)
+			return false, err // stop here
+		}
+
+		if envConfig {
+			err := loadConfigEnv(command)
+			if err != nil {
+				logger.Error(err)
+				return false, err // stop here
+			}
+
+			readConfig = true
+		}
+	}
+
+	// default config
+	if !readConfig {
 		// auto detect
 		homePath, err := os.UserHomeDir()
 		if err == nil {
@@ -316,6 +342,34 @@ func isICommandsEnvDir(filePath string) bool {
 	return true
 }
 
+func isYAMLFile(filePath string) bool {
+	st, err := os.Stat(filePath)
+	if err != nil {
+		return false
+	}
+
+	if st.IsDir() {
+		return false
+	}
+
+	ext := filepath.Ext(filePath)
+	return ext == ".yaml" || ext == ".yml"
+}
+
+func isJSONFile(filePath string) bool {
+	st, err := os.Stat(filePath)
+	if err != nil {
+		return false
+	}
+
+	if st.IsDir() {
+		return false
+	}
+
+	ext := filepath.Ext(filePath)
+	return ext == ".json"
+}
+
 func loadConfigFile(command *cobra.Command, configFilePath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
@@ -354,9 +408,113 @@ func loadConfigFile(command *cobra.Command, configFilePath string) error {
 		environmentMgr = iCommandsEnvMgr
 		account = loadedAccount
 		return nil
+	} else if isYAMLFile(configFilePath) || isJSONFile(configFilePath) {
+		logger.Debugf("reading gocommands YAML/JSON config file - %s", configFilePath)
+
+		homePath, err := os.UserHomeDir()
+		if err != nil {
+			return err
+		}
+
+		irodsPath := filepath.Join(homePath, ".irods")
+		iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager(irodsPath, 0)
+		if err != nil {
+			return err
+		}
+
+		// load from YAML/JSON
+		yjBytes, err := ioutil.ReadFile(configFilePath)
+		if err != nil {
+			return err
+		}
+
+		var config *Config
+		if isYAMLFile(configFilePath) {
+			config, err = NewConfigFromYAML(yjBytes)
+			if err != nil {
+				return err
+			}
+		} else {
+			config, err = NewConfigFromJSON(yjBytes)
+			if err != nil {
+				return err
+			}
+		}
+
+		iCommandsEnvMgr.Environment.CurrentWorkingDir = config.CurrentWorkingDir
+		iCommandsEnvMgr.Environment.Host = config.Host
+		iCommandsEnvMgr.Environment.Port = config.Port
+		iCommandsEnvMgr.Environment.Username = config.Username
+		iCommandsEnvMgr.Environment.Zone = config.Zone
+		iCommandsEnvMgr.Environment.DefaultResource = config.DefaultResource
+		iCommandsEnvMgr.Environment.LogLevel = config.LogLevel
+
+		iCommandsEnvMgr.Password = config.Password
+
+		if iCommandsEnvMgr.Environment.LogLevel > 0 {
+			logLevel := log.Level(iCommandsEnvMgr.Environment.LogLevel / 2)
+			log.SetLevel(logLevel)
+		}
+
+		loadedAccount, err := iCommandsEnvMgr.ToIRODSAccount()
+		if err != nil {
+			return err
+		}
+
+		environmentMgr = iCommandsEnvMgr
+		account = loadedAccount
+		return nil
 	}
 
 	return fmt.Errorf("unhandled configuration file - %s", configFilePath)
+}
+
+func loadConfigEnv(command *cobra.Command) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "loadConfigEnv",
+	})
+
+	logger.Debug("reading config from environment variables")
+	homePath, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+
+	irodsPath := filepath.Join(homePath, ".irods")
+	iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager(irodsPath, 0)
+	if err != nil {
+		return err
+	}
+
+	config, err := NewConfigFromENV()
+	if err != nil {
+		return err
+	}
+
+	iCommandsEnvMgr.Environment.CurrentWorkingDir = config.CurrentWorkingDir
+	iCommandsEnvMgr.Environment.Host = config.Host
+	iCommandsEnvMgr.Environment.Port = config.Port
+	iCommandsEnvMgr.Environment.Username = config.Username
+	iCommandsEnvMgr.Environment.Zone = config.Zone
+	iCommandsEnvMgr.Environment.DefaultResource = config.DefaultResource
+	iCommandsEnvMgr.Environment.LogLevel = config.LogLevel
+
+	iCommandsEnvMgr.Password = config.Password
+
+	if iCommandsEnvMgr.Environment.LogLevel > 0 {
+		logLevel := log.Level(iCommandsEnvMgr.Environment.LogLevel / 2)
+		log.SetLevel(logLevel)
+	}
+
+	loadedAccount, err := iCommandsEnvMgr.ToIRODSAccount()
+	if err != nil {
+		return err
+	}
+
+	environmentMgr = iCommandsEnvMgr
+	account = loadedAccount
+	return nil
 }
 
 func printVersion(command *cobra.Command) error {
