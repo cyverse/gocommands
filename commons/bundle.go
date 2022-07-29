@@ -157,13 +157,17 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 
 	manager.mutex.Lock()
 	bundlePtr := manager.pendingBundles.Front()
+	bundleId := 0
 	for bundlePtr != nil {
 		if bundle, ok := bundlePtr.Value.(*Bundle); ok {
 			// seal
-			bundleName := fmt.Sprintf("bundle_%d", manager.pendingBundles.Len()-1)
+			bundleName := fmt.Sprintf("bundle_%d", bundleId)
 			bundle.Seal(bundleName)
 
+			logger.Debugf("sealing a bundle '%s'", bundleName)
+
 			sourceFiles = append(sourceFiles, bundle.files...)
+			bundleId++
 		}
 
 		bundlePtr = bundlePtr.Next()
