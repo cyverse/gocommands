@@ -91,7 +91,8 @@ func GetBasename(path string) string {
 	return path[idx2+1:]
 }
 
-func GetShortedLocalPath(paths []string) (string, error) {
+func GetCommonRootLocalDirPath(paths []string) (string, error) {
+	// find shortest path
 	shortestPath := ""
 	shortestPathDepth := 0
 
@@ -113,5 +114,36 @@ func GetShortedLocalPath(paths []string) (string, error) {
 		}
 	}
 
-	return shortestPath, nil
+	commonRootPath := shortestPath
+	for {
+		pass := true
+		// check it with others
+		for _, path := range paths {
+			absPath, err := filepath.Abs(path)
+			if err != nil {
+				return "", err
+			}
+
+			rel, err := filepath.Rel(commonRootPath, absPath)
+			if err != nil {
+				return "", err
+			}
+
+			if strings.HasPrefix(rel, "../") {
+				commonRootPath = filepath.Dir(commonRootPath)
+				pass = false
+				break
+			}
+		}
+
+		if pass {
+			break
+		}
+	}
+
+	if commonRootPath == "" {
+		commonRootPath = "/"
+	}
+
+	return commonRootPath, nil
 }

@@ -64,8 +64,7 @@ func (bundle *Bundle) Seal(name string) error {
 }
 
 type BundleTransferManager struct {
-	pendingBundles          *list.List   // *Bundle
-	transferredBundles      chan *Bundle // *Bundle
+	pendingBundles          *list.List // *Bundle
 	maxBundleFileNum        int
 	maxBundleFileSize       int64
 	errors                  *list.List // error
@@ -77,7 +76,6 @@ type BundleTransferManager struct {
 func NewBundleTransferManager(maxBundleFileNum int, maxBundleFileSize int64) *BundleTransferManager {
 	manager := &BundleTransferManager{
 		pendingBundles:          list.New(),
-		transferredBundles:      make(chan *Bundle),
 		maxBundleFileNum:        maxBundleFileNum,
 		maxBundleFileSize:       maxBundleFileSize,
 		errors:                  list.New(),
@@ -153,35 +151,37 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 	}
 
 	// do some precheck
+	bundles := list.New()
 	sourceFiles := []string{}
 
 	manager.mutex.Lock()
-	bundlePtr := manager.pendingBundles.Front()
-	bundleId := 0
-	for bundlePtr != nil {
-		if bundle, ok := bundlePtr.Value.(*Bundle); ok {
-			// seal
-			bundleName := fmt.Sprintf("bundle_%d", bundleId)
-			bundle.Seal(bundleName)
 
-			logger.Debugf("sealing a bundle '%s'", bundleName)
+	for bundleId := 0; bundleId < pendingBundles; bundleId++ {
+		bundleElem := manager.pendingBundles.Front()
+		if bundleElem != nil {
+			bundlePtr := manager.pendingBundles.Remove(bundleElem)
+			if bundle, ok := bundlePtr.(*Bundle); ok {
+				// seal
+				bundleName := fmt.Sprintf("bundle_%d", bundleId)
+				logger.Debugf("sealing a bundle '%s'", bundleName)
+				bundle.Seal(bundleName)
 
-			sourceFiles = append(sourceFiles, bundle.files...)
-			bundleId++
+				bundles.PushBack(bundle)
+				sourceFiles = append(sourceFiles, bundle.files...)
+			}
 		}
-
-		bundlePtr = bundlePtr.Next()
 	}
+
 	manager.mutex.Unlock()
 
 	// calculate tar root
-	shortestSourceFile, err := GetShortedLocalPath(sourceFiles)
+	tarBaseDir, err := GetCommonRootLocalDirPath(sourceFiles)
 	if err != nil {
-		logger.Debug("failed to calculate shortest local path")
+		logger.Debug("failed to calculate common root path")
 		return nil
 	}
 
-	tarBaseDir := filepath.Dir(shortestSourceFile)
+	logger.Debugf("using %s as tar base dir", tarBaseDir)
 
 	// check if files exist on the target -- to support 'force' option
 	// even with 'force' option, ibun fails if files exist
@@ -269,21 +269,21 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 		manager.progressTrackerCallback = trackerCB
 	}
 
+	// extractChannel
+	extractBundleChan := make(chan *Bundle, 10)
+
 	// tar
 	go func() {
-		for i := 0; i < pendingBundles; i++ {
-			manager.mutex.Lock()
-			frontElem := manager.pendingBundles.Front()
-			if frontElem == nil {
-				manager.mutex.Unlock()
-				logger.Debug("no more pending bundles")
+		bundlesLen := bundles.Len()
+		for i := 0; i < bundlesLen; i++ {
+			bundleElem := bundles.Front()
+			if bundleElem == nil {
 				break
 			}
 
-			frontBundle := manager.pendingBundles.Remove(frontElem)
-			manager.mutex.Unlock()
+			bundlePtr := bundles.Remove(bundleElem)
 
-			if bundle, ok := frontBundle.(*Bundle); ok {
+			if bundle, ok := bundlePtr.(*Bundle); ok {
 				// do bundle
 				logger.Debugf("bundling (tar) files to %s", bundle.localBundlePath)
 
@@ -340,20 +340,19 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 				// remove local bundle file
 				os.Remove(bundle.localBundlePath)
 
-				manager.transferredBundles <- bundle
+				extractBundleChan <- bundle
 			} else {
 				logger.Error("unknown bundle")
 			}
 		}
 
-		close(manager.transferredBundles)
-		logger.Debug("done bundling")
+		close(extractBundleChan)
 	}()
 
 	// extract
 	go func() {
 		for {
-			if bundle, ok := <-manager.transferredBundles; ok {
+			if bundle, ok := <-extractBundleChan; ok {
 				// do extract
 				logger.Debugf("extracting a bundle file %s", bundle.irodsBundlePath)
 				if showProgress {
@@ -384,7 +383,6 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 		}
 
 		wg.Done()
-		logger.Debug("done extracting")
 	}()
 
 	wg.Wait()
