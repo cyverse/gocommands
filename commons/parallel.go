@@ -52,9 +52,9 @@ func NewParallelTransferManager(maxThreads int) *ParallelTransferManager {
 	return manager
 }
 
-func (manager *ParallelTransferManager) progressCallback(path string, processed int64, total int64) {
+func (manager *ParallelTransferManager) progressCallback(path string, processed int64, total int64, done bool) {
 	if manager.progressTrackerCallback != nil {
-		manager.progressTrackerCallback(path, processed, total)
+		manager.progressTrackerCallback(path, processed, total, done)
 	}
 }
 
@@ -140,7 +140,8 @@ func (manager *ParallelTransferManager) ScheduleDownloadIfDifferent(filesystem *
 		// down
 		logger.Debugf("downloading a data object %s to %s", source, target)
 		callback := func(processed int64, total int64) {
-			manager.progressCallback(source, processed, total)
+			done := processed >= total
+			manager.progressCallback(source, processed, total, done)
 		}
 
 		err = filesystem.DownloadFileParallel(source, "", target, 0, callback)
@@ -190,7 +191,8 @@ func (manager *ParallelTransferManager) ScheduleDownload(filesystem *irodsclient
 	task := func() {
 		logger.Debugf("downloading a data object %s to %s", source, target)
 		callback := func(processed int64, total int64) {
-			manager.progressCallback(source, processed, total)
+			done := processed >= total
+			manager.progressCallback(source, processed, total, done)
 		}
 
 		err := filesystem.DownloadFileParallel(source, "", target, 0, callback)
@@ -309,7 +311,8 @@ func (manager *ParallelTransferManager) ScheduleUploadIfDifferent(filesystem *ir
 		// up
 		logger.Debugf("uploading a local file %s to %s", source, target)
 		callback := func(processed int64, total int64) {
-			manager.progressCallback(target, processed, total)
+			done := processed >= total
+			manager.progressCallback(target, processed, total, done)
 		}
 
 		err = filesystem.UploadFileParallel(source, target, "", 0, true, callback)
@@ -357,7 +360,8 @@ func (manager *ParallelTransferManager) ScheduleUpload(filesystem *irodsclient_f
 	task := func() {
 		logger.Debugf("uploading a local file %s to %s", source, target)
 		callback := func(processed int64, total int64) {
-			manager.progressCallback(target, processed, total)
+			done := processed >= total
+			manager.progressCallback(target, processed, total, done)
 		}
 
 		err := filesystem.UploadFileParallel(source, target, "", 0, true, callback)
@@ -557,7 +561,7 @@ func (manager *ParallelTransferManager) Go(showProgress bool) error {
 		trackerMutex := sync.Mutex{}
 
 		// add progress tracker callback
-		trackerCB := func(name string, processed, total int64) {
+		trackerCB := func(name string, processed int64, total int64, done bool) {
 			trackerMutex.Lock()
 			defer trackerMutex.Unlock()
 
@@ -578,7 +582,7 @@ func (manager *ParallelTransferManager) Go(showProgress bool) error {
 
 			tracker.SetValue(processed)
 
-			if processed >= total {
+			if done {
 				tracker.MarkAsDone()
 			}
 		}

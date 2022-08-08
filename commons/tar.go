@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 )
 
+type TrackerCallBack func(processed int64, total int64)
+
 type TarEntry struct {
 	source string
 	target string // target path in a TAR file
@@ -19,7 +21,7 @@ func NewTarEntry(source string, target string) *TarEntry {
 	}
 }
 
-func Tar(baseDir string, sources []string, target string) error {
+func Tar(baseDir string, sources []string, target string, callback TrackerCallBack) error {
 	entries := []*TarEntry{}
 
 	for _, source := range sources {
@@ -33,10 +35,25 @@ func Tar(baseDir string, sources []string, target string) error {
 		entries = append(entries, entry)
 	}
 
-	return makeTar(entries, target)
+	return makeTar(entries, target, callback)
 }
 
-func makeTar(entries []*TarEntry, target string) error {
+func makeTar(entries []*TarEntry, target string, callback TrackerCallBack) error {
+	totalSize := int64(0)
+	currentSize := int64(0)
+	for _, entry := range entries {
+		sourceStat, err := os.Stat(entry.source)
+		if err != nil {
+			return err
+		}
+
+		if !sourceStat.IsDir() {
+			totalSize += sourceStat.Size()
+		}
+	}
+
+	callback(0, totalSize)
+
 	tarfile, err := os.Create(target)
 	if err != nil {
 		return err
@@ -78,6 +95,10 @@ func makeTar(entries []*TarEntry, target string) error {
 			if err != nil {
 				return err
 			}
+
+			currentSize += sourceStat.Size()
+
+			callback(currentSize, totalSize)
 		}
 	}
 

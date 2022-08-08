@@ -85,9 +85,9 @@ func NewBundleTransferManager(maxBundleFileNum int, maxBundleFileSize int64) *Bu
 	return manager
 }
 
-func (manager *BundleTransferManager) progressCallback(name string, processed int64, total int64) {
+func (manager *BundleTransferManager) progressCallback(name string, processed int64, total int64, done bool) {
 	if manager.progressTrackerCallback != nil {
-		manager.progressTrackerCallback(name, processed, total)
+		manager.progressTrackerCallback(name, processed, total, done)
 	}
 }
 
@@ -235,7 +235,7 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 		trackerMutex := sync.Mutex{}
 
 		// add progress tracker callback
-		trackerCB := func(name string, processed int64, total int64) {
+		trackerCB := func(name string, processed int64, total int64, done bool) {
 			trackerMutex.Lock()
 			defer trackerMutex.Unlock()
 
@@ -261,7 +261,7 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 
 			tracker.SetValue(processed)
 
-			if processed >= total {
+			if done {
 				tracker.MarkAsDone()
 			}
 		}
@@ -287,11 +287,16 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 				// do bundle
 				logger.Debugf("bundling (tar) files to %s", bundle.localBundlePath)
 
+				var tarCallback func(processed int64, total int64)
 				if showProgress {
-					manager.progressCallback(manager.getTarProgressName(bundle), 0, 100)
+					tarProgressName := manager.getTarProgressName(bundle)
+					tarCallback = func(processed int64, total int64) {
+						done := processed >= total
+						manager.progressCallback(tarProgressName, processed, total, done)
+					}
 				}
 
-				err := Tar(tarBaseDir, bundle.files, bundle.localBundlePath)
+				err := Tar(tarBaseDir, bundle.files, bundle.localBundlePath, tarCallback)
 				if err != nil {
 					manager.mutex.Lock()
 					defer manager.mutex.Unlock()
@@ -301,10 +306,6 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 					break
 				}
 
-				if showProgress {
-					manager.progressCallback(manager.getTarProgressName(bundle), 100, 100)
-				}
-
 				logger.Debugf("created a bundle (tar) file %s", bundle.localBundlePath)
 
 				// update target irods file path
@@ -312,11 +313,12 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 
 				// upload
 				logger.Debugf("uploading a local bundle file %s to %s", bundle.localBundlePath, bundle.irodsBundlePath)
-				var callback func(processed int64, total int64)
+				var uploadCallback func(processed int64, total int64)
 				if showProgress {
 					uploadProgressName := manager.getUploadProgressName(bundle)
-					callback = func(processed int64, total int64) {
-						manager.progressCallback(uploadProgressName, processed, total)
+					uploadCallback = func(processed int64, total int64) {
+						done := processed >= total
+						manager.progressCallback(uploadProgressName, processed, total, done)
 					}
 				}
 
@@ -324,7 +326,7 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 					// exists - skip
 					logger.Debugf("bundle file already exists in iRODS, skip uploading - %s", bundle.irodsBundlePath)
 				} else {
-					err = filesystem.UploadFileParallel(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false, callback)
+					err = filesystem.UploadFileParallel(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false, uploadCallback)
 					if err != nil {
 						manager.mutex.Lock()
 						defer manager.mutex.Unlock()
@@ -356,7 +358,7 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 				// do extract
 				logger.Debugf("extracting a bundle file %s", bundle.irodsBundlePath)
 				if showProgress {
-					manager.progressCallback(manager.getExtractProgressName(bundle), 0, 100)
+					manager.progressCallback(manager.getExtractProgressName(bundle), 0, 0, false)
 				}
 
 				err := filesystem.ExtractStructFile(bundle.irodsBundlePath, targetPath, "", types.TAR_FILE_DT, force)
@@ -372,7 +374,7 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 				filesystem.RemoveFile(bundle.irodsBundlePath, true)
 
 				if showProgress {
-					manager.progressCallback(manager.getExtractProgressName(bundle), 100, 100)
+					manager.progressCallback(manager.getExtractProgressName(bundle), 0, 0, true)
 				}
 
 				logger.Debugf("extracted a bundle file %s to %s", bundle.irodsBundlePath, targetPath)
