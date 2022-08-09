@@ -181,6 +181,12 @@ func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, 
 		return nil
 	}
 
+	// use the parent dir of the tar root to include the parent dir
+	tarBaseDir = filepath.Dir(tarBaseDir)
+	if tarBaseDir == "" {
+		tarBaseDir = "/"
+	}
+
 	logger.Debugf("using %s as tar base dir", tarBaseDir)
 
 	// check if files exist on the target -- to support 'force' option

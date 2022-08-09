@@ -24,13 +24,36 @@ func NewTarEntry(source string, target string) *TarEntry {
 func Tar(baseDir string, sources []string, target string, callback TrackerCallBack) error {
 	entries := []*TarEntry{}
 
+	createdDirs := map[string]bool{}
+
 	for _, source := range sources {
+		sourceStat, err := os.Stat(source)
+		if err != nil {
+			return err
+		}
+
+		if sourceStat.IsDir() {
+			// do not include dir for now
+			continue
+		}
+
 		rel, err := filepath.Rel(baseDir, source)
 		if err != nil {
 			return err
 		}
 
-		// make entries
+		pdirs := GetParentLocalDirs(rel)
+		for _, pdir := range pdirs {
+			if _, ok := createdDirs[pdir]; !ok {
+				// make entries for dir
+				entry := NewTarEntry(filepath.Join(baseDir, pdir), filepath.ToSlash(pdir))
+				entries = append(entries, entry)
+
+				createdDirs[pdir] = true
+			}
+		}
+
+		// make entries for file
 		entry := NewTarEntry(source, filepath.ToSlash(rel))
 		entries = append(entries, entry)
 	}

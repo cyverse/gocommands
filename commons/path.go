@@ -5,6 +5,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -89,6 +90,32 @@ func GetBasename(path string) string {
 		return path[idx1+1:]
 	}
 	return path[idx2+1:]
+}
+
+// GetParentLocalDirs returns all parent dirs
+func GetParentLocalDirs(p string) []string {
+	parents := []string{}
+
+	if p == string(os.PathSeparator) || p == "." {
+		return parents
+	}
+
+	curPath := p
+	for len(curPath) > 0 && curPath != string(os.PathSeparator) && curPath != "." {
+		curDir := filepath.Dir(curPath)
+		if len(curDir) > 0 && curDir != "." {
+			parents = append(parents, curDir)
+		}
+
+		curPath = curDir
+	}
+
+	// sort
+	sort.Slice(parents, func(i int, j int) bool {
+		return len(parents[i]) < len(parents[j])
+	})
+
+	return parents
 }
 
 func GetCommonRootLocalDirPath(paths []string) (string, error) {
