@@ -75,7 +75,9 @@ func makeTar(entries []*TarEntry, target string, callback TrackerCallBack) error
 		}
 	}
 
-	callback(0, totalSize)
+	if callback != nil {
+		callback(0, totalSize)
+	}
 
 	tarfile, err := os.Create(target)
 	if err != nil {
@@ -121,7 +123,9 @@ func makeTar(entries []*TarEntry, target string, callback TrackerCallBack) error
 
 			currentSize += sourceStat.Size()
 
-			callback(currentSize, totalSize)
+			if callback != nil {
+				callback(currentSize, totalSize)
+			}
 		}
 	}
 
