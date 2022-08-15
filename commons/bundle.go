@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	MaxBundleFileNum  int   = 100
-	MaxBundleFileSize int64 = 5 * 1024 * 1024 * 1024 // 5GB
+	MaxBundleFileNum  int   = 50
+	MaxBundleFileSize int64 = 1 * 1024 * 1024 * 1024 // 1GB
 )
 
 type Bundle struct {
