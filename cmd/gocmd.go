@@ -73,6 +73,7 @@ func main() {
 	subcmd.AddRmdirCommand(rootCmd)
 	subcmd.AddBunCommand(rootCmd)
 	subcmd.AddBputCommand(rootCmd)
+	subcmd.AddSvrinfoCommand(rootCmd)
 
 	err := Execute()
 	if err != nil {
