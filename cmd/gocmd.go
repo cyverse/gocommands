@@ -74,6 +74,7 @@ func main() {
 	subcmd.AddBunCommand(rootCmd)
 	subcmd.AddBputCommand(rootCmd)
 	subcmd.AddSvrinfoCommand(rootCmd)
+	subcmd.AddPsCommand(rootCmd)
 
 	err := Execute()
 	if err != nil {
