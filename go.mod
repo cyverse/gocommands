@@ -3,7 +3,7 @@ module github.com/cyverse/gocommands
 go 1.18
 
 require (
-	github.com/cyverse/go-irodsclient v0.9.7-0.20220824201524-42459ae6fb7f
+	github.com/cyverse/go-irodsclient v0.9.7-0.20220824231649-08647fd009ad
 	github.com/jedib0t/go-pretty/v6 v6.3.1
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/sirupsen/logrus v1.8.1
