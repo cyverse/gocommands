@@ -3,11 +3,29 @@ iRODS Command-line Tools written in Go
 
 
 ## Download pre-built binary
-Please download binary file (bundled with `tar` or `zip`) at (https://github.com/cyverse/gocommands/releases)[https://github.com/cyverse/gocommands/releases].
+Please download binary file (bundled with `tar` or `zip`) at [https://github.com/cyverse/gocommands/releases](https://github.com/cyverse/gocommands/releases).
 Be sure to download a binary for your target system architecture.
 
+For Darwin-amd64 (Mac OS):
+```bash
+curl -L -o gocommands.tar https://github.com/cyverse/gocommands/releases/download/v0.2.11/gocommands_amd64_darwin_v0.2.11_portable.tar && \
+tar xvf gocommands.tar && rm gocommands.tar
+```
 
-## Build from source
+For Linux-amd64:
+```bash
+curl -L -o gocommands.tar https://github.com/cyverse/gocommands/releases/download/v0.2.11/gocommands_amd64_linux_v0.2.11_portable.tar && \
+tar xvf gocommands.tar && rm gocommands.tar
+```
+
+For Linux-arm64:
+```bash
+curl -L -o gocommands.tar https://github.com/cyverse/gocommands/releases/download/v0.2.11/gocommands_arm64_linux_v0.2.11_portable.tar && \
+tar xvf gocommands.tar && rm gocommands.tar
+```
+
+
+## Build from source (optional)
 Use `make` to build `gocommands`. Binaries will be created on `./bin` directory.
 
 ```bash
