@@ -1,7 +1,13 @@
 # gocommands
 iRODS Command-line Tools written in Go
 
-## Build
+
+## Download pre-built binary
+Please download binary file (bundled with `tar` or `zip`) at (https://github.com/cyverse/gocommands/releases)[https://github.com/cyverse/gocommands/releases].
+Be sure to download a binary for your target system architecture.
+
+
+## Build from source
 Use `make` to build `gocommands`. Binaries will be created on `./bin` directory.
 
 ```bash
@@ -12,11 +18,11 @@ make
 
 ### Using a persistent configuration (compatible to iCommands)
 `gocommands` can create a configuration that is compatible to `icommands`.
-Run `goinit` to configure iRODS account for access in interactive manner.
+Run `gocmd init` to configure iRODS account for access in interactive manner.
 This will create a configuration directory `.irods` in your home directory and several configuration files will be created.
 Now, it is ready to go.
 
-Use any commands, such as `gols`, to access iRODS.
+Use any commands, such as `gocmd ls`, to access iRODS.
 
 ### Using an external configuration file 
 `gocommands` can read configuration from an external file in `YAML` or `JSON` format.
@@ -31,9 +37,9 @@ irods_zone_name: "iplant"
 irods_user_password: "your password"
 ```
 
-Then run any commands, such as `gols`, with `-c` option.
+Then run any commands, such as `gocmd ls`, with `-c` option.
 ```bash
-gols -c config.yaml
+gocmd ls -c config.yaml
 ```
 
 You can omit password if you want. In the case, `gocommands` will ask you to type a password in runtime.
@@ -50,9 +56,9 @@ export IRODS_ZONE_NAME="iplant"
 export IRODS_USER_PASSWORD="your password"
 ```
 
-Then run any commands, such as `gols`, with `-e` option.
+Then run any commands, such as `gocmd ls`, with `-e` option.
 ```bash
-gols -e
+gocmd ls -e
 ```
 
 You can omit password if you want. In the case, `gocommands` will ask you to type a password in runtime.
