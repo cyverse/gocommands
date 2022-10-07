@@ -3,11 +3,11 @@ module github.com/cyverse/gocommands
 go 1.18
 
 require (
-	github.com/cyverse/go-irodsclient v0.9.8
+	github.com/cyverse/go-irodsclient v0.9.9-0.20221007230011-9421b617f15a
 	github.com/jedib0t/go-pretty/v6 v6.3.1
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/sirupsen/logrus v1.8.1
-	github.com/spf13/cobra v1.4.0
+	github.com/spf13/cobra v1.5.0
 	golang.org/x/term v0.0.0-20220411215600-e5f449aeb171
 	gopkg.in/yaml.v2 v2.4.0
 )

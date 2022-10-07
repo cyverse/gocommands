@@ -60,6 +60,7 @@ func main() {
 
 	// add sub commands
 	subcmd.AddInitCommand(rootCmd)
+	subcmd.AddPasswdCommand(rootCmd)
 	subcmd.AddPwdCommand(rootCmd)
 	subcmd.AddCdCommand(rootCmd)
 	subcmd.AddLsCommand(rootCmd)
