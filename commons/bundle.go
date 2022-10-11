@@ -22,6 +22,7 @@ const (
 )
 
 type Bundle struct {
+	tempDirPath     string
 	name            string
 	files           []string
 	size            int64
@@ -29,8 +30,9 @@ type Bundle struct {
 	irodsBundlePath string
 }
 
-func NewBundle() *Bundle {
+func NewBundle(tempDirPath string) *Bundle {
 	return &Bundle{
+		tempDirPath:     tempDirPath,
 		files:           []string{},
 		size:            0,
 		localBundlePath: "",
@@ -58,8 +60,7 @@ func (bundle *Bundle) Seal(name string) error {
 	bundle.name = name
 
 	// set local bundle path
-	tempDir := os.TempDir()
-	bundle.localBundlePath = filepath.Join(tempDir, fmt.Sprintf("%s_%s.tar", bundle.name, bundleID))
+	bundle.localBundlePath = filepath.Join(bundle.tempDirPath, fmt.Sprintf("%s_%s.tar", bundle.name, bundleID))
 	return nil
 }
 
@@ -67,17 +68,19 @@ type BundleTransferManager struct {
 	pendingBundles          *list.List // *Bundle
 	maxBundleFileNum        int
 	maxBundleFileSize       int64
+	tempDirPath             string
 	errors                  *list.List // error
 	progressTrackerCallback ProgressTrackerCallback
 	mutex                   sync.Mutex
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
-func NewBundleTransferManager(maxBundleFileNum int, maxBundleFileSize int64) *BundleTransferManager {
+func NewBundleTransferManager(maxBundleFileNum int, maxBundleFileSize int64, tempDirPath string) *BundleTransferManager {
 	manager := &BundleTransferManager{
 		pendingBundles:          list.New(),
 		maxBundleFileNum:        maxBundleFileNum,
 		maxBundleFileSize:       maxBundleFileSize,
+		tempDirPath:             tempDirPath,
 		errors:                  list.New(),
 		progressTrackerCallback: nil,
 	}
@@ -109,7 +112,7 @@ func (manager *BundleTransferManager) ScheduleBundleUpload(source string, size i
 			if lastBundle.size >= manager.maxBundleFileSize || len(lastBundle.files) >= manager.maxBundleFileNum {
 				// exceed bundle size or file num
 				// create a new
-				currentBundle = NewBundle()
+				currentBundle = NewBundle(manager.tempDirPath)
 
 				logger.Debugf("assigning a new bundle %d", manager.pendingBundles.Len())
 				manager.pendingBundles.PushBack(currentBundle)
@@ -122,7 +125,7 @@ func (manager *BundleTransferManager) ScheduleBundleUpload(source string, size i
 		}
 	} else {
 		// add new
-		currentBundle = NewBundle()
+		currentBundle = NewBundle(manager.tempDirPath)
 
 		logger.Debugf("assigning a new bundle %d", manager.pendingBundles.Len())
 		manager.pendingBundles.PushBack(currentBundle)

@@ -26,6 +26,7 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	bputCmd.Flags().IntP("max_file_num", "", commons.MaxBundleFileNum, "Specify max file number in a bundle file")
 	bputCmd.Flags().Int64P("max_file_size", "", commons.MaxBundleFileSize, "Specify max file size of a bundle file")
 	bputCmd.Flags().BoolP("progress", "", false, "Display progress bar")
+	bputCmd.Flags().StringP("temp_dir_path", "", os.TempDir(), "Specify a local temp directory path to create bundle files")
 
 	rootCmd.AddCommand(bputCmd)
 }
@@ -90,6 +91,12 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
+	tempDirPath := os.TempDir()
+	tempDirPathFlag := command.Flags().Lookup("temp_dir_path")
+	if tempDirPathFlag != nil {
+		tempDirPath = tempDirPathFlag.Value.String()
+	}
+
 	// Create a file system
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
@@ -101,7 +108,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
-	bundleTransferManager := commons.NewBundleTransferManager(maxFileNum, maxFileSize)
+	bundleTransferManager := commons.NewBundleTransferManager(maxFileNum, maxFileSize, tempDirPath)
 
 	targetPath := ""
 
