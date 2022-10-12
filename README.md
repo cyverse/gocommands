@@ -8,20 +8,20 @@ Be sure to download a binary for your target system architecture.
 
 For Darwin-amd64 (Mac OS):
 ```bash
-curl -L -o gocommands.tar https://github.com/cyverse/gocommands/releases/download/v0.2.11/gocommands_amd64_darwin_v0.2.11_portable.tar && \
-tar xvf gocommands.tar && rm gocommands.tar
+curl -L -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/v0.3.0/gocmd-v0.3.0-darwin-amd64.tar.gz && \
+tar zxvf gocmd.tar.gz && rm gocmd.tar.gz
 ```
 
 For Linux-amd64:
 ```bash
-curl -L -o gocommands.tar https://github.com/cyverse/gocommands/releases/download/v0.2.11/gocommands_amd64_linux_v0.2.11_portable.tar && \
-tar xvf gocommands.tar && rm gocommands.tar
+curl -L -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/v0.3.0/gocmd-v0.3.0-linux-amd64.tar.gz && \
+tar zxvf gocmd.tar.gz && rm gocmd.tar.gz
 ```
 
 For Linux-arm64:
 ```bash
-curl -L -o gocommands.tar https://github.com/cyverse/gocommands/releases/download/v0.2.11/gocommands_arm64_linux_v0.2.11_portable.tar && \
-tar xvf gocommands.tar && rm gocommands.tar
+curl -L -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/v0.3.0/gocmd-v0.3.0-linux-arm64.tar.gz && \
+tar zxvf gocmd.tar.gz && rm gocmd.tar.gz
 ```
 
 
