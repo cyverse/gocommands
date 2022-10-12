@@ -1,0 +1,28 @@
+name: Release GoCommands
+on:
+  release:
+    types: [created]
+
+jobs:
+  releases-matrix:
+    name: Release Go Binary
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        goos: [linux, darwin, windows]
+        goarch: ["386", amd64, arm, arm64]
+    env:
+      PKG: "github.com/cyverse/gocommands"
+    steps:
+    - name: "set build date"
+      run: echo "BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_ENV
+    - uses: actions/checkout@v3
+    - uses: wangyoucao577/go-release-action@v1.31
+      with:
+        github_token: ${{ secrets.RELEASE_GITHUB_TOKEN }}
+        goversion: 1.18
+        goos: ${{ matrix.goos }}
+        goarch: ${{ matrix.goarch }}
+        project_path: "./cmd/"
+        binary_name: "irodsfs"
+        ldflags: "-X ${{ env.PKG }}/commons.clientVersion=${{ github.ref_name }} -X ${{ env.PKG }}/commons.gitCommit=${{ github.sha }} -X ${{ env.PKG }}/commons.buildDate=${{ env.BUILD_DATE }}"
