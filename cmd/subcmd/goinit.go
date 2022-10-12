@@ -73,7 +73,7 @@ func processInitCommand(command *cobra.Command, args []string) error {
 		}
 	} else {
 		fmt.Println("gocommands is already configured for following account:")
-		err := commons.PrintAccount(command)
+		err := commons.PrintAccount()
 		if err != nil {
 			logger.Error(err)
 			fmt.Fprintln(os.Stderr, err.Error())

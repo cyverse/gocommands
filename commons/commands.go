@@ -25,6 +25,7 @@ var (
 	account        *irodsclient_types.IRODSAccount
 
 	sessionID      int
+	configPath     string
 	resourceServer string
 )
 
@@ -102,7 +103,7 @@ func SetCommonFlags(command *cobra.Command) {
 
 func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "commons",
 		"function": "ProcessCommonFlags",
 	})
 
@@ -139,10 +140,18 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		}
 
 		if version {
-			printVersion(command)
+			printVersion()
 			return false, nil // stop here
 		}
 	}
+
+	// read env config
+	/*
+		envConfig, err := NewEnvConfigFromENV()
+		if err != nil {
+			return false, err // stop here
+		}
+	*/
 
 	sessionFlag := command.Flags().Lookup("session")
 	if sessionFlag != nil {
@@ -168,7 +177,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	if configFlag != nil {
 		config := configFlag.Value.String()
 		if len(config) > 0 {
-			err := loadConfigFile(command, config)
+			err := loadConfigFile(config)
 			if err != nil {
 				logger.Error(err)
 				return false, err // stop here
@@ -177,6 +186,26 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 			readConfig = true
 		}
 	}
+
+	// need to modify gocommands to support change of irods env file path
+	/*
+		if len(envConfig.ConfigPath) > 0 {
+			if strings.HasPrefix(envConfig.ConfigPath, "~/") || strings.HasPrefix(envConfig.ConfigPath, "./") {
+				homePath, err := os.UserHomeDir()
+				if err == nil {
+					irodsPath := filepath.Join(homePath, envConfig.ConfigPath[2:])
+					loadConfigFile(irodsPath)
+				}
+			}
+			err := loadConfigFile(config)
+			if err != nil {
+				logger.Error(err)
+				return false, err // stop here
+			}
+
+			readConfig = true
+		}
+	*/
 
 	envConfigFlag := command.Flags().Lookup("envconfig")
 	if envConfigFlag != nil {
@@ -187,7 +216,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		}
 
 		if envConfig {
-			err := loadConfigEnv(command)
+			err := loadConfigEnv()
 			if err != nil {
 				logger.Error(err)
 				return false, err // stop here
@@ -203,7 +232,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		homePath, err := os.UserHomeDir()
 		if err == nil {
 			irodsPath := filepath.Join(homePath, ".irods")
-			loadConfigFile(command, irodsPath)
+			loadConfigFile(irodsPath)
 			//if err != nil {
 			//logger.Error(err)
 			// ignore error
@@ -370,9 +399,9 @@ func isJSONFile(filePath string) bool {
 	return ext == ".json"
 }
 
-func loadConfigFile(command *cobra.Command, configFilePath string) error {
+func loadConfigFile(configFilePath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "commons",
 		"function": "loadConfigFile",
 	})
 
@@ -469,9 +498,9 @@ func loadConfigFile(command *cobra.Command, configFilePath string) error {
 	return fmt.Errorf("unhandled configuration file - %s", configFilePath)
 }
 
-func loadConfigEnv(command *cobra.Command) error {
+func loadConfigEnv() error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "commons",
 		"function": "loadConfigEnv",
 	})
 
@@ -517,7 +546,7 @@ func loadConfigEnv(command *cobra.Command) error {
 	return nil
 }
 
-func printVersion(command *cobra.Command) error {
+func printVersion() error {
 	info, err := GetVersionJSON()
 	if err != nil {
 		return err
@@ -531,7 +560,7 @@ func PrintHelp(command *cobra.Command) error {
 	return command.Usage()
 }
 
-func PrintAccount(command *cobra.Command) error {
+func PrintAccount() error {
 	envMgr := GetEnvironmentManager()
 	if envMgr == nil {
 		return errors.New("environment is not set")

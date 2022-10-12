@@ -20,6 +20,11 @@ type Config struct {
 	Password string `yaml:"irods_user_password,omitempty" json:"irods_user_password,omitempty" envconfig:"IRODS_USER_PASSWORD"`
 }
 
+type EnvConfig struct {
+	ConfigPath           string `envconfig:"GOCMD_CONFIG_PATH"`
+	IrodsEnvironmentFile string `envconfig:"IRODS_ENVIRONMENT_FILE"`
+}
+
 // NewConfigFromJSON creates Config from JSON
 func NewConfigFromJSON(jsonBytes []byte) (*Config, error) {
 	config := Config{
@@ -60,4 +65,19 @@ func NewConfigFromENV() (*Config, error) {
 	}
 
 	return &config, nil
+}
+
+// NewEnvConfigFromENV creates EnvConfig from Environmental variables
+func NewEnvConfigFromENV() (*EnvConfig, error) {
+	envConfig := EnvConfig{
+		ConfigPath:           "",
+		IrodsEnvironmentFile: "~/.irods/irods_environment.json",
+	}
+
+	err := envconfig.Process("", &envConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config from environmental variables - %v", err)
+	}
+
+	return &envConfig, nil
 }
