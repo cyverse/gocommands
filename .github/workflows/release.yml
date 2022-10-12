@@ -33,5 +33,5 @@ jobs:
         goos: ${{ matrix.goos }}
         goarch: ${{ matrix.goarch }}
         project_path: "./cmd/"
-        binary_name: "irodsfs"
+        binary_name: "gocmd"
         ldflags: "-X ${{ env.PKG }}/commons.clientVersion=${{ github.ref_name }} -X ${{ env.PKG }}/commons.gitCommit=${{ github.sha }} -X ${{ env.PKG }}/commons.buildDate=${{ env.BUILD_DATE }}"
