@@ -76,6 +76,7 @@ func main() {
 	subcmd.AddBputCommand(rootCmd)
 	subcmd.AddSvrinfoCommand(rootCmd)
 	subcmd.AddPsCommand(rootCmd)
+	subcmd.AddCopySftpIdCommand(rootCmd)
 
 	err := Execute()
 	if err != nil {
