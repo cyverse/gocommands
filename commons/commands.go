@@ -29,7 +29,6 @@ var (
 	account        *irodsclient_types.IRODSAccount
 
 	sessionID      int
-	configPath     string
 	resourceServer string
 )
 
@@ -380,9 +379,19 @@ func loadConfigFile(configPath string) error {
 		"function": "loadConfigFile",
 	})
 
+	configPath, err := ExpandHomeDir(configPath)
+	if err != nil {
+		return err
+	}
+
+	configPath, err = filepath.Abs(configPath)
+	if err != nil {
+		return err
+	}
+
 	logger.Debugf("reading config file/dir - %s", configPath)
 	// check if it is a file or a dir
-	_, err := os.Stat(configPath)
+	_, err = os.Stat(configPath)
 	if err != nil {
 		return err
 	}
@@ -536,6 +545,45 @@ func PrintAccount() error {
 	t.SetOutputMirror(os.Stdout)
 
 	t.AppendRows([]table.Row{
+		{
+			"iRODS Host",
+			envMgr.Environment.Host,
+		},
+		{
+			"iRODS Port",
+			envMgr.Environment.Port,
+		},
+		{
+			"iRODS Zone",
+			envMgr.Environment.Zone,
+		},
+		{
+			"iRODS Username",
+			envMgr.Environment.Username,
+		},
+	}, table.RowConfig{})
+	t.Render()
+	return nil
+}
+
+func PrintEnvironment() error {
+	envMgr := GetEnvironmentManager()
+	if envMgr == nil {
+		return errors.New("environment is not set")
+	}
+
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+
+	t.AppendRows([]table.Row{
+		{
+			"iRODS Session Environment File",
+			envMgr.GetSessionFilePath(os.Getppid()),
+		},
+		{
+			"iRODS Environment File",
+			envMgr.GetEnvironmentFilePath(),
+		},
 		{
 			"iRODS Host",
 			envMgr.Environment.Host,

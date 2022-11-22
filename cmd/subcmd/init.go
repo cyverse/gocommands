@@ -65,7 +65,7 @@ func processInitCommand(command *cobra.Command, args []string) error {
 
 	if updated {
 		// save
-		err := commons.GetEnvironmentManager().Save()
+		err := commons.GetEnvironmentManager().SaveEnvironment()
 		if err != nil {
 			logger.Error(err)
 			fmt.Fprintln(os.Stderr, err.Error())
