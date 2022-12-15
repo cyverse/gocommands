@@ -475,6 +475,12 @@ func loadConfigFile(configPath string) error {
 
 	environmentMgr = iCommandsEnvMgr
 	account = loadedAccount
+
+	if account.AuthenticationScheme == irodsclient_types.AuthSchemePAM {
+		// when reading password from irods environment with PAM auth,
+		// the password is PAM token, so using native auth to use the token directly
+		account.AuthenticationScheme = irodsclient_types.AuthSchemeNative
+	}
 	return nil
 }
 
