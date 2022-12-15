@@ -2,8 +2,8 @@ package subcmd
 
 import (
 	"fmt"
+	"io"
 	"os"
-	"strconv"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/gocommands/commons"
@@ -11,26 +11,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var rmCmd = &cobra.Command{
-	Use:   "rm [data-object1] [data-object2] [collection1] ...",
-	Short: "Remove iRODS data-objects or collections",
-	Long:  `This removes iRODS data-objects or collections.`,
-	RunE:  processRmCommand,
+var catCmd = &cobra.Command{
+	Use:   "cat [data-object]",
+	Short: "Display the content of an iRODS data-object",
+	Long:  `This displays the content of an iRODS data-object.`,
+	RunE:  processCatCommand,
 }
 
-func AddRmCommand(rootCmd *cobra.Command) {
+func AddCatCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	commons.SetCommonFlags(rmCmd)
-	rmCmd.Flags().BoolP("recurse", "r", false, "Remove non-empty collections")
-	rmCmd.Flags().BoolP("force", "f", false, "Remove forcefully")
+	commons.SetCommonFlags(catCmd)
 
-	rootCmd.AddCommand(rmCmd)
+	rootCmd.AddCommand(catCmd)
 }
 
-func processRmCommand(command *cobra.Command, args []string) error {
+func processCatCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "processRmCommand",
+		"function": "processCatCommand",
 	})
 
 	cont, err := commons.ProcessCommonFlags(command)
@@ -49,24 +47,6 @@ func processRmCommand(command *cobra.Command, args []string) error {
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
 		return nil
-	}
-
-	recurse := false
-	recurseFlag := command.Flags().Lookup("recurse")
-	if recurseFlag != nil {
-		recurse, err = strconv.ParseBool(recurseFlag.Value.String())
-		if err != nil {
-			recurse = false
-		}
-	}
-
-	force := false
-	forceFlag := command.Flags().Lookup("force")
-	if forceFlag != nil {
-		force, err = strconv.ParseBool(forceFlag.Value.String())
-		if err != nil {
-			force = false
-		}
 	}
 
 	// Create a file system
@@ -88,7 +68,7 @@ func processRmCommand(command *cobra.Command, args []string) error {
 	}
 
 	for _, sourcePath := range args {
-		err = removeOne(filesystem, sourcePath, force, recurse)
+		err = catOne(filesystem, sourcePath)
 		if err != nil {
 			logger.Error(err)
 			fmt.Fprintln(os.Stderr, err.Error())
@@ -98,10 +78,10 @@ func processRmCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func removeOne(filesystem *irodsclient_fs.FileSystem, targetPath string, force bool, recurse bool) error {
+func catOne(filesystem *irodsclient_fs.FileSystem, targetPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "removeOne",
+		"function": "catOne",
 	})
 
 	cwd := commons.GetCWD()
@@ -116,22 +96,30 @@ func removeOne(filesystem *irodsclient_fs.FileSystem, targetPath string, force b
 
 	if targetEntry.Type == irodsclient_fs.FileEntry {
 		// file
-		logger.Debugf("removing a data object %s", targetPath)
-		err = filesystem.RemoveFile(targetPath, force)
+		logger.Debugf("showing the content of a data object %s", targetPath)
+		fh, err := filesystem.OpenFile(targetPath, "", "r")
 		if err != nil {
 			return err
-		}
-	} else {
-		// dir
-		if !recurse {
-			return fmt.Errorf("cannot remove a collection, recurse is not set")
 		}
 
-		logger.Debugf("removing a collection %s", targetPath)
-		err = filesystem.RemoveDir(targetPath, recurse, force)
-		if err != nil {
-			return err
+		defer fh.Close()
+
+		buf := make([]byte, 10240) // 10KB buffer
+		for {
+			readLen, err := fh.Read(buf)
+			if readLen > 0 {
+				fmt.Printf("%s", string(buf[:readLen]))
+			}
+
+			if err == io.EOF {
+				// EOF
+				break
+			}
 		}
+
+	} else {
+		// dir
+		return fmt.Errorf("cannot show the content of a collection")
 	}
 	return nil
 }

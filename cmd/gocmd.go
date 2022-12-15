@@ -67,6 +67,7 @@ func main() {
 	subcmd.AddLsCommand(rootCmd)
 	subcmd.AddCpCommand(rootCmd)
 	subcmd.AddMvCommand(rootCmd)
+	subcmd.AddCatCommand(rootCmd)
 	subcmd.AddGetCommand(rootCmd)
 	subcmd.AddPutCommand(rootCmd)
 	subcmd.AddSyncCommand(rootCmd)
