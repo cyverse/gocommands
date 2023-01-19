@@ -373,6 +373,51 @@ func isYAMLFile(filePath string) bool {
 	return ext == ".yaml" || ext == ".yml"
 }
 
+func setConfigToICommandsEnvMgr(envManager *irodsclient_icommands.ICommandsEnvironmentManager, config *Config) {
+	envManager.Environment.CurrentWorkingDir = config.CurrentWorkingDir
+	envManager.Environment.Host = config.Host
+	envManager.Environment.Port = config.Port
+	envManager.Environment.Username = config.Username
+	envManager.Environment.Zone = config.Zone
+	envManager.Environment.DefaultResource = config.DefaultResource
+	envManager.Environment.LogLevel = config.LogLevel
+	envManager.Environment.AuthenticationScheme = config.AuthenticationScheme
+	envManager.Environment.ClientServerNegotiation = config.ClientServerNegotiation
+	envManager.Environment.ClientServerPolicy = config.ClientServerPolicy
+	envManager.Environment.SSLCACertificateFile = config.SSLCACertificateFile
+	envManager.Environment.EncryptionKeySize = config.EncryptionKeySize
+	envManager.Environment.EncryptionAlgorithm = config.EncryptionAlgorithm
+	envManager.Environment.EncryptionSaltSize = config.EncryptionSaltSize
+	envManager.Environment.EncryptionNumHashRounds = config.EncryptionNumHashRounds
+
+	envManager.Password = config.Password
+}
+
+func getLogrusLogLevel(irodsLogLevel int) log.Level {
+	switch irodsLogLevel {
+	case 0:
+		return log.PanicLevel
+	case 1:
+		return log.FatalLevel
+	case 2, 3:
+		return log.ErrorLevel
+	case 4, 5, 6:
+		return log.WarnLevel
+	case 7:
+		return log.InfoLevel
+	case 8:
+		return log.DebugLevel
+	case 9, 10:
+		return log.TraceLevel
+	}
+
+	if irodsLogLevel < 0 {
+		return log.PanicLevel
+	}
+
+	return log.TraceLevel
+}
+
 func loadConfigFile(configPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "commons",
@@ -415,18 +460,10 @@ func loadConfigFile(configPath string) error {
 			return err
 		}
 
-		iCommandsEnvMgr.Environment.CurrentWorkingDir = config.CurrentWorkingDir
-		iCommandsEnvMgr.Environment.Host = config.Host
-		iCommandsEnvMgr.Environment.Port = config.Port
-		iCommandsEnvMgr.Environment.Username = config.Username
-		iCommandsEnvMgr.Environment.Zone = config.Zone
-		iCommandsEnvMgr.Environment.DefaultResource = config.DefaultResource
-		iCommandsEnvMgr.Environment.LogLevel = config.LogLevel
-
-		iCommandsEnvMgr.Password = config.Password
+		setConfigToICommandsEnvMgr(iCommandsEnvMgr, config)
 
 		if iCommandsEnvMgr.Environment.LogLevel > 0 {
-			logLevel := log.Level(iCommandsEnvMgr.Environment.LogLevel / 2)
+			logLevel := getLogrusLogLevel(iCommandsEnvMgr.Environment.LogLevel)
 			log.SetLevel(logLevel)
 		}
 
@@ -434,6 +471,8 @@ func loadConfigFile(configPath string) error {
 		if err != nil {
 			return err
 		}
+
+		loadedAccount.ClientUser = config.ClientUsername
 
 		environmentMgr = iCommandsEnvMgr
 		account = loadedAccount
@@ -464,7 +503,7 @@ func loadConfigFile(configPath string) error {
 	}
 
 	if iCommandsEnvMgr.Environment.LogLevel > 0 {
-		logLevel := log.Level(iCommandsEnvMgr.Environment.LogLevel / 2)
+		logLevel := getLogrusLogLevel(iCommandsEnvMgr.Environment.LogLevel)
 		log.SetLevel(logLevel)
 	}
 
@@ -476,11 +515,6 @@ func loadConfigFile(configPath string) error {
 	environmentMgr = iCommandsEnvMgr
 	account = loadedAccount
 
-	if account.AuthenticationScheme == irodsclient_types.AuthSchemePAM {
-		// when reading password from irods environment with PAM auth,
-		// the password is PAM token, so using native auth to use the token directly
-		account.AuthenticationScheme = irodsclient_types.AuthSchemeNative
-	}
 	return nil
 }
 
@@ -502,18 +536,10 @@ func loadConfigEnv() error {
 		return err
 	}
 
-	iCommandsEnvMgr.Environment.CurrentWorkingDir = config.CurrentWorkingDir
-	iCommandsEnvMgr.Environment.Host = config.Host
-	iCommandsEnvMgr.Environment.Port = config.Port
-	iCommandsEnvMgr.Environment.Username = config.Username
-	iCommandsEnvMgr.Environment.Zone = config.Zone
-	iCommandsEnvMgr.Environment.DefaultResource = config.DefaultResource
-	iCommandsEnvMgr.Environment.LogLevel = config.LogLevel
-
-	iCommandsEnvMgr.Password = config.Password
+	setConfigToICommandsEnvMgr(iCommandsEnvMgr, config)
 
 	if iCommandsEnvMgr.Environment.LogLevel > 0 {
-		logLevel := log.Level(iCommandsEnvMgr.Environment.LogLevel / 2)
+		logLevel := getLogrusLogLevel(iCommandsEnvMgr.Environment.LogLevel)
 		log.SetLevel(logLevel)
 	}
 
@@ -521,6 +547,8 @@ func loadConfigEnv() error {
 	if err != nil {
 		return err
 	}
+
+	loadedAccount.ClientUser = config.ClientUsername
 
 	environmentMgr = iCommandsEnvMgr
 	account = loadedAccount
@@ -567,6 +595,10 @@ func PrintAccount() error {
 			"iRODS Username",
 			envMgr.Environment.Username,
 		},
+		{
+			"iRODS Authentication Scheme",
+			envMgr.Environment.AuthenticationScheme,
+		},
 	}, table.RowConfig{})
 	t.Render()
 	return nil
@@ -605,6 +637,42 @@ func PrintEnvironment() error {
 		{
 			"iRODS Username",
 			envMgr.Environment.Username,
+		},
+		{
+			"iRODS Default Resource",
+			envMgr.Environment.DefaultResource,
+		},
+		{
+			"iRODS Authentication Scheme",
+			envMgr.Environment.AuthenticationScheme,
+		},
+		{
+			"iRODS Client Server Negotiation",
+			envMgr.Environment.ClientServerNegotiation,
+		},
+		{
+			"iRODS Client Server Policy",
+			envMgr.Environment.ClientServerPolicy,
+		},
+		{
+			"iRODS SSL CA Certification File",
+			envMgr.Environment.SSLCACertificateFile,
+		},
+		{
+			"iRODS SSL Encryption Key Size",
+			envMgr.Environment.EncryptionKeySize,
+		},
+		{
+			"iRODS SSL Encryption Key Algorithm",
+			envMgr.Environment.EncryptionAlgorithm,
+		},
+		{
+			"iRODS SSL Encryption Salt Size",
+			envMgr.Environment.EncryptionSaltSize,
+		},
+		{
+			"iRODS SSL Encryption Hash Rounds",
+			envMgr.Environment.EncryptionNumHashRounds,
 		},
 	}, table.RowConfig{})
 	t.Render()

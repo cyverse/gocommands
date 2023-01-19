@@ -1,0 +1,7 @@
+# An example of gocommands configuration
+# use native authentication (via password)
+irods_host: "data.cyverse.org"
+irods_port: 1247
+irods_user_name: "your username"
+irods_zone_name: "iplant"
+irods_user_password: "your password"

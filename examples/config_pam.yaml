@@ -1,0 +1,19 @@
+# An example of gocommands configuration
+# use PAM authentication (via password and SSL CA Certificate)
+irods_host: "data.cyverse.org"
+irods_port: 1247
+irods_user_name: "your username"
+irods_zone_name: "iplant"
+irods_user_password: "your password"
+irods_cwd: ""
+irods_default_resource: ""
+irods_client_user_name: ""
+irods_log_level: 5
+irods_authentication_scheme: "pam"
+irods_client_server_negotiation: "request_server_negotiation"
+irods_client_server_policy: "CS_NEG_REQUIRE"
+irods_ssl_ca_certificate_file: "path to ssl ca certificate file"
+irods_encryption_key_size: 32
+irods_encryption_algorithm: "AES-256-CBC"
+irods_encryption_salt_size: 8
+irods_encryption_num_hash_rounds: 16
