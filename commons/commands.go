@@ -312,6 +312,12 @@ func InputMissingFields() (bool, error) {
 		fmt.Print("\n")
 		password = string(bytePassword)
 
+		if env.Username == "anonymous" && len(password) == 0 {
+			// exceptional case
+			updated = true
+			break
+		}
+
 		if len(password) == 0 {
 			fmt.Println("Please provide password")
 			fmt.Println("")
