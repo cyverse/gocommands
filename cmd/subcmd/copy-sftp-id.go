@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -218,7 +217,7 @@ func copySftpId(filesystem *irodsclient_fs.FileSystem, force bool, dryrun bool, 
 
 		// copy
 		// read the identity file first
-		identityFileContent, err := ioutil.ReadFile(identityFile)
+		identityFileContent, err := os.ReadFile(identityFile)
 		if err != nil {
 			return err
 		}

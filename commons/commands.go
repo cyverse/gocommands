@@ -3,7 +3,6 @@ package commons
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -450,7 +449,7 @@ func loadConfigFile(configPath string) error {
 		}
 
 		// load from YAML
-		yjBytes, err := ioutil.ReadFile(configPath)
+		yjBytes, err := os.ReadFile(configPath)
 		if err != nil {
 			return err
 		}
