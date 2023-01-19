@@ -60,12 +60,9 @@ func processLsticketCommand(command *cobra.Command, args []string) error {
 	defer filesystem.Release()
 
 	if len(args) == 0 {
-		err = listTickets(filesystem)
-		if err != nil {
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
-		}
+		err := fmt.Errorf("not enough input arguments")
+		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
 	} else {
 		for _, ticket := range args {
 			err = getTicket(filesystem, ticket)
@@ -76,43 +73,6 @@ func processLsticketCommand(command *cobra.Command, args []string) error {
 			}
 		}
 	}
-
-	return nil
-}
-
-func listTickets(filesystem *irodsclient_fs.FileSystem) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "listTickets",
-	})
-
-	logger.Debug("listing tickets")
-
-	/*
-		// sort by name
-		sort.SliceStable(objs, func(i int, j int) bool {
-			return objs[i].Name < objs[j].Name
-		})
-
-
-		// print data objects first
-		for _, entry := range objs {
-			if veryLongFormat {
-				for _, replica := range entry.Replicas {
-					modTime := commons.MakeDateTimeString(replica.ModifyTime)
-					fmt.Printf("  %s\t%d\t%s\t%d\t%s\t&\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, entry.Size, modTime, entry.Name)
-					fmt.Printf("    %s\t%s\n", replica.CheckSum, replica.Path)
-				}
-			} else if longFormat {
-				for _, replica := range entry.Replicas {
-					modTime := commons.MakeDateTimeString(replica.ModifyTime)
-					fmt.Printf("  %s\t%d\t%s\t%d\t%s\t&\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, entry.Size, modTime, entry.Name)
-				}
-			} else {
-				fmt.Printf("  %s\n", entry.Name)
-			}
-		}
-	*/
 
 	return nil
 }
