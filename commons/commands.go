@@ -29,6 +29,7 @@ var (
 
 	sessionID      int
 	resourceServer string
+	ticket         string
 )
 
 func GetEnvironmentManager() *irodsclient_icommands.ICommandsEnvironmentManager {
@@ -101,6 +102,7 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().BoolP("debug", "d", false, "Enable debug mode")
 	command.Flags().Int32P("session", "s", -1, "Set session ID")
 	command.Flags().StringP("resource", "R", "", "Set resource server")
+	command.Flags().StringP("ticket", "T", "", "Set ticket")
 }
 
 func ProcessCommonFlags(command *cobra.Command) (bool, error) {
@@ -233,6 +235,14 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		resourceServer = resourceFlag.Value.String()
 	}
 
+	ticketFlag := command.Flags().Lookup("ticket")
+	if ticketFlag != nil {
+		// load to global variable
+		ticket = ticketFlag.Value.String()
+
+		logger.Debugf("use ticket - %s", ticket)
+	}
+
 	return true, nil // contiue
 }
 
@@ -318,6 +328,10 @@ func InputMissingFields() (bool, error) {
 
 	if len(resourceServer) > 0 {
 		newAccount.DefaultResource = resourceServer
+	}
+
+	if len(ticket) > 0 {
+		newAccount.Ticket = ticket
 	}
 
 	account = newAccount
@@ -472,6 +486,7 @@ func loadConfigFile(configPath string) error {
 		}
 
 		loadedAccount.ClientUser = config.ClientUsername
+		loadedAccount.Ticket = config.Ticket
 
 		environmentMgr = iCommandsEnvMgr
 		account = loadedAccount
@@ -548,6 +563,7 @@ func loadConfigEnv() error {
 	}
 
 	loadedAccount.ClientUser = config.ClientUsername
+	loadedAccount.Ticket = config.Ticket
 
 	environmentMgr = iCommandsEnvMgr
 	account = loadedAccount

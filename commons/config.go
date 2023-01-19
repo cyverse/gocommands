@@ -30,6 +30,7 @@ type Config struct {
 	DefaultResource         string `yaml:"irods_default_resource,omitempty" envconfig:"IRODS_DEFAULT_RESOURCE"`
 	LogLevel                int    `yaml:"irods_log_level,omitempty" envconfig:"IRODS_LOG_LEVEL"`
 	Password                string `yaml:"irods_user_password,omitempty" envconfig:"IRODS_USER_PASSWORD"`
+	Ticket                  string `yaml:"irods_ticket,omitempty" envconfig:"IRODS_TICKET"`
 	AuthenticationScheme    string `yaml:"irods_authentication_scheme,omitempty" envconfig:"IRODS_AUTHENTICATION_SCHEME"`
 	ClientServerNegotiation string `yaml:"irods_client_server_negotiation,omitempty" envconfig:"IRODS_CLIENT_SERVER_NEGOTIATION"`
 	ClientServerPolicy      string `yaml:"irods_client_server_policy,omitempty" envconfig:"IRODS_CLIENT_SERVER_POLICY"`
