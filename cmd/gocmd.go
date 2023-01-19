@@ -79,6 +79,7 @@ func main() {
 	subcmd.AddSvrinfoCommand(rootCmd)
 	subcmd.AddPsCommand(rootCmd)
 	subcmd.AddCopySftpIdCommand(rootCmd)
+	subcmd.AddLsticketCommand(rootCmd)
 
 	err := Execute()
 	if err != nil {
