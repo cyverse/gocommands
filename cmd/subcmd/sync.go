@@ -15,7 +15,7 @@ import (
 )
 
 var syncCmd = &cobra.Command{
-	Use:   "sync i:[local dir] [collection] or sync [collection] i:[local dir]",
+	Use:   "sync i:[collection] [local dir] or sync [local dir] i:[collection]",
 	Short: "Sync local directory with iRODS collection",
 	Long:  `This synchronizes a local directory with the given iRODS collection.`,
 	RunE:  processSyncCommand,
