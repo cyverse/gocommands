@@ -238,6 +238,9 @@ func (manager *ParallelTransferManager) ScheduleUploadIfDifferent(filesystem *ir
 		"function": "ScheduleUploadIfDifferent",
 	})
 
+	config := GetConfig()
+	replicate := !config.NoReplication
+
 	task := func() {
 		logger.Debugf("synchronizing a local file %s to %s", source, target)
 
@@ -315,7 +318,7 @@ func (manager *ParallelTransferManager) ScheduleUploadIfDifferent(filesystem *ir
 			manager.progressCallback(target, processed, total, done)
 		}
 
-		err = filesystem.UploadFileParallel(source, target, "", 0, true, callback)
+		err = filesystem.UploadFileParallel(source, target, "", 0, replicate, callback)
 		if err != nil {
 			manager.mutex.Lock()
 			defer manager.mutex.Unlock()
@@ -357,6 +360,9 @@ func (manager *ParallelTransferManager) ScheduleUpload(filesystem *irodsclient_f
 		"function": "ScheduleUpload",
 	})
 
+	config := GetConfig()
+	replicate := !config.NoReplication
+
 	task := func() {
 		logger.Debugf("uploading a local file %s to %s", source, target)
 		callback := func(processed int64, total int64) {
@@ -364,7 +370,7 @@ func (manager *ParallelTransferManager) ScheduleUpload(filesystem *irodsclient_f
 			manager.progressCallback(target, processed, total, done)
 		}
 
-		err := filesystem.UploadFileParallel(source, target, "", 0, true, callback)
+		err := filesystem.UploadFileParallel(source, target, "", 0, replicate, callback)
 		if err != nil {
 			manager.mutex.Lock()
 			defer manager.mutex.Unlock()

@@ -24,16 +24,19 @@ const (
 )
 
 var (
-	environmentMgr *irodsclient_icommands.ICommandsEnvironmentManager
-	account        *irodsclient_types.IRODSAccount
+	environmentManager *irodsclient_icommands.ICommandsEnvironmentManager
+	appConfig          *Config
+	account            *irodsclient_types.IRODSAccount
 
-	sessionID      int
-	resourceServer string
-	ticket         string
+	sessionID int
 )
 
 func GetEnvironmentManager() *irodsclient_icommands.ICommandsEnvironmentManager {
-	return environmentMgr
+	return environmentManager
+}
+
+func GetConfig() *Config {
+	return appConfig
 }
 
 func GetAccount() *irodsclient_types.IRODSAccount {
@@ -55,14 +58,14 @@ func getCWD(env *irodsclient_icommands.ICommandsEnvironment) string {
 }
 
 func GetCWD() string {
-	session := environmentMgr.Session
+	session := environmentManager.Session
 	sessionPath := getCWD(session)
 
 	if len(sessionPath) > 0 {
 		return sessionPath
 	}
 
-	env := environmentMgr.Environment
+	env := environmentManager.Environment
 	envPath := getCWD(env)
 
 	if len(envPath) == 0 {
@@ -73,25 +76,25 @@ func GetCWD() string {
 }
 
 func GetZone() string {
-	env := environmentMgr.Environment
+	env := environmentManager.Environment
 	return env.Zone
 }
 
 func GetHomeDir() string {
-	env := environmentMgr.Environment
+	env := environmentManager.Environment
 	return fmt.Sprintf("/%s/home/%s", env.Zone, env.Username)
 }
 
 func SetCWD(cwd string) {
-	env := environmentMgr.Environment
-	session := environmentMgr.Session
+	env := environmentManager.Environment
+	session := environmentManager.Session
 	if !strings.HasPrefix(cwd, "/") {
 		// relative path from home
 		cwd = fmt.Sprintf("/%s/home/%s/%s", env.Zone, env.Username, cwd)
 	}
 
 	session.CurrentWorkingDir = path.Clean(cwd)
-	environmentMgr.SaveSession(sessionID)
+	environmentManager.SaveSession(sessionID)
 }
 
 func SetCommonFlags(command *cobra.Command) {
@@ -100,6 +103,7 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().BoolP("version", "v", false, "Print version")
 	command.Flags().BoolP("help", "h", false, "Print help")
 	command.Flags().BoolP("debug", "d", false, "Enable debug mode")
+	command.Flags().Bool("no_replication", false, "Disable replication")
 	command.Flags().Int32P("session", "s", -1, "Set session ID")
 	command.Flags().StringP("resource", "R", "", "Set resource server")
 	command.Flags().StringP("ticket", "T", "", "Set ticket")
@@ -171,9 +175,9 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 
 	configFlag := command.Flags().Lookup("config")
 	if configFlag != nil {
-		config := configFlag.Value.String()
-		if len(config) > 0 {
-			err := loadConfigFile(config)
+		configFile := configFlag.Value.String()
+		if len(configFile) > 0 {
+			err := loadConfigFile(configFile)
 			if err != nil {
 				logger.Error(err)
 				return false, err // stop here
@@ -229,18 +233,39 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		//}
 	}
 
+	if appConfig == nil {
+		appConfig = GetDefaultConfig()
+	}
+
 	resourceFlag := command.Flags().Lookup("resource")
 	if resourceFlag != nil {
 		// load to global variable
-		resourceServer = resourceFlag.Value.String()
+		appConfig.DefaultResource = resourceFlag.Value.String()
+		if len(appConfig.DefaultResource) > 0 {
+			logger.Debugf("use default resource server - %s", appConfig.DefaultResource)
+		}
+	}
+
+	noReplicationFlag := command.Flags().Lookup("no_replication")
+	if noReplicationFlag != nil {
+		noReplication, err := strconv.ParseBool(noReplicationFlag.Value.String())
+		if err != nil {
+			noReplication = false
+		}
+
+		appConfig.NoReplication = noReplication
+		if noReplication {
+			logger.Debug("disabled replication")
+		}
 	}
 
 	ticketFlag := command.Flags().Lookup("ticket")
 	if ticketFlag != nil {
 		// load to global variable
-		ticket = ticketFlag.Value.String()
-
-		logger.Debugf("use ticket - %s", ticket)
+		appConfig.Ticket = ticketFlag.Value.String()
+		if len(appConfig.Ticket) > 0 {
+			logger.Debugf("use ticket - %s", appConfig.Ticket)
+		}
 	}
 
 	return true, nil // contiue
@@ -248,13 +273,13 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 
 // InputMissingFields inputs missing fields
 func InputMissingFields() (bool, error) {
-	if environmentMgr == nil {
+	if environmentManager == nil {
 		envMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
 		if err != nil {
 			return false, err
 		}
 
-		environmentMgr = envMgr
+		environmentManager = envMgr
 		account, err = envMgr.ToIRODSAccount()
 		if err != nil {
 			return false, err
@@ -263,7 +288,7 @@ func InputMissingFields() (bool, error) {
 
 	updated := false
 
-	env := environmentMgr.Environment
+	env := environmentManager.Environment
 	if len(env.Host) == 0 {
 		fmt.Print("iRODS Host [data.cyverse.org]: ")
 		fmt.Scanln(&env.Host)
@@ -301,7 +326,7 @@ func InputMissingFields() (bool, error) {
 		}
 	}
 
-	password := environmentMgr.Password
+	password := environmentManager.Password
 	for len(password) == 0 {
 		fmt.Print("iRODS Password: ")
 		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
@@ -325,19 +350,19 @@ func InputMissingFields() (bool, error) {
 			updated = true
 		}
 	}
-	environmentMgr.Password = password
+	environmentManager.Password = password
 
-	newAccount, err := environmentMgr.ToIRODSAccount()
+	newAccount, err := environmentManager.ToIRODSAccount()
 	if err != nil {
 		return updated, err
 	}
 
-	if len(resourceServer) > 0 {
-		newAccount.DefaultResource = resourceServer
+	if len(appConfig.DefaultResource) > 0 {
+		newAccount.DefaultResource = appConfig.DefaultResource
 	}
 
-	if len(ticket) > 0 {
-		newAccount.Ticket = ticket
+	if len(appConfig.Ticket) > 0 {
+		newAccount.Ticket = appConfig.Ticket
 	}
 
 	account = newAccount
@@ -410,6 +435,26 @@ func setConfigToICommandsEnvMgr(envManager *irodsclient_icommands.ICommandsEnvir
 	envManager.Environment.EncryptionNumHashRounds = config.EncryptionNumHashRounds
 
 	envManager.Password = config.Password
+}
+
+func setICommandsEnvMgrToConfig(config *Config, envManager *irodsclient_icommands.ICommandsEnvironmentManager) {
+	config.CurrentWorkingDir = envManager.Environment.CurrentWorkingDir
+	config.Host = envManager.Environment.Host
+	config.Port = envManager.Environment.Port
+	config.Username = envManager.Environment.Username
+	config.Zone = envManager.Environment.Zone
+	config.DefaultResource = envManager.Environment.DefaultResource
+	config.LogLevel = envManager.Environment.LogLevel
+	config.AuthenticationScheme = envManager.Environment.AuthenticationScheme
+	config.ClientServerNegotiation = envManager.Environment.ClientServerNegotiation
+	config.ClientServerPolicy = envManager.Environment.ClientServerPolicy
+	config.SSLCACertificateFile = envManager.Environment.SSLCACertificateFile
+	config.EncryptionKeySize = envManager.Environment.EncryptionKeySize
+	config.EncryptionAlgorithm = envManager.Environment.EncryptionAlgorithm
+	config.EncryptionSaltSize = envManager.Environment.EncryptionSaltSize
+	config.EncryptionNumHashRounds = envManager.Environment.EncryptionNumHashRounds
+
+	config.Password = envManager.Password
 }
 
 func getLogrusLogLevel(irodsLogLevel int) log.Level {
@@ -494,7 +539,8 @@ func loadConfigFile(configPath string) error {
 		loadedAccount.ClientUser = config.ClientUsername
 		loadedAccount.Ticket = config.Ticket
 
-		environmentMgr = iCommandsEnvMgr
+		environmentManager = iCommandsEnvMgr
+		appConfig = config
 		account = loadedAccount
 		return nil
 	}
@@ -532,7 +578,9 @@ func loadConfigFile(configPath string) error {
 		return err
 	}
 
-	environmentMgr = iCommandsEnvMgr
+	environmentManager = iCommandsEnvMgr
+	appConfig = GetDefaultConfig()
+	setICommandsEnvMgrToConfig(appConfig, iCommandsEnvMgr)
 	account = loadedAccount
 
 	return nil
@@ -571,7 +619,8 @@ func loadConfigEnv() error {
 	loadedAccount.ClientUser = config.ClientUsername
 	loadedAccount.Ticket = config.Ticket
 
-	environmentMgr = iCommandsEnvMgr
+	environmentManager = iCommandsEnvMgr
+	appConfig = config
 	account = loadedAccount
 	return nil
 }
