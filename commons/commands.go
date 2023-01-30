@@ -102,10 +102,11 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().BoolP("envconfig", "e", false, "Read config from environmental variables")
 	command.Flags().BoolP("version", "v", false, "Print version")
 	command.Flags().BoolP("help", "h", false, "Print help")
-	command.Flags().BoolP("debug", "d", false, "Enable debug mode")
-	command.Flags().Bool("no_replication", false, "Disable replication")
+	command.Flags().BoolP("debug", "d", false, "Enable debug mode (default is False)")
+	command.Flags().String("log_level", "", "Set log level (default is INFO)")
+	command.Flags().Bool("no_replication", false, "Disable replication (default is False)")
 	command.Flags().Int32P("session", "s", -1, "Set session ID")
-	command.Flags().StringP("resource", "R", "", "Set resource server")
+	command.Flags().StringP("resource", "R", "", "Set resource server (default is empty)")
 	command.Flags().StringP("ticket", "T", "", "Set ticket")
 }
 
@@ -115,16 +116,34 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		"function": "ProcessCommonFlags",
 	})
 
+	logLevel := ""
+	logLevelFlag := command.Flags().Lookup("log_level")
+	if logLevelFlag != nil {
+		logLevelStr := logLevelFlag.Value.String()
+		if len(logLevelStr) > 0 {
+			lvl, err := log.ParseLevel(logLevelStr)
+			if err != nil {
+				lvl = log.InfoLevel
+			}
+
+			log.SetLevel(lvl)
+			logLevel = logLevelStr
+		}
+	}
+
+	debug := false
 	debugFlag := command.Flags().Lookup("debug")
 	if debugFlag != nil {
-		debug, err := strconv.ParseBool(debugFlag.Value.String())
+		debugValue, err := strconv.ParseBool(debugFlag.Value.String())
 		if err != nil {
-			debug = false
+			debugValue = false
 		}
 
-		if debug {
+		if debugValue {
 			log.SetLevel(log.DebugLevel)
 		}
+
+		debug = debugValue
 	}
 
 	helpFlag := command.Flags().Lookup("help")
@@ -235,6 +254,19 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 
 	if appConfig == nil {
 		appConfig = GetDefaultConfig()
+	}
+
+	// re-configure level
+	if len(logLevel) > 0 {
+		lvl, err := log.ParseLevel(logLevel)
+		if err != nil {
+			lvl = log.InfoLevel
+		}
+
+		log.SetLevel(lvl)
+	}
+	if debug {
+		log.SetLevel(log.DebugLevel)
 	}
 
 	resourceFlag := command.Flags().Lookup("resource")
