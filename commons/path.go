@@ -37,14 +37,12 @@ func MakeIRODSPath(cwd string, homedir string, zone string, irodsPath string) st
 }
 
 func MakeLocalPath(localPath string) string {
-	if strings.HasPrefix(localPath, string(os.PathSeparator)) {
+	absLocalPath, err := filepath.Abs(localPath)
+	if err != nil {
 		return filepath.Clean(localPath)
 	}
 
-	wd, _ := os.Getwd()
-
-	newPath := filepath.Join(wd, localPath)
-	return filepath.Clean(newPath)
+	return filepath.Clean(absLocalPath)
 }
 
 func EnsureTargetIRODSFilePath(filesystem *irodsclient_fs.FileSystem, source string, target string) string {

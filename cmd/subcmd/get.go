@@ -137,6 +137,8 @@ func getOne(transferManager *commons.ParallelTransferManager, filesystem *irodsc
 	}
 
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
+		logger.Debugf("downloading a data object %s to %s", sourcePath, targetPath)
+
 		targetFilePath := commons.EnsureTargetLocalFilePath(sourcePath, targetPath)
 
 		targetStat, err := os.Stat(targetFilePath)
