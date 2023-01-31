@@ -176,16 +176,32 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string) er
 		// dir
 		logger.Debugf("bundle-uploading a local directory %s", sourcePath)
 
-		entries, err := os.ReadDir(sourcePath)
-		if err != nil {
-			return err
-		}
+		walkFunc := func(path string, entry os.DirEntry, err2 error) error {
+			if err2 != nil {
+				return err2
+			}
 
-		for _, entryInDir := range entries {
-			err = bputOne(bundleManager, filepath.Join(sourcePath, entryInDir.Name()))
+			if entry.IsDir() {
+				return nil
+			}
+
+			info, err := entry.Info()
 			if err != nil {
 				return err
 			}
+
+			logger.Debugf("> scheduled a local file bundle-upload %s", path)
+			bundleManager.ScheduleBundleUpload(path, info.Size())
+
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+
+		err := filepath.WalkDir(sourcePath, walkFunc)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
