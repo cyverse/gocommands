@@ -1,5 +1,5 @@
 PKG=github.com/cyverse/gocommands
-VERSION=v0.4.4
+VERSION=v0.4.5
 GIT_COMMIT?=$(shell git rev-parse HEAD)
 BUILD_DATE?=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS?="-X '${PKG}/commons.clientVersion=${VERSION}' -X '${PKG}/commons.gitCommit=${GIT_COMMIT}' -X '${PKG}/commons.buildDate=${BUILD_DATE}'"
@@ -25,6 +25,13 @@ test-release:
 	cd install && ./prep-shortcut-script.sh ../release/amd64_linux && cd ..
 	CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags=${LDFLAGS} -o release/amd64_linux/gocmd cmd/*.go
 	cd release/amd64_linux && tar cf gocommands_amd64_linux_${VERSION}.tar * && mv *.tar .. && cd ../..
+
+.PHONY: test-win
+test-win:
+	rm -rf release
+
+	mkdir -p release/amd64_windows
+	CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -ldflags=${LDFLAGS} -o release/amd64_windows/gocmd.exe cmd/*.go
 
 
 .PHONY: build-release
