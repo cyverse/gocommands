@@ -92,3 +92,27 @@ gocmd -e ls
 ```
 
 Some of field values, such as `IRODS_USER_PASSWORD` can be omitted if you don't want to put it in clear text. `gocommands` will ask you to type the missing field values in runtime.
+
+## Troubleshooting
+
+### Getting `SYS_NOT_ALLOWED` error
+
+`put`, `bput`, or `sync` subcommands throw `SYS_NOT_ALLOWED` error if iRODS server does not support data replication. To disable data replication, use `--no_replication` flag.
+
+
+## License
+
+Copyright (c) 2010-2023, The Arizona Board of Regents on behalf of The University of Arizona
+
+All rights reserved.
+
+Developed by: CyVerse as a collaboration between participants at BIO5 at The University of Arizona (the primary hosting institution), Cold Spring Harbor Laboratory, The University of Texas at Austin, and individual contributors. Find out more at http://www.cyverse.org/.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+ * Neither the name of CyVerse, BIO5, The University of Arizona, Cold Spring Harbor Laboratory, The University of Texas at Austin, nor the names of other contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
+
+Please check [LICENSE](https://github.com/cyverse/gocommands/tree/master/LICENSE) file.
