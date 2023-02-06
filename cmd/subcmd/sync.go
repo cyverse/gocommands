@@ -25,7 +25,7 @@ func AddSyncCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(syncCmd)
 
-	syncCmd.Flags().BoolP("progress", "", false, "Display progress bar")
+	syncCmd.Flags().Bool("progress", false, "Display progress bar")
 
 	rootCmd.AddCommand(syncCmd)
 }
@@ -150,7 +150,7 @@ func syncGetOne(transferManager *commons.ParallelTransferManager, filesystem *ir
 	}
 
 	if entry.Type == irodsclient_fs.FileEntry {
-		targetFilePath := commons.EnsureTargetLocalFilePath(sourcePath, targetPath)
+		targetFilePath := commons.MakeTargetLocalFilePath(sourcePath, targetPath)
 
 		logger.Debugf("scheduled synchronizing a data object %s to %s", sourcePath, targetFilePath)
 		transferManager.ScheduleDownloadIfDifferent(filesystem, sourcePath, targetFilePath)
@@ -198,7 +198,7 @@ func syncPutOne(transferManager *commons.ParallelTransferManager, filesystem *ir
 	}
 
 	if !st.IsDir() {
-		targetFilePath := commons.EnsureTargetIRODSFilePath(filesystem, sourcePath, targetPath)
+		targetFilePath := commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetPath)
 
 		logger.Debugf("scheduled synchronizing a local file %s to %s", sourcePath, targetFilePath)
 		transferManager.ScheduleUploadIfDifferent(filesystem, sourcePath, targetFilePath)
@@ -249,7 +249,7 @@ func syncCopyOne(transferManager *commons.ParallelTransferManager, filesystem *i
 
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
 		// file
-		targetFilePath := commons.EnsureTargetIRODSFilePath(filesystem, sourcePath, targetPath)
+		targetFilePath := commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetPath)
 
 		logger.Debugf("scheduled synchronizing a data object %s to %s", sourcePath, targetFilePath)
 		transferManager.ScheduleCopyIfDifferent(filesystem, sourcePath, targetFilePath)

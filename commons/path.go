@@ -45,7 +45,7 @@ func MakeLocalPath(localPath string) string {
 	return filepath.Clean(absLocalPath)
 }
 
-func EnsureTargetIRODSFilePath(filesystem *irodsclient_fs.FileSystem, source string, target string) string {
+func MakeTargetIRODSFilePath(filesystem *irodsclient_fs.FileSystem, source string, target string) string {
 	if filesystem.ExistsDir(target) {
 		// make full file name for target
 		filename := GetBasename(source)
@@ -54,7 +54,7 @@ func EnsureTargetIRODSFilePath(filesystem *irodsclient_fs.FileSystem, source str
 	return target
 }
 
-func EnsureTargetLocalFilePath(source string, target string) string {
+func MakeTargetLocalFilePath(source string, target string) string {
 	st, err := os.Stat(target)
 	if err == nil {
 		if st.IsDir() {
@@ -167,7 +167,12 @@ func GetCommonRootLocalDirPath(paths []string) (string, error) {
 	}
 
 	if commonRootPath == "" {
-		commonRootPath = "/"
+		return "/", nil
+	}
+
+	commonRootPath = filepath.Dir(commonRootPath)
+	if commonRootPath == "" {
+		return "/", nil
 	}
 
 	return commonRootPath, nil

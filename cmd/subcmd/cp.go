@@ -25,7 +25,7 @@ func AddCpCommand(rootCmd *cobra.Command) {
 
 	cpCmd.Flags().BoolP("recurse", "r", false, "Copy recursively")
 	cpCmd.Flags().BoolP("force", "f", false, "Copy forcefully")
-	cpCmd.Flags().BoolP("progress", "", false, "Display progress bar")
+	cpCmd.Flags().Bool("progress", false, "Display progress bar")
 
 	rootCmd.AddCommand(cpCmd)
 }
@@ -149,7 +149,7 @@ func copyOne(transferManager *commons.ParallelTransferManager, filesystem *irods
 
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
 		// file
-		targetFilePath := commons.EnsureTargetIRODSFilePath(filesystem, sourcePath, targetPath)
+		targetFilePath := commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetPath)
 
 		if filesystem.ExistsFile(targetFilePath) {
 			// already exists!

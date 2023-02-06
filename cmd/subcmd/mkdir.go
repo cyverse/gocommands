@@ -22,7 +22,7 @@ var mkdirCmd = &cobra.Command{
 func AddMkdirCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(mkdirCmd)
-	mkdirCmd.Flags().BoolP("parents", "", false, "Make parent collections")
+	mkdirCmd.Flags().Bool("parents", false, "Make parent collections")
 
 	rootCmd.AddCommand(mkdirCmd)
 }

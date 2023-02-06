@@ -24,10 +24,10 @@ func AddPsCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(psCmd)
 
-	psCmd.Flags().BoolP("groupbyuser", "", false, "Group processes by user")
-	psCmd.Flags().BoolP("groupbyprog", "", false, "Group processes by client program")
-	psCmd.Flags().StringP("zone", "", "", "Filter by zone")
-	psCmd.Flags().StringP("address", "", "", "Filter by address")
+	psCmd.Flags().Bool("groupbyuser", false, "Group processes by user")
+	psCmd.Flags().Bool("groupbyprog", false, "Group processes by client program")
+	psCmd.Flags().String("zone", "", "Filter by zone")
+	psCmd.Flags().String("address", "", "Filter by address")
 
 	rootCmd.AddCommand(psCmd)
 }

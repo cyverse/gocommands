@@ -23,10 +23,10 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	commons.SetCommonFlags(bputCmd)
 
 	bputCmd.Flags().BoolP("force", "f", false, "Put forcefully (overwrite)")
-	bputCmd.Flags().IntP("max_file_num", "", commons.MaxBundleFileNum, "Specify max file number in a bundle file")
-	bputCmd.Flags().Int64P("max_file_size", "", commons.MaxBundleFileSize, "Specify max file size of a bundle file")
-	bputCmd.Flags().BoolP("progress", "", false, "Display progress bar")
-	bputCmd.Flags().StringP("temp_dir_path", "", os.TempDir(), "Specify a local temp directory path to create bundle files")
+	bputCmd.Flags().Int("max_file_num", commons.MaxBundleFileNumDefault, "Specify max file number in a bundle file")
+	bputCmd.Flags().Int64("max_file_size", commons.MaxBundleFileSizeDefault, "Specify max file size of a bundle file")
+	bputCmd.Flags().Bool("progress", false, "Display progress bar")
+	bputCmd.Flags().String("local_temp", os.TempDir(), "Specify a local temp directory path to create bundle files")
 
 	rootCmd.AddCommand(bputCmd)
 }
@@ -64,7 +64,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
-	maxFileNum := commons.MaxBundleFileNum
+	maxFileNum := commons.MaxBundleFileNumDefault
 	maxFileNumFlag := command.Flags().Lookup("max_file_num")
 	if maxFileNumFlag != nil {
 		n, err := strconv.ParseInt(maxFileNumFlag.Value.String(), 10, 32)
@@ -73,7 +73,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
-	maxFileSize := commons.MaxBundleFileSize
+	maxFileSize := commons.MaxBundleFileSizeDefault
 	maxFileSizeFlag := command.Flags().Lookup("max_file_size")
 	if maxFileSizeFlag != nil {
 		n, err := strconv.ParseInt(maxFileSizeFlag.Value.String(), 10, 64)
@@ -91,10 +91,10 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
-	tempDirPath := os.TempDir()
-	tempDirPathFlag := command.Flags().Lookup("temp_dir_path")
-	if tempDirPathFlag != nil {
-		tempDirPath = tempDirPathFlag.Value.String()
+	localTempDirPath := os.TempDir()
+	localTempPathFlag := command.Flags().Lookup("local_temp")
+	if localTempPathFlag != nil {
+		localTempDirPath = localTempPathFlag.Value.String()
 	}
 
 	// Create a file system
@@ -108,15 +108,30 @@ func processBputCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
-	bundleTransferManager := commons.NewBundleTransferManager(maxFileNum, maxFileSize, tempDirPath)
+	targetPath := "./"
+	if len(args) >= 2 {
+		targetPath = args[len(args)-1]
+	}
 
-	targetPath := ""
+	cwd := commons.GetCWD()
+	home := commons.GetHomeDir()
+	zone := commons.GetZone()
+	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	irodsTempDirPath := commons.MakeIRODSPath(cwd, home, zone, "./")
+
+	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, localTempDirPath, irodsTempDirPath, force, progress)
+	bundleTransferManager.Start()
 
 	if len(args) == 1 {
-		targetPath = "./"
-
 		// upload to current collection
-		err = bputOne(bundleTransferManager, args[0])
+		bundleRootPath, err := commons.GetCommonRootLocalDirPath(args)
+		if err != nil {
+			logger.Error(err)
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
+		}
+
+		err = bputOne(bundleTransferManager, args[0], bundleRootPath)
 		if err != nil {
 			logger.Error(err)
 			fmt.Fprintln(os.Stderr, err.Error())
@@ -125,8 +140,15 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	} else if len(args) >= 2 {
 		targetPath = args[len(args)-1]
 
+		bundleRootPath, err := commons.GetCommonRootLocalDirPath(args[:len(args)-1])
+		if err != nil {
+			logger.Error(err)
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
+		}
+
 		for _, sourcePath := range args[:len(args)-1] {
-			err = bputOne(bundleTransferManager, sourcePath)
+			err = bputOne(bundleTransferManager, sourcePath, bundleRootPath)
 			if err != nil {
 				logger.Error(err)
 				fmt.Fprintln(os.Stderr, err.Error())
@@ -140,13 +162,8 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		return nil
 	}
 
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
-	zone := commons.GetZone()
-	tempPath := commons.MakeIRODSPath(cwd, home, zone, "./")
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
-
-	err = bundleTransferManager.Go(filesystem, tempPath, targetPath, force, progress)
+	bundleTransferManager.DoneScheduling()
+	err = bundleTransferManager.Wait()
 	if err != nil {
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -156,11 +173,13 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string) error {
+func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string, bundleRootPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "bputOne",
 	})
+
+	bundleManager.SetBundleRootPath(bundleRootPath)
 
 	sourcePath = commons.MakeLocalPath(sourcePath)
 
@@ -171,7 +190,7 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string) er
 
 	if !sourceStat.IsDir() {
 		logger.Debugf("scheduled a local file bundle-upload %s", sourcePath)
-		bundleManager.ScheduleBundleUpload(sourcePath, sourceStat.Size())
+		bundleManager.Schedule(sourcePath, sourceStat.Size())
 	} else {
 		// dir
 		logger.Debugf("bundle-uploading a local directory %s", sourcePath)
@@ -191,7 +210,7 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string) er
 			}
 
 			logger.Debugf("> scheduled a local file bundle-upload %s", path)
-			bundleManager.ScheduleBundleUpload(path, info.Size())
+			bundleManager.Schedule(path, info.Size())
 
 			if err != nil {
 				return err

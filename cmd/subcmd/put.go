@@ -25,7 +25,7 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	commons.SetCommonFlags(putCmd)
 
 	putCmd.Flags().BoolP("force", "f", false, "Put forcefully")
-	putCmd.Flags().BoolP("progress", "", false, "Display progress bar")
+	putCmd.Flags().Bool("progress", false, "Display progress bar")
 
 	rootCmd.AddCommand(putCmd)
 }
@@ -138,7 +138,7 @@ func putOne(transferManager *commons.ParallelTransferManager, filesystem *irodsc
 	}
 
 	if !sourceStat.IsDir() {
-		targetFilePath := commons.EnsureTargetIRODSFilePath(filesystem, sourcePath, targetPath)
+		targetFilePath := commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetPath)
 
 		if filesystem.ExistsFile(targetFilePath) {
 			// already exists!

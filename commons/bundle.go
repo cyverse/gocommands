@@ -1,7 +1,6 @@
 package commons
 
 import (
-	"container/list"
 	"fmt"
 	"os"
 	"path"
@@ -16,419 +15,845 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// default values
 const (
-	MaxBundleFileNum  int   = 50
-	MaxBundleFileSize int64 = 1 * 1024 * 1024 * 1024 // 1GB
+	//MaxBundleFileNumDefault  int   = 50
+	MaxBundleFileNumDefault  int   = 1
+	MaxBundleFileSizeDefault int64 = 1 * 1024 * 1024 * 1024 // 1GB
+	MinBundleFileNumDefault  int   = 3
+)
+
+const (
+	BundleTaskNameRemove  string = "Remove Old Files"
+	BundleTaskNameTar     string = "TAR"
+	BundleTaskNameUpload  string = "Upload"
+	BundleTaskNameExtract string = "Extract"
 )
 
 type Bundle struct {
-	tempDirPath     string
-	name            string
-	files           []string
-	size            int64
-	localBundlePath string
-	irodsBundlePath string
+	manager *BundleTransferManager
+
+	index             int64
+	files             []string
+	size              int64
+	localBundlePath   string
+	irodsBundlePath   string
+	lastError         error
+	lastErrorTaskName string
 }
 
-func NewBundle(tempDirPath string) *Bundle {
+func newBundle(manager *BundleTransferManager) *Bundle {
+	index := manager.nextBundleIndex
+	manager.nextBundleIndex++
+
+	filename := fmt.Sprintf("bundle_%d.tar", index)
+
 	return &Bundle{
-		tempDirPath:     tempDirPath,
-		files:           []string{},
-		size:            0,
-		localBundlePath: "",
-		irodsBundlePath: "",
+		manager:           manager,
+		index:             index,
+		files:             []string{},
+		size:              0,
+		localBundlePath:   filepath.Join(manager.localTempDirPath, filename),
+		irodsBundlePath:   filepath.Join(manager.irodsTempDirPath, filename),
+		lastError:         nil,
+		lastErrorTaskName: "",
 	}
 }
 
-func (bundle *Bundle) AddFile(path string, size int64) {
+func (bundle *Bundle) addFile(path string, size int64) {
 	bundle.files = append(bundle.files, path)
 	bundle.size += size
 }
 
-func (bundle *Bundle) Seal(name string) error {
-	// id
-	strs := []string{}
-	strs = append(strs, bundle.files...)
-	strs = append(strs, fmt.Sprintf("%d", bundle.size))
+func (bundle *Bundle) isFull() bool {
+	return bundle.size >= bundle.manager.maxBundleFileSize || len(bundle.files) >= bundle.manager.maxBundleFileNum
+}
 
-	bundleID, err := HashStringsMD5(strs)
-	if err != nil {
-		return err
-	}
-
-	// name
-	bundle.name = name
-
-	// set local bundle path
-	bundle.localBundlePath = filepath.Join(bundle.tempDirPath, fmt.Sprintf("%s_%s.tar", bundle.name, bundleID))
-	return nil
+func (bundle *Bundle) requireTar() bool {
+	return len(bundle.files) >= MinBundleFileNumDefault
 }
 
 type BundleTransferManager struct {
-	pendingBundles          *list.List // *Bundle
+	filesystem              *irodsclient_fs.FileSystem
+	irodsDestPath           string
+	currentBundle           *Bundle
+	nextBundleIndex         int64
+	pendingBundles          chan *Bundle
+	bundleRootPath          string
 	maxBundleFileNum        int
 	maxBundleFileSize       int64
-	tempDirPath             string
-	errors                  *list.List // error
+	localTempDirPath        string
+	irodsTempDirPath        string
+	force                   bool
+	showProgress            bool
+	progressWriter          progress.Writer
+	progressTrackers        map[string]*progress.Tracker
 	progressTrackerCallback ProgressTrackerCallback
-	mutex                   sync.Mutex
+	mutex                   sync.RWMutex
+	lastError               error
+
+	scheduleWait sync.WaitGroup
+	transferWait sync.WaitGroup
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
-func NewBundleTransferManager(maxBundleFileNum int, maxBundleFileSize int64, tempDirPath string) *BundleTransferManager {
+func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, localTempDirPath string, irodsTempDirPath string, force bool, showProgress bool) *BundleTransferManager {
 	manager := &BundleTransferManager{
-		pendingBundles:          list.New(),
+		filesystem:              fs,
+		irodsDestPath:           irodsDestPath,
+		currentBundle:           nil,
+		nextBundleIndex:         0,
+		pendingBundles:          make(chan *Bundle, 100),
+		bundleRootPath:          "/",
 		maxBundleFileNum:        maxBundleFileNum,
 		maxBundleFileSize:       maxBundleFileSize,
-		tempDirPath:             tempDirPath,
-		errors:                  list.New(),
+		localTempDirPath:        localTempDirPath,
+		irodsTempDirPath:        irodsTempDirPath,
+		force:                   force,
+		showProgress:            showProgress,
+		progressWriter:          nil,
+		progressTrackers:        map[string]*progress.Tracker{},
 		progressTrackerCallback: nil,
+		mutex:                   sync.RWMutex{},
+		lastError:               nil,
+		scheduleWait:            sync.WaitGroup{},
+		transferWait:            sync.WaitGroup{},
 	}
+
+	manager.scheduleWait.Add(1)
 
 	return manager
 }
 
-func (manager *BundleTransferManager) progressCallback(name string, processed int64, total int64, done bool) {
+func (manager *BundleTransferManager) progressCallback(name string, processed int64, total int64, errored bool) {
 	if manager.progressTrackerCallback != nil {
-		manager.progressTrackerCallback(name, processed, total, done)
+		manager.progressTrackerCallback(name, processed, total, errored)
 	}
 }
 
-// ScheduleBundleUpload schedules a file bundle upload
-func (manager *BundleTransferManager) ScheduleBundleUpload(source string, size int64) error {
+func (manager *BundleTransferManager) Schedule(source string, size int64) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "commons",
 		"struct":   "BundleTransferManager",
-		"function": "ScheduleBundleUpload",
+		"function": "Schedule",
 	})
 
 	manager.mutex.Lock()
-	defer manager.mutex.Unlock()
 
-	lastElem := manager.pendingBundles.Back()
-	var currentBundle *Bundle
-	if lastElem != nil {
-		if lastBundle, ok := lastElem.Value.(*Bundle); ok {
-			if lastBundle.size >= manager.maxBundleFileSize || len(lastBundle.files) >= manager.maxBundleFileNum {
-				// exceed bundle size or file num
-				// create a new
-				currentBundle = NewBundle(manager.tempDirPath)
-
-				logger.Debugf("assigning a new bundle %d", manager.pendingBundles.Len())
-				manager.pendingBundles.PushBack(currentBundle)
-			} else {
-				// safe to add
-				currentBundle = lastBundle
-			}
-		} else {
-			return fmt.Errorf("cannot convert the last element in pending bundles to Bundle type")
-		}
-	} else {
-		// add new
-		currentBundle = NewBundle(manager.tempDirPath)
-
-		logger.Debugf("assigning a new bundle %d", manager.pendingBundles.Len())
-		manager.pendingBundles.PushBack(currentBundle)
+	// do not accept new schedule if there's an error
+	if manager.lastError != nil {
+		defer manager.mutex.Unlock()
+		return manager.lastError
 	}
 
-	currentBundle.AddFile(source, size)
+	if manager.currentBundle != nil {
+		// if current bundle is full, prepare a new bundle
+		if manager.currentBundle.isFull() {
+			// temporarily release lock since adding to chan may block
+			manager.mutex.Unlock()
 
+			manager.pendingBundles <- manager.currentBundle
+
+			manager.mutex.Lock()
+			manager.currentBundle = nil
+			manager.transferWait.Add(1)
+		}
+	}
+
+	if manager.currentBundle == nil {
+		// add new
+		manager.currentBundle = newBundle(manager)
+		logger.Debugf("assigned a new bundle %d", manager.currentBundle.index)
+	}
+
+	manager.currentBundle.addFile(source, size)
+
+	manager.mutex.Unlock()
 	return nil
 }
 
-// run jobs
-func (manager *BundleTransferManager) Go(filesystem *irodsclient_fs.FileSystem, tempPath string, targetPath string, force bool, showProgress bool) error {
+func (manager *BundleTransferManager) DoneScheduling() {
+	manager.mutex.Lock()
+	if manager.currentBundle != nil {
+		manager.pendingBundles <- manager.currentBundle
+		manager.currentBundle = nil
+		manager.transferWait.Add(1)
+	}
+	manager.mutex.Unlock()
+
+	close(manager.pendingBundles)
+	manager.scheduleWait.Done()
+}
+
+func (manager *BundleTransferManager) Wait() error {
 	logger := log.WithFields(log.Fields{
 		"package":  "commons",
 		"struct":   "BundleTransferManager",
-		"function": "Go",
+		"function": "Wait",
 	})
 
-	manager.mutex.Lock()
-	pendingBundles := manager.pendingBundles.Len()
-	manager.mutex.Unlock()
+	logger.Debug("waiting schedule-wait")
+	manager.scheduleWait.Wait()
+	logger.Debug("waiting transfer-wait")
+	manager.transferWait.Wait()
+	logger.Debug("wait completed")
 
-	if pendingBundles == 0 {
-		logger.Debug("no pending bundles found")
-		return nil
-	}
+	manager.mutex.RLock()
+	defer manager.mutex.RUnlock()
+	return manager.lastError
+}
 
-	// do some precheck
-	bundles := list.New()
-	sourceFiles := []string{}
+func (manager *BundleTransferManager) SetBundleRootPath(bundleRootPath string) {
+	manager.bundleRootPath = bundleRootPath
+}
 
-	manager.mutex.Lock()
+func (manager *BundleTransferManager) startProgress() {
+	if manager.showProgress {
+		manager.progressWriter = progress.NewWriter()
+		manager.progressWriter.SetAutoStop(false)
+		manager.progressWriter.SetTrackerLength(25)
+		manager.progressWriter.SetMessageWidth(50)
+		manager.progressWriter.SetStyle(progress.StyleDefault)
+		manager.progressWriter.SetTrackerPosition(progress.PositionRight)
+		manager.progressWriter.SetUpdateFrequency(time.Millisecond * 100)
+		manager.progressWriter.Style().Colors = progress.StyleColorsExample
+		manager.progressWriter.Style().Options.PercentFormat = "%4.1f%%"
+		manager.progressWriter.Style().Visibility.ETA = true
+		manager.progressWriter.Style().Visibility.Percentage = true
+		manager.progressWriter.Style().Visibility.Time = true
+		manager.progressWriter.Style().Visibility.Value = true
+		manager.progressWriter.Style().Visibility.ETAOverall = false
+		manager.progressWriter.Style().Visibility.TrackerOverall = false
 
-	for bundleId := 0; bundleId < pendingBundles; bundleId++ {
-		bundleElem := manager.pendingBundles.Front()
-		if bundleElem != nil {
-			bundlePtr := manager.pendingBundles.Remove(bundleElem)
-			if bundle, ok := bundlePtr.(*Bundle); ok {
-				// seal
-				bundleName := fmt.Sprintf("bundle_%d", bundleId)
-				logger.Debugf("sealing a bundle '%s'", bundleName)
-				bundle.Seal(bundleName)
-
-				bundles.PushBack(bundle)
-				sourceFiles = append(sourceFiles, bundle.files...)
-			}
-		}
-	}
-
-	manager.mutex.Unlock()
-
-	// calculate tar root
-	tarBaseDir, err := GetCommonRootLocalDirPath(sourceFiles)
-	if err != nil {
-		logger.Debug("failed to calculate common root path")
-		return nil
-	}
-
-	// use the parent dir of the tar root to include the parent dir
-	tarBaseDir = filepath.Dir(tarBaseDir)
-	if tarBaseDir == "" {
-		tarBaseDir = "/"
-	}
-
-	logger.Debugf("using %s as tar base dir", tarBaseDir)
-
-	// check if files exist on the target -- to support 'force' option
-	// even with 'force' option, ibun fails if files exist
-	if force {
-		for _, source := range sourceFiles {
-			rel, err := filepath.Rel(tarBaseDir, source)
-			if err != nil {
-				logger.Debugf("failed to calculate relative path for source %s", source)
-				return nil
-			}
-
-			targetFilepath := path.Join(targetPath, filepath.ToSlash(rel))
-
-			if filesystem.ExistsFile(targetFilepath) {
-				logger.Debugf("deleting exising data object %s", targetFilepath)
-				err = filesystem.RemoveFile(targetFilepath, true)
-				if err != nil {
-					logger.Debugf("failed to delete existing data object %s", targetFilepath)
-					return nil
-				}
-			}
-		}
-	}
-
-	wg := sync.WaitGroup{}
-
-	wg.Add(1)
-
-	var pw progress.Writer
-	if showProgress {
-		pw = progress.NewWriter()
-		pw.SetAutoStop(false)
-		pw.SetTrackerLength(25)
-		pw.SetMessageWidth(50)
-		pw.SetNumTrackersExpected(pendingBundles * 3)
-		pw.SetStyle(progress.StyleDefault)
-		pw.SetTrackerPosition(progress.PositionRight)
-		pw.SetUpdateFrequency(time.Millisecond * 100)
-		pw.Style().Colors = progress.StyleColorsExample
-		pw.Style().Options.PercentFormat = "%4.1f%%"
-		pw.Style().Visibility.ETA = true
-		pw.Style().Visibility.Percentage = true
-		pw.Style().Visibility.Time = true
-		pw.Style().Visibility.Value = true
-		pw.Style().Visibility.ETAOverall = true
-		pw.Style().Visibility.TrackerOverall = true
-
-		go pw.Render()
-
-		trackers := map[string]*progress.Tracker{}
-		trackerMutex := sync.Mutex{}
+		go manager.progressWriter.Render()
 
 		// add progress tracker callback
-		trackerCB := func(name string, processed int64, total int64, done bool) {
-			trackerMutex.Lock()
-			defer trackerMutex.Unlock()
+		manager.progressTrackerCallback = func(name string, processed int64, total int64, errored bool) {
+			manager.mutex.Lock()
+			defer manager.mutex.Unlock()
 
 			var tracker *progress.Tracker
-			unit := progress.UnitsDefault
-			if manager.isProgressNameForUpload(name) {
-				unit = progress.UnitsBytes
-			}
+			if t, ok := manager.progressTrackers[name]; !ok {
+				// for upload, use bytes,
+				// for others, use count
+				unit := progress.UnitsDefault
+				if manager.getProgressTaskName(name) == BundleTaskNameUpload {
+					unit = progress.UnitsBytes
+				}
 
-			if t, ok := trackers[name]; !ok {
-				// not created yet
+				// created a new tracker if not exists
 				tracker = &progress.Tracker{
 					Message: name,
 					Total:   total,
 					Units:   unit,
 				}
 
-				pw.AppendTracker(tracker)
-				trackers[name] = tracker
+				manager.progressWriter.AppendTracker(tracker)
+				manager.progressTrackers[name] = tracker
 			} else {
 				tracker = t
 			}
 
-			tracker.SetValue(processed)
+			if processed >= 0 {
+				tracker.SetValue(processed)
+			}
 
-			if done {
+			if errored {
+				tracker.MarkAsErrored()
+			} else if processed >= total {
 				tracker.MarkAsDone()
 			}
 		}
-
-		manager.progressTrackerCallback = trackerCB
 	}
+}
 
-	// extractChannel
-	extractBundleChan := make(chan *Bundle, 10)
+func (manager *BundleTransferManager) endProgress() {
+	if manager.showProgress {
+		if manager.progressWriter != nil {
+			manager.mutex.Lock()
 
-	// tar
-	go func() {
-		bundlesLen := bundles.Len()
-		for i := 0; i < bundlesLen; i++ {
-			bundleElem := bundles.Front()
-			if bundleElem == nil {
-				break
-			}
-
-			bundlePtr := bundles.Remove(bundleElem)
-
-			if bundle, ok := bundlePtr.(*Bundle); ok {
-				// do bundle
-				logger.Debugf("bundling (tar) files to %s", bundle.localBundlePath)
-
-				var tarCallback func(processed int64, total int64)
-				if showProgress {
-					tarProgressName := manager.getTarProgressName(bundle)
-					tarCallback = func(processed int64, total int64) {
-						done := processed >= total
-						manager.progressCallback(tarProgressName, processed, total, done)
-					}
-				}
-
-				err := Tar(tarBaseDir, bundle.files, bundle.localBundlePath, tarCallback)
-				if err != nil {
-					manager.mutex.Lock()
-					defer manager.mutex.Unlock()
-
-					logger.WithError(err).Errorf("failed to bundle (tar) files to %s", bundle.localBundlePath)
-					manager.errors.PushBack(err)
-					break
-				}
-
-				logger.Debugf("created a bundle (tar) file %s", bundle.localBundlePath)
-
-				// update target irods file path
-				bundle.irodsBundlePath = EnsureTargetIRODSFilePath(filesystem, bundle.localBundlePath, tempPath)
-
-				// upload
-				logger.Debugf("uploading a local bundle file %s to %s", bundle.localBundlePath, bundle.irodsBundlePath)
-				var uploadCallback func(processed int64, total int64)
-				if showProgress {
-					uploadProgressName := manager.getUploadProgressName(bundle)
-					uploadCallback = func(processed int64, total int64) {
-						done := processed >= total
-						manager.progressCallback(uploadProgressName, processed, total, done)
-					}
-				}
-
-				if filesystem.ExistsFile(bundle.irodsBundlePath) {
-					// exists - skip
-					logger.Debugf("bundle file already exists in iRODS, skip uploading - %s", bundle.irodsBundlePath)
+			for _, tracker := range manager.progressTrackers {
+				if manager.lastError != nil {
+					tracker.MarkAsDone()
 				} else {
-					err = filesystem.UploadFileParallel(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false, uploadCallback)
-					if err != nil {
-						manager.mutex.Lock()
-						defer manager.mutex.Unlock()
+					if !tracker.IsDone() {
+						tracker.MarkAsErrored()
+					}
+				}
+			}
 
-						logger.WithError(err).Errorf("error while uploading a local bundle file %s to %s", bundle.localBundlePath, bundle.irodsBundlePath)
-						manager.errors.PushBack(err)
-						break
+			manager.mutex.Unlock()
+
+			manager.progressWriter.Stop()
+		}
+	}
+}
+
+func (manager *BundleTransferManager) GetLastError() error {
+	manager.mutex.RLock()
+	defer manager.mutex.RUnlock()
+	return manager.lastError
+}
+
+func (manager *BundleTransferManager) Start() {
+	logger := log.WithFields(log.Fields{
+		"package":  "commons",
+		"struct":   "BundleTransferManager",
+		"function": "Start",
+	})
+
+	processBundleTarChan := make(chan *Bundle, 1)
+	processBundleRemoveFilesChan := make(chan *Bundle, 5)
+	processBundleUploadChan := make(chan *Bundle, 5)
+	processBundleExtractChan1 := make(chan *Bundle, 5)
+	processBundleExtractChan2 := make(chan *Bundle, 5)
+
+	manager.startProgress()
+
+	// bundle --> tar --> upload   --> extract
+	//        --> remove ------------>
+
+	go func() {
+		logger.Debug("start transfer thread 1")
+		defer logger.Debug("exit transfer thread 1")
+
+		defer close(processBundleTarChan)
+		defer close(processBundleRemoveFilesChan)
+
+		for bundle := range manager.pendingBundles {
+			// send to tar and remove
+			processBundleTarChan <- bundle
+			processBundleRemoveFilesChan <- bundle
+		}
+	}()
+
+	// process bundle - tar
+	go func() {
+		logger.Debug("start transfer thread 2")
+		defer logger.Debug("exit transfer thread 2")
+
+		defer close(processBundleUploadChan)
+
+		for bundle := range processBundleTarChan {
+			cont := true
+
+			manager.mutex.RLock()
+			if manager.lastError != nil {
+				cont = false
+			}
+			manager.mutex.RUnlock()
+
+			if cont {
+				err := manager.processBundleTar(bundle)
+				if err != nil {
+					// mark error
+					manager.mutex.Lock()
+					manager.lastError = err
+					manager.mutex.Unlock()
+
+					bundle.lastError = err
+					bundle.lastErrorTaskName = BundleTaskNameTar
+
+					logger.Error(err)
+					// don't stop here
+				}
+			}
+
+			processBundleUploadChan <- bundle
+		}
+	}()
+
+	// process bundle - upload
+	funcAsyncUpload := func(id int, wg *sync.WaitGroup) {
+		logger.Debugf("start transfer thread 3-%d", id)
+		defer logger.Debugf("exit transfer thread 3-%d", id)
+
+		defer wg.Done()
+
+		for {
+			bundle, ok := <-processBundleUploadChan
+			if ok {
+				cont := true
+
+				manager.mutex.RLock()
+				if manager.lastError != nil {
+					cont = false
+				}
+				manager.mutex.RUnlock()
+
+				if cont {
+					err := manager.processBundleUpload(bundle)
+					if err != nil {
+						// mark error
+						manager.mutex.Lock()
+						manager.lastError = err
+						manager.mutex.Unlock()
+
+						bundle.lastError = err
+						bundle.lastErrorTaskName = BundleTaskNameUpload
+
+						logger.Error(err)
+						// don't stop here
+					}
+				}
+
+				processBundleExtractChan1 <- bundle
+			} else {
+				return
+			}
+		}
+	}
+
+	waitAsyncUpload := sync.WaitGroup{}
+	for i := 0; i < 5; i++ {
+		waitAsyncUpload.Add(1)
+		go funcAsyncUpload(i, &waitAsyncUpload)
+	}
+
+	go func() {
+		waitAsyncUpload.Wait()
+		close(processBundleExtractChan1)
+	}()
+
+	// process bundle - remove files
+	go func() {
+		logger.Debug("start transfer thread 4")
+		defer logger.Debug("exit transfer thread 4")
+
+		defer close(processBundleExtractChan2)
+
+		for bundle := range processBundleRemoveFilesChan {
+			// check if files exist on the target -- to support 'force' option
+			// even with 'force' option, ibun fails if files exist
+			if manager.force {
+				cont := true
+
+				manager.mutex.RLock()
+				if manager.lastError != nil {
+					cont = false
+				}
+				manager.mutex.RUnlock()
+
+				if cont {
+					err := manager.processBundleRemoveFiles(bundle)
+					if err != nil {
+						// mark error
+						manager.mutex.Lock()
+						manager.lastError = err
+						manager.mutex.Unlock()
+
+						bundle.lastError = err
+						bundle.lastErrorTaskName = BundleTaskNameRemove
+
+						logger.Error(err)
+						// don't stop here
+					}
+				}
+			}
+
+			processBundleExtractChan2 <- bundle
+		}
+	}()
+
+	// process bundle - extract
+	go func() {
+		logger.Debug("start transfer thread 5")
+		defer logger.Debug("exit transfer thread 5")
+
+		defer manager.endProgress()
+
+		// order may be different
+		removeTaskCompleted := map[int64]int{}
+		removeTaskCompletedMutex := sync.Mutex{}
+
+		for {
+			select {
+			case bundle1, ok1 := <-processBundleExtractChan1:
+				if bundle1 != nil {
+					removeTaskCompletedMutex.Lock()
+					if _, ok := removeTaskCompleted[bundle1.index]; ok {
+						// has it
+						delete(removeTaskCompleted, bundle1.index)
+						removeTaskCompletedMutex.Unlock()
+
+						cont := true
+
+						manager.mutex.RLock()
+						if manager.lastError != nil {
+							cont = false
+						}
+						manager.mutex.RUnlock()
+
+						if cont {
+							err := manager.processBundleExtract(bundle1)
+							if err != nil {
+								// mark error
+								manager.mutex.Lock()
+								manager.lastError = err
+								manager.mutex.Unlock()
+
+								bundle1.lastError = err
+								bundle1.lastErrorTaskName = BundleTaskNameExtract
+
+								logger.Error(err)
+								// don't stop here
+							}
+						}
+
+						defer manager.transferWait.Done()
+					} else {
+						removeTaskCompleted[bundle1.index] = 1
+						removeTaskCompletedMutex.Unlock()
+					}
+				}
+
+				if !ok1 {
+					processBundleExtractChan1 = nil
+				}
+
+			case bundle2, ok2 := <-processBundleExtractChan2:
+				if bundle2 != nil {
+					removeTaskCompletedMutex.Lock()
+					if _, ok := removeTaskCompleted[bundle2.index]; ok {
+						// has it
+						delete(removeTaskCompleted, bundle2.index)
+						removeTaskCompletedMutex.Unlock()
+
+						cont := true
+
+						manager.mutex.RLock()
+						if manager.lastError != nil {
+							cont = false
+						}
+						manager.mutex.RUnlock()
+
+						if cont {
+							err := manager.processBundleExtract(bundle2)
+							if err != nil {
+								// mark error
+								manager.mutex.Lock()
+								manager.lastError = err
+								manager.mutex.Unlock()
+
+								bundle2.lastError = err
+								bundle2.lastErrorTaskName = BundleTaskNameExtract
+
+								logger.Error(err)
+								// don't stop here
+							}
+						}
+
+						defer manager.transferWait.Done()
+					} else {
+						removeTaskCompleted[bundle2.index] = 1
+						removeTaskCompletedMutex.Unlock()
+					}
+				}
+
+				if !ok2 {
+					processBundleExtractChan2 = nil
+				}
+			}
+
+			if processBundleExtractChan1 == nil && processBundleExtractChan2 == nil {
+				return
+			}
+		}
+	}()
+}
+
+func (manager *BundleTransferManager) processBundleRemoveFiles(bundle *Bundle) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "commons",
+		"struct":   "BundleTransferManager",
+		"function": "processBundleRemoveFiles",
+	})
+
+	// remove files in the bundle if they exist in iRODS
+	logger.Debugf("deleting exising data objects in the bundle %d", bundle.index)
+
+	progressName := manager.getProgressName(bundle, BundleTaskNameRemove)
+
+	totalFileNum := int64(len(bundle.files))
+	processedFiles := int64(0)
+
+	if manager.showProgress {
+		manager.progressCallback(progressName, 0, totalFileNum, false)
+	}
+
+	if !bundle.requireTar() {
+		// no tar, we can overwrite it. so pass this step
+		if manager.showProgress {
+			manager.progressCallback(progressName, totalFileNum, totalFileNum, false)
+		}
+
+		logger.Debugf("skip - deleting exising data objects in the bundle %d, we will overwrite them", bundle.index)
+		return nil
+	}
+
+	listingParentDirMap := map[string]bool{}
+
+	for _, file := range bundle.files {
+		rel, err := filepath.Rel(manager.bundleRootPath, file)
+		if err != nil {
+			if manager.showProgress {
+				manager.progressCallback(progressName, processedFiles, totalFileNum, true)
+			}
+
+			logger.Error(err)
+			return fmt.Errorf("failed to calculate relative path for file %s in the bundle", file)
+		}
+
+		destFilePath := path.Join(manager.irodsDestPath, filepath.ToSlash(rel))
+
+		// we perform list here to cache entire files in a directory to perform ExistsFile faster
+		destFileParentPath := path.Dir(destFilePath)
+		if _, listingParentDir := listingParentDirMap[destFileParentPath]; !listingParentDir {
+			manager.filesystem.List(destFileParentPath)
+
+			listingParentDirMap[destFileParentPath] = true
+		}
+
+		if manager.filesystem.ExistsFile(destFilePath) {
+			logger.Debugf("deleting exising data object %s", destFilePath)
+			err = manager.filesystem.RemoveFile(destFilePath, true)
+			if err != nil {
+				if manager.showProgress {
+					manager.progressCallback(progressName, processedFiles, totalFileNum, true)
+				}
+
+				logger.Error(err)
+				return fmt.Errorf("failed to delete existing data object %s", destFilePath)
+			}
+		}
+
+		processedFiles++
+		if manager.showProgress {
+			manager.progressCallback(progressName, processedFiles, totalFileNum, false)
+		}
+	}
+
+	logger.Debugf("deleted exising data objects in the bundle %d", bundle.index)
+	return nil
+}
+
+func (manager *BundleTransferManager) processBundleTar(bundle *Bundle) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "commons",
+		"struct":   "BundleTransferManager",
+		"function": "processBundleTar",
+	})
+
+	logger.Debugf("creating a tarball for bundle %d to %s", bundle.index, bundle.localBundlePath)
+
+	progressName := manager.getProgressName(bundle, BundleTaskNameTar)
+
+	totalFileNum := int64(len(bundle.files))
+
+	var callback func(processed int64, total int64)
+	if manager.showProgress {
+		callback = func(processed int64, total int64) {
+			manager.progressCallback(progressName, processed, total, false)
+		}
+	}
+
+	if manager.showProgress {
+		manager.progressCallback(progressName, 0, totalFileNum, false)
+	}
+
+	if !bundle.requireTar() {
+		// no tar, so pass this step
+		if manager.showProgress {
+			manager.progressCallback(progressName, totalFileNum, totalFileNum, false)
+		}
+
+		logger.Debugf("skip - creating a tarball for bundle %d to %s", bundle.index, bundle.localBundlePath)
+		return nil
+	}
+
+	err := Tar(manager.bundleRootPath, bundle.files, bundle.localBundlePath, callback)
+	if err != nil {
+		if manager.showProgress {
+			manager.progressCallback(progressName, 0, totalFileNum, true)
+		}
+
+		logger.WithError(err).Errorf("failed to create a tarball for bundle %d to %s", bundle.index, bundle.localBundlePath)
+		return err
+	}
+
+	logger.Debugf("created a tarball for bundle %d to %s", bundle.index, bundle.localBundlePath)
+	return nil
+}
+
+func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "commons",
+		"struct":   "BundleTransferManager",
+		"function": "processBundleUpload",
+	})
+
+	logger.Debugf("uploading bundle %d to %s", bundle.index, bundle.irodsBundlePath)
+
+	progressName := manager.getProgressName(bundle, BundleTaskNameUpload)
+
+	config := GetConfig()
+	totalFileSize := bundle.size
+	replicate := !config.NoReplication
+
+	if bundle.requireTar() {
+		var callback func(processed int64, total int64)
+		if manager.showProgress {
+			callback = func(processed int64, total int64) {
+				manager.progressCallback(progressName, processed, total, false)
+			}
+		}
+
+		err := manager.filesystem.UploadFileParallel(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, replicate, callback)
+		if err != nil {
+			if manager.showProgress {
+				manager.progressCallback(progressName, -1, totalFileSize, true)
+			}
+
+			logger.WithError(err).Errorf("failed to upload bundle %d to %s", bundle.index, bundle.irodsBundlePath)
+			return err
+		}
+
+		// remove local bundle file
+		os.Remove(bundle.localBundlePath)
+	} else {
+		fileUploadProgress := make([]int64, len(bundle.files))
+		fileUploadProgressMutex := sync.Mutex{}
+
+		if manager.showProgress {
+			manager.progressCallback(progressName, 0, totalFileSize, false)
+		}
+
+		var asyncErr error
+		wg := sync.WaitGroup{}
+
+		for fileIdx := range bundle.files {
+			// this is for safe access to file in the bundle array
+			localFile := bundle.files[fileIdx]
+			wg.Add(1)
+
+			go func(progressIdx int) {
+				defer wg.Done()
+
+				var callbackFileUpload func(processed int64, total int64)
+				if manager.showProgress {
+					callbackFileUpload = func(processed int64, total int64) {
+						fileUploadProgressMutex.Lock()
+						defer fileUploadProgressMutex.Unlock()
+
+						fileUploadProgress[progressIdx] = processed
+
+						progressSum := int64(0)
+						for _, progress := range fileUploadProgress {
+							progressSum += progress
+						}
+
+						manager.progressCallback(progressName, progressSum, totalFileSize, false)
+					}
+				}
+
+				relPath, err := filepath.Rel(manager.bundleRootPath, localFile)
+				if err != nil {
+					if manager.showProgress {
+						manager.progressCallback(progressName, -1, totalFileSize, true)
 					}
 
-					logger.Debugf("uploaded a local bundle file %s to %s", bundle.localBundlePath, bundle.irodsBundlePath)
+					logger.WithError(err).Errorf("failed to calculate relative path for file %s in bundle %d", localFile, bundle.index)
+					asyncErr = err
+					//return err
+					return
 				}
 
-				// remove local bundle file
-				os.Remove(bundle.localBundlePath)
-
-				extractBundleChan <- bundle
-			} else {
-				logger.Error("unknown bundle")
-			}
-		}
-
-		close(extractBundleChan)
-	}()
-
-	// extract
-	go func() {
-		for {
-			if bundle, ok := <-extractBundleChan; ok {
-				// do extract
-				logger.Debugf("extracting a bundle file %s", bundle.irodsBundlePath)
-				if showProgress {
-					manager.progressCallback(manager.getExtractProgressName(bundle), 0, 0, false)
-				}
-
-				err := filesystem.ExtractStructFile(bundle.irodsBundlePath, targetPath, "", types.TAR_FILE_DT, force)
+				targetPath := path.Join(bundle.manager.irodsDestPath, relPath)
+				err = manager.filesystem.UploadFileParallel(localFile, targetPath, "", 0, replicate, callbackFileUpload)
 				if err != nil {
-					manager.mutex.Lock()
-					defer manager.mutex.Unlock()
+					if manager.showProgress {
+						manager.progressCallback(progressName, -1, totalFileSize, true)
+					}
 
-					logger.WithError(err).Errorf("error while extracting a bundle file %s to %s", bundle.irodsBundlePath, targetPath)
-					manager.errors.PushBack(err)
-					break
+					logger.WithError(err).Errorf("failed to upload file %s in bundle %d to %s", localFile, bundle.index, targetPath)
+					asyncErr = err
+					//return err
+					return
 				}
 
-				filesystem.RemoveFile(bundle.irodsBundlePath, true)
-
-				if showProgress {
-					manager.progressCallback(manager.getExtractProgressName(bundle), 0, 0, true)
-				}
-
-				logger.Debugf("extracted a bundle file %s to %s", bundle.irodsBundlePath, targetPath)
-			} else {
-				// closed
-				break
-			}
+				logger.Debugf("uploaded file %s in bundle %d to %s", localFile, bundle.index, targetPath)
+			}(fileIdx)
 		}
 
-		wg.Done()
-	}()
+		wg.Wait()
 
-	wg.Wait()
-
-	if showProgress {
-		pw.Stop()
-	}
-
-	// check error
-	var errReturn error
-	manager.mutex.Lock()
-	if manager.errors.Len() > 0 {
-		frontElem := manager.errors.Front()
-		if frontElem != nil {
-			if err, ok := frontElem.Value.(error); ok {
-				errReturn = err
-			}
+		if asyncErr != nil {
+			return asyncErr
 		}
 	}
-	manager.mutex.Unlock()
-	return errReturn
+
+	logger.Debugf("uploaded bundle %d to %s", bundle.index, bundle.irodsBundlePath)
+	return nil
 }
 
-func (manager *BundleTransferManager) getTarProgressName(bundle *Bundle) string {
-	return fmt.Sprintf("%s - TAR", bundle.name)
+func (manager *BundleTransferManager) processBundleExtract(bundle *Bundle) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "commons",
+		"struct":   "BundleTransferManager",
+		"function": "processBundleExtract",
+	})
+
+	logger.Debugf("extracting bundle %d at %s", bundle.index, bundle.irodsBundlePath)
+
+	progressName := manager.getProgressName(bundle, BundleTaskNameExtract)
+
+	totalFileNum := int64(len(bundle.files))
+
+	if manager.showProgress {
+		manager.progressCallback(progressName, 0, totalFileNum, false)
+	}
+
+	if !bundle.requireTar() {
+		// no tar, so pass this step
+		if manager.showProgress {
+			manager.progressCallback(progressName, totalFileNum, totalFileNum, false)
+		}
+
+		logger.Debugf("skip - extracting bundle %d at %s", bundle.index, bundle.irodsBundlePath)
+		return nil
+	}
+
+	err := manager.filesystem.ExtractStructFile(bundle.irodsBundlePath, manager.irodsDestPath, "", types.TAR_FILE_DT, true)
+	if err != nil {
+		if manager.showProgress {
+			manager.progressCallback(progressName, -1, totalFileNum, true)
+		}
+
+		logger.WithError(err).Errorf("failed to extract bundle %d at %s to %s", bundle.index, bundle.irodsBundlePath, manager.irodsDestPath)
+
+		manager.filesystem.RemoveFile(bundle.irodsBundlePath, true)
+		return err
+	}
+
+	// remove irods bundle file
+	manager.filesystem.RemoveFile(bundle.irodsBundlePath, true)
+
+	if manager.showProgress {
+		manager.progressCallback(progressName, totalFileNum, totalFileNum, false)
+	}
+
+	logger.Debugf("extracted bundle %d at %s to %s", bundle.index, bundle.irodsBundlePath, manager.irodsDestPath)
+	return nil
 }
 
-func (manager *BundleTransferManager) getUploadProgressName(bundle *Bundle) string {
-	return fmt.Sprintf("%s - Upload", bundle.name)
+func (manager *BundleTransferManager) getProgressName(bundle *Bundle, taskName string) string {
+	return fmt.Sprintf("bundle %d - %s", bundle.index, taskName)
 }
 
-func (manager *BundleTransferManager) isProgressNameForUpload(name string) bool {
-	return strings.HasSuffix(name, " Upload")
-}
-
-func (manager *BundleTransferManager) getExtractProgressName(bundle *Bundle) string {
-	return fmt.Sprintf("%s - Extract", bundle.name)
+func (manager *BundleTransferManager) getProgressTaskName(progressName string) string {
+	fields := strings.Split(progressName, " - ")
+	if len(fields) >= 2 {
+		return strings.TrimSpace(fields[1])
+	}
+	return "unknown"
 }

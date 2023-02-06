@@ -24,7 +24,7 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	commons.SetCommonFlags(getCmd)
 
 	getCmd.Flags().BoolP("force", "f", false, "Get forcefully")
-	getCmd.Flags().BoolP("progress", "", false, "Display progress bar")
+	getCmd.Flags().Bool("progress", false, "Display progress bar")
 
 	rootCmd.AddCommand(getCmd)
 }
@@ -139,7 +139,7 @@ func getOne(transferManager *commons.ParallelTransferManager, filesystem *irodsc
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
 		logger.Debugf("downloading a data object %s to %s", sourcePath, targetPath)
 
-		targetFilePath := commons.EnsureTargetLocalFilePath(sourcePath, targetPath)
+		targetFilePath := commons.MakeTargetLocalFilePath(sourcePath, targetPath)
 
 		targetStat, err := os.Stat(targetFilePath)
 		if err != nil {
