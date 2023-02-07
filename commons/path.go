@@ -170,11 +170,6 @@ func GetCommonRootLocalDirPath(paths []string) (string, error) {
 		return "/", nil
 	}
 
-	commonRootPath = filepath.Dir(commonRootPath)
-	if commonRootPath == "" {
-		return "/", nil
-	}
-
 	return commonRootPath, nil
 }
 

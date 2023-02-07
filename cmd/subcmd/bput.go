@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/cyverse/gocommands/commons"
+	"github.com/rs/xid"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -119,7 +120,11 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 	irodsTempDirPath := commons.MakeIRODSPath(cwd, home, zone, "./")
 
-	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, localTempDirPath, irodsTempDirPath, force, progress)
+	jobID := xid.New().String()
+	jobFile := commons.GetDefaultJobLogFilename(jobID)
+	job := commons.NewJob(jobID, jobFile)
+
+	bundleTransferManager := commons.NewBundleTransferManager(job, filesystem, targetPath, maxFileNum, maxFileSize, localTempDirPath, irodsTempDirPath, force, progress)
 	bundleTransferManager.Start()
 
 	if len(args) == 1 {
@@ -131,15 +136,15 @@ func processBputCommand(command *cobra.Command, args []string) error {
 			return nil
 		}
 
-		err = bputOne(bundleTransferManager, args[0], bundleRootPath)
+		bundleTransferManager.SetBundleRootPath(bundleRootPath)
+
+		err = bputOne(bundleTransferManager, args[0], "./")
 		if err != nil {
 			logger.Error(err)
 			fmt.Fprintln(os.Stderr, err.Error())
 			return nil
 		}
 	} else if len(args) >= 2 {
-		targetPath = args[len(args)-1]
-
 		bundleRootPath, err := commons.GetCommonRootLocalDirPath(args[:len(args)-1])
 		if err != nil {
 			logger.Error(err)
@@ -147,8 +152,10 @@ func processBputCommand(command *cobra.Command, args []string) error {
 			return nil
 		}
 
+		bundleTransferManager.SetBundleRootPath(bundleRootPath)
+
 		for _, sourcePath := range args[:len(args)-1] {
-			err = bputOne(bundleTransferManager, sourcePath, bundleRootPath)
+			err = bputOne(bundleTransferManager, sourcePath, targetPath)
 			if err != nil {
 				logger.Error(err)
 				fmt.Fprintln(os.Stderr, err.Error())
@@ -173,13 +180,11 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string, bundleRootPath string) error {
+func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string, targetPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "bputOne",
 	})
-
-	bundleManager.SetBundleRootPath(bundleRootPath)
 
 	sourcePath = commons.MakeLocalPath(sourcePath)
 
@@ -190,7 +195,7 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string, bu
 
 	if !sourceStat.IsDir() {
 		logger.Debugf("scheduled a local file bundle-upload %s", sourcePath)
-		bundleManager.Schedule(sourcePath, sourceStat.Size())
+		bundleManager.Schedule(sourcePath, sourceStat.Size(), sourceStat.ModTime().Local())
 	} else {
 		// dir
 		logger.Debugf("bundle-uploading a local directory %s", sourcePath)
@@ -210,7 +215,7 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string, bu
 			}
 
 			logger.Debugf("> scheduled a local file bundle-upload %s", path)
-			bundleManager.Schedule(path, info.Size())
+			bundleManager.Schedule(path, info.Size(), info.ModTime())
 
 			if err != nil {
 				return err

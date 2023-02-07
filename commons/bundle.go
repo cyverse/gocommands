@@ -17,8 +17,7 @@ import (
 
 // default values
 const (
-	//MaxBundleFileNumDefault  int   = 50
-	MaxBundleFileNumDefault  int   = 1
+	MaxBundleFileNumDefault  int   = 50
 	MaxBundleFileSizeDefault int64 = 1 * 1024 * 1024 * 1024 // 1GB
 	MinBundleFileNumDefault  int   = 3
 )
@@ -74,6 +73,7 @@ func (bundle *Bundle) requireTar() bool {
 }
 
 type BundleTransferManager struct {
+	job                     *Job
 	filesystem              *irodsclient_fs.FileSystem
 	irodsDestPath           string
 	currentBundle           *Bundle
@@ -97,8 +97,9 @@ type BundleTransferManager struct {
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
-func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, localTempDirPath string, irodsTempDirPath string, force bool, showProgress bool) *BundleTransferManager {
+func NewBundleTransferManager(job *Job, fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, localTempDirPath string, irodsTempDirPath string, force bool, showProgress bool) *BundleTransferManager {
 	manager := &BundleTransferManager{
+		job:                     job,
 		filesystem:              fs,
 		irodsDestPath:           irodsDestPath,
 		currentBundle:           nil,
@@ -131,7 +132,7 @@ func (manager *BundleTransferManager) progressCallback(name string, processed in
 	}
 }
 
-func (manager *BundleTransferManager) Schedule(source string, size int64) error {
+func (manager *BundleTransferManager) Schedule(source string, size int64, lastModTime time.Time) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "commons",
 		"struct":   "BundleTransferManager",
@@ -167,6 +168,29 @@ func (manager *BundleTransferManager) Schedule(source string, size int64) error 
 	}
 
 	manager.currentBundle.addFile(source, size)
+
+	// log
+	relPath, err := filepath.Rel(manager.bundleRootPath, source)
+	if err != nil {
+		logger.WithError(err).Warn("failed to compute relative path")
+	}
+
+	logger.Debugf("bundle root path : %s", manager.bundleRootPath)
+	logger.Debugf("rel path : %s", relPath)
+
+	task := &FileTransferTask{
+		LocalPath:        source,
+		IRODSPath:        path.Join(manager.irodsDestPath, relPath),
+		LastModifiedTime: lastModTime,
+		Size:             size,
+		Hash:             "",
+		Completed:        false,
+	}
+
+	err = manager.job.Write(task)
+	if err != nil {
+		logger.WithError(err).Warn("failed to write a file transfer task log")
+	}
 
 	manager.mutex.Unlock()
 	return nil
@@ -319,6 +343,17 @@ func (manager *BundleTransferManager) Start() {
 
 		defer close(processBundleTarChan)
 		defer close(processBundleRemoveFilesChan)
+
+		err := manager.filesystem.MakeDir(manager.irodsDestPath, true)
+		if err != nil {
+			// mark error
+			manager.mutex.Lock()
+			manager.lastError = err
+			manager.mutex.Unlock()
+
+			logger.Error(err)
+			// don't stop here
+		}
 
 		for bundle := range manager.pendingBundles {
 			// send to tar and remove
@@ -498,6 +533,11 @@ func (manager *BundleTransferManager) Start() {
 								logger.Error(err)
 								// don't stop here
 							}
+						} else {
+							if bundle1.requireTar() {
+								// remove irods bundle file
+								manager.filesystem.RemoveFile(bundle1.irodsBundlePath, true)
+							}
 						}
 
 						defer manager.transferWait.Done()
@@ -540,6 +580,11 @@ func (manager *BundleTransferManager) Start() {
 
 								logger.Error(err)
 								// don't stop here
+							}
+						} else {
+							if bundle2.requireTar() {
+								// remove irods bundle file
+								manager.filesystem.RemoveFile(bundle2.irodsBundlePath, true)
 							}
 						}
 
@@ -769,6 +814,22 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 				}
 
 				targetPath := path.Join(bundle.manager.irodsDestPath, relPath)
+
+				if !manager.force {
+					if manager.filesystem.ExistsFile(targetPath) {
+						// do not overwrite
+						if manager.showProgress {
+							manager.progressCallback(progressName, -1, totalFileSize, true)
+						}
+
+						err = fmt.Errorf("file %s already exists", targetPath)
+						logger.WithError(err).Errorf("failed to upload file %s in bundle %d to %s", localFile, bundle.index, targetPath)
+						asyncErr = err
+						//return err
+						return
+					}
+				}
+
 				err = manager.filesystem.UploadFileParallel(localFile, targetPath, "", 0, replicate, callbackFileUpload)
 				if err != nil {
 					if manager.showProgress {
