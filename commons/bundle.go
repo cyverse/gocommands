@@ -753,7 +753,7 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 			}
 		}
 
-		err := manager.filesystem.UploadFileParallel(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, replicate, callback)
+		err := manager.filesystem.UploadFileParallel(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false, callback)
 		if err != nil {
 			if manager.showProgress {
 				manager.progressCallback(progressName, -1, totalFileSize, true)
