@@ -19,7 +19,8 @@ import (
 const (
 	MaxBundleFileNumDefault  int   = 50
 	MaxBundleFileSizeDefault int64 = 1 * 1024 * 1024 * 1024 // 1GB
-	MinBundleFileNumDefault  int   = 3
+	//MinBundleFileNumDefault  int   = 5
+	MinBundleFileNumDefault int = 1
 )
 
 const (
@@ -661,6 +662,7 @@ func (manager *BundleTransferManager) processBundleRemoveFiles(bundle *Bundle) e
 
 		if manager.filesystem.ExistsFile(destFilePath) {
 			logger.Debugf("deleting exising data object %s", destFilePath)
+
 			err = manager.filesystem.RemoveFile(destFilePath, true)
 			if err != nil {
 				if manager.showProgress {
