@@ -28,6 +28,8 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	bputCmd.Flags().Int64("max_file_size", commons.MaxBundleFileSizeDefault, "Specify max file size of a bundle file")
 	bputCmd.Flags().Bool("progress", false, "Display progress bar")
 	bputCmd.Flags().String("local_temp", os.TempDir(), "Specify a local temp directory path to create bundle files")
+	bputCmd.Flags().String("job_id", "", "Specify Job ID")
+	bputCmd.Flags().Bool("continue", false, "Continue from last failure point")
 
 	rootCmd.AddCommand(bputCmd)
 }
@@ -98,6 +100,21 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		localTempDirPath = localTempPathFlag.Value.String()
 	}
 
+	jobID := xid.New().String()
+	jobIDFlag := command.Flags().Lookup("job_id")
+	if jobIDFlag != nil {
+		jobID = jobIDFlag.Value.String()
+	}
+
+	continueFromFailure := false
+	continueFlag := command.Flags().Lookup("continue")
+	if continueFlag != nil {
+		continueFromFailure, err = strconv.ParseBool(continueFlag.Value.String())
+		if err != nil {
+			continueFromFailure = false
+		}
+	}
+
 	// Create a file system
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
@@ -109,9 +126,19 @@ func processBputCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
+	if len(args) == 0 {
+		err := fmt.Errorf("not enough input arguments")
+		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
+	}
+
 	targetPath := "./"
+	sourcePaths := args[:]
+
 	if len(args) >= 2 {
 		targetPath = args[len(args)-1]
+		sourcePaths = args[:len(args)-1]
 	}
 
 	cwd := commons.GetCWD()
@@ -120,53 +147,61 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 	irodsTempDirPath := commons.MakeIRODSPath(cwd, home, zone, "./")
 
-	jobID := xid.New().String()
-	jobFile := commons.GetDefaultJobLogFilename(jobID)
-	job := commons.NewJob(jobID, jobFile)
+	if len(jobID) == 0 {
+		jobID = xid.New().String()
+	}
 
-	bundleTransferManager := commons.NewBundleTransferManager(job, filesystem, targetPath, maxFileNum, maxFileSize, localTempDirPath, irodsTempDirPath, force, progress)
+	jobFile := commons.GetDefaultJobLogPath(jobID)
+
+	var jobLog *commons.JobLog
+	if continueFromFailure {
+		jobLogExisting, err := commons.NewJobLogFromLog(jobFile)
+		if err != nil {
+			logger.Error(err)
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
+		}
+
+		jobLog = jobLogExisting
+	} else {
+		jobLog = commons.NewJobLog(jobID, jobFile, sourcePaths, targetPath)
+		err = jobLog.MakeJobLogDir()
+		if err != nil {
+			logger.Error(err)
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
+		}
+	}
+
+	bundleTransferManager := commons.NewBundleTransferManager(jobLog, filesystem, targetPath, maxFileNum, maxFileSize, localTempDirPath, irodsTempDirPath, force, progress)
 	bundleTransferManager.Start()
 
-	if len(args) == 1 {
-		// upload to current collection
-		bundleRootPath, err := commons.GetCommonRootLocalDirPath(args)
-		if err != nil {
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
-		}
-
-		bundleTransferManager.SetBundleRootPath(bundleRootPath)
-
-		err = bputOne(bundleTransferManager, args[0], "./")
-		if err != nil {
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
-		}
-	} else if len(args) >= 2 {
-		bundleRootPath, err := commons.GetCommonRootLocalDirPath(args[:len(args)-1])
-		if err != nil {
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
-		}
-
-		bundleTransferManager.SetBundleRootPath(bundleRootPath)
-
-		for _, sourcePath := range args[:len(args)-1] {
-			err = bputOne(bundleTransferManager, sourcePath, targetPath)
-			if err != nil {
-				logger.Error(err)
-				fmt.Fprintln(os.Stderr, err.Error())
-				return nil
-			}
-		}
-	} else {
-		err := fmt.Errorf("not enough input arguments")
+	bundleRootPath, err := commons.GetCommonRootLocalDirPath(sourcePaths)
+	if err != nil {
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
 		return nil
+	}
+
+	bundleTransferManager.SetBundleRootPath(bundleRootPath)
+
+	err = jobLog.WriteHeader()
+	if err != nil {
+		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
+	}
+
+	jobLog.MonitorCtrlC()
+
+	for _, sourcePath := range sourcePaths {
+		err = bputOne(bundleTransferManager, sourcePath, targetPath)
+		if err != nil {
+			logger.Error(err)
+			fmt.Fprintln(os.Stderr, err.Error())
+			jobLog.PrintJobID()
+			return nil
+		}
 	}
 
 	bundleTransferManager.DoneScheduling()
@@ -174,6 +209,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	if err != nil {
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
+		jobLog.PrintJobID()
 		return nil
 	}
 
