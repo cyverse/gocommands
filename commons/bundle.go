@@ -152,7 +152,15 @@ func NewBundleTransferManager(jobLog *JobLog, fs *irodsclient_fs.FileSystem, iro
 }
 
 func (manager *BundleTransferManager) progressCallback(name string, processed int64, total int64, errored bool) {
+	logger := log.WithFields(log.Fields{
+		"package":  "commons",
+		"struct":   "BundleTransferManager",
+		"function": "progressCallback",
+	})
+
 	if manager.progressTrackerCallback != nil {
+		logger.Debugf("%s progress %d/%d", name, processed, total)
+
 		manager.progressTrackerCallback(name, processed, total, errored)
 	}
 }
@@ -822,6 +830,8 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 						for _, progress := range fileUploadProgress {
 							progressSum += progress
 						}
+
+						logger.Debugf("progress %d/%d", processed, total)
 
 						manager.progressCallback(progressName, progressSum, totalFileSize, false)
 					}
