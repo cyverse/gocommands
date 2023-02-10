@@ -1,657 +1,294 @@
 package commons
 
 import (
-	"container/list"
-	"os"
 	"sync"
 	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
-	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
 )
 
+// default values
 const (
-	MaxThreadNum int = 5
+	MaxThreadNumDefault int = 5
 )
 
-type ParallelTransferJob struct {
-	task    func()
-	threads int
+type ParallelJobTask func(job *ParallelJob) error
+
+type ParallelJob struct {
+	manager *ParallelJobManager
+
+	index           int64
+	name            string
+	task            ParallelJobTask
+	threadsRequired int
+	progressUnit    progress.Units
+	lastError       error
 }
 
-func NewParallelTransferJob(task func(), threads int) *ParallelTransferJob {
-	return &ParallelTransferJob{
-		task:    task,
-		threads: threads,
+func (job *ParallelJob) GetManager() *ParallelJobManager {
+	return job.manager
+}
+
+func (job *ParallelJob) Progress(processed int64, total int64, errored bool) {
+	job.manager.progress(job.name, processed, total, job.progressUnit, errored)
+}
+
+func newParallelJob(manager *ParallelJobManager, index int64, name string, task ParallelJobTask, threadsRequired int, progressUnit progress.Units) *ParallelJob {
+	return &ParallelJob{
+		manager:         manager,
+		index:           index,
+		name:            name,
+		task:            task,
+		threadsRequired: threadsRequired,
+		progressUnit:    progressUnit,
+		lastError:       nil,
 	}
 }
 
-type ParallelTransferManager struct {
-	pendingJobs             *list.List // *ParallelTransferJob
-	currentThreads          int
+type ParallelJobManager struct {
+	filesystem              *irodsclient_fs.FileSystem
+	nextJobIndex            int64
+	pendingJobs             chan *ParallelJob
 	maxThreads              int
-	errors                  *list.List // error
+	showProgress            bool
+	progressWriter          progress.Writer
+	progressTrackers        map[string]*progress.Tracker
 	progressTrackerCallback ProgressTrackerCallback
-	mutex                   sync.Mutex
-	condition               *sync.Cond
+	lastError               error
+	mutex                   sync.RWMutex
+
+	availableThreadWaitCondition *sync.Cond // used for checking available threads
+	scheduleWait                 sync.WaitGroup
+	jobWait                      sync.WaitGroup
 }
 
-// NewParallelTransferManager creates a new ParallelTransferManager
-func NewParallelTransferManager(maxThreads int) *ParallelTransferManager {
-	manager := &ParallelTransferManager{
-		pendingJobs:             list.New(),
-		currentThreads:          0,
+// NewParallelJobManager creates a new ParallelJobManager
+func NewParallelJobManager(fs *irodsclient_fs.FileSystem, maxThreads int, showProgress bool) *ParallelJobManager {
+	manager := &ParallelJobManager{
+		filesystem:              fs,
+		nextJobIndex:            0,
+		pendingJobs:             make(chan *ParallelJob, 100),
 		maxThreads:              maxThreads,
-		errors:                  list.New(),
+		showProgress:            showProgress,
+		progressWriter:          nil,
+		progressTrackers:        map[string]*progress.Tracker{},
 		progressTrackerCallback: nil,
+		lastError:               nil,
+		mutex:                   sync.RWMutex{},
+		scheduleWait:            sync.WaitGroup{},
+		jobWait:                 sync.WaitGroup{},
 	}
 
-	manager.condition = sync.NewCond(&manager.mutex)
+	manager.availableThreadWaitCondition = sync.NewCond(&manager.mutex)
+
+	manager.scheduleWait.Add(1)
+
 	return manager
 }
 
-func (manager *ParallelTransferManager) progressCallback(path string, processed int64, total int64, done bool) {
+func (manager *ParallelJobManager) GetFilesystem() *irodsclient_fs.FileSystem {
+	return manager.filesystem
+}
+
+func (manager *ParallelJobManager) getNextJobIndex() int64 {
+	idx := manager.nextJobIndex
+	manager.nextJobIndex++
+	return idx
+}
+
+func (manager *ParallelJobManager) progress(name string, processed int64, total int64, progressUnit progress.Units, errored bool) {
 	if manager.progressTrackerCallback != nil {
-		manager.progressTrackerCallback(path, processed, total, done)
+		manager.progressTrackerCallback(name, processed, total, progressUnit, errored)
 	}
 }
 
-// ScheduleDownloadIfDifferent schedules a file download only if data is changed
-func (manager *ParallelTransferManager) ScheduleDownloadIfDifferent(filesystem *irodsclient_fs.FileSystem, source string, target string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "commons",
-		"struct":   "ParallelTransferManager",
-		"function": "ScheduleDownloadIfDifferent",
-	})
-
-	task := func() {
-		logger.Debugf("synchronizing a data object %s to %s", source, target)
-		sourceEntry, err := filesystem.Stat(source)
-		if err != nil {
-			manager.mutex.Lock()
-			defer manager.mutex.Unlock()
-
-			logger.WithError(err).Errorf("error while stating a data object %s", source)
-			manager.errors.PushBack(err)
-			return
-		}
-
-		targetStat, err := os.Stat(target)
-		if err != nil {
-			if !os.IsNotExist(err) {
-				manager.mutex.Lock()
-				defer manager.mutex.Unlock()
-
-				logger.WithError(err).Errorf("error while stating a local file %s", target)
-				manager.errors.PushBack(err)
-				return
-			}
-
-			logger.Debugf("there is no file %s at local", target)
-		} else {
-			// file/dir exists
-			if targetStat.IsDir() {
-				// dir
-				logger.Debugf("local path %s is a directory, deleting", target)
-				err = os.RemoveAll(target)
-				if err != nil {
-					manager.mutex.Lock()
-					defer manager.mutex.Unlock()
-
-					logger.WithError(err).Errorf("error while deleting a directory %s", target)
-					manager.errors.PushBack(err)
-					return
-				}
-			} else {
-				//file
-				md5hash, err := HashLocalFileMD5(target)
-				if err != nil {
-					manager.mutex.Lock()
-					defer manager.mutex.Unlock()
-
-					logger.WithError(err).Errorf("error while hasing a local file %s", target)
-					manager.errors.PushBack(err)
-					return
-				}
-
-				if sourceEntry.CheckSum == md5hash && sourceEntry.Size == targetStat.Size() {
-					// match
-					logger.Debugf("local file %s is up-to-date", target)
-					return
-				}
-
-				// delete first
-				logger.Debugf("local file %s is has a different hash code, deleting", target)
-				logger.Debugf(" hash %s vs. %s, size %d vs. %d", sourceEntry.CheckSum, md5hash, sourceEntry.Size, targetStat.Size())
-				err = os.Remove(target)
-				if err != nil {
-					manager.mutex.Lock()
-					defer manager.mutex.Unlock()
-
-					logger.WithError(err).Errorf("error while deleting a local file %s", target)
-					manager.errors.PushBack(err)
-					return
-				}
-			}
-		}
-
-		// down
-		logger.Debugf("downloading a data object %s to %s", source, target)
-		callback := func(processed int64, total int64) {
-			done := processed >= total
-			manager.progressCallback(source, processed, total, done)
-		}
-
-		err = filesystem.DownloadFileParallel(source, "", target, 0, callback)
-		if err != nil {
-			manager.mutex.Lock()
-			defer manager.mutex.Unlock()
-
-			logger.WithError(err).Errorf("error while downloading a data object %s to %s", source, target)
-			manager.errors.PushBack(err)
-			return
-		}
-		logger.Debugf("downloaded a data object %s to %s", source, target)
-		logger.Debugf("synchronized a data object %s to %s", source, target)
-	}
-
-	threads := 1
-	// 4MB is one thread, max 4 threads
-	sourceEntry, err := filesystem.StatFile(source)
-	if err != nil {
-		return err
-	}
-
-	if sourceEntry.Size > 4*1024*1024 {
-		threads = int(sourceEntry.Size / 4 * 1024 * 1024)
-		if threads > 4 {
-			threads = 4
-		}
-	}
-
-	job := NewParallelTransferJob(task, threads)
-
+func (manager *ParallelJobManager) Schedule(name string, task ParallelJobTask, threadsRequired int, progressUnit progress.Units) error {
 	manager.mutex.Lock()
-	defer manager.mutex.Unlock()
 
-	manager.pendingJobs.PushBack(job)
-	return nil
-}
-
-// ScheduleDownload schedules a file download
-func (manager *ParallelTransferManager) ScheduleDownload(filesystem *irodsclient_fs.FileSystem, source string, target string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "commons",
-		"struct":   "ParallelTransferManager",
-		"function": "ScheduleDownload",
-	})
-
-	task := func() {
-		logger.Debugf("downloading a data object %s to %s", source, target)
-		callback := func(processed int64, total int64) {
-			done := processed >= total
-			manager.progressCallback(source, processed, total, done)
-		}
-
-		err := filesystem.DownloadFileParallel(source, "", target, 0, callback)
-		if err != nil {
-			manager.mutex.Lock()
-			defer manager.mutex.Unlock()
-
-			logger.WithError(err).Errorf("error while downloading a data object %s to %s", source, target)
-			manager.errors.PushBack(err)
-			return
-		}
-		logger.Debugf("downloaded a data object %s to %s", source, target)
+	// do not accept new schedule if there's an error
+	if manager.lastError != nil {
+		defer manager.mutex.Unlock()
+		return manager.lastError
 	}
 
-	threads := 1
-	// 4MB is one thread, max 4 threads
-	sourceEntry, err := filesystem.StatFile(source)
-	if err != nil {
-		return err
-	}
+	job := newParallelJob(manager, manager.getNextJobIndex(), name, task, threadsRequired, progressUnit)
 
-	if sourceEntry.Size > 4*1024*1024 {
-		threads = int(sourceEntry.Size / 4 * 1024 * 1024)
-		if threads > 4 {
-			threads = 4
-		}
-	}
-
-	job := NewParallelTransferJob(task, threads)
-
-	manager.mutex.Lock()
-	defer manager.mutex.Unlock()
-
-	manager.pendingJobs.PushBack(job)
-	return nil
-}
-
-// ScheduleUploadIfDifferent schedules a file upload only if data is changed
-func (manager *ParallelTransferManager) ScheduleUploadIfDifferent(filesystem *irodsclient_fs.FileSystem, source string, target string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "commons",
-		"struct":   "ParallelTransferManager",
-		"function": "ScheduleUploadIfDifferent",
-	})
-
-	config := GetConfig()
-	replicate := !config.NoReplication
-
-	task := func() {
-		logger.Debugf("synchronizing a local file %s to %s", source, target)
-
-		sourceStat, err := os.Stat(source)
-		if err != nil {
-			manager.mutex.Lock()
-			defer manager.mutex.Unlock()
-
-			logger.WithError(err).Errorf("error while stating a local file %s", source)
-			manager.errors.PushBack(err)
-			return
-		}
-
-		targetEntry, err := filesystem.Stat(target)
-		if err != nil {
-			if !irodsclient_types.IsFileNotFoundError(err) {
-				manager.mutex.Lock()
-				defer manager.mutex.Unlock()
-
-				logger.WithError(err).Errorf("error while stating a data object %s", target)
-				manager.errors.PushBack(err)
-				return
-			}
-		} else {
-			// file/dir exists
-			if targetEntry.Type == irodsclient_fs.DirectoryEntry {
-				// dir
-				logger.Debugf("remote path %s is a collection, deleting", target)
-				err = filesystem.RemoveDir(target, true, true)
-				if err != nil {
-					manager.mutex.Lock()
-					defer manager.mutex.Unlock()
-
-					logger.WithError(err).Errorf("error while deleting a collection %s", target)
-					manager.errors.PushBack(err)
-					return
-				}
-			} else {
-				// file
-				md5hash, err := HashLocalFileMD5(source)
-				if err != nil {
-					manager.mutex.Lock()
-					defer manager.mutex.Unlock()
-
-					logger.WithError(err).Errorf("error while hasing a local file %s", source)
-					manager.errors.PushBack(err)
-					return
-				}
-
-				if targetEntry.CheckSum == md5hash && targetEntry.Size == sourceStat.Size() {
-					// match
-					logger.Debugf("remote data object %s is up-to-date", target)
-					return
-				}
-
-				// delete first
-				logger.Debugf("data object %s is has a different hash code, deleting", target)
-				logger.Debugf(" hash %s vs. %s, size %d vs. %d", md5hash, targetEntry.CheckSum, sourceStat.Size(), targetEntry.Size)
-				err = filesystem.RemoveFile(target, true)
-				if err != nil {
-					manager.mutex.Lock()
-					defer manager.mutex.Unlock()
-
-					logger.WithError(err).Errorf("error while deleting a data object %s", target)
-					manager.errors.PushBack(err)
-					return
-				}
-			}
-		}
-
-		// up
-		logger.Debugf("uploading a local file %s to %s", source, target)
-		callback := func(processed int64, total int64) {
-			done := processed >= total
-			manager.progressCallback(target, processed, total, done)
-		}
-
-		err = filesystem.UploadFileParallel(source, target, "", 0, replicate, callback)
-		if err != nil {
-			manager.mutex.Lock()
-			defer manager.mutex.Unlock()
-
-			logger.WithError(err).Errorf("error while uploading a local file %s to %s", source, target)
-			manager.errors.PushBack(err)
-			return
-		}
-		logger.Debugf("uploaded a local file %s to %s", source, target)
-		logger.Debugf("synchronized a local file %s to %s", source, target)
-	}
-
-	threads := 1
-	/*
-		// DataStore doesn't support the feature yet
-			// 4MB is one thread, max 4 threads
-			if size > 4*1024*1024 {
-				threads = int(size / 4 * 1024 * 1024)
-				if threads > 4 {
-					threads = 4
-				}
-			}
-	*/
-
-	job := NewParallelTransferJob(task, threads)
-
-	manager.mutex.Lock()
-	defer manager.mutex.Unlock()
-
-	manager.pendingJobs.PushBack(job)
-	return nil
-}
-
-// ScheduleUpload schedules a file upload
-func (manager *ParallelTransferManager) ScheduleUpload(filesystem *irodsclient_fs.FileSystem, source string, target string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "commons",
-		"struct":   "ParallelTransferManager",
-		"function": "ScheduleUpload",
-	})
-
-	config := GetConfig()
-	replicate := !config.NoReplication
-
-	task := func() {
-		logger.Debugf("uploading a local file %s to %s", source, target)
-		callback := func(processed int64, total int64) {
-			done := processed >= total
-			manager.progressCallback(target, processed, total, done)
-		}
-
-		err := filesystem.UploadFileParallel(source, target, "", 0, replicate, callback)
-		if err != nil {
-			manager.mutex.Lock()
-			defer manager.mutex.Unlock()
-
-			logger.WithError(err).Errorf("error while uploading a local file %s to %s", source, target)
-			manager.errors.PushBack(err)
-			return
-		}
-		logger.Debugf("uploaded a local file %s to %s", source, target)
-	}
-
-	threads := 1
-	/*
-		// DataStore doesn't support the feature yet
-			// 4MB is one thread, max 4 threads
-			if size > 4*1024*1024 {
-				threads = int(size / 4 * 1024 * 1024)
-				if threads > 4 {
-					threads = 4
-				}
-			}
-	*/
-
-	job := NewParallelTransferJob(task, threads)
-
-	manager.mutex.Lock()
-	defer manager.mutex.Unlock()
-
-	manager.pendingJobs.PushBack(job)
-	return nil
-}
-
-// ScheduleCopy schedules a file copy
-func (manager *ParallelTransferManager) ScheduleCopy(filesystem *irodsclient_fs.FileSystem, source string, target string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "commons",
-		"struct":   "ParallelTransferManager",
-		"function": "ScheduleCopy",
-	})
-
-	task := func() {
-		logger.Debugf("copying a data object %s to %s", source, target)
-		err := filesystem.CopyFileToFile(source, target)
-		if err != nil {
-			manager.mutex.Lock()
-			defer manager.mutex.Unlock()
-
-			logger.WithError(err).Errorf("error while copying a data object %s to %s", source, target)
-			manager.errors.PushBack(err)
-			return
-		}
-		logger.Debugf("copied a data object %s to %s", source, target)
-	}
-
-	job := NewParallelTransferJob(task, 1)
-
-	manager.mutex.Lock()
-	defer manager.mutex.Unlock()
-
-	manager.pendingJobs.PushBack(job)
-	return nil
-}
-
-// ScheduleCopyIfDifferent schedules a file copy only if data is changed
-func (manager *ParallelTransferManager) ScheduleCopyIfDifferent(filesystem *irodsclient_fs.FileSystem, source string, target string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "commons",
-		"struct":   "ParallelTransferManager",
-		"function": "ScheduleCopyIfDifferent",
-	})
-
-	task := func() {
-		logger.Debugf("synchronizing a data object %s to %s", source, target)
-		sourceEntry, err := filesystem.Stat(source)
-		if err != nil {
-			manager.mutex.Lock()
-			defer manager.mutex.Unlock()
-
-			logger.WithError(err).Errorf("error while stating a data object %s", source)
-			manager.errors.PushBack(err)
-			return
-		}
-
-		targetEntry, err := filesystem.Stat(target)
-		if err != nil {
-			if !irodsclient_types.IsFileNotFoundError(err) {
-				manager.mutex.Lock()
-				defer manager.mutex.Unlock()
-
-				logger.WithError(err).Errorf("error while stating a data object %s", target)
-				manager.errors.PushBack(err)
-				return
-			}
-		} else {
-			// file/dir exists
-			if targetEntry.Type == irodsclient_fs.DirectoryEntry {
-				// dir
-				logger.Debugf("remote path %s is a collection, deleting", target)
-				err = filesystem.RemoveDir(target, true, true)
-				if err != nil {
-					manager.mutex.Lock()
-					defer manager.mutex.Unlock()
-
-					logger.WithError(err).Errorf("error while deleting a directory %s", target)
-					manager.errors.PushBack(err)
-					return
-				}
-			} else {
-				//file
-				if sourceEntry.CheckSum == targetEntry.CheckSum && sourceEntry.Size == targetEntry.Size {
-					// match
-					logger.Debugf("data object %s is up-to-date", target)
-					return
-				}
-
-				// delete first
-				logger.Debugf("data object %s is has a different hash code, deleting", target)
-				logger.Debugf(" hash %s vs. %s, size %d vs. %d", sourceEntry.CheckSum, targetEntry.CheckSum, sourceEntry.Size, targetEntry.Size)
-				err = filesystem.RemoveFile(target, true)
-				if err != nil {
-					manager.mutex.Lock()
-					defer manager.mutex.Unlock()
-
-					logger.WithError(err).Errorf("error while deleting a data object %s", target)
-					manager.errors.PushBack(err)
-					return
-				}
-			}
-		}
-
-		// down
-		logger.Debugf("copying a data object %s to %s", source, target)
-		err = filesystem.CopyFileToFile(source, target)
-		if err != nil {
-			manager.mutex.Lock()
-			defer manager.mutex.Unlock()
-
-			logger.WithError(err).Errorf("error while copying a data object %s to %s", source, target)
-			manager.errors.PushBack(err)
-			return
-		}
-		logger.Debugf("copied a data object %s to %s", source, target)
-		logger.Debugf("synchronized a data object %s to %s", source, target)
-	}
-
-	job := NewParallelTransferJob(task, 1)
-
-	manager.mutex.Lock()
-	defer manager.mutex.Unlock()
-
-	manager.pendingJobs.PushBack(job)
-	return nil
-}
-
-// run jobs
-func (manager *ParallelTransferManager) Go(showProgress bool) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "commons",
-		"struct":   "ParallelTransferManager",
-		"function": "Go",
-	})
-
-	manager.mutex.Lock()
-	pendingJobs := manager.pendingJobs.Len()
+	// release lock since adding to chan may block
 	manager.mutex.Unlock()
 
-	if pendingJobs == 0 {
-		logger.Debug("no pending jobs found")
-		return nil
-	}
+	manager.pendingJobs <- job
+	manager.jobWait.Add(1)
 
-	wg := sync.WaitGroup{}
+	return nil
+}
 
-	var pw progress.Writer
-	if showProgress {
-		pw = progress.NewWriter()
-		pw.SetAutoStop(false)
-		pw.SetTrackerLength(25)
-		pw.SetMessageWidth(50)
-		pw.SetNumTrackersExpected(pendingJobs)
-		pw.SetStyle(progress.StyleDefault)
-		pw.SetTrackerPosition(progress.PositionRight)
-		pw.SetUpdateFrequency(time.Millisecond * 100)
-		pw.Style().Colors = progress.StyleColorsExample
-		pw.Style().Options.PercentFormat = "%4.1f%%"
-		pw.Style().Visibility.ETA = true
-		pw.Style().Visibility.Percentage = true
-		pw.Style().Visibility.Time = true
-		pw.Style().Visibility.Value = true
+func (manager *ParallelJobManager) DoneScheduling() {
+	close(manager.pendingJobs)
+	manager.scheduleWait.Done()
+}
 
-		go pw.Render()
+func (manager *ParallelJobManager) Wait() error {
+	logger := log.WithFields(log.Fields{
+		"package":  "commons",
+		"struct":   "ParallelJobManager",
+		"function": "Wait",
+	})
 
-		trackers := map[string]*progress.Tracker{}
-		trackerMutex := sync.Mutex{}
+	logger.Debug("waiting schedule-wait")
+	manager.scheduleWait.Wait()
+	logger.Debug("waiting job-wait")
+	manager.jobWait.Wait()
+
+	manager.mutex.RLock()
+	defer manager.mutex.RUnlock()
+	return manager.lastError
+}
+
+func (manager *ParallelJobManager) startProgress() {
+	if manager.showProgress {
+		manager.progressWriter = progress.NewWriter()
+		manager.progressWriter.SetAutoStop(false)
+		manager.progressWriter.SetTrackerLength(25)
+		manager.progressWriter.SetMessageWidth(50)
+		manager.progressWriter.SetStyle(progress.StyleDefault)
+		manager.progressWriter.SetTrackerPosition(progress.PositionRight)
+		manager.progressWriter.SetUpdateFrequency(time.Millisecond * 100)
+		manager.progressWriter.Style().Colors = progress.StyleColorsExample
+		manager.progressWriter.Style().Options.PercentFormat = "%4.1f%%"
+		manager.progressWriter.Style().Visibility.ETA = true
+		manager.progressWriter.Style().Visibility.Percentage = true
+		manager.progressWriter.Style().Visibility.Time = true
+		manager.progressWriter.Style().Visibility.Value = true
+		manager.progressWriter.Style().Visibility.ETAOverall = false
+		manager.progressWriter.Style().Visibility.TrackerOverall = false
+
+		go manager.progressWriter.Render()
 
 		// add progress tracker callback
-		trackerCB := func(name string, processed int64, total int64, done bool) {
-			trackerMutex.Lock()
-			defer trackerMutex.Unlock()
+		manager.progressTrackerCallback = func(name string, processed int64, total int64, progressUnit progress.Units, errored bool) {
+			manager.mutex.Lock()
+			defer manager.mutex.Unlock()
 
 			var tracker *progress.Tracker
-			if t, ok := trackers[name]; !ok {
-				// not created yet
+			if t, ok := manager.progressTrackers[name]; !ok {
+				// created a new tracker if not exists
 				tracker = &progress.Tracker{
-					Message: GetBasename(name),
+					Message: name,
 					Total:   total,
-					Units:   progress.UnitsBytes,
+					Units:   progressUnit,
 				}
 
-				pw.AppendTracker(tracker)
-				trackers[name] = tracker
+				manager.progressWriter.AppendTracker(tracker)
+				manager.progressTrackers[name] = tracker
 			} else {
 				tracker = t
 			}
 
-			tracker.SetValue(processed)
+			if processed >= 0 {
+				tracker.SetValue(processed)
+			}
 
-			if done {
+			if errored {
+				tracker.MarkAsErrored()
+			} else if processed >= total {
 				tracker.MarkAsDone()
 			}
 		}
-
-		manager.progressTrackerCallback = trackerCB
 	}
+}
 
-	for {
-		manager.mutex.Lock()
-		frontElem := manager.pendingJobs.Front()
-		if frontElem == nil {
+func (manager *ParallelJobManager) endProgress() {
+	if manager.showProgress {
+		if manager.progressWriter != nil {
+			manager.mutex.Lock()
+
+			for _, tracker := range manager.progressTrackers {
+				if manager.lastError != nil {
+					tracker.MarkAsDone()
+				} else {
+					if !tracker.IsDone() {
+						tracker.MarkAsErrored()
+					}
+				}
+			}
+
 			manager.mutex.Unlock()
-			logger.Debug("no more pending job")
-			break
+
+			manager.progressWriter.Stop()
 		}
+	}
+}
 
-		frontJob := manager.pendingJobs.Remove(frontElem)
-		if job, ok := frontJob.(*ParallelTransferJob); ok {
-			for manager.currentThreads+job.threads > manager.maxThreads {
-				// wait
-				logger.Debugf("waiting for other jobs to complete - current %d, max %d", manager.currentThreads, manager.maxThreads)
-				manager.condition.Wait()
+func (manager *ParallelJobManager) Start() {
+	logger := log.WithFields(log.Fields{
+		"package":  "commons",
+		"struct":   "ParallelJobManager",
+		"function": "Start",
+	})
+
+	manager.startProgress()
+
+	go func() {
+		logger.Debug("start job run thread")
+		defer logger.Debug("exit job run thread")
+
+		defer manager.endProgress()
+
+		currentThreads := 0
+
+		for job := range manager.pendingJobs {
+			cont := true
+
+			manager.mutex.RLock()
+			if manager.lastError != nil {
+				cont = false
 			}
+			manager.mutex.RUnlock()
 
-			logger.Debugf("# threads : %d, max %d", manager.currentThreads, manager.maxThreads)
-			manager.currentThreads += job.threads
-			logger.Debugf("# threads : %d, max %d", manager.currentThreads, manager.maxThreads)
-			wg.Add(1)
-
-			go func() {
-				job.task()
-
+			if cont {
 				manager.mutex.Lock()
-				manager.currentThreads -= job.threads
-				logger.Debugf("# threads : %d, max %d", manager.currentThreads, manager.maxThreads)
-				manager.condition.Broadcast()
+				if currentThreads > 0 {
+					for currentThreads+job.threadsRequired > manager.maxThreads {
+						// exceeds max threads
+						// wait until it becomes available
+						logger.Debugf("waiting for other jobs to complete - current %d, max %d", currentThreads, manager.maxThreads)
+
+						manager.availableThreadWaitCondition.Wait()
+					}
+				}
+
+				currentThreads += job.threadsRequired
+				logger.Debugf("# threads : %d, max %d", currentThreads, manager.maxThreads)
+
+				go func() {
+					err := job.task(job)
+
+					if err != nil {
+						// mark error
+						manager.mutex.Lock()
+						manager.lastError = err
+						manager.mutex.Unlock()
+
+						logger.Error(err)
+						// don't stop here
+					}
+
+					currentThreads -= job.threadsRequired
+					logger.Debugf("# threads : %d, max %d", currentThreads, manager.maxThreads)
+
+					manager.jobWait.Done()
+
+					manager.mutex.Lock()
+					manager.availableThreadWaitCondition.Broadcast()
+					manager.mutex.Unlock()
+				}()
+
 				manager.mutex.Unlock()
-				wg.Done()
-			}()
-		} else {
-			logger.Error("unknown job")
-		}
-
-		manager.mutex.Unlock()
-	}
-
-	wg.Wait()
-
-	if showProgress {
-		pw.Stop()
-	}
-
-	// check error
-	var errReturn error
-	manager.mutex.Lock()
-	if manager.errors.Len() > 0 {
-		frontElem := manager.errors.Front()
-		if frontElem != nil {
-			if err, ok := frontElem.Value.(error); ok {
-				errReturn = err
+			} else {
+				manager.jobWait.Done()
 			}
 		}
-	}
-	manager.mutex.Unlock()
-	return errReturn
+	}()
 }

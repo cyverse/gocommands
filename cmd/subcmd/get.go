@@ -8,6 +8,7 @@ import (
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/gocommands/commons"
+	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -25,6 +26,8 @@ func AddGetCommand(rootCmd *cobra.Command) {
 
 	getCmd.Flags().BoolP("force", "f", false, "Get forcefully")
 	getCmd.Flags().Bool("progress", false, "Display progress bar")
+	getCmd.Flags().Bool("diff", false, "Get files having different content")
+	getCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
 
 	rootCmd.AddCommand(getCmd)
 }
@@ -71,6 +74,24 @@ func processGetCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
+	diff := false
+	diffFlag := command.Flags().Lookup("diff")
+	if diffFlag != nil {
+		diff, err = strconv.ParseBool(diffFlag.Value.String())
+		if err != nil {
+			diff = false
+		}
+	}
+
+	noHash := false
+	noHashFlag := command.Flags().Lookup("no_hash")
+	if noHashFlag != nil {
+		noHash, err = strconv.ParseBool(noHashFlag.Value.String())
+		if err != nil {
+			noHash = false
+		}
+	}
+
 	// Create a file system
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
@@ -82,34 +103,35 @@ func processGetCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
-	parallelTransferManager := commons.NewParallelTransferManager(commons.MaxThreadNum)
-
-	if len(args) == 1 {
-		// download to current dir
-		err = getOne(parallelTransferManager, filesystem, args[0], "./", force)
-		if err != nil {
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
-		}
-	} else if len(args) >= 2 {
-		targetPath := args[len(args)-1]
-		for _, sourcePath := range args[:len(args)-1] {
-			err = getOne(parallelTransferManager, filesystem, sourcePath, targetPath, force)
-			if err != nil {
-				logger.Error(err)
-				fmt.Fprintln(os.Stderr, err.Error())
-				return nil
-			}
-		}
-	} else {
+	if len(args) == 0 {
 		err := fmt.Errorf("not enough input arguments")
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
 		return nil
 	}
 
-	err = parallelTransferManager.Go(progress)
+	targetPath := "./"
+	sourcePaths := args[:]
+
+	if len(args) >= 2 {
+		targetPath = args[len(args)-1]
+		sourcePaths = args[:len(args)-1]
+	}
+
+	parallelJobManager := commons.NewParallelJobManager(filesystem, commons.MaxThreadNumDefault, progress)
+	parallelJobManager.Start()
+
+	for _, sourcePath := range sourcePaths {
+		err = getOne(parallelJobManager, sourcePath, targetPath, force, diff, noHash)
+		if err != nil {
+			logger.Error(err)
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
+		}
+	}
+
+	parallelJobManager.DoneScheduling()
+	err = parallelJobManager.Wait()
 	if err != nil {
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -119,7 +141,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func getOne(transferManager *commons.ParallelTransferManager, filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, force bool) error {
+func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, targetPath string, force bool, diff bool, noHash bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "getOne",
@@ -131,30 +153,78 @@ func getOne(transferManager *commons.ParallelTransferManager, filesystem *irodsc
 	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 	targetPath = commons.MakeLocalPath(targetPath)
 
+	filesystem := parallelJobManager.GetFilesystem()
+
 	sourceEntry, err := filesystem.Stat(sourcePath)
 	if err != nil {
 		return err
 	}
 
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
-		logger.Debugf("downloading a data object %s to %s", sourcePath, targetPath)
-
 		targetFilePath := commons.MakeTargetLocalFilePath(sourcePath, targetPath)
 
-		targetStat, err := os.Stat(targetFilePath)
+		exist := false
+		targetEntry, err := os.Stat(targetFilePath)
 		if err != nil {
 			if !os.IsNotExist(err) {
 				return err
 			}
 		} else {
-			// file/dir exists
-			if targetStat.IsDir() {
-				// dir
-				return fmt.Errorf("local path %s is a directory", targetFilePath)
+			exist = true
+		}
+
+		getTask := func(job *commons.ParallelJob) error {
+			manager := job.GetManager()
+			fs := manager.GetFilesystem()
+
+			callbackGet := func(processed int64, total int64) {
+				job.Progress(processed, total, false)
 			}
 
-			if force {
-				// delete first
+			job.Progress(0, sourceEntry.Size, false)
+
+			logger.Debugf("downloading a data object %s to %s", sourcePath, targetFilePath)
+			err := fs.DownloadFileParallel(sourcePath, "", targetFilePath, 0, callbackGet)
+			if err != nil {
+				job.Progress(-1, sourceEntry.Size, true)
+				return err
+			}
+
+			logger.Debugf("downloaded a data object %s to %s", sourcePath, targetFilePath)
+			job.Progress(sourceEntry.Size, sourceEntry.Size, false)
+			return nil
+		}
+
+		if exist {
+			if diff {
+				if noHash {
+					if targetEntry.Size() == sourceEntry.Size {
+						fmt.Printf("skip downloading a data object %s. The file already exists!\n", targetFilePath)
+						return nil
+					}
+				} else {
+					if targetEntry.Size() == sourceEntry.Size {
+						if len(sourceEntry.CheckSum) > 0 {
+							// compare hash
+							md5hash, err := commons.HashLocalFileMD5(targetFilePath)
+							if err != nil {
+								return err
+							}
+
+							if sourceEntry.CheckSum == md5hash {
+								fmt.Printf("skip downloading a data object %s. The file with the same hash already exists!\n", targetFilePath)
+								return nil
+							}
+						}
+					}
+				}
+
+				logger.Debugf("deleting an existing file %s", targetFilePath)
+				err := os.Remove(targetFilePath)
+				if err != nil {
+					return err
+				}
+			} else if force {
 				logger.Debugf("deleting an existing file %s", targetFilePath)
 				err := os.Remove(targetFilePath)
 				if err != nil {
@@ -176,8 +246,9 @@ func getOne(transferManager *commons.ParallelTransferManager, filesystem *irodsc
 			}
 		}
 
+		threadsRequired := computeThreadsRequiredForGet(sourceEntry.Size)
+		parallelJobManager.Schedule(sourcePath, getTask, threadsRequired, progress.UnitsBytes)
 		logger.Debugf("scheduled a data object download %s to %s", sourcePath, targetFilePath)
-		transferManager.ScheduleDownload(filesystem, sourcePath, targetFilePath)
 	} else {
 		// dir
 		logger.Debugf("downloading a collection %s to %s", sourcePath, targetPath)
@@ -195,11 +266,25 @@ func getOne(transferManager *commons.ParallelTransferManager, filesystem *irodsc
 		}
 
 		for _, entryInDir := range entries {
-			err = getOne(transferManager, filesystem, entryInDir.Path, targetDir, force)
+			err = getOne(parallelJobManager, entryInDir.Path, targetDir, force, diff, noHash)
 			if err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+func computeThreadsRequiredForGet(size int64) int {
+	// compute num threads required
+	threadsRequired := 1
+	// 4MB is one thread, max 4 threads
+	if size > 4*1024*1024 {
+		threadsRequired = int(size / 4 * 1024 * 1024)
+		if threadsRequired > 4 {
+			threadsRequired = 4
+		}
+	}
+
+	return threadsRequired
 }

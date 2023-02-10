@@ -22,54 +22,54 @@ type FileTransferTask struct {
 	Completed        bool      `json:"completed"`
 }
 
-type JobLogHeader struct {
+type BundleTransferLogHeader struct {
 	ID              string    `json:"id"`
 	CreatedTime     time.Time `json:"created_time"`
 	LocalInputPaths []string  `json:"local_input_paths"`
 	IRODSTargetPath string    `json:"irods_target_path"`
 }
 
-type JobLog struct {
+type BundleTransferLog struct {
 	id              string
-	jobLogFilePath  string
+	logFilePath     string
 	localInputPaths []string
 	irodsTargetPath string
 	transferTasks   map[string]*FileTransferTask
 	createdTime     time.Time
 	writeMutex      sync.Mutex
-	isNewJob        bool
+	isFirstWrite    bool
 }
 
-func NewJobLog(id string, jobLogFilePath string, localInputPaths []string, irodsTargetPath string) *JobLog {
-	return &JobLog{
+func NewBundleTransferLog(id string, logFilePath string, localInputPaths []string, irodsTargetPath string) *BundleTransferLog {
+	return &BundleTransferLog{
 		id:              id,
-		jobLogFilePath:  jobLogFilePath,
+		logFilePath:     logFilePath,
 		localInputPaths: localInputPaths,
 		irodsTargetPath: irodsTargetPath,
 		transferTasks:   map[string]*FileTransferTask{},
 		createdTime:     time.Now(),
 		writeMutex:      sync.Mutex{},
-		isNewJob:        true,
+		isFirstWrite:    true,
 	}
 }
 
-func NewJobLogFromLog(jobLogFilePath string) (*JobLog, error) {
-	fh, err := os.OpenFile(jobLogFilePath, os.O_RDONLY, 0664)
+func NewBundleTransferLogFromLog(logFilePath string) (*BundleTransferLog, error) {
+	fh, err := os.OpenFile(logFilePath, os.O_RDONLY, 0664)
 	if err != nil {
 		return nil, err
 	}
 
 	defer fh.Close()
 
-	jobLog := &JobLog{
+	bundleTransferLog := &BundleTransferLog{
 		id:              "",
-		jobLogFilePath:  jobLogFilePath,
+		logFilePath:     logFilePath,
 		localInputPaths: []string{},
 		irodsTargetPath: "",
 		transferTasks:   map[string]*FileTransferTask{},
 		createdTime:     time.Now(),
 		writeMutex:      sync.Mutex{},
-		isNewJob:        true,
+		isFirstWrite:    true,
 	}
 
 	scanner := bufio.NewScanner(fh)
@@ -80,16 +80,16 @@ func NewJobLogFromLog(jobLogFilePath string) (*JobLog, error) {
 		if firstLine {
 			firstLine = false
 
-			jobLogHeader, err := NewJobLogHeaderFromJSON(line)
+			logHeader, err := NewBundleTransferLogHeaderFromJSON(line)
 			if err != nil {
 				return nil, err
 			}
 
-			jobLog.id = jobLogHeader.ID
-			jobLog.localInputPaths = jobLogHeader.LocalInputPaths
-			jobLog.irodsTargetPath = jobLogHeader.IRODSTargetPath
-			jobLog.createdTime = jobLogHeader.CreatedTime
-			jobLog.isNewJob = false
+			bundleTransferLog.id = logHeader.ID
+			bundleTransferLog.localInputPaths = logHeader.LocalInputPaths
+			bundleTransferLog.irodsTargetPath = logHeader.IRODSTargetPath
+			bundleTransferLog.createdTime = logHeader.CreatedTime
+			bundleTransferLog.isFirstWrite = false
 		}
 
 		task, err := NewFileTransferTaskFromJSON(line)
@@ -97,28 +97,28 @@ func NewJobLogFromLog(jobLogFilePath string) (*JobLog, error) {
 			return nil, err
 		}
 
-		jobLog.transferTasks[task.LocalPath] = task
+		bundleTransferLog.transferTasks[task.LocalPath] = task
 	}
 
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
 
-	return jobLog, nil
+	return bundleTransferLog, nil
 }
 
-func NewJobLogHeaderFromJSON(jsonBytes []byte) (*JobLogHeader, error) {
-	var jobLogHeader JobLogHeader
-	err := json.Unmarshal(jsonBytes, &jobLogHeader)
+func NewBundleTransferLogHeaderFromJSON(jsonBytes []byte) (*BundleTransferLogHeader, error) {
+	var logHeader BundleTransferLogHeader
+	err := json.Unmarshal(jsonBytes, &logHeader)
 	if err != nil {
 		return nil, fmt.Errorf("JSON Marshal Error - %v", err)
 	}
 
-	return &jobLogHeader, nil
+	return &logHeader, nil
 }
 
-func (jobLogHeader *JobLogHeader) ToJSON() ([]byte, error) {
-	jsonBytes, err := json.Marshal(jobLogHeader)
+func (logHeader *BundleTransferLogHeader) ToJSON() ([]byte, error) {
+	jsonBytes, err := json.Marshal(logHeader)
 	if err != nil {
 		return nil, fmt.Errorf("JSON Marshal Error - %v", err)
 	}
@@ -126,7 +126,7 @@ func (jobLogHeader *JobLogHeader) ToJSON() ([]byte, error) {
 	return jsonBytes, nil
 }
 
-func GetDefaultJobLogPath(id string) string {
+func GetDefaultBundleTransferLogPath(id string) string {
 	dir := ""
 	homedir, err := os.UserHomeDir()
 	if err == nil {
@@ -137,35 +137,35 @@ func GetDefaultJobLogPath(id string) string {
 		dir = os.TempDir()
 	}
 
-	filename := fmt.Sprintf("gocmd_job_%s.log", id)
+	filename := fmt.Sprintf("gocmd_bundle_transfer_%s.log", id)
 	return filepath.Join(dir, filename)
 }
 
-func (job *JobLog) MakeJobLogDir() error {
-	dir := filepath.Dir(job.jobLogFilePath)
+func (bundleTransferLog *BundleTransferLog) MakeBundleTransferLogDir() error {
+	dir := filepath.Dir(bundleTransferLog.logFilePath)
 	return os.MkdirAll(dir, 0775)
 }
 
-func (job *JobLog) WriteHeader() error {
-	job.writeMutex.Lock()
-	defer job.writeMutex.Unlock()
+func (bundleTransferLog *BundleTransferLog) WriteHeader() error {
+	bundleTransferLog.writeMutex.Lock()
+	defer bundleTransferLog.writeMutex.Unlock()
 
-	fh, err := os.OpenFile(job.jobLogFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0664)
+	fh, err := os.OpenFile(bundleTransferLog.logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0664)
 	if err != nil {
 		return err
 	}
 
 	defer fh.Close()
 
-	if job.isNewJob {
-		jobLogHeader := JobLogHeader{
-			ID:              job.id,
-			CreatedTime:     job.createdTime,
-			LocalInputPaths: job.localInputPaths,
-			IRODSTargetPath: job.irodsTargetPath,
+	if bundleTransferLog.isFirstWrite {
+		logHeader := BundleTransferLogHeader{
+			ID:              bundleTransferLog.id,
+			CreatedTime:     bundleTransferLog.createdTime,
+			LocalInputPaths: bundleTransferLog.localInputPaths,
+			IRODSTargetPath: bundleTransferLog.irodsTargetPath,
 		}
 
-		headerJsonBytes, err := jobLogHeader.ToJSON()
+		headerJsonBytes, err := logHeader.ToJSON()
 		if err != nil {
 			return err
 		}
@@ -180,31 +180,31 @@ func (job *JobLog) WriteHeader() error {
 			return err
 		}
 
-		job.isNewJob = false
+		bundleTransferLog.isFirstWrite = false
 	}
 	return nil
 }
 
-func (job *JobLog) Write(task *FileTransferTask) error {
-	job.writeMutex.Lock()
-	defer job.writeMutex.Unlock()
+func (bundleTransferLog *BundleTransferLog) Write(task *FileTransferTask) error {
+	bundleTransferLog.writeMutex.Lock()
+	defer bundleTransferLog.writeMutex.Unlock()
 
-	fh, err := os.OpenFile(job.jobLogFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0664)
+	fh, err := os.OpenFile(bundleTransferLog.logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0664)
 	if err != nil {
 		return err
 	}
 
 	defer fh.Close()
 
-	if job.isNewJob {
-		jobLogHeader := JobLogHeader{
-			ID:              job.id,
-			CreatedTime:     job.createdTime,
-			LocalInputPaths: job.localInputPaths,
-			IRODSTargetPath: job.irodsTargetPath,
+	if bundleTransferLog.isFirstWrite {
+		logHeader := BundleTransferLogHeader{
+			ID:              bundleTransferLog.id,
+			CreatedTime:     bundleTransferLog.createdTime,
+			LocalInputPaths: bundleTransferLog.localInputPaths,
+			IRODSTargetPath: bundleTransferLog.irodsTargetPath,
 		}
 
-		headerJsonBytes, err := jobLogHeader.ToJSON()
+		headerJsonBytes, err := logHeader.ToJSON()
 		if err != nil {
 			return err
 		}
@@ -219,7 +219,7 @@ func (job *JobLog) Write(task *FileTransferTask) error {
 			return err
 		}
 
-		job.isNewJob = false
+		bundleTransferLog.isFirstWrite = false
 	}
 
 	jsonBytes, err := task.ToJSON()
@@ -239,32 +239,32 @@ func (job *JobLog) Write(task *FileTransferTask) error {
 	return nil
 }
 
-func (job *JobLog) IsCompleted(localPath string) bool {
-	if task, ok := job.transferTasks[localPath]; ok {
+func (bundleTransferLog *BundleTransferLog) IsCompleted(localPath string) bool {
+	if task, ok := bundleTransferLog.transferTasks[localPath]; ok {
 		return task.Completed
 	}
 	return false
 }
 
-func (job *JobLog) PrintJobID() {
+func (bundleTransferLog *BundleTransferLog) PrintJobID() {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
-		"function": "JobLog",
+		"function": "PrintJobID",
 	})
 
-	logger.Errorf("jobid: '%s'", job.id)
+	logger.Errorf("jobid: '%s'", bundleTransferLog.id)
 	fmt.Fprintln(os.Stderr, "TO CONTINUE FROM THIS POINT, USE FOLLOWING JOB ID")
-	fmt.Fprintf(os.Stderr, "JOBID: %s\n", job.id)
+	fmt.Fprintf(os.Stderr, "JOBID: %s\n", bundleTransferLog.id)
 }
 
-func (job *JobLog) MonitorCtrlC() {
+func (bundleTransferLog *BundleTransferLog) MonitorCtrlC() {
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, os.Interrupt)
 
 	go func() {
 		<-signalChannel
 
-		job.PrintJobID()
+		bundleTransferLog.PrintJobID()
 		os.Exit(1)
 	}()
 }

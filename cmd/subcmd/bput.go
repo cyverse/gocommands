@@ -26,7 +26,7 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	bputCmd.Flags().BoolP("force", "f", false, "Put forcefully (overwrite)")
 	bputCmd.Flags().Int("max_file_num", commons.MaxBundleFileNumDefault, "Specify max file number in a bundle file")
 	bputCmd.Flags().Int64("max_file_size", commons.MaxBundleFileSizeDefault, "Specify max file size of a bundle file")
-	bputCmd.Flags().Bool("progress", false, "Display progress bar")
+	bputCmd.Flags().Bool("progress", false, "Display progress bars")
 	bputCmd.Flags().String("local_temp", os.TempDir(), "Specify a local temp directory path to create bundle files")
 	bputCmd.Flags().String("job_id", "", "Specify Job ID")
 	bputCmd.Flags().Bool("continue", false, "Continue from last failure point")
@@ -151,11 +151,11 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		jobID = xid.New().String()
 	}
 
-	jobFile := commons.GetDefaultJobLogPath(jobID)
+	jobFile := commons.GetDefaultBundleTransferLogPath(jobID)
 
-	var jobLog *commons.JobLog
+	var jobLog *commons.BundleTransferLog
 	if continueFromFailure {
-		jobLogExisting, err := commons.NewJobLogFromLog(jobFile)
+		jobLogExisting, err := commons.NewBundleTransferLogFromLog(jobFile)
 		if err != nil {
 			logger.Error(err)
 			fmt.Fprintln(os.Stderr, err.Error())
@@ -164,8 +164,8 @@ func processBputCommand(command *cobra.Command, args []string) error {
 
 		jobLog = jobLogExisting
 	} else {
-		jobLog = commons.NewJobLog(jobID, jobFile, sourcePaths, targetPath)
-		err = jobLog.MakeJobLogDir()
+		jobLog = commons.NewBundleTransferLog(jobID, jobFile, sourcePaths, targetPath)
+		err = jobLog.MakeBundleTransferLogDir()
 		if err != nil {
 			logger.Error(err)
 			fmt.Fprintln(os.Stderr, err.Error())
@@ -230,8 +230,8 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string, ta
 	}
 
 	if !sourceStat.IsDir() {
-		logger.Debugf("scheduled a local file bundle-upload %s", sourcePath)
 		bundleManager.Schedule(sourcePath, sourceStat.Size(), sourceStat.ModTime().Local())
+		logger.Debugf("scheduled a local file bundle-upload %s", sourcePath)
 	} else {
 		// dir
 		logger.Debugf("bundle-uploading a local directory %s", sourcePath)

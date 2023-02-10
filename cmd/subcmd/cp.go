@@ -8,6 +8,7 @@ import (
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/gocommands/commons"
+	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -25,7 +26,9 @@ func AddCpCommand(rootCmd *cobra.Command) {
 
 	cpCmd.Flags().BoolP("recurse", "r", false, "Copy recursively")
 	cpCmd.Flags().BoolP("force", "f", false, "Copy forcefully")
-	cpCmd.Flags().Bool("progress", false, "Display progress bar")
+	cpCmd.Flags().Bool("progress", false, "Display progress bars")
+	getCmd.Flags().Bool("diff", false, "Copy files having different content")
+	getCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
 
 	rootCmd.AddCommand(cpCmd)
 }
@@ -81,6 +84,24 @@ func processCpCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
+	diff := false
+	diffFlag := command.Flags().Lookup("diff")
+	if diffFlag != nil {
+		diff, err = strconv.ParseBool(diffFlag.Value.String())
+		if err != nil {
+			diff = false
+		}
+	}
+
+	noHash := false
+	noHashFlag := command.Flags().Lookup("no_hash")
+	if noHashFlag != nil {
+		noHash, err = strconv.ParseBool(noHashFlag.Value.String())
+		if err != nil {
+			noHash = false
+		}
+	}
+
 	// Create a file system
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
@@ -92,35 +113,30 @@ func processCpCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
-	parallelTransferManager := commons.NewParallelTransferManager(commons.MaxThreadNum)
-
-	if len(args) == 2 {
-		// copy to another
-		err = copyOne(parallelTransferManager, filesystem, args[0], args[1], recurse, force)
-		if err != nil {
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
-		}
-	} else if len(args) >= 3 {
-		// copy
-		destPath := args[len(args)-1]
-		for _, sourcePath := range args[:len(args)-1] {
-			err = copyOne(parallelTransferManager, filesystem, sourcePath, destPath, recurse, force)
-			if err != nil {
-				logger.Error(err)
-				fmt.Fprintln(os.Stderr, err.Error())
-				return nil
-			}
-		}
-	} else {
+	if len(args) <= 1 {
 		err := fmt.Errorf("not enough input arguments")
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
 		return nil
 	}
 
-	err = parallelTransferManager.Go(progress)
+	targetPath := args[len(args)-1]
+	sourcePaths := args[:len(args)-1]
+
+	parallelJobManager := commons.NewParallelJobManager(filesystem, commons.MaxThreadNumDefault, progress)
+	parallelJobManager.Start()
+
+	for _, sourcePath := range sourcePaths {
+		err = copyOne(parallelJobManager, sourcePath, targetPath, recurse, force, diff, noHash)
+		if err != nil {
+			logger.Error(err)
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
+		}
+	}
+
+	parallelJobManager.DoneScheduling()
+	err = parallelJobManager.Wait()
 	if err != nil {
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -130,7 +146,7 @@ func processCpCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func copyOne(transferManager *commons.ParallelTransferManager, filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, recurse bool, force bool) error {
+func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, targetPath string, recurse bool, force bool, diff bool, noHash bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "copyOne",
@@ -142,6 +158,8 @@ func copyOne(transferManager *commons.ParallelTransferManager, filesystem *irods
 	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
+	filesystem := parallelJobManager.GetFilesystem()
+
 	sourceEntry, err := filesystem.Stat(sourcePath)
 	if err != nil {
 		return err
@@ -151,12 +169,56 @@ func copyOne(transferManager *commons.ParallelTransferManager, filesystem *irods
 		// file
 		targetFilePath := commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetPath)
 
-		if filesystem.ExistsFile(targetFilePath) {
-			// already exists!
-			if force {
-				// delete first
+		exist := filesystem.ExistsFile(targetFilePath)
+
+		copyTask := func(job *commons.ParallelJob) error {
+			manager := job.GetManager()
+			fs := manager.GetFilesystem()
+
+			job.Progress(0, 1, false)
+
+			logger.Debugf("copying a data object %s to %s", sourcePath, targetFilePath)
+			err = fs.CopyFileToFile(sourcePath, targetFilePath)
+			if err != nil {
+				job.Progress(-1, 1, true)
+				return err
+			}
+
+			logger.Debugf("copied a data object %s to %s", sourcePath, targetFilePath)
+			job.Progress(1, 1, false)
+			return nil
+		}
+
+		if exist {
+			targetEntry, err := filesystem.Stat(targetFilePath)
+			if err != nil {
+				return err
+			}
+
+			if diff {
+				if noHash {
+					if targetEntry.Size == sourceEntry.Size {
+						fmt.Printf("skip copying a file %s. The file already exists!\n", targetFilePath)
+						return nil
+					}
+				} else {
+					if targetEntry.Size == sourceEntry.Size {
+						// compare hash
+						if len(sourceEntry.CheckSum) > 0 && sourceEntry.CheckSum == targetEntry.CheckSum {
+							fmt.Printf("skip copying a file %s. The file with the same hash already exists!\n", targetFilePath)
+							return nil
+						}
+					}
+				}
+
 				logger.Debugf("deleting an existing data object %s", targetFilePath)
-				err := filesystem.RemoveFile(targetFilePath, true)
+				err = filesystem.RemoveFile(targetFilePath, true)
+				if err != nil {
+					return err
+				}
+			} else if force {
+				logger.Debugf("deleting an existing data object %s", targetFilePath)
+				err = filesystem.RemoveFile(targetFilePath, true)
 				if err != nil {
 					return err
 				}
@@ -165,7 +227,7 @@ func copyOne(transferManager *commons.ParallelTransferManager, filesystem *irods
 				overwrite := commons.InputYN(fmt.Sprintf("file %s already exists. Overwrite?", targetFilePath))
 				if overwrite {
 					logger.Debugf("deleting an existing data object %s", targetFilePath)
-					err := filesystem.RemoveFile(targetFilePath, true)
+					err = filesystem.RemoveFile(targetFilePath, true)
 					if err != nil {
 						return err
 					}
@@ -176,8 +238,8 @@ func copyOne(transferManager *commons.ParallelTransferManager, filesystem *irods
 			}
 		}
 
+		parallelJobManager.Schedule(sourcePath, copyTask, 1, progress.UnitsDefault)
 		logger.Debugf("scheduled a data object copy %s to %s", sourcePath, targetFilePath)
-		transferManager.ScheduleCopy(filesystem, sourcePath, targetFilePath)
 	} else {
 		// dir
 		if !recurse {
@@ -199,7 +261,7 @@ func copyOne(transferManager *commons.ParallelTransferManager, filesystem *irods
 			}
 
 			for _, entryInDir := range entries {
-				err = copyOne(transferManager, filesystem, entryInDir.Path, targetPath, recurse, force)
+				err = copyOne(parallelJobManager, entryInDir.Path, targetPath, recurse, force, diff, noHash)
 				if err != nil {
 					return err
 				}
@@ -215,7 +277,7 @@ func copyOne(transferManager *commons.ParallelTransferManager, filesystem *irods
 			}
 
 			for _, entryInDir := range entries {
-				err = copyOne(transferManager, filesystem, entryInDir.Path, targetDir, recurse, force)
+				err = copyOne(parallelJobManager, entryInDir.Path, targetDir, recurse, force, diff, noHash)
 				if err != nil {
 					return err
 				}
