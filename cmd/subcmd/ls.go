@@ -3,11 +3,13 @@ package subcmd
 import (
 	"fmt"
 	"os"
+	"path"
 	"sort"
 	"strconv"
 
 	irodsclient_conn "github.com/cyverse/go-irodsclient/irods/connection"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/irods/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -72,7 +74,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
-	// Create a connection
+	// Create a file system
 	account := commons.GetAccount()
 	irodsConn, err := commons.GetIRODSConnection(account)
 	if err != nil {
@@ -90,7 +92,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	}
 
 	for _, sourcePath := range sourcePaths {
-		err = listColletion(irodsConn, sourcePath, longFormat, veryLongFormat)
+		err = listOne(irodsConn, sourcePath, longFormat, veryLongFormat)
 		if err != nil {
 			logger.Error(err)
 			fmt.Fprintln(os.Stderr, err.Error())
@@ -101,64 +103,87 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func listColletion(connection *irodsclient_conn.IRODSConnection, collectionPath string, longFormat bool, veryLongFormat bool) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "listColletion",
-	})
-
+func listOne(connection *irodsclient_conn.IRODSConnection, targetPath string, longFormat bool, veryLongFormat bool) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
-	collectionPath = commons.MakeIRODSPath(cwd, home, zone, collectionPath)
+	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	logger.Debugf("listing collection: %s", collectionPath)
-
-	collection, err := irodsclient_fs.GetCollection(connection, collectionPath)
+	collection, err := irodsclient_fs.GetCollection(connection, targetPath)
 	if err != nil {
-		return err
-	}
-
-	colls, err := irodsclient_fs.ListSubCollections(connection, collectionPath)
-	if err != nil {
-		return err
-	}
-
-	objs, err := irodsclient_fs.ListDataObjects(connection, collection)
-	if err != nil {
-		return err
-	}
-
-	// sort by name
-	sort.SliceStable(objs, func(i int, j int) bool {
-		return objs[i].Name < objs[j].Name
-	})
-
-	sort.SliceStable(colls, func(i int, j int) bool {
-		return colls[i].Name < colls[j].Name
-	})
-
-	// print data objects first
-	for _, entry := range objs {
-		if veryLongFormat {
-			for _, replica := range entry.Replicas {
-				modTime := commons.MakeDateTimeString(replica.ModifyTime)
-				fmt.Printf("  %s\t%d\t%s\t%d\t%s\t&\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, entry.Size, modTime, entry.Name)
-				fmt.Printf("    %s\t%s\n", replica.CheckSum, replica.Path)
-			}
-		} else if longFormat {
-			for _, replica := range entry.Replicas {
-				modTime := commons.MakeDateTimeString(replica.ModifyTime)
-				fmt.Printf("  %s\t%d\t%s\t%d\t%s\t&\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, entry.Size, modTime, entry.Name)
-			}
-		} else {
-			fmt.Printf("  %s\n", entry.Name)
+		if !irodsclient_types.IsFileNotFoundError(err) {
+			return err
 		}
 	}
 
-	// print collections next
-	for _, entry := range colls {
+	if err == nil {
+		colls, err := irodsclient_fs.ListSubCollections(connection, targetPath)
+		if err != nil {
+			return err
+		}
+
+		objs, err := irodsclient_fs.ListDataObjects(connection, collection)
+		if err != nil {
+			return err
+		}
+
+		printDataObjects(objs, veryLongFormat, longFormat)
+		printCollections(colls)
+		return nil
+	}
+
+	// data object
+	parentTargetPath := path.Dir(targetPath)
+
+	parentCollection, err := irodsclient_fs.GetCollection(connection, parentTargetPath)
+	if err != nil {
+		return err
+	}
+
+	entry, err := irodsclient_fs.GetDataObject(connection, parentCollection, path.Base(targetPath))
+	if err != nil {
+		return err
+	}
+
+	printDataObject(entry, veryLongFormat, longFormat)
+	return nil
+}
+
+func printDataObjects(entries []*irodsclient_types.IRODSDataObject, veryLongFormat bool, longFormat bool) {
+	// sort by name
+	sort.SliceStable(entries, func(i int, j int) bool {
+		return entries[i].Name < entries[j].Name
+	})
+
+	for _, entry := range entries {
+		printDataObject(entry, veryLongFormat, longFormat)
+	}
+}
+
+func printDataObject(entry *irodsclient_types.IRODSDataObject, veryLongFormat bool, longFormat bool) {
+	if veryLongFormat {
+		for _, replica := range entry.Replicas {
+			modTime := commons.MakeDateTimeString(replica.ModifyTime)
+			fmt.Printf("  %s\t%d\t%s\t%d\t%s\t&\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, entry.Size, modTime, entry.Name)
+			fmt.Printf("    %s\t%s\n", replica.CheckSum, replica.Path)
+		}
+	} else if longFormat {
+		for _, replica := range entry.Replicas {
+			modTime := commons.MakeDateTimeString(replica.ModifyTime)
+			fmt.Printf("  %s\t%d\t%s\t%d\t%s\t&\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, entry.Size, modTime, entry.Name)
+		}
+	} else {
+		fmt.Printf("  %s\n", entry.Name)
+	}
+}
+
+func printCollections(entries []*irodsclient_types.IRODSCollection) {
+	// sort by name
+	sort.SliceStable(entries, func(i int, j int) bool {
+		return entries[i].Name < entries[j].Name
+	})
+
+	for _, entry := range entries {
 		fmt.Printf("  C- %s\n", entry.Path)
 	}
-	return nil
 }
