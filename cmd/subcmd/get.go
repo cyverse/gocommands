@@ -265,8 +265,10 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 			return err
 		}
 
-		for _, entryInDir := range entries {
-			err = getOne(parallelJobManager, entryInDir.Path, targetDir, force, diff, noHash)
+		for idx := range entries {
+			path := entries[idx].Path
+
+			err = getOne(parallelJobManager, path, targetDir, force, diff, noHash)
 			if err != nil {
 				return err
 			}

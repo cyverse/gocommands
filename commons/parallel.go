@@ -262,8 +262,12 @@ func (manager *ParallelJobManager) Start() {
 				currentThreads += job.threadsRequired
 				logger.Debugf("# threads : %d, max %d", currentThreads, manager.maxThreads)
 
-				go func() {
-					err := job.task(job)
+				go func(pjob *ParallelJob) {
+					logger.Debugf("Run job %d, %s", pjob.index, pjob.name)
+
+					err := pjob.task(pjob)
+
+					logger.Debugf("Run job %d, %s", pjob.index, pjob.name)
 
 					if err != nil {
 						// mark error
@@ -275,7 +279,7 @@ func (manager *ParallelJobManager) Start() {
 						// don't stop here
 					}
 
-					currentThreads -= job.threadsRequired
+					currentThreads -= pjob.threadsRequired
 					logger.Debugf("# threads : %d, max %d", currentThreads, manager.maxThreads)
 
 					manager.jobWait.Done()
@@ -283,7 +287,7 @@ func (manager *ParallelJobManager) Start() {
 					manager.mutex.Lock()
 					manager.availableThreadWaitCondition.Broadcast()
 					manager.mutex.Unlock()
-				}()
+				}(job)
 
 				manager.mutex.Unlock()
 			} else {
