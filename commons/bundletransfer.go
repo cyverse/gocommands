@@ -211,6 +211,8 @@ func (manager *BundleTransferManager) Schedule(source string, size int64, lastMo
 		logger.Debugf("assigned a new bundle %d", manager.currentBundle.index)
 	}
 
+	defer manager.mutex.Unlock()
+
 	if manager.differentFilesOnly {
 		targetFilePath, err := manager.getTargetPath(source)
 		if err != nil {
@@ -250,7 +252,6 @@ func (manager *BundleTransferManager) Schedule(source string, size int64, lastMo
 
 	manager.currentBundle.addFile(source, size, "", lastModTime)
 
-	manager.mutex.Unlock()
 	return nil
 }
 
