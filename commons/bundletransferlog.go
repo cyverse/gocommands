@@ -13,6 +13,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// we don't use this for now
+//
+
 type FileTransferTask struct {
 	LocalPath        string    `json:"local_path"`
 	IRODSPath        string    `json:"irods_path"`

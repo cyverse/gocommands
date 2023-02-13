@@ -62,12 +62,10 @@ func newBundle(manager *BundleTransferManager, index int64) *Bundle {
 }
 
 func (bundle *Bundle) addFile(localPath string, size int64, hash string, lastModTime time.Time) error {
-	relPath, err := filepath.Rel(bundle.manager.bundleRootPath, localPath)
+	irodsPath, err := bundle.manager.getTargetPath(localPath)
 	if err != nil {
 		return err
 	}
-
-	irodsPath := path.Join(bundle.manager.irodsDestPath, filepath.ToSlash(relPath))
 
 	f := &BundleFile{
 		LocalPath:        localPath,
@@ -92,7 +90,6 @@ func (bundle *Bundle) requireTar() bool {
 }
 
 type BundleTransferManager struct {
-	transferLog             *BundleTransferLog
 	filesystem              *irodsclient_fs.FileSystem
 	irodsDestPath           string
 	currentBundle           *Bundle
@@ -103,7 +100,8 @@ type BundleTransferManager struct {
 	maxBundleFileSize       int64
 	localTempDirPath        string
 	irodsTempDirPath        string
-	force                   bool
+	differentFilesOnly      bool
+	noHashForComparison     bool
 	showProgress            bool
 	progressWriter          progress.Writer
 	progressTrackers        map[string]*progress.Tracker
@@ -116,9 +114,8 @@ type BundleTransferManager struct {
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
-func NewBundleTransferManager(jobLog *BundleTransferLog, fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, localTempDirPath string, irodsTempDirPath string, force bool, showProgress bool) *BundleTransferManager {
+func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, localTempDirPath string, irodsTempDirPath string, diff bool, noHash bool, showProgress bool) *BundleTransferManager {
 	manager := &BundleTransferManager{
-		transferLog:             jobLog,
 		filesystem:              fs,
 		irodsDestPath:           irodsDestPath,
 		currentBundle:           nil,
@@ -129,7 +126,8 @@ func NewBundleTransferManager(jobLog *BundleTransferLog, fs *irodsclient_fs.File
 		maxBundleFileSize:       maxBundleFileSize,
 		localTempDirPath:        localTempDirPath,
 		irodsTempDirPath:        irodsTempDirPath,
-		force:                   force,
+		differentFilesOnly:      diff,
+		noHashForComparison:     noHash,
 		showProgress:            showProgress,
 		progressWriter:          nil,
 		progressTrackers:        map[string]*progress.Tracker{},
@@ -169,6 +167,15 @@ func (manager *BundleTransferManager) progress(name string, processed int64, tot
 	}
 }
 
+func (manager *BundleTransferManager) getTargetPath(localPath string) (string, error) {
+	relPath, err := filepath.Rel(manager.bundleRootPath, localPath)
+	if err != nil {
+		return "", err
+	}
+
+	return path.Join(manager.irodsDestPath, filepath.ToSlash(relPath)), nil
+}
+
 func (manager *BundleTransferManager) Schedule(source string, size int64, lastModTime time.Time) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "commons",
@@ -204,34 +211,46 @@ func (manager *BundleTransferManager) Schedule(source string, size int64, lastMo
 		logger.Debugf("assigned a new bundle %d", manager.currentBundle.index)
 	}
 
-	// check if this source is already transferred in the last run
-	if manager.transferLog.IsCompleted(source) {
-		logger.Infof("skip adding source file %s because it's already transferred", source)
-	} else {
-		manager.currentBundle.addFile(source, size, "", lastModTime)
-	}
-
-	manager.mutex.Unlock()
-	return nil
-}
-
-func (manager *BundleTransferManager) logTransfer(bundle *Bundle, completed bool) error {
-	for _, file := range bundle.files {
-		task := &FileTransferTask{
-			LocalPath:        file.LocalPath,
-			IRODSPath:        file.IRODSPath,
-			LastModifiedTime: file.LastModifiedTime,
-			Size:             file.Size,
-			Hash:             file.Hash,
-			Completed:        completed,
-		}
-
-		err := manager.transferLog.Write(task)
+	if manager.differentFilesOnly {
+		targetFilePath, err := manager.getTargetPath(source)
 		if err != nil {
 			return err
 		}
+
+		exist := ExistsIRODSFile(manager.filesystem, targetFilePath)
+		if exist {
+			targetEntry, err := StatIRODSPath(manager.filesystem, targetFilePath)
+			if err != nil {
+				return err
+			}
+
+			if manager.noHashForComparison {
+				if targetEntry.Size == size {
+					fmt.Printf("skip adding a file %s to the bundle. The file already exists!\n", targetFilePath)
+					return nil
+				}
+			} else {
+				if targetEntry.Size == size {
+					if len(targetEntry.CheckSum) > 0 {
+						// compare hash
+						md5hash, err := HashLocalFileMD5(source)
+						if err != nil {
+							return err
+						}
+
+						if md5hash == targetEntry.CheckSum {
+							fmt.Printf("skip adding a file %s to the bundle. The file with the same hash already exists!\n", targetFilePath)
+							return nil
+						}
+					}
+				}
+			}
+		}
 	}
 
+	manager.currentBundle.addFile(source, size, "", lastModTime)
+
+	manager.mutex.Unlock()
 	return nil
 }
 
@@ -380,15 +399,12 @@ func (manager *BundleTransferManager) Start() {
 			// don't stop here
 		}
 
+		ClearIRODSDirCache(manager.filesystem, manager.irodsDestPath)
+
 		for bundle := range manager.pendingBundles {
 			// send to tar and remove
 			processBundleTarChan <- bundle
 			processBundleRemoveFilesChan <- bundle
-
-			err = manager.logTransfer(bundle, false)
-			if err != nil {
-				logger.Error(err)
-			}
 			// don't stop here
 		}
 	}()
@@ -489,31 +505,27 @@ func (manager *BundleTransferManager) Start() {
 		defer close(processBundleExtractChan2)
 
 		for bundle := range processBundleRemoveFilesChan {
-			// check if files exist on the target -- to support 'force' option
-			// even with 'force' option, ibun fails if files exist
-			if manager.force {
-				cont := true
+			cont := true
 
-				manager.mutex.RLock()
-				if manager.lastError != nil {
-					cont = false
-				}
-				manager.mutex.RUnlock()
+			manager.mutex.RLock()
+			if manager.lastError != nil {
+				cont = false
+			}
+			manager.mutex.RUnlock()
 
-				if cont {
-					err := manager.processBundleRemoveFiles(bundle)
-					if err != nil {
-						// mark error
-						manager.mutex.Lock()
-						manager.lastError = err
-						manager.mutex.Unlock()
+			if cont {
+				err := manager.processBundleRemoveFiles(bundle)
+				if err != nil {
+					// mark error
+					manager.mutex.Lock()
+					manager.lastError = err
+					manager.mutex.Unlock()
 
-						bundle.lastError = err
-						bundle.lastErrorTaskName = BundleTaskNameRemove
+					bundle.lastError = err
+					bundle.lastErrorTaskName = BundleTaskNameRemove
 
-						logger.Error(err)
-						// don't stop here
-					}
+					logger.Error(err)
+					// don't stop here
 				}
 			}
 
@@ -667,18 +679,8 @@ func (manager *BundleTransferManager) processBundleRemoveFiles(bundle *Bundle) e
 		return nil
 	}
 
-	listingParentDirMap := map[string]bool{}
-
 	for _, file := range bundle.files {
-		// we perform list here to cache entire files in a directory to perform ExistsFile faster
-		destFileParentPath := path.Dir(file.IRODSPath)
-		if _, listingParentDir := listingParentDirMap[destFileParentPath]; !listingParentDir {
-			manager.filesystem.List(destFileParentPath)
-
-			listingParentDirMap[destFileParentPath] = true
-		}
-
-		if manager.filesystem.ExistsFile(file.IRODSPath) {
+		if ExistsIRODSFile(manager.filesystem, file.IRODSPath) {
 			logger.Debugf("deleting exising data object %s", file.IRODSPath)
 
 			err := manager.filesystem.RemoveFile(file.IRODSPath, true)
@@ -826,32 +828,21 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 					}
 				}
 
-				if !manager.force {
-					if manager.filesystem.ExistsFile(file.IRODSPath) {
-						// do not overwrite
+				if !ExistsIRODSDir(manager.filesystem, path.Dir(file.IRODSPath)) {
+					// if parent dir does not exist, create
+					err := manager.filesystem.MakeDir(path.Dir(file.IRODSPath), true)
+					if err != nil {
 						if manager.showProgress {
 							manager.progress(progressName, -1, totalFileSize, progress.UnitsBytes, true)
 						}
 
-						err := fmt.Errorf("file %s already exists", file.IRODSPath)
-						logger.WithError(err).Errorf("failed to upload file %s in bundle %d to %s", file.LocalPath, bundle.index, file.IRODSPath)
+						logger.WithError(err).Errorf("failed to create a dir %s to upload file %s in bundle %d to %s", path.Dir(file.IRODSPath), file.LocalPath, bundle.index, file.IRODSPath)
 						asyncErr = err
 						//return err
 						return
 					}
-				}
 
-				if !manager.filesystem.ExistsDir(path.Dir(file.IRODSPath)) {
-					// if parent dir does not exist, create
-					err := manager.filesystem.MakeDir(path.Dir(file.IRODSPath), true)
-					if manager.showProgress {
-						manager.progress(progressName, -1, totalFileSize, progress.UnitsBytes, true)
-					}
-
-					logger.WithError(err).Errorf("failed to create a dir %s to upload file %s in bundle %d to %s", path.Dir(file.IRODSPath), file.LocalPath, bundle.index, file.IRODSPath)
-					asyncErr = err
-					//return err
-					return
+					ClearIRODSDirCache(manager.filesystem, path.Dir(file.IRODSPath))
 				}
 
 				err := manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, replicate, callbackFileUpload)
@@ -905,13 +896,6 @@ func (manager *BundleTransferManager) processBundleExtract(bundle *Bundle) error
 		}
 
 		logger.Debugf("skip - extracting bundle %d at %s", bundle.index, bundle.irodsBundlePath)
-
-		err := manager.logTransfer(bundle, true)
-		if err != nil {
-			logger.Error(err)
-			// don't stop here
-		}
-
 		return nil
 	}
 
@@ -935,11 +919,6 @@ func (manager *BundleTransferManager) processBundleExtract(bundle *Bundle) error
 	}
 
 	logger.Debugf("extracted bundle %d at %s to %s", bundle.index, bundle.irodsBundlePath, manager.irodsDestPath)
-
-	err = manager.logTransfer(bundle, true)
-	logger.Error(err)
-	// don't stop here
-
 	return nil
 }
 

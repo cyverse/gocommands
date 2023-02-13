@@ -27,8 +27,8 @@ func AddCpCommand(rootCmd *cobra.Command) {
 	cpCmd.Flags().BoolP("recurse", "r", false, "Copy recursively")
 	cpCmd.Flags().BoolP("force", "f", false, "Copy forcefully")
 	cpCmd.Flags().Bool("progress", false, "Display progress bars")
-	getCmd.Flags().Bool("diff", false, "Copy files having different content")
-	getCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
+	cpCmd.Flags().Bool("diff", false, "Copy files having different content")
+	cpCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
 
 	rootCmd.AddCommand(cpCmd)
 }
@@ -160,7 +160,7 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 
 	filesystem := parallelJobManager.GetFilesystem()
 
-	sourceEntry, err := filesystem.Stat(sourcePath)
+	sourceEntry, err := commons.StatIRODSPath(filesystem, sourcePath)
 	if err != nil {
 		return err
 	}
@@ -168,8 +168,7 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
 		// file
 		targetFilePath := commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetPath)
-
-		exist := filesystem.ExistsFile(targetFilePath)
+		exist := commons.ExistsIRODSFile(filesystem, targetFilePath)
 
 		copyTask := func(job *commons.ParallelJob) error {
 			manager := job.GetManager()
@@ -190,7 +189,7 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 		}
 
 		if exist {
-			targetEntry, err := filesystem.Stat(targetFilePath)
+			targetEntry, err := commons.StatIRODSPath(filesystem, targetFilePath)
 			if err != nil {
 				return err
 			}
@@ -248,12 +247,12 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 
 		logger.Debugf("copying a collection %s to %s", sourcePath, targetPath)
 
-		entries, err := filesystem.List(sourceEntry.Path)
+		entries, err := commons.ListIRODSDir(filesystem, sourceEntry.Path)
 		if err != nil {
 			return err
 		}
 
-		if !filesystem.ExistsDir(targetPath) {
+		if !commons.ExistsIRODSDir(filesystem, targetPath) {
 			// make target dir
 			err = filesystem.MakeDir(targetPath, true)
 			if err != nil {
@@ -269,7 +268,7 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 		} else {
 			// make a sub dir
 			targetDir := path.Join(targetPath, sourceEntry.Name)
-			if !filesystem.ExistsDir(targetDir) {
+			if !commons.ExistsIRODSDir(filesystem, targetDir) {
 				err = filesystem.MakeDir(targetDir, true)
 				if err != nil {
 					return err

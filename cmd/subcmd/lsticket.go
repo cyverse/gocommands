@@ -63,14 +63,15 @@ func processLsticketCommand(command *cobra.Command, args []string) error {
 		err := fmt.Errorf("not enough input arguments")
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
-	} else {
-		for _, ticket := range args {
-			err = getTicket(filesystem, ticket)
-			if err != nil {
-				logger.Error(err)
-				fmt.Fprintln(os.Stderr, err.Error())
-				return nil
-			}
+		return nil
+	}
+
+	for _, ticket := range args {
+		err = getTicket(filesystem, ticket)
+		if err != nil {
+			logger.Error(err)
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
 		}
 	}
 

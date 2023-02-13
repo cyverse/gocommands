@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	"github.com/cyverse/gocommands/commons"
-	"github.com/rs/xid"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -23,13 +22,12 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(bputCmd)
 
-	bputCmd.Flags().BoolP("force", "f", false, "Put forcefully (overwrite)")
 	bputCmd.Flags().Int("max_file_num", commons.MaxBundleFileNumDefault, "Specify max file number in a bundle file")
 	bputCmd.Flags().Int64("max_file_size", commons.MaxBundleFileSizeDefault, "Specify max file size of a bundle file")
 	bputCmd.Flags().Bool("progress", false, "Display progress bars")
 	bputCmd.Flags().String("local_temp", os.TempDir(), "Specify a local temp directory path to create bundle files")
-	bputCmd.Flags().String("job_id", "", "Specify Job ID")
-	bputCmd.Flags().Bool("continue", false, "Continue from last failure point")
+	bputCmd.Flags().Bool("diff", false, "Put files having different content")
+	bputCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
 
 	rootCmd.AddCommand(bputCmd)
 }
@@ -56,15 +54,6 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
 		return nil
-	}
-
-	force := false
-	forceFlag := command.Flags().Lookup("force")
-	if forceFlag != nil {
-		force, err = strconv.ParseBool(forceFlag.Value.String())
-		if err != nil {
-			force = false
-		}
 	}
 
 	maxFileNum := commons.MaxBundleFileNumDefault
@@ -94,25 +83,28 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
+	diff := false
+	diffFlag := command.Flags().Lookup("diff")
+	if diffFlag != nil {
+		diff, err = strconv.ParseBool(diffFlag.Value.String())
+		if err != nil {
+			diff = false
+		}
+	}
+
+	noHash := false
+	noHashFlag := command.Flags().Lookup("no_hash")
+	if noHashFlag != nil {
+		noHash, err = strconv.ParseBool(noHashFlag.Value.String())
+		if err != nil {
+			noHash = false
+		}
+	}
+
 	localTempDirPath := os.TempDir()
 	localTempPathFlag := command.Flags().Lookup("local_temp")
 	if localTempPathFlag != nil {
 		localTempDirPath = localTempPathFlag.Value.String()
-	}
-
-	jobID := xid.New().String()
-	jobIDFlag := command.Flags().Lookup("job_id")
-	if jobIDFlag != nil {
-		jobID = jobIDFlag.Value.String()
-	}
-
-	continueFromFailure := false
-	continueFlag := command.Flags().Lookup("continue")
-	if continueFlag != nil {
-		continueFromFailure, err = strconv.ParseBool(continueFlag.Value.String())
-		if err != nil {
-			continueFromFailure = false
-		}
 	}
 
 	// Create a file system
@@ -147,33 +139,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 	irodsTempDirPath := commons.MakeIRODSPath(cwd, home, zone, "./")
 
-	if len(jobID) == 0 {
-		jobID = xid.New().String()
-	}
-
-	jobFile := commons.GetDefaultBundleTransferLogPath(jobID)
-
-	var jobLog *commons.BundleTransferLog
-	if continueFromFailure {
-		jobLogExisting, err := commons.NewBundleTransferLogFromLog(jobFile)
-		if err != nil {
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
-		}
-
-		jobLog = jobLogExisting
-	} else {
-		jobLog = commons.NewBundleTransferLog(jobID, jobFile, sourcePaths, targetPath)
-		err = jobLog.MakeBundleTransferLogDir()
-		if err != nil {
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
-		}
-	}
-
-	bundleTransferManager := commons.NewBundleTransferManager(jobLog, filesystem, targetPath, maxFileNum, maxFileSize, localTempDirPath, irodsTempDirPath, force, progress)
+	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, localTempDirPath, irodsTempDirPath, diff, noHash, progress)
 	bundleTransferManager.Start()
 
 	bundleRootPath, err := commons.GetCommonRootLocalDirPath(sourcePaths)
@@ -185,21 +151,11 @@ func processBputCommand(command *cobra.Command, args []string) error {
 
 	bundleTransferManager.SetBundleRootPath(bundleRootPath)
 
-	err = jobLog.WriteHeader()
-	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
-	}
-
-	jobLog.MonitorCtrlC()
-
 	for _, sourcePath := range sourcePaths {
 		err = bputOne(bundleTransferManager, sourcePath, targetPath)
 		if err != nil {
 			logger.Error(err)
 			fmt.Fprintln(os.Stderr, err.Error())
-			jobLog.PrintJobID()
 			return nil
 		}
 	}
@@ -209,7 +165,6 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	if err != nil {
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
-		jobLog.PrintJobID()
 		return nil
 	}
 

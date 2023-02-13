@@ -59,31 +59,26 @@ func processMvCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
-	if len(args) == 2 {
-		// rename or move
-		err = moveOne(filesystem, args[0], args[1])
-		if err != nil {
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
-		}
-	} else if len(args) >= 3 {
-		// move
-		targetPath := args[len(args)-1]
-		for _, sourcePath := range args[:len(args)-1] {
-			err = moveOne(filesystem, sourcePath, targetPath)
-			if err != nil {
-				logger.Error(err)
-				fmt.Fprintln(os.Stderr, err.Error())
-				return nil
-			}
-		}
-	} else {
+	if len(args) < 2 {
 		err := fmt.Errorf("not enough input arguments")
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
 		return nil
 	}
+
+	targetPath := args[len(args)-1]
+	sourcePaths := args[:len(args)-1]
+
+	// move
+	for _, sourcePath := range sourcePaths {
+		err = moveOne(filesystem, sourcePath, targetPath)
+		if err != nil {
+			logger.Error(err)
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
+		}
+	}
+
 	return nil
 }
 
@@ -99,7 +94,7 @@ func moveOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPat
 	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	sourceEntry, err := filesystem.Stat(sourcePath)
+	sourceEntry, err := commons.StatIRODSPath(filesystem, sourcePath)
 	if err != nil {
 		return err
 	}

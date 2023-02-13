@@ -72,7 +72,6 @@ func processBunCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
-	// TODO: currently only extract is supported
 	extract = true
 
 	dataType := "" // auto
@@ -92,24 +91,25 @@ func processBunCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
-	if len(args) >= 2 {
-		targetPath := args[len(args)-1]
-		for _, sourcePath := range args[:len(args)-1] {
-			if extract {
-				err = extractOne(filesystem, sourcePath, targetPath, dataType, force)
-				if err != nil {
-					logger.Error(err)
-					fmt.Fprintln(os.Stderr, err.Error())
-					return nil
-				}
-			}
-		}
-	} else {
+	if len(args) < 2 {
 		err := fmt.Errorf("not enough input arguments")
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
 		return nil
 	}
+
+	targetPath := args[len(args)-1]
+	for _, sourcePath := range args[:len(args)-1] {
+		if extract {
+			err = extractOne(filesystem, sourcePath, targetPath, dataType, force)
+			if err != nil {
+				logger.Error(err)
+				fmt.Fprintln(os.Stderr, err.Error())
+				return nil
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -157,12 +157,12 @@ func extractOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, target
 	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	sourceEntry, err := filesystem.Stat(sourcePath)
+	sourceEntry, err := commons.StatIRODSPath(filesystem, sourcePath)
 	if err != nil {
 		return err
 	}
 
-	targetEntry, err := filesystem.Stat(targetPath)
+	targetEntry, err := commons.StatIRODSPath(filesystem, targetPath)
 	if err != nil {
 		if !irodsclient_types.IsFileNotFoundError(err) {
 			return err

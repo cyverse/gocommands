@@ -167,8 +167,7 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 	if !sourceStat.IsDir() {
 		// file
 		targetFilePath := commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetPath)
-
-		exist := filesystem.ExistsFile(targetFilePath)
+		exist := commons.ExistsIRODSFile(filesystem, targetFilePath)
 
 		putTask := func(job *commons.ParallelJob) error {
 			manager := job.GetManager()
@@ -193,7 +192,7 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 		}
 
 		if exist {
-			targetEntry, err := filesystem.Stat(targetFilePath)
+			targetEntry, err := commons.StatIRODSPath(filesystem, targetFilePath)
 			if err != nil {
 				return err
 			}

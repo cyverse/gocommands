@@ -60,17 +60,19 @@ func processCdCommand(command *cobra.Command, args []string) error {
 
 	defer irodsConn.Disconnect()
 
+	if len(args) > 1 {
+		err := fmt.Errorf("too many arguments")
+		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
+	}
+
 	targetPath := ""
 	if len(args) == 0 {
 		// move to home dir
 		targetPath = "~"
 	} else if len(args) == 1 {
 		targetPath = args[0]
-	} else {
-		err := fmt.Errorf("too many arguments")
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
 	}
 
 	// cd

@@ -83,21 +83,18 @@ func processLsCommand(command *cobra.Command, args []string) error {
 
 	defer irodsConn.Disconnect()
 
+	sourcePaths := args[:]
+
 	if len(args) == 0 {
-		err = listColletion(irodsConn, ".", longFormat, veryLongFormat)
+		sourcePaths = []string{"."}
+	}
+
+	for _, sourcePath := range sourcePaths {
+		err = listColletion(irodsConn, sourcePath, longFormat, veryLongFormat)
 		if err != nil {
 			logger.Error(err)
 			fmt.Fprintln(os.Stderr, err.Error())
 			return nil
-		}
-	} else {
-		for _, sourcePath := range args {
-			err = listColletion(irodsConn, sourcePath, longFormat, veryLongFormat)
-			if err != nil {
-				logger.Error(err)
-				fmt.Fprintln(os.Stderr, err.Error())
-				return nil
-			}
 		}
 	}
 

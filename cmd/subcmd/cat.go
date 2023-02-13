@@ -89,7 +89,7 @@ func catOne(filesystem *irodsclient_fs.FileSystem, targetPath string) error {
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	targetEntry, err := filesystem.Stat(targetPath)
+	targetEntry, err := commons.StatIRODSPath(filesystem, targetPath)
 	if err != nil {
 		return err
 	}

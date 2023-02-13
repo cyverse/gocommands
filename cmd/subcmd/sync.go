@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -70,9 +71,6 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
-	config := commons.GetConfig()
-	replicate := !config.NoReplication
-
 	// Create a file system
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
@@ -99,53 +97,117 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 		sourcePaths = args[:len(args)-1]
 	}
 
+	localSources := []string{}
+	irodsSources := []string{}
+
+	for _, sourcePath := range sourcePaths {
+		if strings.HasPrefix(sourcePath, "i:") {
+			irodsSources = append(irodsSources, sourcePath)
+		} else {
+			localSources = append(localSources, sourcePath)
+		}
+	}
+
+	if len(localSources) > 0 {
+		// source is local
+		if !strings.HasPrefix(targetPath, "i:") {
+			// local to local
+			err := fmt.Errorf("syncing between local files/directories is not supported")
+			logger.Error(err)
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
+		}
+
+		// target must starts with "i:"
+		err := syncFromLocal(filesystem, localSources, targetPath[2:], progress, noHash)
+		if err != nil {
+			logger.Error(err)
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
+		}
+	}
+
+	if len(irodsSources) > 0 {
+		// source is iRODS
+		err := syncFromRemote(filesystem, irodsSources, targetPath, progress, noHash)
+		if err != nil {
+			logger.Error(err)
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
+		}
+	}
+
+	return nil
+}
+
+func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath string, progress bool, noHash bool) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "syncFromLocal",
+	})
+
+	cwd := commons.GetCWD()
+	home := commons.GetHomeDir()
+	zone := commons.GetZone()
+	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	irodsTempDirPath := commons.MakeIRODSPath(cwd, home, zone, "./")
+	localTempDirPath := os.TempDir()
+
+	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, commons.MaxBundleFileNumDefault, commons.MaxBundleFileSizeDefault, localTempDirPath, irodsTempDirPath, true, noHash, progress)
+	bundleTransferManager.Start()
+
+	bundleRootPath, err := commons.GetCommonRootLocalDirPath(sourcePaths)
+	if err != nil {
+		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
+	}
+
+	bundleTransferManager.SetBundleRootPath(bundleRootPath)
+
+	for _, sourcePath := range sourcePaths {
+		err = bputOne(bundleTransferManager, sourcePath, targetPath)
+		if err != nil {
+			return err
+		}
+	}
+
+	bundleTransferManager.DoneScheduling()
+	err = bundleTransferManager.Wait()
+	if err != nil {
+		logger.Error(err)
+		fmt.Fprintln(os.Stderr, err.Error())
+		return nil
+	}
+
+	return nil
+}
+
+func syncFromRemote(filesystem *fs.FileSystem, sourcePaths []string, targetPath string, progress bool, noHash bool) error {
 	parallelJobManager := commons.NewParallelJobManager(filesystem, commons.MaxThreadNumDefault, progress)
 	parallelJobManager.Start()
 
 	for _, sourcePath := range sourcePaths {
-		if strings.HasPrefix(sourcePath, "i:") {
-			if strings.HasPrefix(targetPath, "i:") {
-				// copy
-				err = copyOne(parallelJobManager, sourcePath[2:], targetPath[2:], true, false, true, noHash)
-				if err != nil {
-					logger.Error(err)
-					fmt.Fprintln(os.Stderr, err.Error())
-					return nil
-				}
-			} else {
-				// get
-				err = getOne(parallelJobManager, sourcePath[2:], targetPath, false, true, noHash)
-				if err != nil {
-					logger.Error(err)
-					fmt.Fprintln(os.Stderr, err.Error())
-					return nil
-				}
+		// sourcePath must starts with "i:"
+		if strings.HasPrefix(targetPath, "i:") {
+			// copy
+			err := copyOne(parallelJobManager, sourcePath[2:], targetPath[2:], true, false, true, noHash)
+			if err != nil {
+				return err
 			}
 		} else {
-			if strings.HasPrefix(targetPath, "i:") {
-				// put
-				err = putOne(parallelJobManager, sourcePath, targetPath[2:], false, replicate, true, noHash)
-				if err != nil {
-					logger.Error(err)
-					fmt.Fprintln(os.Stderr, err.Error())
-					return nil
-				}
-			} else {
-				// local to local
-				err := fmt.Errorf("syncing between local files/directories is not supported")
-				logger.Error(err)
-				fmt.Fprintln(os.Stderr, err.Error())
-				return nil
+			// get
+			err := getOne(parallelJobManager, sourcePath[2:], targetPath, false, true, noHash)
+			if err != nil {
+				return err
 			}
 		}
 	}
 
 	parallelJobManager.DoneScheduling()
-	err = parallelJobManager.Wait()
+	err := parallelJobManager.Wait()
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	return nil

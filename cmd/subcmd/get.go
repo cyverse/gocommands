@@ -155,7 +155,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 
 	filesystem := parallelJobManager.GetFilesystem()
 
-	sourceEntry, err := filesystem.Stat(sourcePath)
+	sourceEntry, err := commons.StatIRODSPath(filesystem, sourcePath)
 	if err != nil {
 		return err
 	}
@@ -253,7 +253,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 		// dir
 		logger.Debugf("downloading a collection %s to %s", sourcePath, targetPath)
 
-		entries, err := filesystem.List(sourceEntry.Path)
+		entries, err := commons.ListIRODSDir(filesystem, sourceEntry.Path)
 		if err != nil {
 			return err
 		}
