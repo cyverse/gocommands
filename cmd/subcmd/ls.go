@@ -164,13 +164,13 @@ func printDataObject(entry *irodsclient_types.IRODSDataObject, veryLongFormat bo
 	if veryLongFormat {
 		for _, replica := range entry.Replicas {
 			modTime := commons.MakeDateTimeString(replica.ModifyTime)
-			fmt.Printf("  %s\t%d\t%s\t%d\t%s\t&\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, entry.Size, modTime, entry.Name)
+			fmt.Printf("  %s\t%d\t%s\t%d\t%s\t%s\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, entry.Size, modTime, getStatusMark(replica.Status), entry.Name)
 			fmt.Printf("    %s\t%s\n", replica.CheckSum, replica.Path)
 		}
 	} else if longFormat {
 		for _, replica := range entry.Replicas {
 			modTime := commons.MakeDateTimeString(replica.ModifyTime)
-			fmt.Printf("  %s\t%d\t%s\t%d\t%s\t&\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, entry.Size, modTime, entry.Name)
+			fmt.Printf("  %s\t%d\t%s\t%d\t%s\t%s\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, entry.Size, modTime, getStatusMark(replica.Status), entry.Name)
 		}
 	} else {
 		fmt.Printf("  %s\n", entry.Name)
@@ -185,5 +185,16 @@ func printCollections(entries []*irodsclient_types.IRODSCollection) {
 
 	for _, entry := range entries {
 		fmt.Printf("  C- %s\n", entry.Path)
+	}
+}
+
+func getStatusMark(status string) string {
+	switch status {
+	case "0":
+		return "X" // stale
+	case "1":
+		return "&" // good
+	default:
+		return "?"
 	}
 }
