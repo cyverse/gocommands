@@ -229,8 +229,11 @@ func (manager *BundleTransferManager) Schedule(source string, size int64, lastMo
 			if manager.noHashForComparison {
 				if targetEntry.Size == size {
 					fmt.Printf("skip adding a file %s to the bundle. The file already exists!\n", targetFilePath)
+					logger.Debugf("skip adding a file %s to the bundle. The file already exists!", targetFilePath)
 					return nil
 				}
+
+				logger.Debugf("adding a file %s to the bundle as it has different size %d != %d", targetFilePath, targetEntry.Size, size)
 			} else {
 				if targetEntry.Size == size {
 					if len(targetEntry.CheckSum) > 0 {
@@ -242,15 +245,20 @@ func (manager *BundleTransferManager) Schedule(source string, size int64, lastMo
 
 						if md5hash == targetEntry.CheckSum {
 							fmt.Printf("skip adding a file %s to the bundle. The file with the same hash already exists!\n", targetFilePath)
+							logger.Debugf("skip adding a file %s to the bundle. The file with the same hash already exists!", targetFilePath)
 							return nil
 						}
 					}
+					logger.Debugf("adding a file %s to the bundle as it has different hash", targetFilePath)
 				}
 			}
+		} else {
+			logger.Debugf("adding a file %s to the bundle as it doesn't exist", targetFilePath)
 		}
 	}
 
 	manager.currentBundle.addFile(source, size, "", lastModTime)
+	logger.Debugf("> scheduled a local file bundle-upload %s", source)
 
 	return nil
 }
@@ -389,18 +397,20 @@ func (manager *BundleTransferManager) Start() {
 		defer close(processBundleTarChan)
 		defer close(processBundleRemoveFilesChan)
 
-		err := manager.filesystem.MakeDir(manager.irodsDestPath, true)
-		if err != nil {
-			// mark error
-			manager.mutex.Lock()
-			manager.lastError = err
-			manager.mutex.Unlock()
+		if !manager.filesystem.ExistsDir(manager.irodsDestPath) {
+			err := manager.filesystem.MakeDir(manager.irodsDestPath, true)
+			if err != nil {
+				// mark error
+				manager.mutex.Lock()
+				manager.lastError = err
+				manager.mutex.Unlock()
 
-			logger.Error(err)
-			// don't stop here
+				logger.Error(err)
+				// don't stop here
+			}
+
+			ClearIRODSDirCache(manager.filesystem, manager.irodsDestPath)
 		}
-
-		ClearIRODSDirCache(manager.filesystem, manager.irodsDestPath)
 
 		for bundle := range manager.pendingBundles {
 			// send to tar and remove

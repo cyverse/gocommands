@@ -186,7 +186,6 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string, ta
 
 	if !sourceStat.IsDir() {
 		bundleManager.Schedule(sourcePath, sourceStat.Size(), sourceStat.ModTime().Local())
-		logger.Debugf("scheduled a local file bundle-upload %s", sourcePath)
 	} else {
 		// dir
 		logger.Debugf("bundle-uploading a local directory %s", sourcePath)
@@ -205,7 +204,6 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string, ta
 				return err
 			}
 
-			logger.Debugf("> scheduled a local file bundle-upload %s", path)
 			bundleManager.Schedule(path, info.Size(), info.ModTime())
 
 			if err != nil {
