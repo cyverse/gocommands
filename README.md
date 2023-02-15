@@ -1,4 +1,4 @@
-# gocommands
+# Gocommands
 iRODS Command-line Tools written in Go
 
 
@@ -25,17 +25,10 @@ tar zxvf gocmd.tar.gz && rm gocmd.tar.gz
 ```
 
 
-## Build from source (optional)
-Use `make` to build `gocommands`. Binaries will be created on `./bin` directory.
-
-```bash
-make
-```
-
 ## How to use
 
 ### Using the iCommands configuration
-`gocommands` understands the iCommands' configuration files, `~/.irods/irods_environment.json`.
+`Gocommands` understands the iCommands' configuration files, `~/.irods/irods_environment.json`.
 To create iCommands' configuration file, run `gocmd init` to create the configuration file under `~/.irods`.
 
 ```
@@ -56,7 +49,7 @@ gocmd ls
 
 
 ### Using an external configuration file 
-`gocommands` can read configuration from an `YAML` file.
+`Gocommands` can read configuration from an `YAML` file.
 
 Create `config.yaml` file using an editor and type in followings.
 ```yaml
@@ -67,15 +60,15 @@ irods_zone_name: "iplant"
 irods_user_password: "your password"
 ```
 
-When you run `gocommands`, provide the configuration file's path with `-c` flag.
+When you run `Gocommands`, provide the configuration file's path with `-c` flag.
 ```bash
 gocmd -c config.yaml ls
 ```
 
-Some of field values, such as `irods_user_password` can be omitted if you don't want to put it in clear text. `gocommands` will ask you to type the missing field values in runtime.
+Some of field values, such as `irods_user_password` can be omitted if you don't want to put it in clear text. `Gocommands` will ask you to type the missing field values in runtime.
 
 ### Using environmental variables 
-`gocommands` can read configuration from environmental variables.
+`Gocommands` can read configuration from environmental variables.
 
 Set environmental variables
 ```bash
@@ -86,12 +79,12 @@ export IRODS_ZONE_NAME="iplant"
 export IRODS_USER_PASSWORD="your password"
 ```
 
-Then run `gocommands` with `-e` flag.
+Then run `Gocommands` with `-e` flag.
 ```bash
 gocmd -e ls
 ```
 
-Some of field values, such as `IRODS_USER_PASSWORD` can be omitted if you don't want to put it in clear text. `gocommands` will ask you to type the missing field values in runtime.
+Some of field values, such as `IRODS_USER_PASSWORD` can be omitted if you don't want to put it in clear text. `Gocommands` will ask you to type the missing field values in runtime.
 
 ## Troubleshooting
 

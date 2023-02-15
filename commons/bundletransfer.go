@@ -923,6 +923,7 @@ func (manager *BundleTransferManager) processBundleExtract(bundle *Bundle) error
 	}
 
 	// remove irods bundle file
+	logger.Debugf("removing bundle %d at %s", bundle.index, bundle.irodsBundlePath)
 	manager.filesystem.RemoveFile(bundle.irodsBundlePath, true)
 
 	if manager.showProgress {

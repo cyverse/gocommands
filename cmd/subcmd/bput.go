@@ -25,7 +25,8 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	bputCmd.Flags().Int("max_file_num", commons.MaxBundleFileNumDefault, "Specify max file number in a bundle file")
 	bputCmd.Flags().Int64("max_file_size", commons.MaxBundleFileSizeDefault, "Specify max file size of a bundle file")
 	bputCmd.Flags().Bool("progress", false, "Display progress bars")
-	bputCmd.Flags().String("local_temp", os.TempDir(), "Specify a local temp directory path to create bundle files")
+	bputCmd.Flags().String("local_temp", os.TempDir(), "Specify local temp directory path to create bundle files")
+	bputCmd.Flags().String("irods_temp", "", "Specify iRODS temp directory path to upload bundle files to")
 	bputCmd.Flags().Bool("diff", false, "Put files having different content")
 	bputCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
 
@@ -107,6 +108,15 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		localTempDirPath = localTempPathFlag.Value.String()
 	}
 
+	irodsTempDirPath := ""
+	irodsTempPathFlag := command.Flags().Lookup("irods_temp")
+	if irodsTempPathFlag != nil {
+		tempDirPath := irodsTempPathFlag.Value.String()
+		if len(tempDirPath) > 0 {
+			irodsTempDirPath = tempDirPath
+		}
+	}
+
 	// Create a file system
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
@@ -137,7 +147,11 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
-	irodsTempDirPath := commons.MakeIRODSPath(cwd, home, zone, "./")
+	if len(irodsTempDirPath) == 0 {
+		irodsTempDirPath = commons.GetTrashHomeDir()
+	} else {
+		irodsTempDirPath = commons.MakeIRODSPath(cwd, home, zone, irodsTempDirPath)
+	}
 
 	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, localTempDirPath, irodsTempDirPath, diff, noHash, progress)
 	bundleTransferManager.Start()
