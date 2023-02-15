@@ -180,8 +180,11 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	logger.Debugf("use staging dir - %s", irodsTempDirPath)
 
 	// clean up staging dir in the target dir
-	unusedStagingDir := commons.GetDefaultStagingDirInTargetPath(targetPath)
-	defer filesystem.RemoveDir(unusedStagingDir, true, true)
+	defer func() {
+		unusedStagingDir := commons.GetDefaultStagingDirInTargetPath(targetPath)
+		logger.Debugf("delete staging dir - %s", unusedStagingDir)
+		filesystem.RemoveDir(unusedStagingDir, true, true)
+	}()
 
 	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, localTempDirPath, irodsTempDirPath, diff, noHash, progress)
 	bundleTransferManager.Start()
