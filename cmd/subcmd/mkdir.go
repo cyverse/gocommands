@@ -5,8 +5,8 @@ import (
 	"os"
 	"strconv"
 
-	irodsclient_conn "github.com/cyverse/go-irodsclient/irods/connection"
-	irodsclient_fs "github.com/cyverse/go-irodsclient/irods/fs"
+	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -62,17 +62,17 @@ func processMkdirCommand(command *cobra.Command, args []string) error {
 
 	// Create a connection
 	account := commons.GetAccount()
-	irodsConn, err := commons.GetIRODSConnection(account)
+	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
 		return nil
 	}
 
-	defer irodsConn.Disconnect()
+	defer filesystem.Release()
 
 	for _, targetPath := range args {
-		err = makeOne(irodsConn, targetPath, parent)
+		err = makeOne(filesystem, targetPath, parent)
 		if err != nil {
 			logger.Error(err)
 			fmt.Fprintln(os.Stderr, err.Error())
@@ -82,7 +82,7 @@ func processMkdirCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func makeOne(connection *irodsclient_conn.IRODSConnection, targetPath string, parent bool) error {
+func makeOne(fs *irodsclient_fs.FileSystem, targetPath string, parent bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "makeOne",
@@ -93,9 +93,15 @@ func makeOne(connection *irodsclient_conn.IRODSConnection, targetPath string, pa
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
+	connection, err := fs.GetConnection()
+	if err != nil {
+		return err
+	}
+	defer fs.ReturnConnection(connection)
+
 	logger.Debugf("making a collection %s", targetPath)
 
-	err := irodsclient_fs.CreateCollection(connection, targetPath, parent)
+	err = irodsclient_irodsfs.CreateCollection(connection, targetPath, parent)
 	if err != nil {
 		return err
 	}

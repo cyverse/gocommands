@@ -5,8 +5,8 @@ import (
 	"os"
 	"syscall"
 
-	irodsclient_conn "github.com/cyverse/go-irodsclient/irods/connection"
-	irodsclient_fs "github.com/cyverse/go-irodsclient/irods/fs"
+	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -53,16 +53,14 @@ func processPasswdCommand(command *cobra.Command, args []string) error {
 
 	// Create a connection
 	account := commons.GetAccount()
-	irodsConn, err := commons.GetIRODSConnection(account)
+	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
 		return nil
 	}
 
-	defer irodsConn.Disconnect()
-
-	err = changePassword(irodsConn)
+	err = changePassword(filesystem)
 	if err != nil {
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -71,13 +69,19 @@ func processPasswdCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func changePassword(connection *irodsclient_conn.IRODSConnection) error {
+func changePassword(fs *irodsclient_fs.FileSystem) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "changePassword",
 	})
 
 	account := commons.GetAccount()
+
+	connection, err := fs.GetConnection()
+	if err != nil {
+		return err
+	}
+	defer fs.ReturnConnection(connection)
 
 	logger.Debugf("changing password for user %s", account.ClientUser)
 
@@ -156,7 +160,7 @@ func changePassword(connection *irodsclient_conn.IRODSConnection) error {
 		return fmt.Errorf("password mismatched")
 	}
 
-	err = irodsclient_fs.ChangeUserPassword(connection, account.ClientUser, account.ClientZone, newPassword)
+	err = irodsclient_irodsfs.ChangeUserPassword(connection, account.ClientUser, account.ClientZone, newPassword)
 	if err != nil {
 		return err
 	}

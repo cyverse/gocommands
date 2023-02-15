@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	irodsclient_conn "github.com/cyverse/go-irodsclient/irods/connection"
+	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/jedib0t/go-pretty/v6/table"
 	log "github.com/sirupsen/logrus"
@@ -51,16 +51,16 @@ func processSvrinfoCommand(command *cobra.Command, args []string) error {
 
 	// Create a connection
 	account := commons.GetAccount()
-	irodsConn, err := commons.GetIRODSConnection(account)
+	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
 		return nil
 	}
 
-	defer irodsConn.Disconnect()
+	defer filesystem.Release()
 
-	err = displayVersion(irodsConn)
+	err = displayVersion(filesystem)
 	if err != nil {
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -70,11 +70,17 @@ func processSvrinfoCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func displayVersion(connection *irodsclient_conn.IRODSConnection) error {
+func displayVersion(fs *irodsclient_fs.FileSystem) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "displayVersion",
 	})
+
+	connection, err := fs.GetConnection()
+	if err != nil {
+		return err
+	}
+	defer fs.ReturnConnection(connection)
 
 	logger.Debug("displaying version")
 

@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strconv"
 
-	irodsclient_conn "github.com/cyverse/go-irodsclient/irods/connection"
-	irodsclient_fs "github.com/cyverse/go-irodsclient/irods/fs"
+	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
@@ -76,14 +76,14 @@ func processLsCommand(command *cobra.Command, args []string) error {
 
 	// Create a file system
 	account := commons.GetAccount()
-	irodsConn, err := commons.GetIRODSConnection(account)
+	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
 		return nil
 	}
 
-	defer irodsConn.Disconnect()
+	defer filesystem.Release()
 
 	sourcePaths := args[:]
 
@@ -92,7 +92,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	}
 
 	for _, sourcePath := range sourcePaths {
-		err = listOne(irodsConn, sourcePath, longFormat, veryLongFormat)
+		err = listOne(filesystem, sourcePath, longFormat, veryLongFormat)
 		if err != nil {
 			logger.Error(err)
 			fmt.Fprintln(os.Stderr, err.Error())
@@ -103,13 +103,19 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func listOne(connection *irodsclient_conn.IRODSConnection, targetPath string, longFormat bool, veryLongFormat bool) error {
+func listOne(fs *irodsclient_fs.FileSystem, targetPath string, longFormat bool, veryLongFormat bool) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	collection, err := irodsclient_fs.GetCollection(connection, targetPath)
+	connection, err := fs.GetConnection()
+	if err != nil {
+		return err
+	}
+	defer fs.ReturnConnection(connection)
+
+	collection, err := irodsclient_irodsfs.GetCollection(connection, targetPath)
 	if err != nil {
 		if !irodsclient_types.IsFileNotFoundError(err) {
 			return err
@@ -117,12 +123,12 @@ func listOne(connection *irodsclient_conn.IRODSConnection, targetPath string, lo
 	}
 
 	if err == nil {
-		colls, err := irodsclient_fs.ListSubCollections(connection, targetPath)
+		colls, err := irodsclient_irodsfs.ListSubCollections(connection, targetPath)
 		if err != nil {
 			return err
 		}
 
-		objs, err := irodsclient_fs.ListDataObjects(connection, collection)
+		objs, err := irodsclient_irodsfs.ListDataObjects(connection, collection)
 		if err != nil {
 			return err
 		}
@@ -135,12 +141,12 @@ func listOne(connection *irodsclient_conn.IRODSConnection, targetPath string, lo
 	// data object
 	parentTargetPath := path.Dir(targetPath)
 
-	parentCollection, err := irodsclient_fs.GetCollection(connection, parentTargetPath)
+	parentCollection, err := irodsclient_irodsfs.GetCollection(connection, parentTargetPath)
 	if err != nil {
 		return err
 	}
 
-	entry, err := irodsclient_fs.GetDataObject(connection, parentCollection, path.Base(targetPath))
+	entry, err := irodsclient_irodsfs.GetDataObject(connection, parentCollection, path.Base(targetPath))
 	if err != nil {
 		return err
 	}

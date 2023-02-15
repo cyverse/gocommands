@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	irodsclient_conn "github.com/cyverse/go-irodsclient/irods/connection"
-	irodsclient_fs "github.com/cyverse/go-irodsclient/irods/fs"
+	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -51,14 +51,14 @@ func processCdCommand(command *cobra.Command, args []string) error {
 
 	// Create a connection
 	account := commons.GetAccount()
-	irodsConn, err := commons.GetIRODSConnection(account)
+	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
 		return nil
 	}
 
-	defer irodsConn.Disconnect()
+	defer filesystem.Release()
 
 	if len(args) > 1 {
 		err := fmt.Errorf("too many arguments")
@@ -76,7 +76,7 @@ func processCdCommand(command *cobra.Command, args []string) error {
 	}
 
 	// cd
-	err = changeWorkingDir(irodsConn, targetPath)
+	err = changeWorkingDir(filesystem, targetPath)
 	if err != nil {
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -85,7 +85,7 @@ func processCdCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func changeWorkingDir(connection *irodsclient_conn.IRODSConnection, collectionPath string) error {
+func changeWorkingDir(fs *irodsclient_fs.FileSystem, collectionPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "changeWorkingDir",
@@ -96,9 +96,15 @@ func changeWorkingDir(connection *irodsclient_conn.IRODSConnection, collectionPa
 	zone := commons.GetZone()
 	collectionPath = commons.MakeIRODSPath(cwd, home, zone, collectionPath)
 
+	connection, err := fs.GetConnection()
+	if err != nil {
+		return err
+	}
+	defer fs.ReturnConnection(connection)
+
 	logger.Debugf("changing working dir: %s", collectionPath)
 
-	collection, err := irodsclient_fs.GetCollection(connection, collectionPath)
+	collection, err := irodsclient_irodsfs.GetCollection(connection, collectionPath)
 	if err != nil {
 		return err
 	}

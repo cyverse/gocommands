@@ -5,8 +5,8 @@ import (
 	"os"
 	"strconv"
 
-	irodsclient_conn "github.com/cyverse/go-irodsclient/irods/connection"
-	irodsclient_fs "github.com/cyverse/go-irodsclient/irods/fs"
+	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/jedib0t/go-pretty/v6/table"
 	log "github.com/sirupsen/logrus"
@@ -88,17 +88,16 @@ func processPsCommand(command *cobra.Command, args []string) error {
 
 	// Create a connection
 	account := commons.GetAccount()
-
-	irodsConn, err := commons.GetIRODSConnection(account)
+	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
 		return nil
 	}
 
-	defer irodsConn.Disconnect()
+	defer filesystem.Release()
 
-	err = listProcesses(irodsConn, address, zone, groupbyuser, groupbyprog)
+	err = listProcesses(filesystem, address, zone, groupbyuser, groupbyprog)
 	if err != nil {
 		logger.Error(err)
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -108,15 +107,21 @@ func processPsCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func listProcesses(connection *irodsclient_conn.IRODSConnection, address string, zone string, groupbyuser bool, groupbyprog bool) error {
+func listProcesses(fs *irodsclient_fs.FileSystem, address string, zone string, groupbyuser bool, groupbyprog bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "listProcesses",
 	})
 
+	connection, err := fs.GetConnection()
+	if err != nil {
+		return err
+	}
+	defer fs.ReturnConnection(connection)
+
 	logger.Debugf("listing processes - addr: %s, zone: %s", address, zone)
 
-	processes, err := irodsclient_fs.StatProcess(connection, address, zone)
+	processes, err := irodsclient_irodsfs.StatProcess(connection, address, zone)
 	if err != nil {
 		return err
 	}

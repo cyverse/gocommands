@@ -147,11 +147,41 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
-	if len(irodsTempDirPath) == 0 {
-		irodsTempDirPath = commons.GetTrashHomeDir()
-	} else {
+	if len(irodsTempDirPath) > 0 {
+		logger.Debugf("validating staging dir - %s", irodsTempDirPath)
+
 		irodsTempDirPath = commons.MakeIRODSPath(cwd, home, zone, irodsTempDirPath)
+		ok, err := commons.ValidateStagingDir(filesystem, targetPath, irodsTempDirPath)
+		if err != nil {
+			logger.WithError(err).Errorf("failed to validate staging dir - %s", irodsTempDirPath)
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
+		}
+
+		if !ok {
+			logger.Debugf("unable to use the given staging dir %s since it is in a different resource server, using default staging dir", irodsTempDirPath)
+
+			irodsTempDirPath = commons.GetDefaultStagingDirInTargetPath(targetPath)
+		}
 	}
+
+	if len(irodsTempDirPath) == 0 {
+		// set default staging dir
+		logger.Debug("get default staging dir")
+
+		irodsTempDirPath, err = commons.GetDefaultStagingDir(filesystem, targetPath)
+		if err != nil {
+			logger.WithError(err).Error("failed to get default staging dir")
+			fmt.Fprintln(os.Stderr, err.Error())
+			return nil
+		}
+	}
+
+	logger.Debugf("use staging dir - %s", irodsTempDirPath)
+
+	// clean up staging dir in the target dir
+	unusedStagingDir := commons.GetDefaultStagingDirInTargetPath(targetPath)
+	defer filesystem.RemoveDir(unusedStagingDir, true, true)
 
 	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, localTempDirPath, irodsTempDirPath, diff, noHash, progress)
 	bundleTransferManager.Start()

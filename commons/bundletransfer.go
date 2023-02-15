@@ -5,12 +5,14 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/jedib0t/go-pretty/v6/progress"
+	"github.com/rs/xid"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -90,6 +92,7 @@ func (bundle *Bundle) requireTar() bool {
 }
 
 type BundleTransferManager struct {
+	id                      string
 	filesystem              *irodsclient_fs.FileSystem
 	irodsDestPath           string
 	currentBundle           *Bundle
@@ -116,6 +119,7 @@ type BundleTransferManager struct {
 // NewBundleTransferManager creates a new BundleTransferManager
 func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, localTempDirPath string, irodsTempDirPath string, diff bool, noHash bool, showProgress bool) *BundleTransferManager {
 	manager := &BundleTransferManager{
+		id:                      xid.New().String(),
 		filesystem:              fs,
 		irodsDestPath:           irodsDestPath,
 		currentBundle:           nil,
@@ -150,7 +154,22 @@ func (manager *BundleTransferManager) getNextBundleIndex() int64 {
 }
 
 func (manager *BundleTransferManager) getBundleFileName(index int64) string {
-	return fmt.Sprintf("bundle_%d.tar", index)
+	return fmt.Sprintf("bundle_%s_%d.tar", manager.id, index)
+}
+
+func (manager *BundleTransferManager) getBundleFileNameParts(name string) (bool, string, string) {
+	if !strings.HasSuffix(name, ".tar") {
+		return false, "", ""
+	}
+
+	name = name[:len(name)-4]
+
+	parts := strings.Split(name, "_")
+	if len(parts) != 3 {
+		return false, "", ""
+	}
+
+	return true, parts[1], parts[2]
 }
 
 func (manager *BundleTransferManager) getLocalBundleFilePath(index int64) string {
@@ -248,8 +267,11 @@ func (manager *BundleTransferManager) Schedule(source string, size int64, lastMo
 							logger.Debugf("skip adding a file %s to the bundle. The file with the same hash already exists!", targetFilePath)
 							return nil
 						}
+
+						logger.Debugf("adding a file %s to the bundle as it has different hash, %s vs %s", targetFilePath, md5hash, targetEntry.CheckSum)
+					} else {
+						logger.Debugf("adding a file %s to the bundle as the file in iRODS doesn't have hash yet", targetFilePath)
 					}
-					logger.Debugf("adding a file %s to the bundle as it has different hash", targetFilePath)
 				}
 			}
 		} else {
@@ -288,6 +310,8 @@ func (manager *BundleTransferManager) Wait() error {
 	logger.Debug("waiting transfer-wait")
 	manager.transferWait.Wait()
 
+	manager.CleanUpBundles()
+
 	manager.mutex.RLock()
 	defer manager.mutex.RUnlock()
 	return manager.lastError
@@ -295,6 +319,37 @@ func (manager *BundleTransferManager) Wait() error {
 
 func (manager *BundleTransferManager) SetBundleRootPath(bundleRootPath string) {
 	manager.bundleRootPath = bundleRootPath
+}
+
+func (manager *BundleTransferManager) CleanUpBundles() {
+	logger := log.WithFields(log.Fields{
+		"package":  "commons",
+		"struct":   "BundleTransferManager",
+		"function": "CleanUpBundles",
+	})
+
+	logger.Debugf("clearing bundle files in %s", manager.irodsTempDirPath)
+
+	// clean up - staging dir
+	entries, err := manager.filesystem.List(manager.irodsTempDirPath)
+	if err != nil {
+		logger.Error(err)
+		return
+	}
+
+	for _, entry := range entries {
+		if entry.Type == irodsclient_fs.FileEntry {
+			if ok, managerID, _ := manager.getBundleFileNameParts(entry.Name); ok {
+				if managerID == manager.id {
+					err := manager.filesystem.RemoveFile(entry.Path, true)
+					if err != nil {
+						logger.Error(err)
+						return
+					}
+				}
+			}
+		}
+	}
 }
 
 func (manager *BundleTransferManager) startProgress() {
@@ -436,7 +491,7 @@ func (manager *BundleTransferManager) Start() {
 			}
 			manager.mutex.RUnlock()
 
-			if cont {
+			if cont && len(bundle.files) > 0 {
 				err := manager.processBundleTar(bundle)
 				if err != nil {
 					// mark error
@@ -474,7 +529,7 @@ func (manager *BundleTransferManager) Start() {
 				}
 				manager.mutex.RUnlock()
 
-				if cont {
+				if cont && len(bundle.files) > 0 {
 					err := manager.processBundleUpload(bundle)
 					if err != nil {
 						// mark error
@@ -524,7 +579,7 @@ func (manager *BundleTransferManager) Start() {
 			}
 			manager.mutex.RUnlock()
 
-			if cont {
+			if cont && len(bundle.files) > 0 {
 				err := manager.processBundleRemoveFiles(bundle)
 				if err != nil {
 					// mark error
@@ -573,7 +628,7 @@ func (manager *BundleTransferManager) Start() {
 						}
 						manager.mutex.RUnlock()
 
-						if cont {
+						if cont && len(bundle1.files) > 0 {
 							err := manager.processBundleExtract(bundle1)
 							if err != nil {
 								// mark error
@@ -621,7 +676,7 @@ func (manager *BundleTransferManager) Start() {
 						}
 						manager.mutex.RUnlock()
 
-						if cont {
+						if cont && len(bundle2.files) > 0 {
 							err := manager.processBundleExtract(bundle2)
 							if err != nil {
 								// mark error
