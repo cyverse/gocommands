@@ -183,7 +183,10 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	defer func() {
 		unusedStagingDir := commons.GetDefaultStagingDirInTargetPath(targetPath)
 		logger.Debugf("delete staging dir - %s", unusedStagingDir)
-		filesystem.RemoveDir(unusedStagingDir, true, true)
+		err := filesystem.RemoveDir(unusedStagingDir, true, true)
+		if err != nil {
+			logger.WithError(err).Warnf("failed to delete staging dir - %s, remove it manually later", unusedStagingDir)
+		}
 	}()
 
 	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, localTempDirPath, irodsTempDirPath, diff, noHash, progress)

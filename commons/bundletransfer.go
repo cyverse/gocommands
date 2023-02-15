@@ -333,7 +333,7 @@ func (manager *BundleTransferManager) CleanUpBundles() {
 	// clean up - staging dir
 	entries, err := manager.filesystem.List(manager.irodsTempDirPath)
 	if err != nil {
-		logger.Error(err)
+		logger.WithError(err).Warnf("failed to listing staging dir %s", manager.irodsTempDirPath)
 		return
 	}
 
@@ -343,7 +343,7 @@ func (manager *BundleTransferManager) CleanUpBundles() {
 				if managerID == manager.id {
 					err := manager.filesystem.RemoveFile(entry.Path, true)
 					if err != nil {
-						logger.Error(err)
+						logger.WithError(err).Warnf("failed to remove bundle file %s", entry.Path)
 						return
 					}
 				}
