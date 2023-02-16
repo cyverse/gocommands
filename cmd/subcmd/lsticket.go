@@ -2,7 +2,6 @@ package subcmd
 
 import (
 	"fmt"
-	"os"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/gocommands/commons"
@@ -25,15 +24,9 @@ func AddLsticketCommand(rootCmd *cobra.Command) {
 }
 
 func processLsticketCommand(command *cobra.Command, args []string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "processLsticketCommand",
-	})
-
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	if !cont {
@@ -43,35 +36,26 @@ func processLsticketCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	// Create a file system
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	defer filesystem.Release()
 
 	if len(args) == 0 {
-		err := fmt.Errorf("not enough input arguments")
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return fmt.Errorf("not enough input arguments")
 	}
 
 	for _, ticket := range args {
 		err = getTicket(filesystem, ticket)
 		if err != nil {
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
+			return err
 		}
 	}
 

@@ -2,7 +2,6 @@ package subcmd
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 
@@ -31,15 +30,9 @@ func AddBunCommand(rootCmd *cobra.Command) {
 }
 
 func processBunCommand(command *cobra.Command, args []string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "processBunCommand",
-	})
-
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	if !cont {
@@ -49,9 +42,7 @@ func processBunCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	force := false
@@ -72,7 +63,9 @@ func processBunCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
-	extract = true
+	if !extract {
+		return fmt.Errorf("support only extract mode")
+	}
 
 	dataType := "" // auto
 	dataTypeFlag := command.Flags().Lookup("data_type")
@@ -84,18 +77,13 @@ func processBunCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	defer filesystem.Release()
 
 	if len(args) < 2 {
-		err := fmt.Errorf("not enough input arguments")
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return fmt.Errorf("not enough input arguments")
 	}
 
 	targetPath := args[len(args)-1]
@@ -103,9 +91,7 @@ func processBunCommand(command *cobra.Command, args []string) error {
 		if extract {
 			err = extractOne(filesystem, sourcePath, targetPath, dataType, force)
 			if err != nil {
-				logger.Error(err)
-				fmt.Fprintln(os.Stderr, err.Error())
-				return nil
+				return err
 			}
 		}
 	}

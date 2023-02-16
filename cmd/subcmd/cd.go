@@ -2,7 +2,6 @@ package subcmd
 
 import (
 	"fmt"
-	"os"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
@@ -26,15 +25,9 @@ func AddCdCommand(rootCmd *cobra.Command) {
 }
 
 func processCdCommand(command *cobra.Command, args []string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "processCdCommand",
-	})
-
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	if !cont {
@@ -44,27 +37,20 @@ func processCdCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	// Create a connection
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	defer filesystem.Release()
 
 	if len(args) > 1 {
-		err := fmt.Errorf("too many arguments")
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return fmt.Errorf("too many arguments")
 	}
 
 	targetPath := ""
@@ -78,9 +64,7 @@ func processCdCommand(command *cobra.Command, args []string) error {
 	// cd
 	err = changeWorkingDir(filesystem, targetPath)
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 	return nil
 }

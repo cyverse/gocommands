@@ -1,7 +1,6 @@
 package subcmd
 
 import (
-	"fmt"
 	"os"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -26,15 +25,9 @@ func AddSvrinfoCommand(rootCmd *cobra.Command) {
 }
 
 func processSvrinfoCommand(command *cobra.Command, args []string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "processSvrinfoCommand",
-	})
-
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	if !cont {
@@ -44,27 +37,21 @@ func processSvrinfoCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	// Create a connection
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	defer filesystem.Release()
 
 	err = displayVersion(filesystem)
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	return nil

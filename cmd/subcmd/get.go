@@ -33,15 +33,9 @@ func AddGetCommand(rootCmd *cobra.Command) {
 }
 
 func processGetCommand(command *cobra.Command, args []string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "processGetCommand",
-	})
-
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	if !cont {
@@ -51,9 +45,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	force := false
@@ -96,18 +88,13 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	defer filesystem.Release()
 
 	if len(args) == 0 {
-		err := fmt.Errorf("not enough input arguments")
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return fmt.Errorf("not enough input arguments")
 	}
 
 	targetPath := "./"
@@ -124,18 +111,14 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	for _, sourcePath := range sourcePaths {
 		err = getOne(parallelJobManager, sourcePath, targetPath, force, diff, noHash)
 		if err != nil {
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
+			return err
 		}
 	}
 
 	parallelJobManager.DoneScheduling()
 	err = parallelJobManager.Wait()
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	return nil

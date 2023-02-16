@@ -2,7 +2,6 @@ package subcmd
 
 import (
 	"fmt"
-	"os"
 	"strconv"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -28,15 +27,9 @@ func AddMkdirCommand(rootCmd *cobra.Command) {
 }
 
 func processMkdirCommand(command *cobra.Command, args []string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "processMkdirCommand",
-	})
-
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	if !cont {
@@ -46,9 +39,7 @@ func processMkdirCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	parent := false
@@ -64,19 +55,19 @@ func processMkdirCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	defer filesystem.Release()
 
+	if len(args) == 0 {
+		return fmt.Errorf("not enough input arguments")
+	}
+
 	for _, targetPath := range args {
 		err = makeOne(filesystem, targetPath, parent)
 		if err != nil {
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
+			return err
 		}
 	}
 	return nil

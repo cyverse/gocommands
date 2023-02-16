@@ -30,15 +30,9 @@ func AddSyncCommand(rootCmd *cobra.Command) {
 }
 
 func processSyncCommand(command *cobra.Command, args []string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "processSyncCommand",
-	})
-
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	if !cont {
@@ -48,9 +42,7 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	progress := false
@@ -75,18 +67,13 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	defer filesystem.Release()
 
 	if len(args) < 2 {
-		err := fmt.Errorf("not enough input arguments")
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return fmt.Errorf("not enough input arguments")
 	}
 
 	targetPath := "i:./"
@@ -112,18 +99,13 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 		// source is local
 		if !strings.HasPrefix(targetPath, "i:") {
 			// local to local
-			err := fmt.Errorf("syncing between local files/directories is not supported")
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
+			return fmt.Errorf("syncing between local files/directories is not supported")
 		}
 
 		// target must starts with "i:"
 		err := syncFromLocal(filesystem, localSources, targetPath[2:], progress, noHash)
 		if err != nil {
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
+			return err
 		}
 	}
 
@@ -131,9 +113,7 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 		// source is iRODS
 		err := syncFromRemote(filesystem, irodsSources, targetPath, progress, noHash)
 		if err != nil {
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
+			return err
 		}
 	}
 

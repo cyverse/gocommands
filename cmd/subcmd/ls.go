@@ -2,7 +2,6 @@ package subcmd
 
 import (
 	"fmt"
-	"os"
 	"path"
 	"sort"
 	"strconv"
@@ -11,7 +10,6 @@ import (
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/commons"
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -33,15 +31,9 @@ func AddLsCommand(rootCmd *cobra.Command) {
 }
 
 func processLsCommand(command *cobra.Command, args []string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "processLsCommand",
-	})
-
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	if !cont {
@@ -51,9 +43,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	longFormat := false
@@ -78,9 +68,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	defer filesystem.Release()
@@ -94,9 +82,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	for _, sourcePath := range sourcePaths {
 		err = listOne(filesystem, sourcePath, longFormat, veryLongFormat)
 		if err != nil {
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
+			return err
 		}
 	}
 

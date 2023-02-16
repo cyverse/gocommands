@@ -2,7 +2,6 @@ package subcmd
 
 import (
 	"fmt"
-	"os"
 	"path"
 	"strconv"
 
@@ -34,15 +33,9 @@ func AddCpCommand(rootCmd *cobra.Command) {
 }
 
 func processCpCommand(command *cobra.Command, args []string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "processCpCommand",
-	})
-
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	if !cont {
@@ -52,9 +45,7 @@ func processCpCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	recurse := false
@@ -106,18 +97,13 @@ func processCpCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	defer filesystem.Release()
 
 	if len(args) <= 1 {
-		err := fmt.Errorf("not enough input arguments")
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return fmt.Errorf("not enough input arguments")
 	}
 
 	targetPath := args[len(args)-1]
@@ -129,18 +115,14 @@ func processCpCommand(command *cobra.Command, args []string) error {
 	for _, sourcePath := range sourcePaths {
 		err = copyOne(parallelJobManager, sourcePath, targetPath, recurse, force, diff, noHash)
 		if err != nil {
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
+			return err
 		}
 	}
 
 	parallelJobManager.DoneScheduling()
 	err = parallelJobManager.Wait()
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	return nil

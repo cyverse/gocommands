@@ -2,7 +2,6 @@ package subcmd
 
 import (
 	"fmt"
-	"os"
 	"syscall"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -28,15 +27,9 @@ func AddPasswdCommand(rootCmd *cobra.Command) {
 }
 
 func processPasswdCommand(command *cobra.Command, args []string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "processPasswdCommand",
-	})
-
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	if !cont {
@@ -46,25 +39,19 @@ func processPasswdCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	// Create a connection
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	err = changePassword(filesystem)
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 	return nil
 }

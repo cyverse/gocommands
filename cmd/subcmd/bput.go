@@ -41,8 +41,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	if !cont {
@@ -52,9 +51,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	maxFileNum := commons.MaxBundleFileNumDefault
@@ -121,18 +118,13 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	defer filesystem.Release()
 
 	if len(args) == 0 {
-		err := fmt.Errorf("not enough input arguments")
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return fmt.Errorf("not enough input arguments")
 	}
 
 	targetPath := "./"
@@ -154,8 +146,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		ok, err := commons.ValidateStagingDir(filesystem, targetPath, irodsTempDirPath)
 		if err != nil {
 			logger.WithError(err).Errorf("failed to validate staging dir - %s", irodsTempDirPath)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
+			return err
 		}
 
 		if !ok {
@@ -172,8 +163,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		irodsTempDirPath, err = commons.GetDefaultStagingDir(filesystem, targetPath)
 		if err != nil {
 			logger.WithError(err).Error("failed to get default staging dir")
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
+			return err
 		}
 	}
 
@@ -185,7 +175,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		logger.Debugf("delete staging dir - %s", unusedStagingDir)
 		err := filesystem.RemoveDir(unusedStagingDir, true, true)
 		if err != nil {
-			logger.WithError(err).Warnf("failed to delete staging dir - %s, remove it manually later", unusedStagingDir)
+			logger.WithError(err).Errorf("failed to delete staging dir - %s, remove it manually later", unusedStagingDir)
 		}
 	}()
 
@@ -194,9 +184,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 
 	bundleRootPath, err := commons.GetCommonRootLocalDirPath(sourcePaths)
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	bundleTransferManager.SetBundleRootPath(bundleRootPath)
@@ -204,18 +192,14 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	for _, sourcePath := range sourcePaths {
 		err = bputOne(bundleTransferManager, sourcePath, targetPath)
 		if err != nil {
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
+			return err
 		}
 	}
 
 	bundleTransferManager.DoneScheduling()
 	err = bundleTransferManager.Wait()
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	return nil

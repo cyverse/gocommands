@@ -11,10 +11,11 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "gocmd [subcommand]",
-	Short: "Gocommands, a command-line iRODS client",
-	Long:  `Gocommands, a command-line iRODS client.`,
-	RunE:  processCommand,
+	Use:          "gocmd [subcommand]",
+	Short:        "Gocommands, a command-line iRODS client",
+	Long:         `Gocommands, a command-line iRODS client.`,
+	RunE:         processCommand,
+	SilenceUsage: true,
 }
 
 func Execute() error {
@@ -83,7 +84,7 @@ func main() {
 
 	err := Execute()
 	if err != nil {
-		logger.Fatal(err)
+		logger.Error(err)
 		os.Exit(1)
 	}
 }

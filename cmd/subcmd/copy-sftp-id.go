@@ -35,15 +35,9 @@ func AddCopySftpIdCommand(rootCmd *cobra.Command) {
 }
 
 func processCopySftpIdCommand(command *cobra.Command, args []string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "processCopySftpIdCommand",
-	})
-
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	if !cont {
@@ -53,9 +47,7 @@ func processCopySftpIdCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	force := false
@@ -86,9 +78,7 @@ func processCopySftpIdCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	defer filesystem.Release()
@@ -103,24 +93,17 @@ func processCopySftpIdCommand(command *cobra.Command, args []string) error {
 		// scan defaults
 		identityFiles, err = scanSSHIdentityFiles()
 		if err != nil {
-			logger.Error(err)
-			fmt.Fprintln(os.Stderr, err.Error())
-			return nil
+			return err
 		}
 	}
 
 	if len(identityFiles) == 0 {
-		errorMessage := "failed to find SSH identity files '~/.ssh/*.pub'"
-		logger.Error(errorMessage)
-		fmt.Fprintln(os.Stderr, errorMessage)
-		return nil
+		return fmt.Errorf("failed to find SSH identity files '~/.ssh/*.pub'")
 	}
 
 	err = copySftpId(filesystem, force, dryrun, identityFiles)
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 	return nil
 }

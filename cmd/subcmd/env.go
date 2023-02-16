@@ -1,11 +1,7 @@
 package subcmd
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/cyverse/gocommands/commons"
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -24,15 +20,9 @@ func AddEnvCommand(rootCmd *cobra.Command) {
 }
 
 func processEnvCommand(command *cobra.Command, args []string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "processEnvCommand",
-	})
-
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 
 	if !cont {
@@ -41,9 +31,7 @@ func processEnvCommand(command *cobra.Command, args []string) error {
 
 	err = commons.PrintEnvironment()
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return err
 	}
 	return nil
 }
