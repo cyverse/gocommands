@@ -11,6 +11,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/xerrors"
 )
 
 var psCmd = &cobra.Command{
@@ -35,7 +36,7 @@ func AddPsCommand(rootCmd *cobra.Command) {
 func processPsCommand(command *cobra.Command, args []string) error {
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
 
 	if !cont {
@@ -45,7 +46,7 @@ func processPsCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	address := ""
@@ -82,14 +83,14 @@ func processPsCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 
 	defer filesystem.Release()
 
 	err = listProcesses(filesystem, address, zone, groupbyuser, groupbyprog)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to perform list processes addr %s, zone %s : %w", address, zone, err)
 	}
 
 	return nil
@@ -103,7 +104,7 @@ func listProcesses(fs *irodsclient_fs.FileSystem, address string, zone string, g
 
 	connection, err := fs.GetConnection()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get connection: %w", err)
 	}
 	defer fs.ReturnConnection(connection)
 
@@ -111,7 +112,7 @@ func listProcesses(fs *irodsclient_fs.FileSystem, address string, zone string, g
 
 	processes, err := irodsclient_irodsfs.StatProcess(connection, address, zone)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to stat process addr %s, zone %s: %w", address, zone, err)
 	}
 
 	t := table.NewWriter()

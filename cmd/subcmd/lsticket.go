@@ -7,6 +7,7 @@ import (
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/xerrors"
 )
 
 var lsticketCmd = &cobra.Command{
@@ -26,7 +27,7 @@ func AddLsticketCommand(rootCmd *cobra.Command) {
 func processLsticketCommand(command *cobra.Command, args []string) error {
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
 
 	if !cont {
@@ -36,26 +37,26 @@ func processLsticketCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	// Create a file system
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 
 	defer filesystem.Release()
 
 	if len(args) == 0 {
-		return fmt.Errorf("not enough input arguments")
+		return xerrors.Errorf("not enough input arguments")
 	}
 
 	for _, ticket := range args {
 		err = getTicket(filesystem, ticket)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to perform get ticket %s: %w", ticket, err)
 		}
 	}
 
@@ -72,7 +73,7 @@ func getTicket(filesystem *irodsclient_fs.FileSystem, ticket string) error {
 
 	ticketInfo, err := filesystem.GetTicketForAnonymousAccess(ticket)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get ticket %s: %w", ticket, err)
 	}
 
 	fmt.Printf("[%s]\n", ticketInfo.Name)

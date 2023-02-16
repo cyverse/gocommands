@@ -1,7 +1,6 @@
 package commons
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -15,6 +14,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
+	"golang.org/x/xerrors"
 
 	"github.com/jedib0t/go-pretty/v6/table"
 )
@@ -183,8 +183,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		sessionIDString := sessionFlag.Value.String()
 		sessionIDInt, err := strconv.ParseInt(sessionIDString, 10, 32)
 		if err != nil {
-			logger.Error(err)
-			return false, err // stop here
+			return false, xerrors.Errorf("failed to parse int %s: %w", sessionIDString, err) // stop here
 		}
 		sessionID = int(sessionIDInt)
 	}
@@ -203,8 +202,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		if len(configFile) > 0 {
 			err := loadConfigFile(configFile)
 			if err != nil {
-				logger.Error(err)
-				return false, err // stop here
+				return false, xerrors.Errorf("failed to load config from file %s: %w", configFile, err) // stop here
 			}
 
 			readConfig = true
@@ -216,15 +214,13 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		if envConfigFlag != nil {
 			envConfig, err := strconv.ParseBool(envConfigFlag.Value.String())
 			if err != nil {
-				logger.Error(err)
-				return false, err // stop here
+				return false, xerrors.Errorf("failed to parse bool %s: %w", envConfigFlag.Value.String(), err) // stop here
 			}
 
 			if envConfig {
 				err := loadConfigEnv()
 				if err != nil {
-					logger.Error(err)
-					return false, err // stop here
+					return false, xerrors.Errorf("failed to load config from environment: %w", err) // stop here
 				}
 
 				readConfig = true
@@ -238,8 +234,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 			if len(irodsEnvironmentFileEnvVal) > 0 {
 				err := loadConfigFile(irodsEnvironmentFileEnvVal)
 				if err != nil {
-					logger.Error(err)
-					return false, err // stop here
+					return false, xerrors.Errorf("failed to load config file %s: %w", irodsEnvironmentFileEnvVal, err) // stop here
 				}
 
 				readConfig = true
@@ -313,13 +308,13 @@ func InputMissingFields() (bool, error) {
 	if environmentManager == nil {
 		envMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
 		if err != nil {
-			return false, err
+			return false, xerrors.Errorf("failed to get new iCommands Environment: %w", err)
 		}
 
 		environmentManager = envMgr
 		account, err = envMgr.ToIRODSAccount()
 		if err != nil {
-			return false, err
+			return false, xerrors.Errorf("failed to get account from iCommands Environment: %w", err)
 		}
 	}
 
@@ -368,7 +363,7 @@ func InputMissingFields() (bool, error) {
 		fmt.Print("iRODS Password: ")
 		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 		if err != nil {
-			return false, err
+			return false, xerrors.Errorf("failed to read password: %w", err)
 		}
 
 		fmt.Print("\n")
@@ -391,7 +386,7 @@ func InputMissingFields() (bool, error) {
 
 	newAccount, err := environmentManager.ToIRODSAccount()
 	if err != nil {
-		return updated, err
+		return updated, xerrors.Errorf("failed to get account from iCommands Environment: %w", err)
 	}
 
 	if len(appConfig.DefaultResource) > 0 {
@@ -527,19 +522,19 @@ func loadConfigFile(configPath string) error {
 
 	configPath, err := ExpandHomeDir(configPath)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to expand home dir for %s: %w", configPath, err)
 	}
 
 	configPath, err = filepath.Abs(configPath)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to compute absolute path for %s: %w", configPath, err)
 	}
 
 	logger.Debugf("reading config file/dir - %s", configPath)
 	// check if it is a file or a dir
 	_, err = os.Stat(configPath)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to stat %s: %w", configPath, err)
 	}
 
 	if isYAMLFile(configPath) {
@@ -547,18 +542,18 @@ func loadConfigFile(configPath string) error {
 
 		iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to create iCommands Environment: %w", err)
 		}
 
 		// load from YAML
 		yjBytes, err := os.ReadFile(configPath)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to read file %s: %w", configPath, err)
 		}
 
 		config, err := NewConfigFromYAML(yjBytes)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to read config from YAML: %w", err)
 		}
 
 		setConfigToICommandsEnvMgr(iCommandsEnvMgr, config)
@@ -570,7 +565,7 @@ func loadConfigFile(configPath string) error {
 
 		loadedAccount, err := iCommandsEnvMgr.ToIRODSAccount()
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to get iCommands Environment: %w", err)
 		}
 
 		loadedAccount.ClientUser = config.ClientUsername
@@ -592,17 +587,17 @@ func loadConfigFile(configPath string) error {
 
 	iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to create new iCommands Environment: %w", err)
 	}
 
 	err = iCommandsEnvMgr.SetEnvironmentFilePath(configFilePath)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to set iCommands Environment file %s: %w", configFilePath, err)
 	}
 
 	err = iCommandsEnvMgr.Load(sessionID)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to read iCommands Environment: %w", err)
 	}
 
 	if iCommandsEnvMgr.Environment.LogLevel > 0 {
@@ -612,7 +607,7 @@ func loadConfigFile(configPath string) error {
 
 	loadedAccount, err := iCommandsEnvMgr.ToIRODSAccount()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get iCommands Environment: %w", err)
 	}
 
 	environmentManager = iCommandsEnvMgr
@@ -633,12 +628,12 @@ func loadConfigEnv() error {
 
 	iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get new iCommands Environment: %w", err)
 	}
 
 	config, err := NewConfigFromENV()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get new iCommands Environment: %w", err)
 	}
 
 	setConfigToICommandsEnvMgr(iCommandsEnvMgr, config)
@@ -650,7 +645,7 @@ func loadConfigEnv() error {
 
 	loadedAccount, err := iCommandsEnvMgr.ToIRODSAccount()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get iCommands Environment: %w", err)
 	}
 
 	loadedAccount.ClientUser = config.ClientUsername
@@ -665,7 +660,7 @@ func loadConfigEnv() error {
 func printVersion() error {
 	info, err := GetVersionJSON()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get version json: %w", err)
 	}
 
 	fmt.Println(info)
@@ -679,7 +674,7 @@ func PrintHelp(command *cobra.Command) error {
 func PrintAccount() error {
 	envMgr := GetEnvironmentManager()
 	if envMgr == nil {
-		return errors.New("environment is not set")
+		return xerrors.Errorf("environment is not set")
 	}
 
 	t := table.NewWriter()
@@ -714,7 +709,7 @@ func PrintAccount() error {
 func PrintEnvironment() error {
 	envMgr := GetEnvironmentManager()
 	if envMgr == nil {
-		return errors.New("environment is not set")
+		return xerrors.Errorf("environment is not set")
 	}
 
 	t := table.NewWriter()

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	"golang.org/x/xerrors"
 )
 
 func MakeIRODSPath(cwd string, homedir string, zone string, irodsPath string) string {
@@ -124,7 +125,7 @@ func GetCommonRootLocalDirPath(paths []string) (string, error) {
 	for _, path := range paths {
 		absPath, err := filepath.Abs(path)
 		if err != nil {
-			return "", err
+			return "", xerrors.Errorf("failed to compute absolute path for %s: %w", path, err)
 		}
 
 		if len(shortestPath) == 0 {
@@ -146,12 +147,12 @@ func GetCommonRootLocalDirPath(paths []string) (string, error) {
 		for _, path := range paths {
 			absPath, err := filepath.Abs(path)
 			if err != nil {
-				return "", err
+				return "", xerrors.Errorf("failed to compute absolute path for %s: %w", path, err)
 			}
 
 			rel, err := filepath.Rel(commonRootPath, absPath)
 			if err != nil {
-				return "", err
+				return "", xerrors.Errorf("failed to compute relative path %s to %s: %w", absPath, commonRootPath, err)
 			}
 
 			if strings.HasPrefix(rel, "../") {
@@ -178,14 +179,14 @@ func ExpandHomeDir(path string) (string, error) {
 	if path == "~" {
 		homedir, err := os.UserHomeDir()
 		if err != nil {
-			return "", err
+			return "", xerrors.Errorf("failed to get user home dir: %w", err)
 		}
 
 		return homedir, nil
 	} else if strings.HasPrefix(path, "~/") {
 		homedir, err := os.UserHomeDir()
 		if err != nil {
-			return "", err
+			return "", xerrors.Errorf("failed to get user home dir: %w", err)
 		}
 
 		path = filepath.Join(homedir, path[2:])

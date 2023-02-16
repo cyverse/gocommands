@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"runtime"
+
+	"golang.org/x/xerrors"
 )
 
 var (
@@ -44,7 +46,7 @@ func GetVersionJSON() (string, error) {
 	info := GetVersion()
 	marshalled, err := json.MarshalIndent(&info, "", "  ")
 	if err != nil {
-		return "", err
+		return "", xerrors.Errorf("failed to marshal version info to json: %w", err)
 	}
 	return string(marshalled), nil
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/xerrors"
 )
 
 var cpCmd = &cobra.Command{
@@ -35,7 +36,7 @@ func AddCpCommand(rootCmd *cobra.Command) {
 func processCpCommand(command *cobra.Command, args []string) error {
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
 
 	if !cont {
@@ -45,7 +46,7 @@ func processCpCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	recurse := false
@@ -97,13 +98,13 @@ func processCpCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 
 	defer filesystem.Release()
 
 	if len(args) <= 1 {
-		return fmt.Errorf("not enough input arguments")
+		return xerrors.Errorf("not enough input arguments")
 	}
 
 	targetPath := args[len(args)-1]
@@ -115,14 +116,14 @@ func processCpCommand(command *cobra.Command, args []string) error {
 	for _, sourcePath := range sourcePaths {
 		err = copyOne(parallelJobManager, sourcePath, targetPath, recurse, force, diff, noHash)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to perform cp %s to %s: %w", sourcePath, targetPath, err)
 		}
 	}
 
 	parallelJobManager.DoneScheduling()
 	err = parallelJobManager.Wait()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to perform parallel job: %w", err)
 	}
 
 	return nil
@@ -144,7 +145,7 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 
 	sourceEntry, err := commons.StatIRODSPath(filesystem, sourcePath)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
 
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
@@ -162,7 +163,7 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 			err = fs.CopyFileToFile(sourcePath, targetFilePath)
 			if err != nil {
 				job.Progress(-1, 1, true)
-				return err
+				return xerrors.Errorf("failed to copy %s to %s: %w", sourcePath, targetFilePath, err)
 			}
 
 			logger.Debugf("copied a data object %s to %s", sourcePath, targetFilePath)
@@ -173,7 +174,7 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 		if exist {
 			targetEntry, err := commons.StatIRODSPath(filesystem, targetFilePath)
 			if err != nil {
-				return err
+				return xerrors.Errorf("failed to stat %s: %w", targetFilePath, err)
 			}
 
 			if diff {
@@ -195,13 +196,13 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 				logger.Debugf("deleting an existing data object %s", targetFilePath)
 				err = filesystem.RemoveFile(targetFilePath, true)
 				if err != nil {
-					return err
+					return xerrors.Errorf("failed to remove %s: %w", targetFilePath, err)
 				}
 			} else if force {
 				logger.Debugf("deleting an existing data object %s", targetFilePath)
 				err = filesystem.RemoveFile(targetFilePath, true)
 				if err != nil {
-					return err
+					return xerrors.Errorf("failed to remove %s: %w", targetFilePath, err)
 				}
 			} else {
 				// ask
@@ -210,7 +211,7 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 					logger.Debugf("deleting an existing data object %s", targetFilePath)
 					err = filesystem.RemoveFile(targetFilePath, true)
 					if err != nil {
-						return err
+						return xerrors.Errorf("failed to remove %s: %w", targetFilePath, err)
 					}
 				} else {
 					fmt.Printf("skip copying a file %s. The file already exists!\n", targetFilePath)
@@ -224,27 +225,27 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 	} else {
 		// dir
 		if !recurse {
-			return fmt.Errorf("cannot copy a collection, turn on 'recurse' option")
+			return xerrors.Errorf("cannot copy a collection, turn on 'recurse' option")
 		}
 
 		logger.Debugf("copying a collection %s to %s", sourcePath, targetPath)
 
 		entries, err := commons.ListIRODSDir(filesystem, sourceEntry.Path)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to list dir %s: %w", sourceEntry.Path, err)
 		}
 
 		if !commons.ExistsIRODSDir(filesystem, targetPath) {
 			// make target dir
 			err = filesystem.MakeDir(targetPath, true)
 			if err != nil {
-				return err
+				return xerrors.Errorf("failed to make dir %s: %w", targetPath, err)
 			}
 
 			for _, entryInDir := range entries {
 				err = copyOne(parallelJobManager, entryInDir.Path, targetPath, recurse, force, diff, noHash)
 				if err != nil {
-					return err
+					return xerrors.Errorf("failed to perform copy %s to %s: %w", entryInDir.Path, targetPath, err)
 				}
 			}
 		} else {
@@ -253,14 +254,14 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 			if !commons.ExistsIRODSDir(filesystem, targetDir) {
 				err = filesystem.MakeDir(targetDir, true)
 				if err != nil {
-					return err
+					return xerrors.Errorf("failed to make dir %s: %w", targetPath, err)
 				}
 			}
 
 			for _, entryInDir := range entries {
 				err = copyOne(parallelJobManager, entryInDir.Path, targetDir, recurse, force, diff, noHash)
 				if err != nil {
-					return err
+					return xerrors.Errorf("failed to perform copy %s to %s: %w", entryInDir.Path, targetDir, err)
 				}
 			}
 		}

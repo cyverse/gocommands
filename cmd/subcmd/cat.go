@@ -8,6 +8,7 @@ import (
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/xerrors"
 )
 
 var catCmd = &cobra.Command{
@@ -27,7 +28,7 @@ func AddCatCommand(rootCmd *cobra.Command) {
 func processCatCommand(command *cobra.Command, args []string) error {
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
 
 	if !cont {
@@ -37,26 +38,26 @@ func processCatCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	// Create a file system
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 
 	defer filesystem.Release()
 
 	if len(args) == 0 {
-		return fmt.Errorf("not enough input arguments")
+		return xerrors.Errorf("not enough input arguments")
 	}
 
 	for _, sourcePath := range args {
 		err = catOne(filesystem, sourcePath)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to perform cat %s: %w", sourcePath, err)
 		}
 	}
 	return nil
@@ -75,7 +76,7 @@ func catOne(filesystem *irodsclient_fs.FileSystem, targetPath string) error {
 
 	targetEntry, err := commons.StatIRODSPath(filesystem, targetPath)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to stat %s: %w", targetPath, err)
 	}
 
 	if targetEntry.Type == irodsclient_fs.FileEntry {
@@ -83,7 +84,7 @@ func catOne(filesystem *irodsclient_fs.FileSystem, targetPath string) error {
 		logger.Debugf("showing the content of a data object %s", targetPath)
 		fh, err := filesystem.OpenFile(targetPath, "", "r")
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to open file %s: %w", targetPath, err)
 		}
 
 		defer fh.Close()
@@ -103,7 +104,7 @@ func catOne(filesystem *irodsclient_fs.FileSystem, targetPath string) error {
 
 	} else {
 		// dir
-		return fmt.Errorf("cannot show the content of a collection")
+		return xerrors.Errorf("cannot show the content of a collection")
 	}
 	return nil
 }

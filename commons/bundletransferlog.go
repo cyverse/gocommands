@@ -11,6 +11,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/xerrors"
 )
 
 // we don't use this for now
@@ -59,7 +60,7 @@ func NewBundleTransferLog(id string, logFilePath string, localInputPaths []strin
 func NewBundleTransferLogFromLog(logFilePath string) (*BundleTransferLog, error) {
 	fh, err := os.OpenFile(logFilePath, os.O_RDONLY, 0664)
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to open file %s: %w", logFilePath, err)
 	}
 
 	defer fh.Close()
@@ -85,7 +86,7 @@ func NewBundleTransferLogFromLog(logFilePath string) (*BundleTransferLog, error)
 
 			logHeader, err := NewBundleTransferLogHeaderFromJSON(line)
 			if err != nil {
-				return nil, err
+				return nil, xerrors.Errorf("failed to convert json to log header: %w", err)
 			}
 
 			bundleTransferLog.id = logHeader.ID
@@ -97,14 +98,14 @@ func NewBundleTransferLogFromLog(logFilePath string) (*BundleTransferLog, error)
 
 		task, err := NewFileTransferTaskFromJSON(line)
 		if err != nil {
-			return nil, err
+			return nil, xerrors.Errorf("failed to convert json to log: %w", err)
 		}
 
 		bundleTransferLog.transferTasks[task.LocalPath] = task
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to read: %w", err)
 	}
 
 	return bundleTransferLog, nil
@@ -114,7 +115,7 @@ func NewBundleTransferLogHeaderFromJSON(jsonBytes []byte) (*BundleTransferLogHea
 	var logHeader BundleTransferLogHeader
 	err := json.Unmarshal(jsonBytes, &logHeader)
 	if err != nil {
-		return nil, fmt.Errorf("JSON Marshal Error - %v", err)
+		return nil, xerrors.Errorf("failed to unmarshal json to object: %w", err)
 	}
 
 	return &logHeader, nil
@@ -123,7 +124,7 @@ func NewBundleTransferLogHeaderFromJSON(jsonBytes []byte) (*BundleTransferLogHea
 func (logHeader *BundleTransferLogHeader) ToJSON() ([]byte, error) {
 	jsonBytes, err := json.Marshal(logHeader)
 	if err != nil {
-		return nil, fmt.Errorf("JSON Marshal Error - %v", err)
+		return nil, xerrors.Errorf("failed to marshal object to json: %w", err)
 	}
 
 	return jsonBytes, nil
@@ -155,7 +156,7 @@ func (bundleTransferLog *BundleTransferLog) WriteHeader() error {
 
 	fh, err := os.OpenFile(bundleTransferLog.logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0664)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to open file %s: %w", bundleTransferLog.logFilePath, err)
 	}
 
 	defer fh.Close()
@@ -170,17 +171,17 @@ func (bundleTransferLog *BundleTransferLog) WriteHeader() error {
 
 		headerJsonBytes, err := logHeader.ToJSON()
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to convert to json log header: %w", err)
 		}
 
 		_, err = fh.Write(headerJsonBytes)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to write log header: %w", err)
 		}
 
 		_, err = fh.Write([]byte("\n"))
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to write: %w", err)
 		}
 
 		bundleTransferLog.isFirstWrite = false
@@ -194,7 +195,7 @@ func (bundleTransferLog *BundleTransferLog) Write(task *FileTransferTask) error 
 
 	fh, err := os.OpenFile(bundleTransferLog.logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0664)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to open file %s: %w", bundleTransferLog.logFilePath, err)
 	}
 
 	defer fh.Close()
@@ -209,17 +210,17 @@ func (bundleTransferLog *BundleTransferLog) Write(task *FileTransferTask) error 
 
 		headerJsonBytes, err := logHeader.ToJSON()
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to convert to json log header: %w", err)
 		}
 
 		_, err = fh.Write(headerJsonBytes)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to write log header: %w", err)
 		}
 
 		_, err = fh.Write([]byte("\n"))
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to write: %w", err)
 		}
 
 		bundleTransferLog.isFirstWrite = false
@@ -227,17 +228,17 @@ func (bundleTransferLog *BundleTransferLog) Write(task *FileTransferTask) error 
 
 	jsonBytes, err := task.ToJSON()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to convert to json log: %w", err)
 	}
 
 	_, err = fh.Write(jsonBytes)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to write log: %w", err)
 	}
 
 	_, err = fh.Write([]byte("\n"))
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to write: %w", err)
 	}
 	return nil
 }
@@ -287,7 +288,7 @@ func NewFileTransferTaskFromJSON(jsonBytes []byte) (*FileTransferTask, error) {
 	var task FileTransferTask
 	err := json.Unmarshal(jsonBytes, &task)
 	if err != nil {
-		return nil, fmt.Errorf("JSON Marshal Error - %v", err)
+		return nil, xerrors.Errorf("failed to unmarshal json to object: %w", err)
 	}
 
 	return &task, nil
@@ -296,7 +297,7 @@ func NewFileTransferTaskFromJSON(jsonBytes []byte) (*FileTransferTask, error) {
 func (task *FileTransferTask) ToJSON() ([]byte, error) {
 	jsonBytes, err := json.Marshal(task)
 	if err != nil {
-		return nil, fmt.Errorf("JSON Marshal Error - %v", err)
+		return nil, xerrors.Errorf("failed to marshal object to json: %w", err)
 	}
 
 	return jsonBytes, nil

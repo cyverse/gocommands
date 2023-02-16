@@ -14,6 +14,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/progress"
 	"github.com/rs/xid"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/xerrors"
 )
 
 // default values
@@ -66,7 +67,7 @@ func newBundle(manager *BundleTransferManager, index int64) *Bundle {
 func (bundle *Bundle) addFile(localPath string, size int64, hash string, lastModTime time.Time) error {
 	irodsPath, err := bundle.manager.getTargetPath(localPath)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get target path for %s: %w", localPath, err)
 	}
 
 	f := &BundleFile{
@@ -189,7 +190,7 @@ func (manager *BundleTransferManager) progress(name string, processed int64, tot
 func (manager *BundleTransferManager) getTargetPath(localPath string) (string, error) {
 	relPath, err := filepath.Rel(manager.bundleRootPath, localPath)
 	if err != nil {
-		return "", err
+		return "", xerrors.Errorf("failed to compute relative path %s to %s: %w", localPath, manager.bundleRootPath, err)
 	}
 
 	return path.Join(manager.irodsDestPath, filepath.ToSlash(relPath)), nil
@@ -235,14 +236,14 @@ func (manager *BundleTransferManager) Schedule(source string, size int64, lastMo
 	if manager.differentFilesOnly {
 		targetFilePath, err := manager.getTargetPath(source)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to get target path for %s: %w", source, err)
 		}
 
 		exist := ExistsIRODSFile(manager.filesystem, targetFilePath)
 		if exist {
 			targetEntry, err := StatIRODSPath(manager.filesystem, targetFilePath)
 			if err != nil {
-				return err
+				return xerrors.Errorf("failed to stat %s: %w", targetFilePath, err)
 			}
 
 			if manager.noHashForComparison {
@@ -259,7 +260,7 @@ func (manager *BundleTransferManager) Schedule(source string, size int64, lastMo
 						// compare hash
 						md5hash, err := HashLocalFileMD5(source)
 						if err != nil {
-							return err
+							return xerrors.Errorf("failed to get hash %s: %w", source, err)
 						}
 
 						if md5hash == targetEntry.CheckSum {
@@ -768,7 +769,7 @@ func (manager *BundleTransferManager) processBundleRemoveFiles(bundle *Bundle) e
 				}
 
 				logger.Error(err)
-				return fmt.Errorf("failed to delete existing data object %s", file.IRODSPath)
+				return xerrors.Errorf("failed to delete existing data object %s", file.IRODSPath)
 			}
 		}
 
@@ -827,8 +828,7 @@ func (manager *BundleTransferManager) processBundleTar(bundle *Bundle) error {
 			manager.progress(progressName, 0, totalFileNum, progress.UnitsDefault, true)
 		}
 
-		logger.WithError(err).Errorf("failed to create a tarball for bundle %d to %s", bundle.index, bundle.localBundlePath)
-		return err
+		return xerrors.Errorf("failed to create a tarball for bundle %d to %s: %w", bundle.index, bundle.localBundlePath, err)
 	}
 
 	logger.Debugf("created a tarball for bundle %d to %s", bundle.index, bundle.localBundlePath)
@@ -864,8 +864,7 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 				manager.progress(progressName, -1, totalFileSize, progress.UnitsBytes, true)
 			}
 
-			logger.WithError(err).Errorf("failed to upload bundle %d to %s", bundle.index, bundle.irodsBundlePath)
-			return err
+			return xerrors.Errorf("failed to upload bundle %d to %s: %w", bundle.index, bundle.irodsBundlePath, err)
 		}
 
 		// remove local bundle file
@@ -914,7 +913,8 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 							manager.progress(progressName, -1, totalFileSize, progress.UnitsBytes, true)
 						}
 
-						logger.WithError(err).Errorf("failed to create a dir %s to upload file %s in bundle %d to %s", path.Dir(file.IRODSPath), file.LocalPath, bundle.index, file.IRODSPath)
+						err = xerrors.Errorf("failed to create a dir %s to upload file %s in bundle %d to %s: %w", path.Dir(file.IRODSPath), file.LocalPath, bundle.index, file.IRODSPath, err)
+						logger.Error(err)
 						asyncErr = err
 						//return err
 						return
@@ -929,7 +929,8 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 						manager.progress(progressName, -1, totalFileSize, progress.UnitsBytes, true)
 					}
 
-					logger.WithError(err).Errorf("failed to upload file %s in bundle %d to %s", file.LocalPath, bundle.index, file.IRODSPath)
+					err = xerrors.Errorf("failed to upload file %s in bundle %d to %s: %w", file.LocalPath, bundle.index, file.IRODSPath, err)
+					logger.Error(err)
 					asyncErr = err
 					//return err
 					return
@@ -983,10 +984,8 @@ func (manager *BundleTransferManager) processBundleExtract(bundle *Bundle) error
 			manager.progress(progressName, -1, totalFileNum, progress.UnitsDefault, true)
 		}
 
-		logger.WithError(err).Errorf("failed to extract bundle %d at %s to %s", bundle.index, bundle.irodsBundlePath, manager.irodsDestPath)
-
 		manager.filesystem.RemoveFile(bundle.irodsBundlePath, true)
-		return err
+		return xerrors.Errorf("failed to extract bundle %d at %s to %s: %w", bundle.index, bundle.irodsBundlePath, manager.irodsDestPath, err)
 	}
 
 	// remove irods bundle file

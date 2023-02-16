@@ -1,21 +1,24 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/cyverse/gocommands/cmd/subcmd"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/xerrors"
 )
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:          "gocmd [subcommand]",
-	Short:        "Gocommands, a command-line iRODS client",
-	Long:         `Gocommands, a command-line iRODS client.`,
-	RunE:         processCommand,
-	SilenceUsage: true,
+	Use:           "gocmd [subcommand]",
+	Short:         "Gocommands, a command-line iRODS client",
+	Long:          `Gocommands, a command-line iRODS client.`,
+	RunE:          processCommand,
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 func Execute() error {
@@ -84,7 +87,8 @@ func main() {
 
 	err := Execute()
 	if err != nil {
-		logger.Error(err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		logger.Errorf("%+v", xerrors.Errorf(": %w", err))
 		os.Exit(1)
 	}
 }

@@ -1,7 +1,6 @@
 package subcmd
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -9,6 +8,7 @@ import (
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/xerrors"
 )
 
 var bputCmd = &cobra.Command{
@@ -41,7 +41,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
 
 	if !cont {
@@ -51,7 +51,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	maxFileNum := commons.MaxBundleFileNumDefault
@@ -118,13 +118,13 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 
 	defer filesystem.Release()
 
 	if len(args) == 0 {
-		return fmt.Errorf("not enough input arguments")
+		return xerrors.Errorf("not enough input arguments")
 	}
 
 	targetPath := "./"
@@ -145,8 +145,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		irodsTempDirPath = commons.MakeIRODSPath(cwd, home, zone, irodsTempDirPath)
 		ok, err := commons.ValidateStagingDir(filesystem, targetPath, irodsTempDirPath)
 		if err != nil {
-			logger.WithError(err).Errorf("failed to validate staging dir - %s", irodsTempDirPath)
-			return err
+			return xerrors.Errorf("failed to validate staging dir - %s: %w", irodsTempDirPath, err)
 		}
 
 		if !ok {
@@ -162,8 +161,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 
 		irodsTempDirPath, err = commons.GetDefaultStagingDir(filesystem, targetPath)
 		if err != nil {
-			logger.WithError(err).Error("failed to get default staging dir")
-			return err
+			return xerrors.Errorf("failed to get default staging dir: %w", err)
 		}
 	}
 
@@ -184,7 +182,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 
 	bundleRootPath, err := commons.GetCommonRootLocalDirPath(sourcePaths)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get common root dir for source paths: %w", err)
 	}
 
 	bundleTransferManager.SetBundleRootPath(bundleRootPath)
@@ -192,14 +190,14 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	for _, sourcePath := range sourcePaths {
 		err = bputOne(bundleTransferManager, sourcePath, targetPath)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to perform bput %s to %s: %w", sourcePath, targetPath, err)
 		}
 	}
 
 	bundleTransferManager.DoneScheduling()
 	err = bundleTransferManager.Wait()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to perform bundle transfer: %w", err)
 	}
 
 	return nil
@@ -215,7 +213,7 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string, ta
 
 	sourceStat, err := os.Stat(sourcePath)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
 
 	if !sourceStat.IsDir() {
@@ -226,7 +224,7 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string, ta
 
 		walkFunc := func(path string, entry os.DirEntry, err2 error) error {
 			if err2 != nil {
-				return err2
+				return xerrors.Errorf("failed to walk for %s: %w", path, err2)
 			}
 
 			if entry.IsDir() {
@@ -235,20 +233,19 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string, ta
 
 			info, err := entry.Info()
 			if err != nil {
-				return err
+				return xerrors.Errorf("failed to get info for %s: %w", path, err)
 			}
 
-			bundleManager.Schedule(path, info.Size(), info.ModTime())
-
+			err = bundleManager.Schedule(path, info.Size(), info.ModTime())
 			if err != nil {
-				return err
+				return xerrors.Errorf("failed to schedule %s: %w", path, err)
 			}
 			return nil
 		}
 
 		err := filepath.WalkDir(sourcePath, walkFunc)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to walk for %s: %w", sourcePath, err)
 		}
 	}
 	return nil

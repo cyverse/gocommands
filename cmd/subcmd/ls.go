@@ -11,6 +11,7 @@ import (
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/spf13/cobra"
+	"golang.org/x/xerrors"
 )
 
 var lsCmd = &cobra.Command{
@@ -33,7 +34,7 @@ func AddLsCommand(rootCmd *cobra.Command) {
 func processLsCommand(command *cobra.Command, args []string) error {
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
 
 	if !cont {
@@ -43,7 +44,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	longFormat := false
@@ -68,7 +69,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 
 	defer filesystem.Release()
@@ -82,7 +83,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	for _, sourcePath := range sourcePaths {
 		err = listOne(filesystem, sourcePath, longFormat, veryLongFormat)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to perform ls %s: %w", sourcePath, err)
 		}
 	}
 
@@ -97,26 +98,26 @@ func listOne(fs *irodsclient_fs.FileSystem, targetPath string, longFormat bool, 
 
 	connection, err := fs.GetConnection()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get connection: %w", err)
 	}
 	defer fs.ReturnConnection(connection)
 
 	collection, err := irodsclient_irodsfs.GetCollection(connection, targetPath)
 	if err != nil {
 		if !irodsclient_types.IsFileNotFoundError(err) {
-			return err
+			return xerrors.Errorf("failed to get collection %s: %w", targetPath, err)
 		}
 	}
 
 	if err == nil {
 		colls, err := irodsclient_irodsfs.ListSubCollections(connection, targetPath)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to list sub-collections in %s: %w", targetPath, err)
 		}
 
 		objs, err := irodsclient_irodsfs.ListDataObjects(connection, collection)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to list data-objects in %s: %w", targetPath, err)
 		}
 
 		printDataObjects(objs, veryLongFormat, longFormat)
@@ -129,12 +130,12 @@ func listOne(fs *irodsclient_fs.FileSystem, targetPath string, longFormat bool, 
 
 	parentCollection, err := irodsclient_irodsfs.GetCollection(connection, parentTargetPath)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get collection %s: %w", parentTargetPath, err)
 	}
 
 	entry, err := irodsclient_irodsfs.GetDataObject(connection, parentCollection, path.Base(targetPath))
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get data-object %s: %w", targetPath, err)
 	}
 
 	printDataObject(entry, veryLongFormat, longFormat)

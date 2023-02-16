@@ -7,6 +7,7 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/xerrors"
 )
 
 func ValidateStagingDir(fs *irodsclient_fs.FileSystem, targetPath string, stagingPath string) (bool, error) {
@@ -17,16 +18,14 @@ func ValidateStagingDir(fs *irodsclient_fs.FileSystem, targetPath string, stagin
 
 	stagingResourceServers, err := GetResourceServers(fs, stagingPath)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get resource servers for - %s", stagingPath)
-		return false, err
+		return false, xerrors.Errorf("failed to get resource servers for %s: %w", stagingPath, err)
 	}
 
 	logger.Debugf("staging resource servers - %v", stagingResourceServers)
 
 	targetResourceServers, err := GetResourceServers(fs, targetPath)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get resource servers for - %s", targetPath)
-		return false, err
+		return false, xerrors.Errorf("failed to get resource servers for %s: %w", targetPath, err)
 	}
 
 	logger.Debugf("target resource servers - %v", targetResourceServers)
@@ -58,16 +57,14 @@ func GetDefaultStagingDir(fs *irodsclient_fs.FileSystem, targetPath string) (str
 
 	trashResourceServers, err := GetResourceServers(fs, trashDirPath)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get resource servers for - %s", trashDirPath)
-		return "", err
+		return "", xerrors.Errorf("failed to get resource servers for %s: %w", trashDirPath, err)
 	}
 
 	logger.Debugf("trash resource servers - %v", trashResourceServers)
 
 	targetResourceServers, err := GetResourceServers(fs, targetStagingDirPath)
 	if err != nil {
-		logger.WithError(err).Errorf("failed to get resource servers for - %s", targetStagingDirPath)
-		return "", err
+		return "", xerrors.Errorf("failed to get resource servers for %s: %w", targetStagingDirPath, err)
 	}
 
 	logger.Debugf("target resource servers - %v", targetResourceServers)
@@ -87,14 +84,14 @@ func GetDefaultStagingDir(fs *irodsclient_fs.FileSystem, targetPath string) (str
 func GetResourceServers(fs *irodsclient_fs.FileSystem, targetDir string) ([]string, error) {
 	connection, err := fs.GetConnection()
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to get connection: %w", err)
 	}
 	defer fs.ReturnConnection(connection)
 
 	if !fs.ExistsDir(targetDir) {
 		err := fs.MakeDir(targetDir, true)
 		if err != nil {
-			return nil, err
+			return nil, xerrors.Errorf("failed to make dir %s: %w", targetDir, err)
 		}
 	}
 
@@ -103,28 +100,28 @@ func GetResourceServers(fs *irodsclient_fs.FileSystem, targetDir string) ([]stri
 
 	filehandle, err := fs.CreateFile(testFilePath, "", "w")
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to crate file %s: %w", testFilePath, err)
 	}
 
 	_, err = filehandle.Write([]byte("resource server test\n"))
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to write: %w", err)
 	}
 
 	err = filehandle.Close()
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to close file: %w", err)
 	}
 
 	// data object
 	collection, err := irodsclient_irodsfs.GetCollection(connection, targetDir)
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to get collection %s: %w", targetDir, err)
 	}
 
 	entry, err := irodsclient_irodsfs.GetDataObject(connection, collection, path.Base(testFilePath))
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to get data-object %s: %w", testFilePath, err)
 	}
 
 	resourceServers := []string{}

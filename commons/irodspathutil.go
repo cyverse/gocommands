@@ -7,6 +7,7 @@ import (
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	"golang.org/x/xerrors"
 )
 
 var (
@@ -28,14 +29,14 @@ func ListIRODSDir(filesystem *irodsclient_fs.FileSystem, irodsPath string) ([]*i
 	// no cache
 	dirStat, err := filesystem.StatDir(irodsPath)
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to stat %s: %w", irodsPath, err)
 	}
 
 	statCache[irodsPath] = dirStat
 
 	entries, err := filesystem.List(irodsPath)
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to list dir %s: %w", irodsPath, err)
 	}
 
 	for _, entry := range entries {
@@ -63,7 +64,7 @@ func StatIRODSPath(filesystem *irodsclient_fs.FileSystem, irodsPath string) (*ir
 
 		entry, err := filesystem.Stat(irodsPath)
 		if err != nil {
-			return nil, err
+			return nil, xerrors.Errorf("failed to stat %s: %w", irodsPath, err)
 		}
 
 		statCache[irodsPath] = entry
@@ -81,14 +82,14 @@ func StatIRODSPath(filesystem *irodsclient_fs.FileSystem, irodsPath string) (*ir
 	if _, ok := dirCache[parentDirPath]; !ok {
 		parentDirStat, err := filesystem.StatDir(parentDirPath)
 		if err != nil {
-			return nil, err
+			return nil, xerrors.Errorf("failed to stat %s: %w", parentDirPath, err)
 		}
 
 		statCache[parentDirPath] = parentDirStat
 
 		entries, err := filesystem.List(parentDirPath)
 		if err != nil {
-			return nil, err
+			return nil, xerrors.Errorf("failed to list dir %s: %w", parentDirPath, err)
 		}
 
 		for _, entry := range entries {

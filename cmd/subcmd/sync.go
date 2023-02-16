@@ -1,15 +1,14 @@
 package subcmd
 
 import (
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/gocommands/commons"
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/xerrors"
 )
 
 var syncCmd = &cobra.Command{
@@ -32,7 +31,7 @@ func AddSyncCommand(rootCmd *cobra.Command) {
 func processSyncCommand(command *cobra.Command, args []string) error {
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
 
 	if !cont {
@@ -42,7 +41,7 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	progress := false
@@ -67,13 +66,13 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 
 	defer filesystem.Release()
 
 	if len(args) < 2 {
-		return fmt.Errorf("not enough input arguments")
+		return xerrors.Errorf("not enough input arguments")
 	}
 
 	targetPath := "i:./"
@@ -99,13 +98,13 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 		// source is local
 		if !strings.HasPrefix(targetPath, "i:") {
 			// local to local
-			return fmt.Errorf("syncing between local files/directories is not supported")
+			return xerrors.Errorf("syncing between local files/directories is not supported")
 		}
 
 		// target must starts with "i:"
 		err := syncFromLocal(filesystem, localSources, targetPath[2:], progress, noHash)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to perform sync (from local): %w", err)
 		}
 	}
 
@@ -113,7 +112,7 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 		// source is iRODS
 		err := syncFromRemote(filesystem, irodsSources, targetPath, progress, noHash)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to perform sync (from remote): %w", err)
 		}
 	}
 
@@ -121,11 +120,6 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 }
 
 func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath string, progress bool, noHash bool) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "syncFromLocal",
-	})
-
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
@@ -138,9 +132,7 @@ func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath s
 
 	bundleRootPath, err := commons.GetCommonRootLocalDirPath(sourcePaths)
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return xerrors.Errorf("failed to get common root dir for source paths: %w", err)
 	}
 
 	bundleTransferManager.SetBundleRootPath(bundleRootPath)
@@ -148,16 +140,14 @@ func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath s
 	for _, sourcePath := range sourcePaths {
 		err = bputOne(bundleTransferManager, sourcePath, targetPath)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to perform bput %s to %s: %w", sourcePath, targetPath, err)
 		}
 	}
 
 	bundleTransferManager.DoneScheduling()
 	err = bundleTransferManager.Wait()
 	if err != nil {
-		logger.Error(err)
-		fmt.Fprintln(os.Stderr, err.Error())
-		return nil
+		return xerrors.Errorf("failed to perform bundle transfer: %w", err)
 	}
 
 	return nil
@@ -173,13 +163,13 @@ func syncFromRemote(filesystem *fs.FileSystem, sourcePaths []string, targetPath 
 			// copy
 			err := copyOne(parallelJobManager, sourcePath[2:], targetPath[2:], true, false, true, noHash)
 			if err != nil {
-				return err
+				return xerrors.Errorf("failed to perform copy %s to %s: %w", sourcePath[2:], targetPath[2:], err)
 			}
 		} else {
 			// get
 			err := getOne(parallelJobManager, sourcePath[2:], targetPath, false, true, noHash)
 			if err != nil {
-				return err
+				return xerrors.Errorf("failed to perform get %s to %s: %w", sourcePath[2:], targetPath, err)
 			}
 		}
 	}
@@ -187,7 +177,7 @@ func syncFromRemote(filesystem *fs.FileSystem, sourcePaths []string, targetPath 
 	parallelJobManager.DoneScheduling()
 	err := parallelJobManager.Wait()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to perform parallel jobs: %w", err)
 	}
 
 	return nil

@@ -1,12 +1,11 @@
 package subcmd
 
 import (
-	"fmt"
-
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/xerrors"
 )
 
 var mvCmd = &cobra.Command{
@@ -26,7 +25,7 @@ func AddMvCommand(rootCmd *cobra.Command) {
 func processMvCommand(command *cobra.Command, args []string) error {
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
 
 	if !cont {
@@ -36,20 +35,20 @@ func processMvCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	// Create a file system
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 
 	defer filesystem.Release()
 
 	if len(args) < 2 {
-		return fmt.Errorf("not enough input arguments")
+		return xerrors.Errorf("not enough input arguments")
 	}
 
 	targetPath := args[len(args)-1]
@@ -59,7 +58,7 @@ func processMvCommand(command *cobra.Command, args []string) error {
 	for _, sourcePath := range sourcePaths {
 		err = moveOne(filesystem, sourcePath, targetPath)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to perform mv %s to %s: %w", sourcePath, targetPath, err)
 		}
 	}
 
@@ -80,7 +79,7 @@ func moveOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPat
 
 	sourceEntry, err := commons.StatIRODSPath(filesystem, sourcePath)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
 
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
@@ -88,14 +87,14 @@ func moveOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPat
 		logger.Debugf("renaming a data object %s to %s", sourcePath, targetPath)
 		err = filesystem.RenameFile(sourcePath, targetPath)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to rename %s to %s: %w", sourcePath, targetPath, err)
 		}
 	} else {
 		// dir
 		logger.Debugf("renaming a collection %s to %s", sourcePath, targetPath)
 		err = filesystem.RenameDir(sourcePath, targetPath)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to rename %s to %s: %w", sourcePath, targetPath, err)
 		}
 	}
 	return nil

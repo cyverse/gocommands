@@ -1,7 +1,6 @@
 package subcmd
 
 import (
-	"fmt"
 	"strconv"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -9,6 +8,7 @@ import (
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/xerrors"
 )
 
 var mkdirCmd = &cobra.Command{
@@ -29,7 +29,7 @@ func AddMkdirCommand(rootCmd *cobra.Command) {
 func processMkdirCommand(command *cobra.Command, args []string) error {
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
 
 	if !cont {
@@ -39,7 +39,7 @@ func processMkdirCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	parent := false
@@ -55,19 +55,19 @@ func processMkdirCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 
 	defer filesystem.Release()
 
 	if len(args) == 0 {
-		return fmt.Errorf("not enough input arguments")
+		return xerrors.Errorf("not enough input arguments")
 	}
 
 	for _, targetPath := range args {
 		err = makeOne(filesystem, targetPath, parent)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to perform mkdir %s: %w", targetPath, err)
 		}
 	}
 	return nil
@@ -86,7 +86,7 @@ func makeOne(fs *irodsclient_fs.FileSystem, targetPath string, parent bool) erro
 
 	connection, err := fs.GetConnection()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get connection: %w", err)
 	}
 	defer fs.ReturnConnection(connection)
 
@@ -94,7 +94,7 @@ func makeOne(fs *irodsclient_fs.FileSystem, targetPath string, parent bool) erro
 
 	err = irodsclient_irodsfs.CreateCollection(connection, targetPath, parent)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to create collection %s: %w", targetPath, err)
 	}
 	return nil
 }

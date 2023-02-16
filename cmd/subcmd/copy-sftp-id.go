@@ -2,7 +2,6 @@ package subcmd
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"os"
 	"path"
@@ -15,6 +14,7 @@ import (
 	"github.com/gliderlabs/ssh"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/xerrors"
 )
 
 var copySftpIdCmd = &cobra.Command{
@@ -37,7 +37,7 @@ func AddCopySftpIdCommand(rootCmd *cobra.Command) {
 func processCopySftpIdCommand(command *cobra.Command, args []string) error {
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
 
 	if !cont {
@@ -47,7 +47,7 @@ func processCopySftpIdCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	force := false
@@ -78,7 +78,7 @@ func processCopySftpIdCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 
 	defer filesystem.Release()
@@ -93,17 +93,17 @@ func processCopySftpIdCommand(command *cobra.Command, args []string) error {
 		// scan defaults
 		identityFiles, err = scanSSHIdentityFiles()
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to scan ssh identity files: %w", err)
 		}
 	}
 
 	if len(identityFiles) == 0 {
-		return fmt.Errorf("failed to find SSH identity files '~/.ssh/*.pub'")
+		return xerrors.Errorf("failed to find SSH identity files '~/.ssh/*.pub'")
 	}
 
 	err = copySftpId(filesystem, force, dryrun, identityFiles)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to perform copy-sftp-id: %w", err)
 	}
 	return nil
 }
@@ -112,14 +112,14 @@ func scanSSHIdentityFiles() ([]string, error) {
 	// ~/.ssh/*.pub
 	homePath, err := os.UserHomeDir()
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to get user home dir: %w", err)
 	}
 
 	sshPath := filepath.Join(homePath, ".ssh")
 
 	sshDirEntries, err := os.ReadDir(sshPath)
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to read dir %s: %w", sshPath, err)
 	}
 
 	identityFiles := []string{}
@@ -155,7 +155,7 @@ func copySftpId(filesystem *irodsclient_fs.FileSystem, force bool, dryrun bool, 
 			// create ssh dir
 			err := filesystem.MakeDir(irodsSshPath, true)
 			if err != nil {
-				return err
+				return xerrors.Errorf("failed to make dir %s: %w", irodsSshPath, err)
 			}
 		}
 	}
@@ -167,7 +167,7 @@ func copySftpId(filesystem *irodsclient_fs.FileSystem, force bool, dryrun bool, 
 
 		handle, err := filesystem.OpenFile(authorizedKeyPath, "", "r")
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to open file %s: %w", authorizedKeyPath, err)
 		}
 		defer handle.Close()
 
@@ -176,12 +176,12 @@ func copySftpId(filesystem *irodsclient_fs.FileSystem, force bool, dryrun bool, 
 		for {
 			readLen, err := handle.Read(readBuffer)
 			if err != nil && err != io.EOF {
-				return err
+				return xerrors.Errorf("failed to read file %s: %w", authorizedKeyPath, err)
 			}
 
 			_, err2 := sb.Write(readBuffer[:readLen])
 			if err2 != nil {
-				return err2
+				return xerrors.Errorf("failed to write to buffer: %w", err2)
 			}
 
 			if err == io.EOF {
@@ -202,13 +202,12 @@ func copySftpId(filesystem *irodsclient_fs.FileSystem, force bool, dryrun bool, 
 		// read the identity file first
 		identityFileContent, err := os.ReadFile(identityFile)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to read file %s: %w", identityFile, err)
 		}
 
 		userKey, _, _, _, err := ssh.ParseAuthorizedKey(identityFileContent)
 		if err != nil {
-			log.Debugf("failed to parse a SSH public key %s for user %s", identityFile, account.ClientUser)
-			return err
+			return xerrors.Errorf("failed to parse a SSH public key %s for user %s: %w", identityFile, account.ClientUser, err)
 		}
 
 		if force {
@@ -259,7 +258,7 @@ func copySftpId(filesystem *irodsclient_fs.FileSystem, force bool, dryrun bool, 
 			// open the file with write truncate mode
 			handle, err := filesystem.OpenFile(authorizedKeyPath, "", "w+")
 			if err != nil {
-				return err
+				return xerrors.Errorf("failed to open file %s: %w", authorizedKeyPath, err)
 			}
 			defer handle.Close()
 
@@ -274,7 +273,7 @@ func copySftpId(filesystem *irodsclient_fs.FileSystem, force bool, dryrun bool, 
 
 			_, err = handle.Write(buf.Bytes())
 			if err != nil {
-				return err
+				return xerrors.Errorf("failed to write: %w", err)
 			}
 		}
 	}

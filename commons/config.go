@@ -1,9 +1,8 @@
 package commons
 
 import (
-	"fmt"
-
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	"golang.org/x/xerrors"
 
 	"github.com/kelseyhightower/envconfig"
 	"gopkg.in/yaml.v2"
@@ -65,7 +64,7 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 
 	err := yaml.Unmarshal(yamlBytes, config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal YAML - %v", err)
+		return nil, xerrors.Errorf("failed to unmarshal YAML - %v", err)
 	}
 
 	return config, nil
@@ -77,7 +76,7 @@ func NewConfigFromENV() (*Config, error) {
 
 	err := envconfig.Process("", config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read config from environmental variables - %v", err)
+		return nil, xerrors.Errorf("failed to read config from environmental variables - %v", err)
 	}
 
 	return config, nil

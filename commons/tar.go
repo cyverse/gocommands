@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"golang.org/x/xerrors"
 )
 
 type TrackerCallBack func(processed int64, total int64)
@@ -29,7 +31,7 @@ func Tar(baseDir string, sources []string, target string, callback TrackerCallBa
 	for _, source := range sources {
 		sourceStat, err := os.Stat(source)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to stat %s: %w", source, err)
 		}
 
 		if sourceStat.IsDir() {
@@ -39,7 +41,7 @@ func Tar(baseDir string, sources []string, target string, callback TrackerCallBa
 
 		rel, err := filepath.Rel(baseDir, source)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to compute relative path %s to %s: %w", source, baseDir, err)
 		}
 
 		pdirs := GetParentLocalDirs(rel)
@@ -67,7 +69,7 @@ func makeTar(entries []*TarEntry, target string, callback TrackerCallBack) error
 	for _, entry := range entries {
 		sourceStat, err := os.Stat(entry.source)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to stat %s: %w", entry.source, err)
 		}
 
 		if !sourceStat.IsDir() {
@@ -81,7 +83,7 @@ func makeTar(entries []*TarEntry, target string, callback TrackerCallBack) error
 
 	tarfile, err := os.Create(target)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to create file %s: %w", target, err)
 	}
 
 	defer tarfile.Close()
@@ -92,33 +94,33 @@ func makeTar(entries []*TarEntry, target string, callback TrackerCallBack) error
 	for _, entry := range entries {
 		sourceStat, err := os.Stat(entry.source)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to stat %s: %w", entry.source, err)
 		}
 
 		header, err := tar.FileInfoHeader(sourceStat, sourceStat.Name())
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to create tar file info header: %w", err)
 		}
 
 		header.Name = entry.target
 
 		err = tarWriter.WriteHeader(header)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to write tar header: %w", err)
 		}
 
 		if !sourceStat.IsDir() {
 			// add file content
 			file, err := os.Open(entry.source)
 			if err != nil {
-				return err
+				return xerrors.Errorf("failed to open tar file %s: %w", entry.source, err)
 			}
 
 			defer file.Close()
 
 			_, err = io.Copy(tarWriter, file)
 			if err != nil {
-				return err
+				return xerrors.Errorf("failed to write tar file: %w", err)
 			}
 
 			currentSize += sourceStat.Size()

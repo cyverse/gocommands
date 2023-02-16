@@ -5,6 +5,7 @@ import (
 
 	"github.com/cyverse/gocommands/commons"
 	"github.com/spf13/cobra"
+	"golang.org/x/xerrors"
 )
 
 var initCmd = &cobra.Command{
@@ -26,7 +27,7 @@ func AddInitCommand(rootCmd *cobra.Command) {
 func processInitCommand(command *cobra.Command, args []string) error {
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
 
 	if !cont {
@@ -36,30 +37,30 @@ func processInitCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	updated, err := commons.InputMissingFields()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	account, err := commons.GetEnvironmentManager().ToIRODSAccount()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get iRODS account info from iCommands Environment: %w", err)
 	}
 
 	err = commons.TestConnect(account)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to connect to iRODS server: %w", err)
 	}
 
 	if updated {
 		// save
 		err := commons.GetEnvironmentManager().SaveEnvironment()
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to save iCommands Environment: %w", err)
 		}
 	} else {
 		fmt.Println("gocommands is already configured for following account:")
 		err := commons.PrintAccount()
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to print account info: %w", err)
 		}
 	}
 	return nil

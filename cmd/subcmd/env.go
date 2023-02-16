@@ -3,6 +3,7 @@ package subcmd
 import (
 	"github.com/cyverse/gocommands/commons"
 	"github.com/spf13/cobra"
+	"golang.org/x/xerrors"
 )
 
 var envCmd = &cobra.Command{
@@ -22,7 +23,7 @@ func AddEnvCommand(rootCmd *cobra.Command) {
 func processEnvCommand(command *cobra.Command, args []string) error {
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
 
 	if !cont {
@@ -31,7 +32,7 @@ func processEnvCommand(command *cobra.Command, args []string) error {
 
 	err = commons.PrintEnvironment()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to print environment: %w", err)
 	}
 	return nil
 }

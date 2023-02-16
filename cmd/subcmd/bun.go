@@ -1,7 +1,6 @@
 package subcmd
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -10,6 +9,7 @@ import (
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/xerrors"
 )
 
 var bunCmd = &cobra.Command{
@@ -32,7 +32,7 @@ func AddBunCommand(rootCmd *cobra.Command) {
 func processBunCommand(command *cobra.Command, args []string) error {
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
 
 	if !cont {
@@ -42,7 +42,7 @@ func processBunCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	force := false
@@ -64,7 +64,7 @@ func processBunCommand(command *cobra.Command, args []string) error {
 	}
 
 	if !extract {
-		return fmt.Errorf("support only extract mode")
+		return xerrors.Errorf("support only extract mode")
 	}
 
 	dataType := "" // auto
@@ -77,13 +77,13 @@ func processBunCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 
 	defer filesystem.Release()
 
 	if len(args) < 2 {
-		return fmt.Errorf("not enough input arguments")
+		return xerrors.Errorf("not enough input arguments")
 	}
 
 	targetPath := args[len(args)-1]
@@ -91,7 +91,7 @@ func processBunCommand(command *cobra.Command, args []string) error {
 		if extract {
 			err = extractOne(filesystem, sourcePath, targetPath, dataType, force)
 			if err != nil {
-				return err
+				return xerrors.Errorf("failed to perform bun %s to %s: %w", sourcePath, targetPath, err)
 			}
 		}
 	}
@@ -112,7 +112,7 @@ func getDataType(irodsPath string, dataType string) (irodsclient_types.DataType,
 	case "":
 		// auto
 	default:
-		return "", fmt.Errorf("unknown format %s", dataType)
+		return "", xerrors.Errorf("unknown format %s", dataType)
 	}
 
 	// auto
@@ -145,17 +145,17 @@ func extractOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, target
 
 	sourceEntry, err := commons.StatIRODSPath(filesystem, sourcePath)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
 
 	targetEntry, err := commons.StatIRODSPath(filesystem, targetPath)
 	if err != nil {
 		if !irodsclient_types.IsFileNotFoundError(err) {
-			return err
+			return xerrors.Errorf("failed to stat %s: %w", targetPath, err)
 		}
 	} else {
 		if targetEntry.Type == irodsclient_fs.FileEntry {
-			return fmt.Errorf("%s is not a collection", targetPath)
+			return xerrors.Errorf("%s is not a collection", targetPath)
 		}
 	}
 
@@ -165,15 +165,15 @@ func extractOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, target
 
 		dt, err := getDataType(sourcePath, dataType)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to get type %s: %w", sourcePath, err)
 		}
 
 		err = filesystem.ExtractStructFile(sourcePath, targetPath, "", dt, force)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to extract file %s to %s: %w", sourcePath, targetPath, err)
 		}
 	} else {
-		return fmt.Errorf("source must be a data object")
+		return xerrors.Errorf("source %s must be a data object", sourcePath)
 	}
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_conn "github.com/cyverse/go-irodsclient/irods/connection"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	"golang.org/x/xerrors"
 )
 
 const (
@@ -28,7 +29,7 @@ func GetIRODSConnection(account *irodsclient_types.IRODSAccount) (*irodsclient_c
 	conn := irodsclient_conn.NewIRODSConnection(account, connectionTimeout, ClientProgramName)
 	err := conn.Connect()
 	if err != nil {
-		return nil, err
+		return nil, xerrors.Errorf("failed to connect: %w", err)
 	}
 
 	return conn, nil
@@ -38,7 +39,7 @@ func GetIRODSConnection(account *irodsclient_types.IRODSAccount) (*irodsclient_c
 func TestConnect(account *irodsclient_types.IRODSAccount) error {
 	conn, err := GetIRODSConnection(account)
 	if err != nil {
-		return err
+		return nil
 	}
 
 	defer conn.Disconnect()

@@ -6,6 +6,8 @@ import (
 	"hash"
 	"io"
 	"os"
+
+	"golang.org/x/xerrors"
 )
 
 func HashLocalFileMD5(sourcePath string) (string, error) {
@@ -16,14 +18,14 @@ func HashLocalFileMD5(sourcePath string) (string, error) {
 func HashLocalFile(sourcePath string, hashAlg hash.Hash) (string, error) {
 	f, err := os.Open(sourcePath)
 	if err != nil {
-		return "", err
+		return "", xerrors.Errorf("failed to open file %s: %w", sourcePath, err)
 	}
 
 	defer f.Close()
 
 	_, err = io.Copy(hashAlg, f)
 	if err != nil {
-		return "", err
+		return "", xerrors.Errorf("failed to write: %w", err)
 	}
 
 	sumBytes := hashAlg.Sum(nil)
@@ -41,7 +43,7 @@ func HashStrings(strs []string, hashAlg hash.Hash) (string, error) {
 	for _, str := range strs {
 		_, err := hashAlg.Write([]byte(str))
 		if err != nil {
-			return "", err
+			return "", xerrors.Errorf("failed to write: %w", err)
 		}
 	}
 

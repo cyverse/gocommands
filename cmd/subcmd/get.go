@@ -11,6 +11,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"golang.org/x/xerrors"
 )
 
 var getCmd = &cobra.Command{
@@ -35,7 +36,7 @@ func AddGetCommand(rootCmd *cobra.Command) {
 func processGetCommand(command *cobra.Command, args []string) error {
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
 
 	if !cont {
@@ -45,7 +46,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	// handle local flags
 	_, err = commons.InputMissingFields()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	force := false
@@ -88,13 +89,13 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 
 	defer filesystem.Release()
 
 	if len(args) == 0 {
-		return fmt.Errorf("not enough input arguments")
+		return xerrors.Errorf("not enough input arguments")
 	}
 
 	targetPath := "./"
@@ -111,14 +112,14 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	for _, sourcePath := range sourcePaths {
 		err = getOne(parallelJobManager, sourcePath, targetPath, force, diff, noHash)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to perform get %s to %s: %w", sourcePath, targetPath, err)
 		}
 	}
 
 	parallelJobManager.DoneScheduling()
 	err = parallelJobManager.Wait()
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to perform parallel jobs: %w", err)
 	}
 
 	return nil
@@ -140,7 +141,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 
 	sourceEntry, err := commons.StatIRODSPath(filesystem, sourcePath)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
 
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
@@ -150,7 +151,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 		targetEntry, err := os.Stat(targetFilePath)
 		if err != nil {
 			if !os.IsNotExist(err) {
-				return err
+				return xerrors.Errorf("failed to stat %s: %w", targetFilePath, err)
 			}
 		} else {
 			exist = true
@@ -170,7 +171,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 			err := fs.DownloadFileParallel(sourcePath, "", targetFilePath, 0, callbackGet)
 			if err != nil {
 				job.Progress(-1, sourceEntry.Size, true)
-				return err
+				return xerrors.Errorf("failed to download %s to %s: %w", sourcePath, targetFilePath, err)
 			}
 
 			logger.Debugf("downloaded a data object %s to %s", sourcePath, targetFilePath)
@@ -191,7 +192,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 							// compare hash
 							md5hash, err := commons.HashLocalFileMD5(targetFilePath)
 							if err != nil {
-								return err
+								return xerrors.Errorf("failed to get hash of %s: %w", targetFilePath, err)
 							}
 
 							if sourceEntry.CheckSum == md5hash {
@@ -205,13 +206,13 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 				logger.Debugf("deleting an existing file %s", targetFilePath)
 				err := os.Remove(targetFilePath)
 				if err != nil {
-					return err
+					return xerrors.Errorf("failed to remove %s: %w", targetFilePath, err)
 				}
 			} else if force {
 				logger.Debugf("deleting an existing file %s", targetFilePath)
 				err := os.Remove(targetFilePath)
 				if err != nil {
-					return err
+					return xerrors.Errorf("failed to remove %s: %w", targetFilePath, err)
 				}
 			} else {
 				// ask
@@ -220,7 +221,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 					logger.Debugf("deleting an existing file %s", targetFilePath)
 					err := os.Remove(targetFilePath)
 					if err != nil {
-						return err
+						return xerrors.Errorf("failed to remove %s: %w", targetFilePath, err)
 					}
 				} else {
 					fmt.Printf("skip downloading a data object %s. The file already exists!\n", targetFilePath)
@@ -238,14 +239,14 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 
 		entries, err := commons.ListIRODSDir(filesystem, sourceEntry.Path)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to list dir %s: %w", sourceEntry.Path, err)
 		}
 
 		// make target dir
 		targetDir := filepath.Join(targetPath, sourceEntry.Name)
 		err = os.MkdirAll(targetDir, 0766)
 		if err != nil {
-			return err
+			return xerrors.Errorf("failed to make dir %s: %w", targetDir, err)
 		}
 
 		for idx := range entries {
@@ -253,7 +254,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 
 			err = getOne(parallelJobManager, path, targetDir, force, diff, noHash)
 			if err != nil {
-				return err
+				return xerrors.Errorf("failed to perform get %s to %s: %w", path, targetDir, err)
 			}
 		}
 	}
