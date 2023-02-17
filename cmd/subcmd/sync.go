@@ -7,6 +7,7 @@ import (
 
 	"github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/gocommands/commons"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
 )
@@ -120,11 +121,36 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 }
 
 func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath string, progress bool, noHash bool) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "syncFromLocal",
+	})
+
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
-	irodsTempDirPath := commons.MakeIRODSPath(cwd, home, zone, "./")
+
+	// set default staging dir
+	logger.Debug("get default staging dir")
+
+	irodsTempDirPath, err := commons.GetDefaultStagingDir(filesystem, targetPath)
+	if err != nil {
+		return xerrors.Errorf("failed to get default staging dir: %w", err)
+	}
+
+	logger.Debugf("use staging dir - %s", irodsTempDirPath)
+
+	// clean up staging dir in the target dir
+	defer func() {
+		unusedStagingDir := commons.GetDefaultStagingDirInTargetPath(targetPath)
+		logger.Debugf("delete staging dir - %s", unusedStagingDir)
+		err := filesystem.RemoveDir(unusedStagingDir, true, true)
+		if err != nil {
+			logger.WithError(err).Errorf("failed to delete staging dir - %s, remove it manually later", unusedStagingDir)
+		}
+	}()
+
 	localTempDirPath := os.TempDir()
 
 	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, commons.MaxBundleFileNumDefault, commons.MaxBundleFileSizeDefault, localTempDirPath, irodsTempDirPath, true, noHash, progress)
