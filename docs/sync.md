@@ -2,7 +2,7 @@
 
 You can sync your local data with iRODS (or reverse) using `Gocommands`.
 
-You can use `get`, `put`, `bput`, `copy`, and `sync` subcommands for moving data.
+You can use `get`, `put`, `bput`, `cp`, and `sync` subcommands for moving data.
 
 ## Get (Download) data from iRODS to local
 
@@ -35,6 +35,8 @@ gocmd get test_data .
 - `--diff`: Does not download a file if the file exists at local. Overwrites if the local file has different `size` or file `hash`.
 - `--no_hash`: Works with `--diff`. Does not use file `hash` in file comparisons. This is a lot faster than using `hash` and useful if you don't change file content (like image files).
 - `-f`: Downloads data in iRODS to local forcefully. Existing files at local will be overwritten.
+- `--retry <num_retry>`: Retries the same command with given retry number if something goes wrong, like network failure. 
+- `--retry_interval <seconds>`: Sets interval between each retry.
 
 
 ## Put (Upload) data from local to iRODS
@@ -69,6 +71,8 @@ gocmd put test_data .
 - `--no_hash`: Works with `--diff`. Does not use file `hash` in file comparisons. This is a lot faster than using `hash` and useful if you don't change file content (like image files).
 - `-f`: Uploads data at local to iRODS forcefully. Existing files in iRODS will be overwritten.
 - `--no_replication`: Does not trigger iRODS data replication. Use this only if you know what this is.
+- `--retry <num_retry>`: Retries the same command with given retry number if something goes wrong, like network failure. 
+- `--retry_interval <seconds>`: Sets interval between each retry.
 
 ### Note
 
@@ -117,7 +121,8 @@ gocmd bput test_data .
 - `--max_file_num`: Specifies the maximum number of files in a bundle. Default is 50.
 - `--max_file_size`: Specifies the size threshold of a bundle. Default is 1GB.
 - `--local_temp`: Specifies the local temporary directory to be used in creating bundle files. Default is `/tmp`.
-
+- `--retry <num_retry>`: Retries the same command with given retry number if something goes wrong, like network failure. 
+- `--retry_interval <seconds>`: Sets interval between each retry.
 
 
 ## Sync data between local and iRODS
@@ -147,7 +152,8 @@ gocmd sync i:[irods_source] [local_destination]
 - `--max_file_num`: Specifies the maximum number of files in a bundle. Default is 50.
 - `--max_file_size`: Specifies the size threshold of a bundle. Default is 1GB.
 - `--local_temp`: Specifies the local temporary directory to be used in creating bundle files. Default is `/tmp`.
-
+- `--retry <num_retry>`: Retries the same command with given retry number if something goes wrong, like network failure. 
+- `--retry_interval <seconds>`: Sets interval between each retry.
 
 ### Note
 
