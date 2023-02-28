@@ -29,6 +29,7 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	bputCmd.Flags().String("irods_temp", "", "Specify iRODS temp directory path to upload bundle files to")
 	bputCmd.Flags().Bool("diff", false, "Put files having different content")
 	bputCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
+	bputCmd.Flags().Bool("no_replication", false, "Disable replication (default is False)")
 
 	rootCmd.AddCommand(bputCmd)
 }
@@ -98,6 +99,17 @@ func processBputCommand(command *cobra.Command, args []string) error {
 			noHash = false
 		}
 	}
+
+	noReplication := false
+	noReplicationFlag := command.Flags().Lookup("no_replication")
+	if noReplicationFlag != nil {
+		noReplication, err = strconv.ParseBool(noReplicationFlag.Value.String())
+		if err != nil {
+			noReplication = false
+		}
+	}
+
+	replication := !noReplication
 
 	localTempDirPath := os.TempDir()
 	localTempPathFlag := command.Flags().Lookup("local_temp")
@@ -177,7 +189,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		}
 	}()
 
-	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, localTempDirPath, irodsTempDirPath, diff, noHash, progress)
+	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, localTempDirPath, irodsTempDirPath, diff, noHash, replication, progress)
 	bundleTransferManager.Start()
 
 	bundleRootPath, err := commons.GetCommonRootLocalDirPath(sourcePaths)

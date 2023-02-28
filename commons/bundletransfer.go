@@ -106,6 +106,7 @@ type BundleTransferManager struct {
 	irodsTempDirPath        string
 	differentFilesOnly      bool
 	noHashForComparison     bool
+	replication             bool
 	showProgress            bool
 	progressWriter          progress.Writer
 	progressTrackers        map[string]*progress.Tracker
@@ -118,7 +119,7 @@ type BundleTransferManager struct {
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
-func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, localTempDirPath string, irodsTempDirPath string, diff bool, noHash bool, showProgress bool) *BundleTransferManager {
+func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, localTempDirPath string, irodsTempDirPath string, diff bool, noHash bool, replication bool, showProgress bool) *BundleTransferManager {
 	manager := &BundleTransferManager{
 		id:                      xid.New().String(),
 		filesystem:              fs,
@@ -133,6 +134,7 @@ func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath strin
 		irodsTempDirPath:        irodsTempDirPath,
 		differentFilesOnly:      diff,
 		noHashForComparison:     noHash,
+		replication:             replication,
 		showProgress:            showProgress,
 		progressWriter:          nil,
 		progressTrackers:        map[string]*progress.Tracker{},
@@ -846,9 +848,7 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 
 	progressName := manager.getProgressName(bundle, BundleTaskNameUpload)
 
-	config := GetConfig()
 	totalFileSize := bundle.size
-	replicate := !config.NoReplication
 
 	if bundle.requireTar() {
 		var callback func(processed int64, total int64)
@@ -923,7 +923,7 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 					ClearIRODSDirCache(manager.filesystem, path.Dir(file.IRODSPath))
 				}
 
-				err := manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, replicate, callbackFileUpload)
+				err := manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, manager.replication, callbackFileUpload)
 				if err != nil {
 					if manager.showProgress {
 						manager.progress(progressName, -1, totalFileSize, progress.UnitsBytes, true)

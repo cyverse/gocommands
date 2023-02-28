@@ -30,6 +30,7 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	putCmd.Flags().Bool("progress", false, "Display progress bar")
 	putCmd.Flags().Bool("diff", false, "Put files having different content")
 	putCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
+	putCmd.Flags().Bool("no_replication", false, "Disable replication (default is False)")
 
 	rootCmd.AddCommand(putCmd)
 }
@@ -86,8 +87,16 @@ func processPutCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
-	config := commons.GetConfig()
-	replicate := !config.NoReplication
+	noReplication := false
+	noReplicationFlag := command.Flags().Lookup("no_replication")
+	if noReplicationFlag != nil {
+		noReplication, err = strconv.ParseBool(noReplicationFlag.Value.String())
+		if err != nil {
+			noReplication = false
+		}
+	}
+
+	replication := !noReplication
 
 	// Create a file system
 	account := commons.GetAccount()
@@ -114,7 +123,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	parallelJobManager.Start()
 
 	for _, sourcePath := range sourcePaths {
-		err = putOne(parallelJobManager, sourcePath, targetPath, force, replicate, diff, noHash)
+		err = putOne(parallelJobManager, sourcePath, targetPath, force, replication, diff, noHash)
 		if err != nil {
 			return xerrors.Errorf("failed to perform put %s to %s: %w", sourcePath, targetPath, err)
 		}

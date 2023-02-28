@@ -25,6 +25,7 @@ func AddSyncCommand(rootCmd *cobra.Command) {
 
 	syncCmd.Flags().Bool("progress", false, "Display progress bar")
 	syncCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
+	syncCmd.Flags().Bool("no_replication", false, "Disable replication (default is False)")
 
 	rootCmd.AddCommand(syncCmd)
 }
@@ -62,6 +63,17 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 			noHash = false
 		}
 	}
+
+	noReplication := false
+	noReplicationFlag := command.Flags().Lookup("no_replication")
+	if noReplicationFlag != nil {
+		noReplication, err = strconv.ParseBool(noReplicationFlag.Value.String())
+		if err != nil {
+			noReplication = false
+		}
+	}
+
+	replication := !noReplication
 
 	// Create a file system
 	account := commons.GetAccount()
@@ -103,7 +115,7 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 		}
 
 		// target must starts with "i:"
-		err := syncFromLocal(filesystem, localSources, targetPath[2:], progress, noHash)
+		err := syncFromLocal(filesystem, localSources, targetPath[2:], progress, replication, noHash)
 		if err != nil {
 			return xerrors.Errorf("failed to perform sync (from local): %w", err)
 		}
@@ -120,7 +132,7 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath string, progress bool, noHash bool) error {
+func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath string, progress bool, replication bool, noHash bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "syncFromLocal",
@@ -153,7 +165,7 @@ func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath s
 
 	localTempDirPath := os.TempDir()
 
-	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, commons.MaxBundleFileNumDefault, commons.MaxBundleFileSizeDefault, localTempDirPath, irodsTempDirPath, true, noHash, progress)
+	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, commons.MaxBundleFileNumDefault, commons.MaxBundleFileSizeDefault, localTempDirPath, irodsTempDirPath, true, noHash, replication, progress)
 	bundleTransferManager.Start()
 
 	bundleRootPath, err := commons.GetCommonRootLocalDirPath(sourcePaths)

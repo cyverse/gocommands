@@ -109,7 +109,6 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().BoolP("help", "h", false, "Print help")
 	command.Flags().BoolP("debug", "d", false, "Enable debug mode (default is False)")
 	command.Flags().String("log_level", "", "Set log level (default is INFO)")
-	command.Flags().Bool("no_replication", false, "Disable replication (default is False)")
 	command.Flags().Int32P("session", "s", -1, "Set session ID")
 	command.Flags().StringP("resource", "R", "", "Set resource server (default is empty)")
 	command.Flags().StringP("ticket", "T", "", "Set ticket")
@@ -275,19 +274,6 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		appConfig.DefaultResource = resourceFlag.Value.String()
 		if len(appConfig.DefaultResource) > 0 {
 			logger.Debugf("use default resource server - %s", appConfig.DefaultResource)
-		}
-	}
-
-	noReplicationFlag := command.Flags().Lookup("no_replication")
-	if noReplicationFlag != nil {
-		noReplication, err := strconv.ParseBool(noReplicationFlag.Value.String())
-		if err != nil {
-			noReplication = false
-		}
-
-		appConfig.NoReplication = noReplication
-		if noReplication {
-			logger.Debug("disabled replication")
 		}
 	}
 

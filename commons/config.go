@@ -38,8 +38,6 @@ type Config struct {
 	EncryptionAlgorithm     string `yaml:"irods_encryption_algorithm,omitempty" envconfig:"IRODS_ENCRYPTION_ALGORITHM"`
 	EncryptionSaltSize      int    `yaml:"irods_encryption_salt_size,omitempty" envconfig:"IRODS_ENCRYPTION_SALT_SIZE"`
 	EncryptionNumHashRounds int    `yaml:"irods_encryption_num_hash_rounds,omitempty" envconfig:"IRODS_ENCRYPTION_NUM_HASH_ROUNDS"`
-
-	NoReplication bool `yaml:"irods_no_replication,omitempty" envconfig:"IRODS_NO_REPLICATION"`
 }
 
 func GetDefaultConfig() *Config {
@@ -53,8 +51,6 @@ func GetDefaultConfig() *Config {
 		EncryptionAlgorithm:     EncryptionAlgorithmDefault,
 		EncryptionSaltSize:      SaltSizeDefault,
 		EncryptionNumHashRounds: HashRoundsDefault,
-
-		NoReplication: false,
 	}
 }
 
