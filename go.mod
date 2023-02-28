@@ -3,7 +3,7 @@ module github.com/cyverse/gocommands
 go 1.18
 
 require (
-	github.com/cyverse/go-irodsclient v0.10.11
+	github.com/cyverse/go-irodsclient v0.10.12
 	github.com/gliderlabs/ssh v0.3.5
 	github.com/jedib0t/go-pretty/v6 v6.3.1
 	github.com/kelseyhightower/envconfig v1.4.0
