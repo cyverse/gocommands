@@ -32,6 +32,7 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	putCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
 	putCmd.Flags().Bool("no_replication", false, "Disable replication (default is False)")
 	putCmd.Flags().Int("retry", 1, "Retry if fails (default is 1)")
+	putCmd.Flags().Int("retry_interval", 60, "Retry interval in seconds (default is 60)")
 
 	rootCmd.AddCommand(putCmd)
 }
@@ -119,8 +120,17 @@ func processPutCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
+	retryInterval := int64(60)
+	retryIntervalFlag := command.Flags().Lookup("retry_interval")
+	if retryIntervalFlag != nil {
+		retryInterval, err = strconv.ParseInt(retryIntervalFlag.Value.String(), 10, 32)
+		if err != nil {
+			retryInterval = 60
+		}
+	}
+
 	if retry > 1 && !retryChild {
-		err = commons.RunWithRetry(int(retry))
+		err = commons.RunWithRetry(int(retry), int(retryInterval))
 		if err != nil {
 			return xerrors.Errorf("failed to run with retry %d: %w", err)
 		}

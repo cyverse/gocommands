@@ -29,6 +29,8 @@ func AddCpCommand(rootCmd *cobra.Command) {
 	cpCmd.Flags().Bool("progress", false, "Display progress bars")
 	cpCmd.Flags().Bool("diff", false, "Copy files having different content")
 	cpCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
+	cpCmd.Flags().Int("retry", 1, "Retry if fails (default is 1)")
+	cpCmd.Flags().Int("retry_interval", 60, "Retry interval in seconds (default is 60)")
 
 	rootCmd.AddCommand(cpCmd)
 }
@@ -92,6 +94,43 @@ func processCpCommand(command *cobra.Command, args []string) error {
 		if err != nil {
 			noHash = false
 		}
+	}
+
+	retryChild := false
+	retryChildFlag := command.Flags().Lookup("retry_child")
+	if retryChildFlag != nil {
+		retryChildValue, err := strconv.ParseBool(retryChildFlag.Value.String())
+		if err != nil {
+			retryChildValue = false
+		}
+
+		retryChild = retryChildValue
+	}
+
+	retry := int64(1)
+	retryFlag := command.Flags().Lookup("retry")
+	if retryFlag != nil {
+		retry, err = strconv.ParseInt(retryFlag.Value.String(), 10, 32)
+		if err != nil {
+			retry = 1
+		}
+	}
+
+	retryInterval := int64(60)
+	retryIntervalFlag := command.Flags().Lookup("retry_interval")
+	if retryIntervalFlag != nil {
+		retryInterval, err = strconv.ParseInt(retryIntervalFlag.Value.String(), 10, 32)
+		if err != nil {
+			retryInterval = 60
+		}
+	}
+
+	if retry > 1 && !retryChild {
+		err = commons.RunWithRetry(int(retry), int(retryInterval))
+		if err != nil {
+			return xerrors.Errorf("failed to run with retry %d: %w", err)
+		}
+		return nil
 	}
 
 	// Create a file system

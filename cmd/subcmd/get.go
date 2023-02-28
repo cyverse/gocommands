@@ -30,6 +30,7 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	getCmd.Flags().Bool("diff", false, "Get files having different content")
 	getCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
 	getCmd.Flags().Int("retry", 1, "Retry if fails (default is 1)")
+	getCmd.Flags().Int("retry_interval", 60, "Retry interval in seconds (default is 60)")
 
 	rootCmd.AddCommand(getCmd)
 }
@@ -106,8 +107,17 @@ func processGetCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
+	retryInterval := int64(60)
+	retryIntervalFlag := command.Flags().Lookup("retry_interval")
+	if retryIntervalFlag != nil {
+		retryInterval, err = strconv.ParseInt(retryIntervalFlag.Value.String(), 10, 32)
+		if err != nil {
+			retryInterval = 60
+		}
+	}
+
 	if retry > 1 && !retryChild {
-		err = commons.RunWithRetry(int(retry))
+		err = commons.RunWithRetry(int(retry), int(retryInterval))
 		if err != nil {
 			return err
 		}

@@ -1,14 +1,16 @@
 package commons
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
 )
 
-func RunWithRetry(retry int) error {
+func RunWithRetry(retry int, retryInterval int) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "commons",
 		"function": "RunWithRetry",
@@ -24,6 +26,13 @@ func RunWithRetry(retry int) error {
 		}
 
 		logger.Errorf("%+v", err)
+		fmt.Fprintf(os.Stderr, "Error: %+v\n", err)
+
+		logger.Errorf("Waiting %d seconds for next try...", retryInterval)
+		fmt.Fprintf(os.Stderr, "Waiting %d seconds for next try...", retryInterval)
+
+		sleepTime := time.Duration(retryInterval * int(time.Second))
+		time.Sleep(sleepTime)
 	}
 
 	if err != nil {
