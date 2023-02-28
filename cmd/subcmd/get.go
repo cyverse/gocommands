@@ -29,6 +29,7 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	getCmd.Flags().Bool("progress", false, "Display progress bar")
 	getCmd.Flags().Bool("diff", false, "Get files having different content")
 	getCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
+	getCmd.Flags().Int("retry", 1, "Retry if fails (default is 1)")
 
 	rootCmd.AddCommand(getCmd)
 }
@@ -83,6 +84,34 @@ func processGetCommand(command *cobra.Command, args []string) error {
 		if err != nil {
 			noHash = false
 		}
+	}
+
+	retryChild := false
+	retryChildFlag := command.Flags().Lookup("retry_child")
+	if retryChildFlag != nil {
+		retryChildValue, err := strconv.ParseBool(retryChildFlag.Value.String())
+		if err != nil {
+			retryChildValue = false
+		}
+
+		retryChild = retryChildValue
+	}
+
+	retry := int64(1)
+	retryFlag := command.Flags().Lookup("retry")
+	if retryFlag != nil {
+		retry, err = strconv.ParseInt(retryFlag.Value.String(), 10, 32)
+		if err != nil {
+			retry = 1
+		}
+	}
+
+	if retry > 1 && !retryChild {
+		err = commons.RunWithRetry(int(retry))
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 
 	// Create a file system

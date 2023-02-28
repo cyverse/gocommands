@@ -2,6 +2,7 @@ package commons
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -105,6 +106,7 @@ func SetCWD(cwd string) {
 func SetCommonFlags(command *cobra.Command) {
 	command.Flags().StringP("config", "c", "", "Set config file or dir (default is $HOME/.irods)")
 	command.Flags().BoolP("envconfig", "e", false, "Read config from environmental variables")
+	command.Flags().Bool("retry_child", false, "Set this to retry child process")
 	command.Flags().BoolP("version", "v", false, "Print version")
 	command.Flags().BoolP("help", "h", false, "Print help")
 	command.Flags().BoolP("debug", "d", false, "Enable debug mode (default is False)")
@@ -268,6 +270,25 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		log.SetLevel(log.DebugLevel)
 	}
 
+	retryChild := false
+	retryChildFlag := command.Flags().Lookup("retry_child")
+	if retryChildFlag != nil {
+		retryChildValue, err := strconv.ParseBool(retryChildFlag.Value.String())
+		if err != nil {
+			retryChildValue = false
+		}
+
+		retryChild = retryChildValue
+	}
+
+	if retryChild {
+		// read from stdin
+		err := InputMissingFieldsFromStdin()
+		if err != nil {
+			return false, xerrors.Errorf("failed to load config from stdin: %w", err) // stop here
+		}
+	}
+
 	resourceFlag := command.Flags().Lookup("resource")
 	if resourceFlag != nil {
 		// load to global variable
@@ -385,6 +406,38 @@ func InputMissingFields() (bool, error) {
 
 	account = newAccount
 	return updated, nil
+}
+
+// InputMissingFieldsFromStdin inputs missing fields
+func InputMissingFieldsFromStdin() error {
+	if environmentManager == nil {
+		envMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
+		if err != nil {
+			return xerrors.Errorf("failed to get new iCommands Environment: %w", err)
+		}
+
+		environmentManager = envMgr
+	}
+
+	// read from stdin
+	stdinBytes, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return xerrors.Errorf("failed to read missing config values from stdin: %w", err)
+	}
+
+	configTypeIn, err := NewConfigTypeInFromYAML(stdinBytes)
+	if err != nil {
+		return xerrors.Errorf("failed to read missing config values: %w", err)
+	}
+
+	env := environmentManager.Environment
+	env.Host = configTypeIn.Host
+	env.Port = configTypeIn.Port
+	env.Zone = configTypeIn.Zone
+	env.Username = configTypeIn.Username
+	environmentManager.Password = configTypeIn.Password
+
+	return nil
 }
 
 func isICommandsEnvDir(filePath string) bool {

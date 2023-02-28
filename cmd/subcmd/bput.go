@@ -30,6 +30,7 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	bputCmd.Flags().Bool("diff", false, "Put files having different content")
 	bputCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
 	bputCmd.Flags().Bool("no_replication", false, "Disable replication (default is False)")
+	bputCmd.Flags().Int("retry", 1, "Retry if fails (default is 1)")
 
 	rootCmd.AddCommand(bputCmd)
 }
@@ -124,6 +125,34 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		if len(tempDirPath) > 0 {
 			irodsTempDirPath = tempDirPath
 		}
+	}
+
+	retryChild := false
+	retryChildFlag := command.Flags().Lookup("retry_child")
+	if retryChildFlag != nil {
+		retryChildValue, err := strconv.ParseBool(retryChildFlag.Value.String())
+		if err != nil {
+			retryChildValue = false
+		}
+
+		retryChild = retryChildValue
+	}
+
+	retry := int64(1)
+	retryFlag := command.Flags().Lookup("retry")
+	if retryFlag != nil {
+		retry, err = strconv.ParseInt(retryFlag.Value.String(), 10, 32)
+		if err != nil {
+			retry = 1
+		}
+	}
+
+	if retry > 1 && !retryChild {
+		err = commons.RunWithRetry(int(retry))
+		if err != nil {
+			return xerrors.Errorf("failed to run with retry %d: %w", err)
+		}
+		return nil
 	}
 
 	// Create a file system

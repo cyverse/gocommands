@@ -8,7 +8,6 @@ import (
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -33,7 +32,7 @@ func processCommand(command *cobra.Command, args []string) error {
 
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
-		logger.Error(err)
+		logger.Errorf("%+v", err)
 	}
 
 	if !cont {
@@ -87,8 +86,8 @@ func main() {
 
 	err := Execute()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		logger.Errorf("%+v", xerrors.Errorf(": %w", err))
+		fmt.Fprintf(os.Stderr, "Error: %+v\n", err)
+		logger.Errorf("%+v", err)
 		os.Exit(1)
 	}
 }
