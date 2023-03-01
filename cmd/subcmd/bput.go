@@ -1,6 +1,7 @@
 package subcmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -24,6 +25,7 @@ func AddBputCommand(rootCmd *cobra.Command) {
 
 	bputCmd.Flags().Int("max_file_num", commons.MaxBundleFileNumDefault, "Specify max file number in a bundle file")
 	bputCmd.Flags().Int64("max_file_size", commons.MaxBundleFileSizeDefault, "Specify max file size of a bundle file")
+	bputCmd.Flags().Int("upload_thread_num", commons.UploadTreadNumDefault, "Specify the number of upload threads")
 	bputCmd.Flags().Bool("progress", false, "Display progress bars")
 	bputCmd.Flags().String("local_temp", os.TempDir(), "Specify local temp directory path to create bundle files")
 	bputCmd.Flags().String("irods_temp", "", "Specify iRODS temp directory path to upload bundle files to")
@@ -72,6 +74,15 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		n, err := strconv.ParseInt(maxFileSizeFlag.Value.String(), 10, 64)
 		if err == nil {
 			maxFileSize = n
+		}
+	}
+
+	uploadThreadNum := commons.UploadTreadNumDefault
+	uploadThreadNumFlag := command.Flags().Lookup("upload_thread_num")
+	if uploadThreadNumFlag != nil {
+		n, err := strconv.ParseInt(uploadThreadNumFlag.Value.String(), 10, 32)
+		if err == nil {
+			uploadThreadNum = int(n)
 		}
 	}
 
@@ -160,7 +171,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	if retry > 1 && !retryChild {
 		err = commons.RunWithRetry(int(retry), int(retryInterval))
 		if err != nil {
-			return xerrors.Errorf("failed to run with retry %d: %w", err)
+			return xerrors.Errorf("failed to run with retry %d: %w", retry, err)
 		}
 		return nil
 	}
@@ -190,6 +201,8 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+
+	fmt.Printf("determining staging dir...\n")
 	if len(irodsTempDirPath) > 0 {
 		logger.Debugf("validating staging dir - %s", irodsTempDirPath)
 
@@ -217,6 +230,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	}
 
 	logger.Debugf("use staging dir - %s", irodsTempDirPath)
+	fmt.Printf("will use %s for staging\n", irodsTempDirPath)
 
 	// clean up staging dir in the target dir
 	defer func() {
@@ -228,7 +242,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		}
 	}()
 
-	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, localTempDirPath, irodsTempDirPath, diff, noHash, replication, progress)
+	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, uploadThreadNum, localTempDirPath, irodsTempDirPath, diff, noHash, replication, progress)
 	bundleTransferManager.Start()
 
 	bundleRootPath, err := commons.GetCommonRootLocalDirPath(sourcePaths)

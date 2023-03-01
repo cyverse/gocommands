@@ -21,7 +21,9 @@ import (
 const (
 	MaxBundleFileNumDefault  int   = 50
 	MaxBundleFileSizeDefault int64 = 5 * 1024 * 1024 * 1024 // 5GB
-	MinBundleFileNumDefault  int   = 1
+	MinBundleFileNumDefault  int   = 1                      // it seems untar recreates dir and changes collection ID, causing getting collection by ID fail
+	UploadTreadNumDefault    int   = 5
+	UploadTreadNumMax        int   = 20
 )
 
 const (
@@ -102,6 +104,7 @@ type BundleTransferManager struct {
 	bundleRootPath          string
 	maxBundleFileNum        int
 	maxBundleFileSize       int64
+	uploadThreadNum         int
 	localTempDirPath        string
 	irodsTempDirPath        string
 	differentFilesOnly      bool
@@ -119,7 +122,7 @@ type BundleTransferManager struct {
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
-func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, localTempDirPath string, irodsTempDirPath string, diff bool, noHash bool, replication bool, showProgress bool) *BundleTransferManager {
+func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, uploadThreadNum int, localTempDirPath string, irodsTempDirPath string, diff bool, noHash bool, replication bool, showProgress bool) *BundleTransferManager {
 	manager := &BundleTransferManager{
 		id:                      xid.New().String(),
 		filesystem:              fs,
@@ -130,6 +133,7 @@ func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath strin
 		bundleRootPath:          "/",
 		maxBundleFileNum:        maxBundleFileNum,
 		maxBundleFileSize:       maxBundleFileSize,
+		uploadThreadNum:         uploadThreadNum,
 		localTempDirPath:        localTempDirPath,
 		irodsTempDirPath:        irodsTempDirPath,
 		differentFilesOnly:      diff,
@@ -143,6 +147,10 @@ func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath strin
 		mutex:                   sync.RWMutex{},
 		scheduleWait:            sync.WaitGroup{},
 		transferWait:            sync.WaitGroup{},
+	}
+
+	if manager.uploadThreadNum > UploadTreadNumMax {
+		manager.uploadThreadNum = UploadTreadNumMax
 	}
 
 	manager.scheduleWait.Add(1)
@@ -558,7 +566,7 @@ func (manager *BundleTransferManager) Start() {
 	}
 
 	waitAsyncUpload := sync.WaitGroup{}
-	for i := 0; i < 5; i++ {
+	for i := 0; i < manager.uploadThreadNum; i++ {
 		waitAsyncUpload.Add(1)
 		go funcAsyncUpload(i, &waitAsyncUpload)
 	}

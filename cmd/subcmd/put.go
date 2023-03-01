@@ -132,7 +132,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	if retry > 1 && !retryChild {
 		err = commons.RunWithRetry(int(retry), int(retryInterval))
 		if err != nil {
-			return xerrors.Errorf("failed to run with retry %d: %w", err)
+			return xerrors.Errorf("failed to run with retry %d: %w", retry, err)
 		}
 		return nil
 	}

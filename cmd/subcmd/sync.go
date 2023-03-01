@@ -1,6 +1,7 @@
 package subcmd
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -23,7 +24,12 @@ func AddSyncCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(syncCmd)
 
+	syncCmd.Flags().Int("max_file_num", commons.MaxBundleFileNumDefault, "Specify max file number in a bundle file")
+	syncCmd.Flags().Int64("max_file_size", commons.MaxBundleFileSizeDefault, "Specify max file size of a bundle file")
+	syncCmd.Flags().Int("upload_thread_num", commons.UploadTreadNumDefault, "Specify the number of upload threads")
 	syncCmd.Flags().Bool("progress", false, "Display progress bar")
+	syncCmd.Flags().String("local_temp", os.TempDir(), "Specify local temp directory path to create bundle files")
+	syncCmd.Flags().String("irods_temp", "", "Specify iRODS temp directory path to upload bundle files to")
 	syncCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
 	syncCmd.Flags().Bool("no_replication", false, "Disable replication (default is False)")
 	syncCmd.Flags().Int("retry", 1, "Retry if fails (default is 1)")
@@ -46,6 +52,33 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 	_, err = commons.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
+	}
+
+	maxFileNum := commons.MaxBundleFileNumDefault
+	maxFileNumFlag := command.Flags().Lookup("max_file_num")
+	if maxFileNumFlag != nil {
+		n, err := strconv.ParseInt(maxFileNumFlag.Value.String(), 10, 32)
+		if err == nil {
+			maxFileNum = int(n)
+		}
+	}
+
+	maxFileSize := commons.MaxBundleFileSizeDefault
+	maxFileSizeFlag := command.Flags().Lookup("max_file_size")
+	if maxFileSizeFlag != nil {
+		n, err := strconv.ParseInt(maxFileSizeFlag.Value.String(), 10, 64)
+		if err == nil {
+			maxFileSize = n
+		}
+	}
+
+	uploadThreadNum := commons.UploadTreadNumDefault
+	uploadThreadNumFlag := command.Flags().Lookup("upload_thread_num")
+	if uploadThreadNumFlag != nil {
+		n, err := strconv.ParseInt(uploadThreadNumFlag.Value.String(), 10, 32)
+		if err == nil {
+			uploadThreadNum = int(n)
+		}
 	}
 
 	progress := false
@@ -76,6 +109,21 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 	}
 
 	replication := !noReplication
+
+	localTempDirPath := os.TempDir()
+	localTempPathFlag := command.Flags().Lookup("local_temp")
+	if localTempPathFlag != nil {
+		localTempDirPath = localTempPathFlag.Value.String()
+	}
+
+	irodsTempDirPath := ""
+	irodsTempPathFlag := command.Flags().Lookup("irods_temp")
+	if irodsTempPathFlag != nil {
+		tempDirPath := irodsTempPathFlag.Value.String()
+		if len(tempDirPath) > 0 {
+			irodsTempDirPath = tempDirPath
+		}
+	}
 
 	retryChild := false
 	retryChildFlag := command.Flags().Lookup("retry_child")
@@ -109,7 +157,7 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 	if retry > 1 && !retryChild {
 		err = commons.RunWithRetry(int(retry), int(retryInterval))
 		if err != nil {
-			return xerrors.Errorf("failed to run with retry %d: %w", err)
+			return xerrors.Errorf("failed to run with retry %d: %w", retry, err)
 		}
 		return nil
 	}
@@ -154,7 +202,7 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 		}
 
 		// target must starts with "i:"
-		err := syncFromLocal(filesystem, localSources, targetPath[2:], progress, replication, noHash)
+		err := syncFromLocal(filesystem, localSources, targetPath[2:], maxFileNum, maxFileSize, uploadThreadNum, localTempDirPath, irodsTempDirPath, progress, replication, noHash)
 		if err != nil {
 			return xerrors.Errorf("failed to perform sync (from local): %w", err)
 		}
@@ -171,7 +219,7 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath string, progress bool, replication bool, noHash bool) error {
+func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath string, maxFileNum int, maxFileSize int64, uploadThreadNum int, localTempDirPath string, irodsTempDirPath string, progress bool, replication bool, noHash bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "syncFromLocal",
@@ -182,15 +230,36 @@ func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath s
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	// set default staging dir
-	logger.Debug("get default staging dir")
+	fmt.Printf("determining staging dir...\n")
+	if len(irodsTempDirPath) > 0 {
+		logger.Debugf("validating staging dir - %s", irodsTempDirPath)
 
-	irodsTempDirPath, err := commons.GetDefaultStagingDir(filesystem, targetPath)
-	if err != nil {
-		return xerrors.Errorf("failed to get default staging dir: %w", err)
+		irodsTempDirPath = commons.MakeIRODSPath(cwd, home, zone, irodsTempDirPath)
+		ok, err := commons.ValidateStagingDir(filesystem, targetPath, irodsTempDirPath)
+		if err != nil {
+			return xerrors.Errorf("failed to validate staging dir - %s: %w", irodsTempDirPath, err)
+		}
+
+		if !ok {
+			logger.Debugf("unable to use the given staging dir %s since it is in a different resource server, using default staging dir", irodsTempDirPath)
+
+			irodsTempDirPath = commons.GetDefaultStagingDirInTargetPath(targetPath)
+		}
+	}
+
+	var err error
+	if len(irodsTempDirPath) == 0 {
+		// set default staging dir
+		logger.Debug("get default staging dir")
+
+		irodsTempDirPath, err = commons.GetDefaultStagingDir(filesystem, targetPath)
+		if err != nil {
+			return xerrors.Errorf("failed to get default staging dir: %w", err)
+		}
 	}
 
 	logger.Debugf("use staging dir - %s", irodsTempDirPath)
+	fmt.Printf("will use %s for staging\n", irodsTempDirPath)
 
 	// clean up staging dir in the target dir
 	defer func() {
@@ -202,9 +271,7 @@ func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath s
 		}
 	}()
 
-	localTempDirPath := os.TempDir()
-
-	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, commons.MaxBundleFileNumDefault, commons.MaxBundleFileSizeDefault, localTempDirPath, irodsTempDirPath, true, noHash, replication, progress)
+	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, uploadThreadNum, localTempDirPath, irodsTempDirPath, true, noHash, replication, progress)
 	bundleTransferManager.Start()
 
 	bundleRootPath, err := commons.GetCommonRootLocalDirPath(sourcePaths)
