@@ -20,8 +20,8 @@ import (
 // default values
 const (
 	MaxBundleFileNumDefault  int   = 50
-	MaxBundleFileSizeDefault int64 = 1 * 1024 * 1024 * 1024 // 1GB
-	MinBundleFileNumDefault  int   = 3
+	MaxBundleFileSizeDefault int64 = 5 * 1024 * 1024 * 1024 // 5GB
+	MinBundleFileNumDefault  int   = 1
 )
 
 const (
