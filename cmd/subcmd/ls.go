@@ -90,11 +90,11 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func listOne(fs *irodsclient_fs.FileSystem, targetPath string, longFormat bool, veryLongFormat bool) error {
+func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, longFormat bool, veryLongFormat bool) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 
 	connection, err := fs.GetConnection()
 	if err != nil {
@@ -102,22 +102,22 @@ func listOne(fs *irodsclient_fs.FileSystem, targetPath string, longFormat bool, 
 	}
 	defer fs.ReturnConnection(connection)
 
-	collection, err := irodsclient_irodsfs.GetCollection(connection, targetPath)
+	collection, err := irodsclient_irodsfs.GetCollection(connection, sourcePath)
 	if err != nil {
 		if !irodsclient_types.IsFileNotFoundError(err) {
-			return xerrors.Errorf("failed to get collection %s: %w", targetPath, err)
+			return xerrors.Errorf("failed to get collection %s: %w", sourcePath, err)
 		}
 	}
 
 	if err == nil {
-		colls, err := irodsclient_irodsfs.ListSubCollections(connection, targetPath)
+		colls, err := irodsclient_irodsfs.ListSubCollections(connection, sourcePath)
 		if err != nil {
-			return xerrors.Errorf("failed to list sub-collections in %s: %w", targetPath, err)
+			return xerrors.Errorf("failed to list sub-collections in %s: %w", sourcePath, err)
 		}
 
 		objs, err := irodsclient_irodsfs.ListDataObjects(connection, collection)
 		if err != nil {
-			return xerrors.Errorf("failed to list data-objects in %s: %w", targetPath, err)
+			return xerrors.Errorf("failed to list data-objects in %s: %w", sourcePath, err)
 		}
 
 		printDataObjects(objs, veryLongFormat, longFormat)
@@ -126,16 +126,16 @@ func listOne(fs *irodsclient_fs.FileSystem, targetPath string, longFormat bool, 
 	}
 
 	// data object
-	parentTargetPath := path.Dir(targetPath)
+	parentSourcePath := path.Dir(sourcePath)
 
-	parentCollection, err := irodsclient_irodsfs.GetCollection(connection, parentTargetPath)
+	parentCollection, err := irodsclient_irodsfs.GetCollection(connection, parentSourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to get collection %s: %w", parentTargetPath, err)
+		return xerrors.Errorf("failed to get collection %s: %w", parentSourcePath, err)
 	}
 
-	entry, err := irodsclient_irodsfs.GetDataObject(connection, parentCollection, path.Base(targetPath))
+	entry, err := irodsclient_irodsfs.GetDataObject(connection, parentCollection, path.Base(sourcePath))
 	if err != nil {
-		return xerrors.Errorf("failed to get data-object %s: %w", targetPath, err)
+		return xerrors.Errorf("failed to get data-object %s: %w", sourcePath, err)
 	}
 
 	printDataObject(entry, veryLongFormat, longFormat)

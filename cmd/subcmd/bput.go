@@ -282,6 +282,7 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string, ta
 	}
 
 	if !sourceStat.IsDir() {
+		// file
 		bundleManager.Schedule(sourcePath, sourceStat.Size(), sourceStat.ModTime().Local())
 	} else {
 		// dir
