@@ -171,6 +171,15 @@ func GetCommonRootLocalDirPath(paths []string) (string, error) {
 		return "/", nil
 	}
 
+	st, err := os.Stat(commonRootPath)
+	if err != nil {
+		return "", xerrors.Errorf("failed to stat path for %s: %w", commonRootPath, err)
+	}
+
+	if !st.IsDir() {
+		commonRootPath = filepath.Dir(commonRootPath)
+	}
+
 	return commonRootPath, nil
 }
 

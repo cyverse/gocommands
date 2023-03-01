@@ -241,6 +241,8 @@ func (manager *BundleTransferManager) Schedule(source string, size int64, lastMo
 			return xerrors.Errorf("failed to get target path for %s: %w", source, err)
 		}
 
+		logger.Debugf("checking if target file %s for source %s exists", targetFilePath, source)
+
 		exist := ExistsIRODSFile(manager.filesystem, targetFilePath)
 		if exist {
 			targetEntry, err := StatIRODSPath(manager.filesystem, targetFilePath)
@@ -250,12 +252,12 @@ func (manager *BundleTransferManager) Schedule(source string, size int64, lastMo
 
 			if manager.noHashForComparison {
 				if targetEntry.Size == size {
-					fmt.Printf("skip adding a file %s to the bundle. The file already exists!\n", targetFilePath)
-					logger.Debugf("skip adding a file %s to the bundle. The file already exists!", targetFilePath)
+					fmt.Printf("skip adding a file %s to the bundle. The file already exists!\n", source)
+					logger.Debugf("skip adding a file %s to the bundle. The file already exists!", source)
 					return nil
 				}
 
-				logger.Debugf("adding a file %s to the bundle as it has different size %d != %d", targetFilePath, targetEntry.Size, size)
+				logger.Debugf("adding a file %s to the bundle as it has different size %d != %d", source, targetEntry.Size, size)
 			} else {
 				if targetEntry.Size == size {
 					if len(targetEntry.CheckSum) > 0 {
@@ -266,19 +268,19 @@ func (manager *BundleTransferManager) Schedule(source string, size int64, lastMo
 						}
 
 						if md5hash == targetEntry.CheckSum {
-							fmt.Printf("skip adding a file %s to the bundle. The file with the same hash already exists!\n", targetFilePath)
-							logger.Debugf("skip adding a file %s to the bundle. The file with the same hash already exists!", targetFilePath)
+							fmt.Printf("skip adding a file %s to the bundle. The file with the same hash already exists!\n", source)
+							logger.Debugf("skip adding a file %s to the bundle. The file with the same hash already exists!", source)
 							return nil
 						}
 
-						logger.Debugf("adding a file %s to the bundle as it has different hash, %s vs %s", targetFilePath, md5hash, targetEntry.CheckSum)
+						logger.Debugf("adding a file %s to the bundle as it has different hash, %s vs %s", source, md5hash, targetEntry.CheckSum)
 					} else {
-						logger.Debugf("adding a file %s to the bundle as the file in iRODS doesn't have hash yet", targetFilePath)
+						logger.Debugf("adding a file %s to the bundle as the file in iRODS doesn't have hash yet", source)
 					}
 				}
 			}
 		} else {
-			logger.Debugf("adding a file %s to the bundle as it doesn't exist", targetFilePath)
+			logger.Debugf("adding a file %s to the bundle as it doesn't exist", source)
 		}
 	}
 
