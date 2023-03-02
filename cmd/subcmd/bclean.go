@@ -77,10 +77,6 @@ func processBcleanCommand(command *cobra.Command, args []string) error {
 	// clear local
 	commons.CleanUpOldLocalBundles(localTempDirPath, force)
 
-	if len(args) == 0 {
-		return nil
-	}
-
 	// Create a file system
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
