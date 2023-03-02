@@ -75,7 +75,6 @@ func processBcleanCommand(command *cobra.Command, args []string) error {
 	}
 
 	// clear local
-	//localTempDirPath
 	commons.CleanUpOldLocalBundles(localTempDirPath, force)
 
 	if len(args) == 0 {
@@ -97,7 +96,7 @@ func processBcleanCommand(command *cobra.Command, args []string) error {
 
 	if len(irodsTempDirPath) > 0 {
 		logger.Debugf("clearing irods temp dir %s", irodsTempDirPath)
-		bcleanOne(filesystem, irodsTempDirPath, force)
+		commons.CleanUpOldIRODSBundles(filesystem, irodsTempDirPath, false, force)
 	}
 
 	for _, targetPath := range args {

@@ -24,6 +24,7 @@ func AddSyncCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(syncCmd)
 
+	syncCmd.Flags().Bool("clear_leftover", false, "Clear leftover bundle files")
 	syncCmd.Flags().Int("max_file_num", commons.MaxBundleFileNumDefault, "Specify max file number in a bundle file")
 	syncCmd.Flags().Int64("max_file_size", commons.MaxBundleFileSizeDefault, "Specify max file size of a bundle file")
 	syncCmd.Flags().Int("upload_thread_num", commons.UploadTreadNumDefault, "Specify the number of upload threads")
@@ -39,6 +40,11 @@ func AddSyncCommand(rootCmd *cobra.Command) {
 }
 
 func processSyncCommand(command *cobra.Command, args []string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "processSyncCommand",
+	})
+
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
@@ -52,6 +58,15 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 	_, err = commons.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
+	}
+
+	clearLeftover := false
+	clearLeftoverFlag := command.Flags().Lookup("clear_leftover")
+	if clearLeftoverFlag != nil {
+		clearLeftover, err = strconv.ParseBool(clearLeftoverFlag.Value.String())
+		if err != nil {
+			clearLeftover = false
+		}
 	}
 
 	maxFileNum := commons.MaxBundleFileNumDefault
@@ -154,12 +169,9 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
-	if retry > 1 && !retryChild {
-		err = commons.RunWithRetry(int(retry), int(retryInterval))
-		if err != nil {
-			return xerrors.Errorf("failed to run with retry %d: %w", retry, err)
-		}
-		return nil
+	// clear local
+	if clearLeftover {
+		commons.CleanUpOldLocalBundles(localTempDirPath, true)
 	}
 
 	// Create a file system
@@ -170,6 +182,25 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 	}
 
 	defer filesystem.Release()
+
+	if clearLeftover {
+		trashHome := commons.GetTrashHomeDir()
+		logger.Debugf("clearing trash dir %s", trashHome)
+		commons.CleanUpOldIRODSBundles(filesystem, trashHome, false, true)
+
+		if len(irodsTempDirPath) > 0 {
+			logger.Debugf("clearing irods temp dir %s", irodsTempDirPath)
+			commons.CleanUpOldIRODSBundles(filesystem, irodsTempDirPath, false, true)
+		}
+	}
+
+	if retry > 1 && !retryChild {
+		err = commons.RunWithRetry(int(retry), int(retryInterval))
+		if err != nil {
+			return xerrors.Errorf("failed to run with retry %d: %w", retry, err)
+		}
+		return nil
+	}
 
 	if len(args) < 2 {
 		return xerrors.Errorf("not enough input arguments")
@@ -265,10 +296,7 @@ func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath s
 	defer func() {
 		unusedStagingDir := commons.GetDefaultStagingDirInTargetPath(targetPath)
 		logger.Debugf("delete staging dir - %s", unusedStagingDir)
-		err := filesystem.RemoveDir(unusedStagingDir, true, true)
-		if err != nil {
-			logger.WithError(err).Errorf("failed to delete staging dir - %s, remove it manually later", unusedStagingDir)
-		}
+		commons.CleanUpOldIRODSBundles(filesystem, unusedStagingDir, true, true)
 	}()
 
 	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, uploadThreadNum, localTempDirPath, irodsTempDirPath, true, noHash, replication, progress)
