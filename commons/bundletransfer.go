@@ -19,7 +19,7 @@ import (
 // default values
 const (
 	MaxBundleFileNumDefault  int   = 50
-	MaxBundleFileSizeDefault int64 = 5 * 1024 * 1024 * 1024 // 5GB
+	MaxBundleFileSizeDefault int64 = 2 * 1024 * 1024 * 1024 // 2GB
 	MinBundleFileNumDefault  int   = 1                      // it seems untar recreates dir and changes collection ID, causing getting collection by ID fail
 	UploadTreadNumDefault    int   = 5
 	UploadTreadNumMax        int   = 20
@@ -151,6 +151,8 @@ func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath strin
 	if manager.uploadThreadNum > UploadTreadNumMax {
 		manager.uploadThreadNum = UploadTreadNumMax
 	}
+
+	manager.adjustBundleFileSizeAuto()
 
 	manager.scheduleWait.Add(1)
 
@@ -982,6 +984,12 @@ func (manager *BundleTransferManager) processBundleExtract(bundle *Bundle) error
 
 func (manager *BundleTransferManager) getProgressName(bundle *Bundle, taskName string) string {
 	return fmt.Sprintf("bundle %d - %s", bundle.index, taskName)
+}
+
+func (manager *BundleTransferManager) adjustBundleFileSizeAuto() {
+	// get disk free space under tmp
+	//manager.localTempDirPath =
+
 }
 
 func CleanUpOldLocalBundles(localTempDirPath string, force bool) {
