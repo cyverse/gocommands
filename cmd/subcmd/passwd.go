@@ -65,11 +65,11 @@ func changePassword(fs *irodsclient_fs.FileSystem) error {
 
 	account := commons.GetAccount()
 
-	connection, err := fs.GetConnection()
+	connection, err := fs.GetMetadataConnection()
 	if err != nil {
 		return xerrors.Errorf("failed to get connection: %w", err)
 	}
-	defer fs.ReturnConnection(connection)
+	defer fs.ReturnMetadataConnection(connection)
 
 	logger.Debugf("changing password for user %s", account.ClientUser)
 

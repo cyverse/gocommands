@@ -102,11 +102,11 @@ func listProcesses(fs *irodsclient_fs.FileSystem, address string, zone string, g
 		"function": "listProcesses",
 	})
 
-	connection, err := fs.GetConnection()
+	connection, err := fs.GetMetadataConnection()
 	if err != nil {
 		return xerrors.Errorf("failed to get connection: %w", err)
 	}
-	defer fs.ReturnConnection(connection)
+	defer fs.ReturnMetadataConnection(connection)
 
 	logger.Debugf("listing processes - addr: %s, zone: %s", address, zone)
 

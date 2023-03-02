@@ -96,11 +96,11 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, longFormat bool, 
 	zone := commons.GetZone()
 	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 
-	connection, err := fs.GetConnection()
+	connection, err := fs.GetMetadataConnection()
 	if err != nil {
 		return xerrors.Errorf("failed to get connection: %w", err)
 	}
-	defer fs.ReturnConnection(connection)
+	defer fs.ReturnMetadataConnection(connection)
 
 	collection, err := irodsclient_irodsfs.GetCollection(connection, sourcePath)
 	if err != nil {

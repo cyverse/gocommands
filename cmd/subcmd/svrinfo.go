@@ -4,6 +4,7 @@ import (
 	"os"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	"github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/jedib0t/go-pretty/v6/table"
 	log "github.com/sirupsen/logrus"
@@ -50,7 +51,7 @@ func processSvrinfoCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
-	err = displayVersion(filesystem)
+	err = displayVersion(account, filesystem)
 	if err != nil {
 		return xerrors.Errorf("failed to perform svrinfo: %w", err)
 	}
@@ -58,22 +59,18 @@ func processSvrinfoCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func displayVersion(fs *irodsclient_fs.FileSystem) error {
+func displayVersion(account *types.IRODSAccount, fs *irodsclient_fs.FileSystem) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "displayVersion",
 	})
 
-	connection, err := fs.GetConnection()
-	if err != nil {
-		return xerrors.Errorf("failed to get connection: %w", err)
-	}
-	defer fs.ReturnConnection(connection)
-
 	logger.Debug("displaying version")
 
-	account := connection.GetAccount()
-	ver := connection.GetVersion()
+	ver, err := fs.GetServerVersion()
+	if err != nil {
+		return xerrors.Errorf("failed to get server version: %w", err)
+	}
 
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)

@@ -13,12 +13,13 @@ const (
 	ClientProgramName string        = "gocommands"
 	connectionTimeout time.Duration = 10 * time.Minute
 	filesystemTimeout time.Duration = 10 * time.Minute
+	tcpBufferSize     int           = 4 * 1024 * 1024
 )
 
 // GetIRODSFSClient returns a file system client
 func GetIRODSFSClient(account *irodsclient_types.IRODSAccount) (*irodsclient_fs.FileSystem, error) {
 	fsConfig := irodsclient_fs.NewFileSystemConfig(ClientProgramName, irodsclient_fs.ConnectionLifespanDefault,
-		filesystemTimeout, filesystemTimeout, irodsclient_fs.FileSystemConnectionMaxDefault,
+		filesystemTimeout, filesystemTimeout, irodsclient_fs.FileSystemConnectionMaxDefault, tcpBufferSize,
 		irodsclient_fs.FileSystemTimeoutDefault, irodsclient_fs.FileSystemTimeoutDefault, []irodsclient_fs.MetadataCacheTimeoutSetting{}, true, true)
 
 	return irodsclient_fs.NewFileSystem(account, fsConfig)

@@ -84,11 +84,11 @@ func makeOne(fs *irodsclient_fs.FileSystem, targetPath string, parent bool) erro
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	connection, err := fs.GetConnection()
+	connection, err := fs.GetMetadataConnection()
 	if err != nil {
 		return xerrors.Errorf("failed to get connection: %w", err)
 	}
-	defer fs.ReturnConnection(connection)
+	defer fs.ReturnMetadataConnection(connection)
 
 	logger.Debugf("making a collection %s", targetPath)
 

@@ -79,11 +79,11 @@ func changeWorkingDir(fs *irodsclient_fs.FileSystem, collectionPath string) erro
 	zone := commons.GetZone()
 	collectionPath = commons.MakeIRODSPath(cwd, home, zone, collectionPath)
 
-	connection, err := fs.GetConnection()
+	connection, err := fs.GetMetadataConnection()
 	if err != nil {
 		return xerrors.Errorf("failed to get connection: %w", err)
 	}
-	defer fs.ReturnConnection(connection)
+	defer fs.ReturnMetadataConnection(connection)
 
 	logger.Debugf("changing working dir: %s", collectionPath)
 

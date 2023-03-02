@@ -82,11 +82,11 @@ func GetDefaultStagingDir(fs *irodsclient_fs.FileSystem, targetPath string) (str
 }
 
 func GetResourceServers(fs *irodsclient_fs.FileSystem, targetDir string) ([]string, error) {
-	connection, err := fs.GetConnection()
+	connection, err := fs.GetMetadataConnection()
 	if err != nil {
 		return nil, xerrors.Errorf("failed to get connection: %w", err)
 	}
-	defer fs.ReturnConnection(connection)
+	defer fs.ReturnMetadataConnection(connection)
 
 	if !fs.ExistsDir(targetDir) {
 		err := fs.MakeDir(targetDir, true)
