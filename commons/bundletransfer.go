@@ -5,7 +5,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -165,22 +164,7 @@ func (manager *BundleTransferManager) getNextBundleIndex() int64 {
 }
 
 func (manager *BundleTransferManager) getBundleFileName(index int64) string {
-	return fmt.Sprintf("bundle_%s_%d.tar", manager.id, index)
-}
-
-func (manager *BundleTransferManager) getBundleFileNameParts(name string) (bool, string, string) {
-	if !strings.HasSuffix(name, ".tar") {
-		return false, "", ""
-	}
-
-	name = name[:len(name)-4]
-
-	parts := strings.Split(name, "_")
-	if len(parts) != 3 {
-		return false, "", ""
-	}
-
-	return true, parts[1], parts[2]
+	return GetBundleFileName(manager.id, index)
 }
 
 func (manager *BundleTransferManager) getLocalBundleFilePath(index int64) string {
@@ -343,7 +327,18 @@ func (manager *BundleTransferManager) CleanUpBundles() {
 
 	logger.Debugf("clearing bundle files in %s", manager.irodsTempDirPath)
 
-	// clean up - staging dir
+	if IsStagingDirInTargetPath(manager.irodsTempDirPath) {
+		// staging dir in target path
+		// remove all files in it and the dir
+		err := manager.filesystem.RemoveDir(manager.irodsTempDirPath, true, true)
+		if err != nil {
+			logger.WithError(err).Warnf("failed to remove staging dir %s", manager.irodsTempDirPath)
+			return
+		}
+		return
+	}
+
+	// if the staging dir is not in target path
 	entries, err := manager.filesystem.List(manager.irodsTempDirPath)
 	if err != nil {
 		logger.WithError(err).Warnf("failed to listing staging dir %s", manager.irodsTempDirPath)
@@ -352,7 +347,7 @@ func (manager *BundleTransferManager) CleanUpBundles() {
 
 	for _, entry := range entries {
 		if entry.Type == irodsclient_fs.FileEntry {
-			if ok, managerID, _ := manager.getBundleFileNameParts(entry.Name); ok {
+			if ok, managerID, _ := GetBundleFileNameParts(entry.Name); ok {
 				if managerID == manager.id {
 					err := manager.filesystem.RemoveFile(entry.Path, true)
 					if err != nil {
@@ -987,4 +982,148 @@ func (manager *BundleTransferManager) processBundleExtract(bundle *Bundle) error
 
 func (manager *BundleTransferManager) getProgressName(bundle *Bundle, taskName string) string {
 	return fmt.Sprintf("bundle %d - %s", bundle.index, taskName)
+}
+
+func CleanUpOldLocalBundles(localTempDirPath string, force bool) {
+	logger := log.WithFields(log.Fields{
+		"package":  "commons",
+		"struct":   "BundleTransferManager",
+		"function": "CleanUpOldLocalBundles",
+	})
+
+	logger.Debugf("clearing local bundle files in %s", localTempDirPath)
+
+	entries, err := os.ReadDir(localTempDirPath)
+	if err != nil {
+		logger.WithError(err).Warnf("failed to read local temp dir %s", localTempDirPath)
+		return
+	}
+
+	bundleEntries := []string{}
+	for _, entry := range entries {
+		// filter only bundle files
+		if ok, _, _ := GetBundleFileNameParts(entry.Name()); ok {
+			fullPath := filepath.Join(localTempDirPath, entry.Name())
+			bundleEntries = append(bundleEntries, fullPath)
+		}
+	}
+
+	if len(bundleEntries) == 0 {
+		return
+	}
+
+	if force {
+		for _, entry := range bundleEntries {
+			logger.Debugf("deleting old local bundle %s", entry)
+			removeErr := os.Remove(entry)
+			if removeErr != nil {
+				logger.WithError(removeErr).Warnf("failed to remove old local bundle %s", entry)
+			}
+		}
+		return
+	}
+
+	// ask
+	deleteAll := InputYN(fmt.Sprintf("removing %d old local bundle files found in local temp dir %s. Delete all?", len(bundleEntries), localTempDirPath))
+	if !deleteAll {
+		fmt.Printf("skip deleting %d old local bundles in %s\n", len(bundleEntries), localTempDirPath)
+		return
+	}
+
+	deletedCount := 0
+	for _, entry := range bundleEntries {
+		logger.Debugf("deleting old local bundle %s", entry)
+		removeErr := os.Remove(entry)
+		if removeErr != nil {
+			logger.WithError(removeErr).Warnf("failed to remove old local bundle %s", entry)
+		} else {
+			deletedCount++
+		}
+	}
+
+	fmt.Printf("deleted %d old local bundles in %s\n", deletedCount, localTempDirPath)
+}
+
+func CleanUpOldIRODSBundles(fs *irodsclient_fs.FileSystem, irodsTempDirPath string, removeDir bool, force bool) {
+	logger := log.WithFields(log.Fields{
+		"package":  "commons",
+		"struct":   "BundleTransferManager",
+		"function": "CleanUpOldIRODSBundles",
+	})
+
+	logger.Debugf("clearing old irods bundle files in %s", irodsTempDirPath)
+
+	if !fs.ExistsDir(irodsTempDirPath) {
+		return
+	}
+
+	entries, err := fs.List(irodsTempDirPath)
+	if err != nil {
+		logger.WithError(err).Warnf("failed to listing staging dir %s", irodsTempDirPath)
+		return
+	}
+
+	bundleEntries := []string{}
+	for _, entry := range entries {
+		// filter only bundle files
+		if entry.Type == irodsclient_fs.FileEntry {
+			if ok, _, _ := GetBundleFileNameParts(entry.Name); ok {
+				fullPath := path.Join(irodsTempDirPath, entry.Name)
+				bundleEntries = append(bundleEntries, fullPath)
+			}
+		}
+	}
+
+	if len(bundleEntries) == 0 {
+		return
+	}
+
+	if force {
+		for _, entry := range bundleEntries {
+			logger.Debugf("deleting old irods bundle %s", entry)
+			removeErr := fs.RemoveFile(entry, true)
+			if removeErr != nil {
+				logger.WithError(removeErr).Warnf("failed to remove old irods bundle %s", entry)
+			}
+		}
+
+		if removeDir {
+			if IsStagingDirInTargetPath(irodsTempDirPath) {
+				rmdirErr := fs.RemoveDir(irodsTempDirPath, true, true)
+				if rmdirErr != nil {
+					logger.WithError(rmdirErr).Warnf("failed to remove old irods bundle staging dir %s", irodsTempDirPath)
+				}
+			}
+		}
+		return
+	}
+
+	// ask
+	deleteAll := InputYN(fmt.Sprintf("removing %d old irods bundle files found in staging dir %s. Delete all?", len(bundleEntries), irodsTempDirPath))
+	if !deleteAll {
+		fmt.Printf("skip deleting %d old irods bundles in %s\n", len(bundleEntries), irodsTempDirPath)
+		return
+	}
+
+	deletedCount := 0
+	for _, entry := range bundleEntries {
+		logger.Debugf("deleting old irods bundle %s", entry)
+		removeErr := fs.RemoveFile(entry, false)
+		if removeErr != nil {
+			logger.WithError(removeErr).Warnf("failed to remove old irods bundle %s", entry)
+		} else {
+			deletedCount++
+		}
+	}
+
+	fmt.Printf("deleted %d old irods bundles in %s\n", deletedCount, irodsTempDirPath)
+
+	if removeDir {
+		if IsStagingDirInTargetPath(irodsTempDirPath) {
+			rmdirErr := fs.RemoveDir(irodsTempDirPath, false, false)
+			if rmdirErr != nil {
+				logger.WithError(rmdirErr).Warnf("failed to remove old irods bundle staging dir %s", irodsTempDirPath)
+			}
+		}
+	}
 }

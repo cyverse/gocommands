@@ -1,6 +1,7 @@
 package commons
 
 import (
+	"fmt"
 	"path"
 	"strings"
 
@@ -44,6 +45,29 @@ func ValidateStagingDir(fs *irodsclient_fs.FileSystem, targetPath string, stagin
 
 func GetDefaultStagingDirInTargetPath(targetPath string) string {
 	return path.Join(targetPath, ".gocmd_staging")
+}
+
+func IsStagingDirInTargetPath(stagingPath string) bool {
+	return path.Base(stagingPath) == ".gocmd_staging"
+}
+
+func GetBundleFileName(managerID string, bundleIndex int64) string {
+	return fmt.Sprintf("bundle_%s_%d.tar", managerID, bundleIndex)
+}
+
+func GetBundleFileNameParts(name string) (bool, string, string) {
+	if !strings.HasSuffix(name, ".tar") {
+		return false, "", ""
+	}
+
+	name = name[:len(name)-4]
+
+	parts := strings.Split(name, "_")
+	if len(parts) != 3 {
+		return false, "", ""
+	}
+
+	return true, parts[1], parts[2]
 }
 
 func GetDefaultStagingDir(fs *irodsclient_fs.FileSystem, targetPath string) (string, error) {
