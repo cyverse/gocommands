@@ -194,8 +194,6 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 
-	defer filesystem.Release()
-
 	if clearLeftover {
 		trashHome := commons.GetTrashHomeDir()
 		logger.Debugf("clearing trash dir %s", trashHome)
@@ -208,12 +206,18 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	}
 
 	if retry > 1 && !retryChild {
+		// we release filesystem here to not hold idle connections
+		filesystem.Release()
+
 		err = commons.RunWithRetry(int(retry), int(retryInterval))
 		if err != nil {
 			return xerrors.Errorf("failed to run with retry %d: %w", retry, err)
 		}
 		return nil
 	}
+
+	// release filesystem after use
+	defer filesystem.Release()
 
 	if len(args) == 0 {
 		return xerrors.Errorf("not enough input arguments")
