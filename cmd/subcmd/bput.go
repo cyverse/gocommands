@@ -23,6 +23,10 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(bputCmd)
 
+	// unused, but required for compatibility with retry
+	bputCmd.Flags().BoolP("force", "f", false, "unused")
+	bputCmd.Flags().MarkHidden("force")
+
 	bputCmd.Flags().Bool("clear_leftover", false, "Clear leftover bundle files")
 	bputCmd.Flags().Int("max_file_num", commons.MaxBundleFileNumDefault, "Specify max file number in a bundle file")
 	bputCmd.Flags().Int64("max_file_size", commons.MaxBundleFileSizeDefault, "Specify max file size of a bundle file")

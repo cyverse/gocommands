@@ -24,6 +24,10 @@ func AddSyncCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(syncCmd)
 
+	// unused, but required for compatibility with retry
+	syncCmd.Flags().BoolP("force", "f", false, "unused")
+	syncCmd.Flags().MarkHidden("force")
+
 	syncCmd.Flags().Bool("clear_leftover", false, "Clear leftover bundle files")
 	syncCmd.Flags().Int("max_file_num", commons.MaxBundleFileNumDefault, "Specify max file number in a bundle file")
 	syncCmd.Flags().Int64("max_file_size", commons.MaxBundleFileSizeDefault, "Specify max file size of a bundle file")

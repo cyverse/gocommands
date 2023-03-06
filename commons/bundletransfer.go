@@ -987,9 +987,7 @@ func (manager *BundleTransferManager) getProgressName(bundle *Bundle, taskName s
 }
 
 func (manager *BundleTransferManager) adjustBundleFileSizeAuto() {
-	// get disk free space under tmp
-	//manager.localTempDirPath =
-
+	// TODO:
 }
 
 func CleanUpOldLocalBundles(localTempDirPath string, force bool) {
