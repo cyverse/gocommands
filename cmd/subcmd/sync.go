@@ -311,6 +311,7 @@ func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath s
 	bundleTransferManager.Start()
 
 	bundleRootPath, err := commons.GetCommonRootLocalDirPathForSync(sourcePaths)
+	logger.Debugf("set bundle root path - %s", bundleRootPath)
 	if err != nil {
 		return xerrors.Errorf("failed to get common root dir for source paths: %w", err)
 	}

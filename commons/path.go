@@ -117,119 +117,82 @@ func GetParentLocalDirs(p string) []string {
 	return parents
 }
 
-func GetCommonRootLocalDirPath(paths []string) (string, error) {
-	// find shortest path
-	shortestPath := ""
-	shortestPathDepth := 0
+func commonPrefix(sep byte, paths ...string) string {
+	// Handle special cases.
+	switch len(paths) {
+	case 0:
+		return ""
+	case 1:
+		return path.Clean(paths[0])
+	}
 
-	for _, path := range paths {
-		absPath, err := filepath.Abs(path)
-		if err != nil {
-			return "", xerrors.Errorf("failed to compute absolute path for %s: %w", path, err)
+	c := []byte(path.Clean(paths[0]))
+	c = append(c, sep)
+
+	// Ignore the first path since it's already in c
+	for _, v := range paths[1:] {
+		// Clean up each path before testing it
+		v = path.Clean(v) + string(sep)
+
+		// Find the first non-common byte and truncate c
+		if len(v) < len(c) {
+			c = c[:len(v)]
 		}
-
-		if len(shortestPath) == 0 {
-			shortestPath = absPath
-			shortestPathDepth = strings.Count(shortestPath, string(os.PathSeparator))
-		} else {
-			curDepth := strings.Count(absPath, string(os.PathSeparator))
-			if shortestPathDepth > curDepth {
-				shortestPath = absPath
-				shortestPathDepth = curDepth
+		for i := 0; i < len(c); i++ {
+			if v[i] != c[i] {
+				c = c[:i]
+				break
 			}
 		}
 	}
 
-	commonRootPath := shortestPath
-	for {
-		pass := true
-		// check it with others
-		for _, path := range paths {
-			absPath, err := filepath.Abs(path)
-			if err != nil {
-				return "", xerrors.Errorf("failed to compute absolute path for %s: %w", path, err)
-			}
-
-			rel, err := filepath.Rel(commonRootPath, absPath)
-			if err != nil {
-				return "", xerrors.Errorf("failed to compute relative path %s to %s: %w", absPath, commonRootPath, err)
-			}
-
-			if strings.HasPrefix(rel, "../") {
-				commonRootPath = filepath.Dir(commonRootPath)
-				pass = false
-				break
-			}
-		}
-
-		if pass {
+	// Remove trailing non-separator characters and the final separator
+	for i := len(c) - 1; i >= 0; i-- {
+		if c[i] == sep {
+			c = c[:i]
 			break
 		}
 	}
 
-	if commonRootPath == "" {
+	return string(c)
+}
+
+func GetCommonRootLocalDirPath(paths []string) (string, error) {
+	commonRootPath, err := GetCommonRootLocalDirPathForSync(paths)
+	if err != nil {
+		return "", err
+	}
+
+	if commonRootPath == "/" {
 		return "/", nil
 	}
 
-	commonRootPath = filepath.Dir(commonRootPath)
-	return commonRootPath, nil
+	return filepath.Dir(commonRootPath), nil
 }
 
 func GetCommonRootLocalDirPathForSync(paths []string) (string, error) {
-	// find shortest path
-	shortestPath := ""
-	shortestPathDepth := 0
+	absPaths := make([]string, len(paths))
 
-	for _, path := range paths {
+	// get abs paths
+	for idx, path := range paths {
 		absPath, err := filepath.Abs(path)
 		if err != nil {
 			return "", xerrors.Errorf("failed to compute absolute path for %s: %w", path, err)
 		}
-
-		if len(shortestPath) == 0 {
-			shortestPath = absPath
-			shortestPathDepth = strings.Count(shortestPath, string(os.PathSeparator))
-		} else {
-			curDepth := strings.Count(absPath, string(os.PathSeparator))
-			if shortestPathDepth > curDepth {
-				shortestPath = absPath
-				shortestPathDepth = curDepth
-			}
-		}
+		absPaths[idx] = absPath
 	}
 
-	commonRootPath := shortestPath
-	for {
-		pass := true
-		// check it with others
-		for _, path := range paths {
-			absPath, err := filepath.Abs(path)
-			if err != nil {
-				return "", xerrors.Errorf("failed to compute absolute path for %s: %w", path, err)
-			}
-
-			rel, err := filepath.Rel(commonRootPath, absPath)
-			if err != nil {
-				return "", xerrors.Errorf("failed to compute relative path %s to %s: %w", absPath, commonRootPath, err)
-			}
-
-			if strings.HasPrefix(rel, "../") {
-				commonRootPath = filepath.Dir(commonRootPath)
-				pass = false
-				break
-			}
-		}
-
-		if pass {
-			break
-		}
+	// find shortest path
+	commonRoot := commonPrefix(filepath.Separator, absPaths...)
+	commonRootStat, err := os.Stat(commonRoot)
+	if err != nil {
+		return "", xerrors.Errorf("failed to stat %s: %w", commonRoot, err)
 	}
 
-	if commonRootPath == "" {
-		return "/", nil
+	if commonRootStat.IsDir() {
+		return commonRoot, nil
 	}
-
-	return commonRootPath, nil
+	return filepath.Dir(commonRoot), nil
 }
 
 func ExpandHomeDir(path string) (string, error) {
