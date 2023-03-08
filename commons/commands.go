@@ -113,6 +113,7 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().Int32P("session", "s", -1, "Set session ID")
 	command.Flags().StringP("resource", "R", "", "Set resource server (default is empty)")
 	command.Flags().StringP("ticket", "T", "", "Set ticket")
+	command.Flags().Bool("no_update", false, "Disable auto update (default is False)")
 
 	// this is hidden
 	command.Flags().Bool("retry_child", false, "Set this to retry child process")
@@ -197,6 +198,23 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	}
 
 	logger.Debugf("use sessionID - %d", sessionID)
+
+	// update?
+	noUpdateFlag := command.Flags().Lookup("no_update")
+	if noUpdateFlag != nil {
+		noUpdate, err := strconv.ParseBool(noUpdateFlag.Value.String())
+		if err != nil {
+			noUpdate = false
+		}
+
+		if !noUpdate {
+			err := SelfUpdate()
+			if err != nil {
+				logger.WithError(err).Debugf("failed to perform self update, ignore...")
+				//return false, xerrors.Errorf("failed to update: %w", err) // stop here
+			}
+		}
+	}
 
 	readConfig := false
 
