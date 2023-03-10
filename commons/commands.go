@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	"github.com/cyverse/go-irodsclient/irods/util"
 	irodsclient_icommands "github.com/cyverse/go-irodsclient/utils/icommands"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -603,6 +604,22 @@ func loadConfigFile(configPath string) error {
 		iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
 		if err != nil {
 			return xerrors.Errorf("failed to create iCommands Environment: %w", err)
+		}
+
+		err = iCommandsEnvMgr.SetEnvironmentFilePath(configPath)
+		if err != nil {
+			return xerrors.Errorf("failed to set environment file path %s: %w", configPath, err)
+		}
+
+		// read session
+		sessionFilePath := iCommandsEnvMgr.GetSessionFilePath(sessionID)
+		if util.ExistFile(sessionFilePath) {
+			session, err := irodsclient_icommands.CreateICommandsEnvironmentFromFile(sessionFilePath)
+			if err != nil {
+				return xerrors.Errorf("failed to create icommands environment from file %s: %w", sessionFilePath, err)
+			}
+
+			iCommandsEnvMgr.Session = session
 		}
 
 		// load from YAML
