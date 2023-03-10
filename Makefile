@@ -14,25 +14,10 @@ build:
 	mkdir -p bin
 	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/gocmd ./cmd/*.go
 
-
-.PHONY: test-release
-test-release:
-	rm -rf release
-
-# 	amd64_linux
-	mkdir -p release/amd64_linux
-	cd install && ./prep-install-script.sh ../release/amd64_linux && cd ..
-	cd install && ./prep-shortcut-script.sh ../release/amd64_linux && cd ..
-	CGO_ENABLED=0 GOARCH=amd64 GOOS=linux go build -ldflags=${LDFLAGS} -o release/amd64_linux/gocmd cmd/*.go
-	cd release/amd64_linux && tar cf gocommands_amd64_linux_${VERSION}.tar * && mv *.tar .. && cd ../..
-
-.PHONY: test-win
-test-win:
-	rm -rf release
-
-	mkdir -p release/amd64_windows
-	CGO_ENABLED=0 GOARCH=amd64 GOOS=windows go build -ldflags=${LDFLAGS} -o release/amd64_windows/gocmd.exe cmd/*.go
-
+.PHONY: install
+install:
+	cp bin/gocmd ${GOPATH}/bin/gocmd
+	chmod 775 ${GOPATH}/bin/gocmd
 
 .PHONY: build-release
 build-release:

@@ -1,0 +1,29 @@
+{% set version = "0.6.1" %}
+
+package:
+  name: gocommands
+  version: {{ version }}
+
+source:
+  url: https://github.com/cyverse/gocommands/archive/refs/tags/v{{ version }}.tar.gz
+  sha256: d80a07ad3381ce34f6ffeeab91fe0cb3c75ce3aba432b0592756e3af9e5a5da8
+
+build:
+  number: 0
+  script:
+    - make build && make install
+
+requirements:
+  build:
+    - {{ compiler('go') }} 1.18
+    - make
+
+test:
+  commands:
+    - gocmd --version
+
+about:
+  home: https://github.com/cyverse/gocommands
+  license_family: BSD
+  license_file: LICENSE
+  summary: Protable iRODS command-line tools written in Go
