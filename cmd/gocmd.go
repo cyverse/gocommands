@@ -84,6 +84,7 @@ func main() {
 	subcmd.AddCopySftpIdCommand(rootCmd)
 	subcmd.AddLsticketCommand(rootCmd)
 	subcmd.AddBcleanCommand(rootCmd)
+	subcmd.AddUpgradeCommand(rootCmd)
 
 	err := Execute()
 	if err != nil {

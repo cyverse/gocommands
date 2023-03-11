@@ -10,10 +10,30 @@ import (
 	"golang.org/x/xerrors"
 )
 
-func SelfUpdate() error {
+func CheckNewRelease() (*selfupdate.Release, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "commons",
-		"function": "SelfUpdate",
+		"function": "CheckNewVersion",
+	})
+
+	logger.Infof("checking latest version for %s/%s", runtime.GOOS, runtime.GOARCH)
+
+	latest, found, err := selfupdate.DetectLatest(context.Background(), selfupdate.ParseSlug("cyverse/gocommands"))
+	if err != nil {
+		return nil, xerrors.Errorf("error occurred while detecting version: %w", err)
+	}
+
+	if !found {
+		return nil, xerrors.Errorf("latest version for %s/%s could not be found from github repository 'cyverse/gocommands'", runtime.GOOS, runtime.GOARCH)
+	}
+
+	return latest, nil
+}
+
+func SelfUpgrade() error {
+	logger := log.WithFields(log.Fields{
+		"package":  "commons",
+		"function": "SelfUpgrade",
 	})
 
 	logger.Infof("checking latest version for %s/%s", runtime.GOOS, runtime.GOARCH)
