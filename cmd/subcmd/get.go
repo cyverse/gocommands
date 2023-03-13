@@ -27,13 +27,13 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	commons.SetCommonFlags(getCmd)
 
 	getCmd.Flags().BoolP("force", "f", false, "Get forcefully")
-	getCmd.Flags().Int("download_thread_num", commons.MaxParallelJobThreadNumDefault, "Specify the number of download threads (default is 5)")
-	getCmd.Flags().String("tcp_buffer_size", strconv.Itoa(commons.TcpBufferSizeDefault), "Specify TCP socket buffer size (default is 4MB)")
+	getCmd.Flags().Int("download_thread_num", commons.MaxParallelJobThreadNumDefault, "Specify the number of download threads")
+	getCmd.Flags().String("tcp_buffer_size", commons.TcpBufferSizeStringDefault, "Specify TCP socket buffer size")
 	getCmd.Flags().Bool("progress", false, "Display progress bar")
 	getCmd.Flags().Bool("diff", false, "Get files having different content")
 	getCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
-	getCmd.Flags().Int("retry", 1, "Retry if fails (default is 1)")
-	getCmd.Flags().Int("retry_interval", 60, "Retry interval in seconds (default is 60)")
+	getCmd.Flags().Int("retry", 1, "Retry if fails")
+	getCmd.Flags().Int("retry_interval", 60, "Retry interval in seconds")
 
 	rootCmd.AddCommand(getCmd)
 }

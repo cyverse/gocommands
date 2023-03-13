@@ -28,14 +28,14 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	commons.SetCommonFlags(putCmd)
 
 	putCmd.Flags().BoolP("force", "f", false, "Put forcefully")
-	putCmd.Flags().Int("upload_thread_num", commons.MaxParallelJobThreadNumDefault, "Specify the number of upload threads (default is 5)")
-	putCmd.Flags().String("tcp_buffer_size", strconv.Itoa(commons.TcpBufferSizeDefault), "Specify TCP socket buffer size (default is 4MB)")
+	putCmd.Flags().Int("upload_thread_num", commons.MaxParallelJobThreadNumDefault, "Specify the number of upload threads")
+	putCmd.Flags().String("tcp_buffer_size", commons.TcpBufferSizeStringDefault, "Specify TCP socket buffer size")
 	putCmd.Flags().Bool("progress", false, "Display progress bar")
 	putCmd.Flags().Bool("diff", false, "Put files having different content")
 	putCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
-	putCmd.Flags().Bool("no_replication", false, "Disable replication (default is False)")
-	putCmd.Flags().Int("retry", 1, "Retry if fails (default is 1)")
-	putCmd.Flags().Int("retry_interval", 60, "Retry interval in seconds (default is 60)")
+	putCmd.Flags().Bool("no_replication", false, "Disable replication")
+	putCmd.Flags().Int("retry", 1, "Retry if fails")
+	putCmd.Flags().Int("retry_interval", 60, "Retry interval in seconds")
 
 	rootCmd.AddCommand(putCmd)
 }

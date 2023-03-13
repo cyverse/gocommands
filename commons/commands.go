@@ -105,14 +105,14 @@ func SetCWD(cwd string) {
 }
 
 func SetCommonFlags(command *cobra.Command) {
-	command.Flags().StringP("config", "c", "", "Set config file or dir (default is $HOME/.irods)")
+	command.Flags().StringP("config", "c", "", "Set config file or dir (default \"$HOME/.irods\")")
 	command.Flags().BoolP("envconfig", "e", false, "Read config from environmental variables")
 	command.Flags().BoolP("version", "v", false, "Print version")
 	command.Flags().BoolP("help", "h", false, "Print help")
-	command.Flags().BoolP("debug", "d", false, "Enable debug mode (default is False)")
-	command.Flags().String("log_level", "", "Set log level (default is INFO)")
+	command.Flags().BoolP("debug", "d", false, "Enable debug mode")
+	command.Flags().String("log_level", "", "Set log level")
 	command.Flags().Int32P("session", "s", -1, "Set session ID")
-	command.Flags().StringP("resource", "R", "", "Set resource server (default is empty)")
+	command.Flags().StringP("resource", "R", "", "Set resource server")
 	command.Flags().StringP("ticket", "T", "", "Set ticket")
 
 	// this is hidden

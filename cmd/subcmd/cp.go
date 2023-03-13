@@ -29,8 +29,8 @@ func AddCpCommand(rootCmd *cobra.Command) {
 	cpCmd.Flags().Bool("progress", false, "Display progress bars")
 	cpCmd.Flags().Bool("diff", false, "Copy files having different content")
 	cpCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
-	cpCmd.Flags().Int("retry", 1, "Retry if fails (default is 1)")
-	cpCmd.Flags().Int("retry_interval", 60, "Retry interval in seconds (default is 60)")
+	cpCmd.Flags().Int("retry", 1, "Retry if fails")
+	cpCmd.Flags().Int("retry_interval", 60, "Retry interval in seconds")
 
 	rootCmd.AddCommand(cpCmd)
 }

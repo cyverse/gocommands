@@ -33,14 +33,14 @@ func AddSyncCommand(rootCmd *cobra.Command) {
 	syncCmd.Flags().String("max_file_size", strconv.FormatInt(commons.MaxBundleFileSizeDefault, 10), "Specify max file size of a bundle file")
 	syncCmd.Flags().Int("upload_thread_num", commons.UploadTreadNumDefault, "Specify the number of upload threads")
 	syncCmd.Flags().Int("download_thread_num", commons.MaxParallelJobThreadNumDefault, "Specify the number of download threads")
-	syncCmd.Flags().String("tcp_buffer_size", strconv.Itoa(commons.TcpBufferSizeDefault), "Specify TCP socket buffer size (default is 4MB)")
+	syncCmd.Flags().String("tcp_buffer_size", commons.TcpBufferSizeStringDefault, "Specify TCP socket buffer size")
 	syncCmd.Flags().Bool("progress", false, "Display progress bar")
 	syncCmd.Flags().String("local_temp", os.TempDir(), "Specify local temp directory path to create bundle files")
 	syncCmd.Flags().String("irods_temp", "", "Specify iRODS temp directory path to upload bundle files to")
 	syncCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
-	syncCmd.Flags().Bool("no_replication", false, "Disable replication (default is False)")
-	syncCmd.Flags().Int("retry", 1, "Retry if fails (default is 1)")
-	syncCmd.Flags().Int("retry_interval", 60, "Retry interval in seconds (default is 60)")
+	syncCmd.Flags().Bool("no_replication", false, "Disable replication")
+	syncCmd.Flags().Int("retry", 1, "Retry if fails")
+	syncCmd.Flags().Int("retry_interval", 60, "Retry interval in seconds")
 
 	rootCmd.AddCommand(syncCmd)
 }
