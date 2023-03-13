@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/cyverse/go-irodsclient/fs"
+	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
@@ -27,6 +28,8 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	commons.SetCommonFlags(putCmd)
 
 	putCmd.Flags().BoolP("force", "f", false, "Put forcefully")
+	putCmd.Flags().Int("upload_thread_num", commons.MaxParallelJobThreadNumDefault, "Specify the number of upload threads (default is 5)")
+	putCmd.Flags().String("tcp_buffer_size", strconv.Itoa(commons.TcpBufferSizeDefault), "Specify TCP socket buffer size (default is 4MB)")
 	putCmd.Flags().Bool("progress", false, "Display progress bar")
 	putCmd.Flags().Bool("diff", false, "Put files having different content")
 	putCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
@@ -59,6 +62,26 @@ func processPutCommand(command *cobra.Command, args []string) error {
 		force, err = strconv.ParseBool(forceFlag.Value.String())
 		if err != nil {
 			force = false
+		}
+	}
+
+	uploadThreadNum := commons.MaxParallelJobThreadNumDefault
+	uploadThreadNumFlag := command.Flags().Lookup("upload_thread_num")
+	if uploadThreadNumFlag != nil {
+		n, err := strconv.ParseInt(uploadThreadNumFlag.Value.String(), 10, 32)
+		if err == nil {
+			uploadThreadNum = int(n)
+		}
+	}
+
+	maxConnectionNum := uploadThreadNum + 2 // 2 for metadata op
+
+	tcpBufferSize := commons.TcpBufferSizeDefault
+	tcpBufferSizeFlag := command.Flags().Lookup("tcp_buffer_size")
+	if tcpBufferSizeFlag != nil {
+		n, err := commons.ParseSize(tcpBufferSizeFlag.Value.String())
+		if err == nil {
+			tcpBufferSize = int(n)
 		}
 	}
 
@@ -139,7 +162,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 
 	// Create a file system
 	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	filesystem, err := commons.GetIRODSFSClientAdvanced(account, maxConnectionNum, tcpBufferSize)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
@@ -158,7 +181,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 		sourcePaths = args[:len(args)-1]
 	}
 
-	parallelJobManager := commons.NewParallelJobManager(filesystem, commons.MaxThreadNumDefault, progress)
+	parallelJobManager := commons.NewParallelJobManager(filesystem, uploadThreadNum, progress)
 	parallelJobManager.Start()
 
 	for _, sourcePath := range sourcePaths {
@@ -311,17 +334,7 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 
 func computeThreadsRequiredForPut(fs *fs.FileSystem, size int64) int {
 	if fs.SupportParallelUpload() {
-		// compute num threads required
-		threadsRequired := 1
-		// 4MB is one thread, max 4 threads
-		if size > 4*1024*1024 {
-			threadsRequired = int(size / 4 * 1024 * 1024)
-			if threadsRequired > 4 {
-				threadsRequired = 4
-			}
-		}
-
-		return threadsRequired
+		return irodsclient_util.GetNumTasksForParallelTransfer(size)
 	}
 
 	return 1

@@ -30,8 +30,10 @@ func AddSyncCommand(rootCmd *cobra.Command) {
 
 	syncCmd.Flags().Bool("clear_leftover", false, "Clear leftover bundle files")
 	syncCmd.Flags().Int("max_file_num", commons.MaxBundleFileNumDefault, "Specify max file number in a bundle file")
-	syncCmd.Flags().Int64("max_file_size", commons.MaxBundleFileSizeDefault, "Specify max file size of a bundle file")
+	syncCmd.Flags().String("max_file_size", strconv.FormatInt(commons.MaxBundleFileSizeDefault, 10), "Specify max file size of a bundle file")
 	syncCmd.Flags().Int("upload_thread_num", commons.UploadTreadNumDefault, "Specify the number of upload threads")
+	syncCmd.Flags().Int("download_thread_num", commons.MaxParallelJobThreadNumDefault, "Specify the number of download threads")
+	syncCmd.Flags().String("tcp_buffer_size", strconv.Itoa(commons.TcpBufferSizeDefault), "Specify TCP socket buffer size (default is 4MB)")
 	syncCmd.Flags().Bool("progress", false, "Display progress bar")
 	syncCmd.Flags().String("local_temp", os.TempDir(), "Specify local temp directory path to create bundle files")
 	syncCmd.Flags().String("irods_temp", "", "Specify iRODS temp directory path to upload bundle files to")
@@ -85,7 +87,7 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 	maxFileSize := commons.MaxBundleFileSizeDefault
 	maxFileSizeFlag := command.Flags().Lookup("max_file_size")
 	if maxFileSizeFlag != nil {
-		n, err := strconv.ParseInt(maxFileSizeFlag.Value.String(), 10, 64)
+		n, err := commons.ParseSize(maxFileSizeFlag.Value.String())
 		if err == nil {
 			maxFileSize = n
 		}
@@ -97,6 +99,29 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 		n, err := strconv.ParseInt(uploadThreadNumFlag.Value.String(), 10, 32)
 		if err == nil {
 			uploadThreadNum = int(n)
+		}
+	}
+
+	downloadThreadNum := commons.MaxParallelJobThreadNumDefault
+	downloadThreadNumFlag := command.Flags().Lookup("download_thread_num")
+	if downloadThreadNumFlag != nil {
+		n, err := strconv.ParseInt(downloadThreadNumFlag.Value.String(), 10, 32)
+		if err == nil {
+			downloadThreadNum = int(n)
+		}
+	}
+
+	maxConnectionNum := uploadThreadNum + 2 + 2 // 2 for metadata op, 2 for extraction
+	if downloadThreadNum+2 > maxConnectionNum {
+		maxConnectionNum = downloadThreadNum + 2
+	}
+
+	tcpBufferSize := commons.TcpBufferSizeDefault
+	tcpBufferSizeFlag := command.Flags().Lookup("tcp_buffer_size")
+	if tcpBufferSizeFlag != nil {
+		n, err := commons.ParseSize(tcpBufferSizeFlag.Value.String())
+		if err == nil {
+			tcpBufferSize = int(n)
 		}
 	}
 
@@ -180,7 +205,7 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 
 	// Create a file system
 	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	filesystem, err := commons.GetIRODSFSClientAdvanced(account, maxConnectionNum, tcpBufferSize)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
@@ -335,7 +360,7 @@ func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath s
 }
 
 func syncFromRemote(filesystem *fs.FileSystem, sourcePaths []string, targetPath string, progress bool, noHash bool) error {
-	parallelJobManager := commons.NewParallelJobManager(filesystem, commons.MaxThreadNumDefault, progress)
+	parallelJobManager := commons.NewParallelJobManager(filesystem, commons.MaxParallelJobThreadNumDefault, progress)
 	parallelJobManager.Start()
 
 	for _, sourcePath := range sourcePaths {

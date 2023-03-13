@@ -26,11 +26,11 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	// unused, but required for compatibility with retry
 	bputCmd.Flags().BoolP("force", "f", false, "unused")
 	bputCmd.Flags().MarkHidden("force")
-
 	bputCmd.Flags().Bool("clear_leftover", false, "Clear leftover bundle files")
 	bputCmd.Flags().Int("max_file_num", commons.MaxBundleFileNumDefault, "Specify max file number in a bundle file")
-	bputCmd.Flags().Int64("max_file_size", commons.MaxBundleFileSizeDefault, "Specify max file size of a bundle file")
-	bputCmd.Flags().Int("upload_thread_num", commons.UploadTreadNumDefault, "Specify the number of upload threads")
+	bputCmd.Flags().String("max_file_size", strconv.FormatInt(commons.MaxBundleFileSizeDefault, 10), "Specify max file size of a bundle file (default is 2GB)")
+	bputCmd.Flags().Int("upload_thread_num", commons.UploadTreadNumDefault, "Specify the number of upload threads (default is 5)")
+	bputCmd.Flags().String("tcp_buffer_size", strconv.Itoa(commons.TcpBufferSizeDefault), "Specify TCP socket buffer size (default is 4MB)")
 	bputCmd.Flags().Bool("progress", false, "Display progress bars")
 	bputCmd.Flags().String("local_temp", os.TempDir(), "Specify local temp directory path to create bundle files")
 	bputCmd.Flags().String("irods_temp", "", "Specify iRODS temp directory path to upload bundle files to")
@@ -85,7 +85,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	maxFileSize := commons.MaxBundleFileSizeDefault
 	maxFileSizeFlag := command.Flags().Lookup("max_file_size")
 	if maxFileSizeFlag != nil {
-		n, err := strconv.ParseInt(maxFileSizeFlag.Value.String(), 10, 64)
+		n, err := commons.ParseSize(maxFileSizeFlag.Value.String())
 		if err == nil {
 			maxFileSize = n
 		}
@@ -97,6 +97,17 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		n, err := strconv.ParseInt(uploadThreadNumFlag.Value.String(), 10, 32)
 		if err == nil {
 			uploadThreadNum = int(n)
+		}
+	}
+
+	maxConnectionNum := uploadThreadNum + 2 + 2 // 2 for metadata op, 2 for extraction
+
+	tcpBufferSize := commons.TcpBufferSizeDefault
+	tcpBufferSizeFlag := command.Flags().Lookup("tcp_buffer_size")
+	if tcpBufferSizeFlag != nil {
+		n, err := commons.ParseSize(tcpBufferSizeFlag.Value.String())
+		if err == nil {
+			tcpBufferSize = int(n)
 		}
 	}
 
@@ -189,7 +200,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 
 	// Create a file system
 	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	filesystem, err := commons.GetIRODSFSClientAdvanced(account, maxConnectionNum, tcpBufferSize)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}

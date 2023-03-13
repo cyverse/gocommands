@@ -21,8 +21,6 @@ const (
 	MaxBundleFileNumDefault  int   = 50
 	MaxBundleFileSizeDefault int64 = 2 * 1024 * 1024 * 1024 // 2GB
 	MinBundleFileNumDefault  int   = 1                      // it seems untar recreates dir and changes collection ID, causing getting collection by ID fail
-	UploadTreadNumDefault    int   = 5
-	UploadTreadNumMax        int   = 20
 )
 
 const (

@@ -149,7 +149,7 @@ func processCpCommand(command *cobra.Command, args []string) error {
 	targetPath := args[len(args)-1]
 	sourcePaths := args[:len(args)-1]
 
-	parallelJobManager := commons.NewParallelJobManager(filesystem, commons.MaxThreadNumDefault, progress)
+	parallelJobManager := commons.NewParallelJobManager(filesystem, commons.MaxParallelJobThreadNumDefault, progress)
 	parallelJobManager.Start()
 
 	for _, sourcePath := range sourcePaths {

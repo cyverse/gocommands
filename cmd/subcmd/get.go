@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
@@ -26,6 +27,8 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	commons.SetCommonFlags(getCmd)
 
 	getCmd.Flags().BoolP("force", "f", false, "Get forcefully")
+	getCmd.Flags().Int("download_thread_num", commons.MaxParallelJobThreadNumDefault, "Specify the number of download threads (default is 5)")
+	getCmd.Flags().String("tcp_buffer_size", strconv.Itoa(commons.TcpBufferSizeDefault), "Specify TCP socket buffer size (default is 4MB)")
 	getCmd.Flags().Bool("progress", false, "Display progress bar")
 	getCmd.Flags().Bool("diff", false, "Get files having different content")
 	getCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
@@ -57,6 +60,26 @@ func processGetCommand(command *cobra.Command, args []string) error {
 		force, err = strconv.ParseBool(forceFlag.Value.String())
 		if err != nil {
 			force = false
+		}
+	}
+
+	downloadThreadNum := commons.MaxParallelJobThreadNumDefault
+	downloadThreadNumFlag := command.Flags().Lookup("download_thread_num")
+	if downloadThreadNumFlag != nil {
+		n, err := strconv.ParseInt(downloadThreadNumFlag.Value.String(), 10, 32)
+		if err == nil {
+			downloadThreadNum = int(n)
+		}
+	}
+
+	maxConnectionNum := downloadThreadNum + 2 // 2 for metadata op
+
+	tcpBufferSize := commons.TcpBufferSizeDefault
+	tcpBufferSizeFlag := command.Flags().Lookup("tcp_buffer_size")
+	if tcpBufferSizeFlag != nil {
+		n, err := commons.ParseSize(tcpBufferSizeFlag.Value.String())
+		if err == nil {
+			tcpBufferSize = int(n)
 		}
 	}
 
@@ -126,7 +149,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 
 	// Create a file system
 	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	filesystem, err := commons.GetIRODSFSClientAdvanced(account, maxConnectionNum, tcpBufferSize)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
@@ -145,7 +168,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 		sourcePaths = args[:len(args)-1]
 	}
 
-	parallelJobManager := commons.NewParallelJobManager(filesystem, commons.MaxThreadNumDefault, progress)
+	parallelJobManager := commons.NewParallelJobManager(filesystem, downloadThreadNum, progress)
 	parallelJobManager.Start()
 
 	for _, sourcePath := range sourcePaths {
@@ -269,7 +292,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 			}
 		}
 
-		threadsRequired := computeThreadsRequiredForGet(sourceEntry.Size)
+		threadsRequired := irodsclient_util.GetNumTasksForParallelTransfer(sourceEntry.Size)
 		parallelJobManager.Schedule(sourcePath, getTask, threadsRequired, progress.UnitsBytes)
 		logger.Debugf("scheduled a data object download %s to %s", sourcePath, targetFilePath)
 	} else {
@@ -298,18 +321,4 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 		}
 	}
 	return nil
-}
-
-func computeThreadsRequiredForGet(size int64) int {
-	// compute num threads required
-	threadsRequired := 1
-	// 4MB is one thread, max 4 threads
-	if size > 4*1024*1024 {
-		threadsRequired = int(size / 4 * 1024 * 1024)
-		if threadsRequired > 4 {
-			threadsRequired = 4
-		}
-	}
-
-	return threadsRequired
 }

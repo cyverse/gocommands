@@ -11,7 +11,7 @@ import (
 
 // default values
 const (
-	MaxThreadNumDefault int = 5
+	MaxParallelJobThreadNumDefault int = 5
 )
 
 type ParallelJobTask func(job *ParallelJob) error
