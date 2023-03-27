@@ -8,19 +8,19 @@ Be sure to download a binary for your target system architecture.
 
 For Darwin-amd64 (Mac OS):
 ```bash
-curl -L -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/v0.4.7/gocmd-v0.4.7-darwin-amd64.tar.gz && \
+curl -L -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/v0.6.3/gocmd-v0.6.3-darwin-amd64.tar.gz && \
 tar zxvf gocmd.tar.gz && rm gocmd.tar.gz
 ```
 
 For Linux-amd64:
 ```bash
-curl -L -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/v0.4.7/gocmd-v0.4.7-linux-amd64.tar.gz && \
+curl -L -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/v0.6.3/gocmd-v0.6.3-linux-amd64.tar.gz && \
 tar zxvf gocmd.tar.gz && rm gocmd.tar.gz
 ```
 
 For Linux-arm64:
 ```bash
-curl -L -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/v0.4.7/gocmd-v0.4.7-linux-arm64.tar.gz && \
+curl -L -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/v0.6.3/gocmd-v0.6.3-linux-arm64.tar.gz && \
 tar zxvf gocmd.tar.gz && rm gocmd.tar.gz
 ```
 
