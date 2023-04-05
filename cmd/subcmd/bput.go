@@ -29,6 +29,7 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	bputCmd.Flags().Bool("clear_leftover", false, "Clear leftover bundle files")
 	bputCmd.Flags().Int("max_file_num", commons.MaxBundleFileNumDefault, "Specify max file number in a bundle file")
 	bputCmd.Flags().String("max_file_size", strconv.FormatInt(commons.MaxBundleFileSizeDefault, 10), "Specify max file size of a bundle file")
+	bputCmd.Flags().Bool("single_threaded", false, "Transfer a file using a single thread")
 	bputCmd.Flags().Int("upload_thread_num", commons.UploadTreadNumDefault, "Specify the number of upload threads")
 	bputCmd.Flags().String("tcp_buffer_size", commons.TcpBufferSizeStringDefault, "Specify TCP socket buffer size")
 	bputCmd.Flags().Bool("progress", false, "Display progress bars")
@@ -88,6 +89,15 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		n, err := commons.ParseSize(maxFileSizeFlag.Value.String())
 		if err == nil {
 			maxFileSize = n
+		}
+	}
+
+	singleThreaded := false
+	singleThreadedFlag := command.Flags().Lookup("single_threaded")
+	if singleThreadedFlag != nil {
+		singleThreaded, err = strconv.ParseBool(singleThreadedFlag.Value.String())
+		if err != nil {
+			singleThreaded = false
 		}
 	}
 
@@ -284,7 +294,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		commons.CleanUpOldIRODSBundles(filesystem, unusedStagingDir, true, true)
 	}()
 
-	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, uploadThreadNum, localTempDirPath, irodsTempDirPath, diff, noHash, replication, progress)
+	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, singleThreaded, uploadThreadNum, localTempDirPath, irodsTempDirPath, diff, noHash, replication, progress)
 	bundleTransferManager.Start()
 
 	bundleRootPath, err := commons.GetCommonRootLocalDirPath(sourcePaths)

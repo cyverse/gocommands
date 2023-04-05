@@ -28,6 +28,7 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	commons.SetCommonFlags(putCmd)
 
 	putCmd.Flags().BoolP("force", "f", false, "Put forcefully")
+	putCmd.Flags().Bool("single_threaded", false, "Transfer a file using a single thread")
 	putCmd.Flags().Int("upload_thread_num", commons.MaxParallelJobThreadNumDefault, "Specify the number of upload threads")
 	putCmd.Flags().String("tcp_buffer_size", commons.TcpBufferSizeStringDefault, "Specify TCP socket buffer size")
 	putCmd.Flags().Bool("progress", false, "Display progress bar")
@@ -62,6 +63,15 @@ func processPutCommand(command *cobra.Command, args []string) error {
 		force, err = strconv.ParseBool(forceFlag.Value.String())
 		if err != nil {
 			force = false
+		}
+	}
+
+	singleThreaded := false
+	singleThreadedFlag := command.Flags().Lookup("single_threaded")
+	if singleThreadedFlag != nil {
+		singleThreaded, err = strconv.ParseBool(singleThreadedFlag.Value.String())
+		if err != nil {
+			singleThreaded = false
 		}
 	}
 
@@ -185,7 +195,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	parallelJobManager.Start()
 
 	for _, sourcePath := range sourcePaths {
-		err = putOne(parallelJobManager, sourcePath, targetPath, force, replication, diff, noHash)
+		err = putOne(parallelJobManager, sourcePath, targetPath, force, singleThreaded, replication, diff, noHash)
 		if err != nil {
 			return xerrors.Errorf("failed to perform put %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -200,7 +210,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, targetPath string, force bool, replicate bool, diff bool, noHash bool) error {
+func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, targetPath string, force bool, singleThreaded bool, replicate bool, diff bool, noHash bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "putOne",
@@ -235,7 +245,12 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 			job.Progress(0, sourceStat.Size(), false)
 
 			logger.Debugf("uploading a file %s to %s", sourcePath, targetFilePath)
-			err = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, replicate, callbackPut)
+			if singleThreaded {
+				err = fs.UploadFile(sourcePath, targetFilePath, "", replicate, callbackPut)
+			} else {
+				err = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, replicate, callbackPut)
+			}
+
 			if err != nil {
 				job.Progress(-1, sourceStat.Size(), true)
 				return xerrors.Errorf("failed to upload %s to %s: %w", sourcePath, targetFilePath, err)
@@ -302,7 +317,7 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 			}
 		}
 
-		threadsRequired := computeThreadsRequiredForPut(filesystem, sourceStat.Size())
+		threadsRequired := computeThreadsRequiredForPut(filesystem, singleThreaded, sourceStat.Size())
 		parallelJobManager.Schedule(sourcePath, putTask, threadsRequired, progress.UnitsBytes)
 		logger.Debugf("scheduled a local file upload %s to %s", sourcePath, targetFilePath)
 	} else {
@@ -323,7 +338,7 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 
 		for _, entryInDir := range entries {
 			newSourcePath := filepath.Join(sourcePath, entryInDir.Name())
-			err = putOne(parallelJobManager, newSourcePath, targetDir, force, replicate, diff, noHash)
+			err = putOne(parallelJobManager, newSourcePath, targetDir, force, singleThreaded, replicate, diff, noHash)
 			if err != nil {
 				return xerrors.Errorf("failed to perform put %s to %s: %w", newSourcePath, targetDir, err)
 			}
@@ -332,7 +347,11 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 	return nil
 }
 
-func computeThreadsRequiredForPut(fs *fs.FileSystem, size int64) int {
+func computeThreadsRequiredForPut(fs *fs.FileSystem, singleThreaded bool, size int64) int {
+	if singleThreaded {
+		return 1
+	}
+
 	if fs.SupportParallelUpload() {
 		return irodsclient_util.GetNumTasksForParallelTransfer(size)
 	}

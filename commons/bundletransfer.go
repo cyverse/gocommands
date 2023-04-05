@@ -101,6 +101,7 @@ type BundleTransferManager struct {
 	bundleRootPath          string
 	maxBundleFileNum        int
 	maxBundleFileSize       int64
+	singleThreaded          bool
 	uploadThreadNum         int
 	localTempDirPath        string
 	irodsTempDirPath        string
@@ -119,7 +120,7 @@ type BundleTransferManager struct {
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
-func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, uploadThreadNum int, localTempDirPath string, irodsTempDirPath string, diff bool, noHash bool, replication bool, showProgress bool) *BundleTransferManager {
+func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, singleThreaded bool, uploadThreadNum int, localTempDirPath string, irodsTempDirPath string, diff bool, noHash bool, replication bool, showProgress bool) *BundleTransferManager {
 	manager := &BundleTransferManager{
 		id:                      xid.New().String(),
 		filesystem:              fs,
@@ -130,6 +131,7 @@ func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath strin
 		bundleRootPath:          "/",
 		maxBundleFileNum:        maxBundleFileNum,
 		maxBundleFileSize:       maxBundleFileSize,
+		singleThreaded:          singleThreaded,
 		uploadThreadNum:         uploadThreadNum,
 		localTempDirPath:        localTempDirPath,
 		irodsTempDirPath:        irodsTempDirPath,
@@ -863,7 +865,13 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 			}
 		}
 
-		err := manager.filesystem.UploadFileParallel(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false, callback)
+		var err error
+		if manager.singleThreaded {
+			err = manager.filesystem.UploadFile(bundle.localBundlePath, bundle.irodsBundlePath, "", false, callback)
+		} else {
+			err = manager.filesystem.UploadFileParallel(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false, callback)
+		}
+
 		if err != nil {
 			if manager.showProgress {
 				manager.progress(progressName, -1, totalFileSize, progress.UnitsBytes, true)
@@ -914,7 +922,13 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 				ClearIRODSDirCache(manager.filesystem, path.Dir(file.IRODSPath))
 			}
 
-			err := manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, manager.replication, callbackFileUpload)
+			var err error
+			if manager.singleThreaded {
+				err = manager.filesystem.UploadFile(file.LocalPath, file.IRODSPath, "", manager.replication, callbackFileUpload)
+			} else {
+				err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, manager.replication, callbackFileUpload)
+			}
+
 			if err != nil {
 				if manager.showProgress {
 					manager.progress(progressName, -1, totalFileSize, progress.UnitsBytes, true)
