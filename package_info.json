@@ -1,5 +1,6 @@
 {
     "name": "gocommands",
     "version": "0.6.4",
-    "git_repo": "https://github.com/cyverse/gocommands.git"
+    "git_repo": "https://github.com/cyverse/gocommands",
+    "release_url": "https://github.com/cyverse/gocommands/releases"
 }

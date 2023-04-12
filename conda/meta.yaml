@@ -1,29 +1,41 @@
-{% set version = "0.6.1" %}
+{% set package_info = load_file_data(filename="../package_info.json", from_recipe_dir=True, recipe_dir="conda") %}
 
 package:
-  name: gocommands
-  version: {{ version }}
+  name: {{ package_info.get('name') }}
+  version: {{ package_info.get('version') }}
 
 source:
-  url: https://github.com/cyverse/gocommands/archive/refs/tags/v{{ version }}.tar.gz
-  sha256: d80a07ad3381ce34f6ffeeab91fe0cb3c75ce3aba432b0592756e3af9e5a5da8
+  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-darwin-amd64.tar.gz # [osx and x86_64]
+  md5: f41aeca3e44dd997e52cf55a30a3c0ba # [osx and x86_64]
+  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-darwin-arm64.tar.gz # [arm64]
+  md5: 3101783333e0b834cb78db9eae4599b6 # [arm64]
+  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-linux-386.tar.gz # [linux32]
+  md5: 68a0376fe0a7363869e9c5a565a91355 # [linux32]
+  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-linux-amd64.tar.gz # [linux64]
+  md5: 8e1f7edeab149458effef09d015d9836 # [linux64]
+  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-linux-arm.tar.gz # [linux and (armv7l or arm6l)]
+  md5: 8e83aa405d24497da46635b2f570c7d6 # [linux and (armv7l or arm6l)]
+  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-linux-arm64.tar.gz # [aarch64]
+  md5: d1dfd9c73773950d37b2ec7a1dc4b872 # [aarch64]
+  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-windows-386.tar.gz # [win32]
+  md5: 65e39ae85d18e59d18f3220dbf5e7ec7 # [win32]
+  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-windows-amd64.tar.gz # [win64]
+  md5: 1fbe88100c569913714c8071c81e6c56 # [win64]
 
 build:
   number: 0
-  script:
-    - make build && make install
-
-requirements:
-  build:
-    - {{ compiler('go') }} 1.18
-    - make
-
+  overlinking_ignore_patterns:
+    - "bin/*"
+  binary_relocation: False
 test:
   commands:
     - gocmd --version
 
 about:
-  home: https://github.com/cyverse/gocommands
-  license_family: BSD
-  license_file: LICENSE
-  summary: Protable iRODS command-line tools written in Go
+  home: {{ package_info.get('git_repo') }}
+  license_file: ../LICENSE
+  summary: A protable command-line toolkit for iRODS
+
+extra:
+  recipe-maintainers:
+    - Illyoung Choi
