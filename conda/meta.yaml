@@ -1,41 +1,53 @@
 {% set package_info = load_file_data(filename="../package_info.json", from_recipe_dir=True, recipe_dir="conda") %}
 
 package:
-  name: {{ package_info.get('name') }}
+  name: {{ package_info.get('name')|lower }}
   version: {{ package_info.get('version') }}
 
 source:
-  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-darwin-amd64.tar.gz # [osx and x86_64]
-  md5: f41aeca3e44dd997e52cf55a30a3c0ba # [osx and x86_64]
-  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-darwin-arm64.tar.gz # [arm64]
-  md5: 3101783333e0b834cb78db9eae4599b6 # [arm64]
-  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-linux-386.tar.gz # [linux32]
-  md5: 68a0376fe0a7363869e9c5a565a91355 # [linux32]
-  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-linux-amd64.tar.gz # [linux64]
-  md5: 8e1f7edeab149458effef09d015d9836 # [linux64]
-  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-linux-arm.tar.gz # [linux and (armv7l or arm6l)]
-  md5: 8e83aa405d24497da46635b2f570c7d6 # [linux and (armv7l or arm6l)]
-  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-linux-arm64.tar.gz # [aarch64]
-  md5: d1dfd9c73773950d37b2ec7a1dc4b872 # [aarch64]
-  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-windows-386.tar.gz # [win32]
-  md5: 65e39ae85d18e59d18f3220dbf5e7ec7 # [win32]
-  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-windows-amd64.tar.gz # [win64]
-  md5: 1fbe88100c569913714c8071c81e6c56 # [win64]
+  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-darwin-amd64.tar.gz  # [osx and x86_64]
+  md5: f41aeca3e44dd997e52cf55a30a3c0ba  # [osx and x86_64]
+  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-darwin-arm64.tar.gz  # [arm64]
+  md5: 3101783333e0b834cb78db9eae4599b6  # [arm64]
+  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-linux-386.tar.gz  # [linux32]
+  md5: 68a0376fe0a7363869e9c5a565a91355  # [linux32]
+  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-linux-amd64.tar.gz  # [linux64]
+  md5: 8e1f7edeab149458effef09d015d9836  # [linux64]
+  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-linux-arm.tar.gz  # [linux and (armv7l or arm6l)]
+  md5: 8e83aa405d24497da46635b2f570c7d6  # [linux and (armv7l or arm6l)]
+  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-linux-arm64.tar.gz  # [aarch64]
+  md5: d1dfd9c73773950d37b2ec7a1dc4b872  # [aarch64]
+  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-windows-386.zip  # [win32]
+  md5: 65e39ae85d18e59d18f3220dbf5e7ec7  # [win32]
+  url: {{ package_info.get('release_url') }}/download/v{{ package_info.get('version') }}/gocmd-v{{ package_info.get('version') }}-windows-amd64.zip  # [win64]
+  md5: 1fbe88100c569913714c8071c81e6c56  # [win64]
 
 build:
   number: 0
   overlinking_ignore_patterns:
     - "bin/*"
+  # Our package contains only a single binary already compiled
   binary_relocation: False
+
 test:
   commands:
-    - gocmd --version
+    # We don't want to run tests when the target platform is not the same as the build platform
+    # because gocmd is a binary that can run on a specific platform
+    - gocmd --version  # [build_platform == target_platform and not win64 and not win32]
+    - gocmd.exe --version  # [build_platform == target_platform and (win64 or win32)]
 
 about:
   home: {{ package_info.get('git_repo') }}
-  license_file: ../LICENSE
-  summary: A protable command-line toolkit for iRODS
+  summary: 'A protable command-line toolkit for iRODS'
+  description: |
+    gocommands is a portable command-line toolkit for iRODS data management service. 
+    It can run on any systems, including linux, osx, and windows. As it is written in 
+    pure Go language, it has no dependencies.
+  license: BSD-3-Clause
+  license_family: BSD
+  license_file: LICENSE
 
 extra:
   recipe-maintainers:
-    - Illyoung Choi
+    # GitHub IDs for maintainers of the recipe.
+    - iychoi
