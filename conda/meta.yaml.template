@@ -1,7 +1,7 @@
-{% set name = "gocommands" %}
-{% set version = "0.6.4" %}
-{% set git_repo = "https://github.com/cyverse/gocommands" %}
-{% set release_url = "https://github.com/cyverse/gocommands/releases" %}
+{% set name = "$NAME" %}
+{% set version = "$VERSION" %}
+{% set git_repo = "$GIT_REPO" %}
+{% set release_url = "$RELEASE_URL" %}
 
 package:
   name: {{ name|lower }}
@@ -9,21 +9,21 @@ package:
 
 source:
   url: {{ release_url }}/download/v{{ version }}/gocmd-v{{ version }}-darwin-amd64.tar.gz  # [osx and x86_64]
-  md5: f41aeca3e44dd997e52cf55a30a3c0ba  # [osx and x86_64]
+  md5: $RELEASE_BINARY_OSX_AMD64_MD5  # [osx and x86_64]
   url: {{ release_url }}/download/v{{ version }}/gocmd-v{{ version }}-darwin-arm64.tar.gz  # [arm64]
-  md5: 3101783333e0b834cb78db9eae4599b6  # [arm64]
+  md5: $RELEASE_BINARY_OSX_ARM64_MD5  # [arm64]
   url: {{ release_url }}/download/v{{ version }}/gocmd-v{{ version }}-linux-386.tar.gz  # [linux32]
-  md5: 68a0376fe0a7363869e9c5a565a91355  # [linux32]
+  md5: $RELEASE_BINARY_LINUX_386_MD5  # [linux32]
   url: {{ release_url }}/download/v{{ version }}/gocmd-v{{ version }}-linux-amd64.tar.gz  # [linux64]
-  md5: 8e1f7edeab149458effef09d015d9836  # [linux64]
+  md5: $RELEASE_BINARY_LINUX_AMD64_MD5  # [linux64]
   url: {{ release_url }}/download/v{{ version }}/gocmd-v{{ version }}-linux-arm.tar.gz  # [linux and (armv7l or arm6l)]
-  md5: 8e83aa405d24497da46635b2f570c7d6  # [linux and (armv7l or arm6l)]
+  md5: $RELEASE_BINARY_LINUX_ARM_MD5  # [linux and (armv7l or arm6l)]
   url: {{ release_url }}/download/v{{ version }}/gocmd-v{{ version }}-linux-arm64.tar.gz  # [aarch64]
-  md5: d1dfd9c73773950d37b2ec7a1dc4b872  # [aarch64]
+  md5: $RELEASE_BINARY_LINUX_ARM64_MD5  # [aarch64]
   url: {{ release_url }}/download/v{{ version }}/gocmd-v{{ version }}-windows-386.zip  # [win32]
-  md5: 65e39ae85d18e59d18f3220dbf5e7ec7  # [win32]
+  md5: $RELEASE_BINARY_WINDOWS_386_MD5  # [win32]
   url: {{ release_url }}/download/v{{ version }}/gocmd-v{{ version }}-windows-amd64.zip  # [win64]
-  md5: 1fbe88100c569913714c8071c81e6c56  # [win64]
+  md5: $RELEASE_BINARY_WINDOWS_AMD64_MD5  # [win64]
 
 build:
   number: 0

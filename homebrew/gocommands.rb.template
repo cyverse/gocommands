@@ -1,0 +1,29 @@
+class Gocommands < Formula
+  desc "Portable command-line toolkit for iRODS data management service"
+  homepage "$GIT_REPO"
+  url "$GIT_REPO/archive/refs/tags/v$VERSION.tar.gz"
+  sha256 "$SOURCE_SHA256"
+  license "BSD-3-Clause"
+
+  livecheck do
+    url :stable
+    regex(/^v?(\d+(?:\.\d+)+)$/i)
+  end
+
+  depends_on "go" => :build
+
+  def install
+    gocmd_pkg = "$GO_PACKAGE"
+    gocmd_version = version.to_s
+    ldflags = "-X #{gocmd_pkg}/commons.clientVersion=v#{gocmd_version}"
+
+    system "go", "build", "-ldflags", ldflags, "-o", "gocmd", "cmd/gocmd.go"
+
+    bin.install "gocmd"
+  end
+
+  test do
+    assert_match "clientVersion",
+      shell_output("#{bin}/gocmd --version")
+  end
+end
