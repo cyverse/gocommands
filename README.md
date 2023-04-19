@@ -8,30 +8,35 @@ Be sure to download a binary for your target system architecture.
 
 For Darwin-amd64 (Mac OS):
 ```bash
-curl -L -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/v0.6.5/gocmd-v0.6.5-darwin-amd64.tar.gz && \
+GOCMD_VER=$(curl -L -s https://raw.githubusercontent.com/cyverse/gocommands/main/VERSION.txt); \
+curl -L -s -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/$GOCMD_VER/gocmd-$GOCMD_VER-darwin-amd64.tar.gz && \
 tar zxvf gocmd.tar.gz && rm gocmd.tar.gz
 ```
 
 For Linux-amd64:
 ```bash
-curl -L -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/v0.6.5/gocmd-v0.6.5-linux-amd64.tar.gz && \
+GOCMD_VER=$(curl -L -s https://raw.githubusercontent.com/cyverse/gocommands/main/VERSION.txt); \
+curl -L -s -o gocmd.tar.gz "https://github.com/cyverse/gocommands/releases/download/${GOCMD_VER}/gocmd-${GOCMD_VER}-linux-amd64.tar.gz" && \
 tar zxvf gocmd.tar.gz && rm gocmd.tar.gz
 ```
 
 For Linux-arm64:
 ```bash
-curl -L -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/v0.6.5/gocmd-v0.6.5-linux-arm64.tar.gz && \
+GOCMD_VER=$(curl -L -s https://raw.githubusercontent.com/cyverse/gocommands/main/VERSION.txt); \
+curl -L -s -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/$GOCMD_VER/gocmd-$GOCMD_VER-linux-arm64.tar.gz && \
 tar zxvf gocmd.tar.gz && rm gocmd.tar.gz
 ```
 
 For Windows-amd64 (using windows Cmd):
 ```bash
-curl -L -o gocmd.zip https://github.com/cyverse/gocommands/releases/download/v0.6.5/gocmd-v0.6.5-windows-amd64.zip && tar zxvf gocmd.zip && del gocmd.zip
+curl -L -s -o gocmdv.txt https://raw.githubusercontent.com/cyverse/gocommands/main/VERSION.txt && set /p GOCMD_VER=<gocmdv.txt
+curl -L -s -o gocmd.zip https://github.com/cyverse/gocommands/releases/download/%GOCMD_VER%/gocmd-%GOCMD_VER%-windows-amd64.zip && tar zxvf gocmd.zip && del gocmd.zip gocmdv.txt
 ```
 
 For Windows-amd64 (using windows PowerShell):
 ```bash
-curl -o gocmd.zip https://github.com/cyverse/gocommands/releases/download/v0.6.5/gocmd-v0.6.5-windows-amd64.zip ; tar zxvf gocmd.zip ; del gocmd.zip
+curl -o gocmdv.txt https://raw.githubusercontent.com/cyverse/gocommands/main/VERSION.txt ; $env:GOCMD_VER = (Get-Content gocmdv.txt)
+curl -o gocmd.zip https://github.com/cyverse/gocommands/releases/download/$env:GOCMD_VER/gocmd-$env:GOCMD_VER-windows-amd64.zip ; tar zxvf gocmd.zip ; del gocmd.zip ; del gocmdv.txt
 ```
 
 ## How to use

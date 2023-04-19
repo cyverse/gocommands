@@ -16,7 +16,6 @@ build:
 
 .PHONY: update_version
 update_version:
-	./tools/update-pkginfo.sh README.md.template README.md
 	./tools/update-pkginfo.sh conda/meta.yaml.template conda/meta.yaml
 	./tools/update-pkginfo.sh homebrew/gocommands.rb.template homebrew/gocommands.rb
 	cp LICENSE conda/LICENSE
