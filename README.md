@@ -9,22 +9,19 @@ Be sure to download a binary for your target system architecture.
 For Darwin-amd64 (Mac OS):
 ```bash
 GOCMD_VER=$(curl -L -s https://raw.githubusercontent.com/cyverse/gocommands/main/VERSION.txt); \
-curl -L -s -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/$GOCMD_VER/gocmd-$GOCMD_VER-darwin-amd64.tar.gz && \
-tar zxvf gocmd.tar.gz && rm gocmd.tar.gz
+curl -L -s https://github.com/cyverse/gocommands/releases/download/${GOCMD_VER}/gocmd-${GOCMD_VER}-darwin-amd64.tar.gz | tar zxvf -
 ```
 
 For Linux-amd64:
 ```bash
 GOCMD_VER=$(curl -L -s https://raw.githubusercontent.com/cyverse/gocommands/main/VERSION.txt); \
-curl -L -s -o gocmd.tar.gz "https://github.com/cyverse/gocommands/releases/download/${GOCMD_VER}/gocmd-${GOCMD_VER}-linux-amd64.tar.gz" && \
-tar zxvf gocmd.tar.gz && rm gocmd.tar.gz
+curl -L -s https://github.com/cyverse/gocommands/releases/download/${GOCMD_VER}/gocmd-${GOCMD_VER}-linux-amd64.tar.gz | tar zxvf -
 ```
 
 For Linux-arm64:
 ```bash
 GOCMD_VER=$(curl -L -s https://raw.githubusercontent.com/cyverse/gocommands/main/VERSION.txt); \
-curl -L -s -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/$GOCMD_VER/gocmd-$GOCMD_VER-linux-arm64.tar.gz && \
-tar zxvf gocmd.tar.gz && rm gocmd.tar.gz
+curl -L -s https://github.com/cyverse/gocommands/releases/download/${GOCMD_VER}/gocmd-${GOCMD_VER}-linux-arm64.tar.gz | tar zxvf -
 ```
 
 For Windows-amd64 (using windows Cmd):
