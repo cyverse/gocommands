@@ -24,6 +24,15 @@ curl -L -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/
 tar zxvf gocmd.tar.gz && rm gocmd.tar.gz
 ```
 
+For Windows-amd64 (using windows Cmd):
+```bash
+curl -L -o gocmd.zip https://github.com/cyverse/gocommands/releases/download/v0.6.5/gocmd-v0.6.5-windows-amd64.zip && tar zxvf gocmd.zip && del gocmd.zip
+```
+
+For Windows-amd64 (using windows PowerShell):
+```bash
+curl -o gocmd.zip https://github.com/cyverse/gocommands/releases/download/v0.6.5/gocmd-v0.6.5-windows-amd64.zip ; tar zxvf gocmd.zip ; del gocmd.zip
+```
 
 ## How to use
 
