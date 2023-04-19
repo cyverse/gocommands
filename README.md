@@ -3,7 +3,7 @@ iRODS Command-line Tools written in Go
 
 
 ## Download pre-built binary
-Please download binary file (bundled with `tar` or `zip`) at [https://github.com/cyverse/gocommands/releases](https://github.com/cyverse/gocommands/releases).
+Please download binary file (bundled with `tar` or `zip`) at ["https://github.com/cyverse/gocommands/releases"]("https://github.com/cyverse/gocommands/releases").
 Be sure to download a binary for your target system architecture.
 
 For Darwin-amd64 (Mac OS):

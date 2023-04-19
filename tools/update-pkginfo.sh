@@ -6,9 +6,6 @@
 #
 # NAME                                 update it with "name" value in package_info.json
 # VERSION                              update it with "version" value in package_info.json
-# GO_PACKAGE                           update it with "go_package" value in package_info.json
-# GIT_REPO                             update it with "git_repo" value in package_info.json
-# RELEASE_URL                          update it with "release_url" value in package_info.json
 # SOURCE_SHA256                        update it with source tarball's sha256sum
 # RELEASE_BINARY_OSX_AMD64_MD5         update it with binary package's md5sum
 # RELEASE_BINARY_OSX_ARM64_MD5         update it with binary package's md5sum
@@ -22,11 +19,8 @@
 
 NAME=$(jq -r .name package_info.json)
 VERSION=$(jq -r .version package_info.json)
-GO_PACKAGE=$(jq -r .go_package package_info.json)
-GIT_REPO=$(jq -r .git_repo package_info.json)
-RELEASE_URL=$(jq -r .release_url package_info.json)
-CUR_RELEASE_URL=${RELEASE_URL}/download/v${VERSION}
-CUR_SOURCE_RELEASE_URL=${GIT_REPO}/archive/refs/tags
+CUR_RELEASE_URL=https://github.com/cyverse/gocommands/releases/download/v${VERSION}
+CUR_SOURCE_RELEASE_URL=https://github.com/cyverse/gocommands/archive/refs/tags
 
 SOURCE_SHA256=
 RELEASE_BINARY_OSX_AMD64_MD5=
@@ -41,7 +35,7 @@ RELEASE_BINARY_WINDOWS_AMD64_MD5=
 get_source_sha256()
 {
   local tarURL="${CUR_SOURCE_RELEASE_URL}/v${VERSION}.tar.gz"
-  printf '%s' $(curl -L ${tarURL} | sha256sum | awk '{print $1}')
+  printf '%s' $(curl -sL ${tarURL} | sha256sum | awk '{print $1}')
 }
 
 get_release_md5()
@@ -59,7 +53,7 @@ get_release_md5()
     md5URL="${tarURL}.md5"
   fi
 
-  printf '%s' $(curl -L ${md5URL})
+  printf '%s' $(curl -sL ${md5URL})
 }
 
 main()
@@ -93,10 +87,7 @@ escape()
 expand_tmpl()
 {
   cat <<EOF | sed --file - "$1"
-s/\$NAME/$(escape $NAME)/g
 s/\$VERSION/$(escape $VERSION)/g
-s/\$GO_PACKAGE/$(escape $GO_PACKAGE)/g
-s/\$GIT_REPO/$(escape $GIT_REPO)/g
 s/\$RELEASE_URL/$(escape $RELEASE_URL)/g
 s/\$SOURCE_SHA256/$(escape $SOURCE_SHA256)/g
 s/\$RELEASE_BINARY_OSX_AMD64_MD5/$(escape $RELEASE_BINARY_OSX_AMD64_MD5)/g

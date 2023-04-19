@@ -1,28 +1,26 @@
-{% set name = "gocommands" %}
 {% set version = "0.6.5" %}
 {% set git_repo = "https://github.com/cyverse/gocommands" %}
-{% set release_url = "https://github.com/cyverse/gocommands/releases" %}
 
 package:
-  name: {{ name|lower }}
+  name: {{ "gocommands" }}
   version: {{ version }}
 
 source:
-  url: {{ release_url }}/download/v{{ version }}/gocmd-v{{ version }}-darwin-amd64.tar.gz  # [osx and x86_64]
+  url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-darwin-amd64.tar.gz  # [osx and x86_64]
   md5: 9c0e88d18355f943d5665da19c74b98c  # [osx and x86_64]
-  url: {{ release_url }}/download/v{{ version }}/gocmd-v{{ version }}-darwin-arm64.tar.gz  # [arm64]
+  url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-darwin-arm64.tar.gz  # [arm64]
   md5: 81cef6aa560fbdcfb7954049060dc635  # [arm64]
-  url: {{ release_url }}/download/v{{ version }}/gocmd-v{{ version }}-linux-386.tar.gz  # [linux32]
+  url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-linux-386.tar.gz  # [linux32]
   md5: 884a243def5e1d4aa1ee45b7033d9a76  # [linux32]
-  url: {{ release_url }}/download/v{{ version }}/gocmd-v{{ version }}-linux-amd64.tar.gz  # [linux64]
+  url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-linux-amd64.tar.gz  # [linux64]
   md5: 85a2c54648a3bf92481a126000115e85  # [linux64]
-  url: {{ release_url }}/download/v{{ version }}/gocmd-v{{ version }}-linux-arm.tar.gz  # [linux and (armv7l or arm6l)]
+  url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-linux-arm.tar.gz  # [linux and (armv7l or arm6l)]
   md5: 5cf43523ec786d8e3f7e747b7f918702  # [linux and (armv7l or arm6l)]
-  url: {{ release_url }}/download/v{{ version }}/gocmd-v{{ version }}-linux-arm64.tar.gz  # [aarch64]
+  url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-linux-arm64.tar.gz  # [aarch64]
   md5: cc19c32d88aedb184c6985bf21909537  # [aarch64]
-  url: {{ release_url }}/download/v{{ version }}/gocmd-v{{ version }}-windows-386.zip  # [win32]
+  url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-windows-386.zip  # [win32]
   md5: acc7c6feb18caa0066953d9449794908  # [win32]
-  url: {{ release_url }}/download/v{{ version }}/gocmd-v{{ version }}-windows-amd64.zip  # [win64]
+  url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-windows-amd64.zip  # [win64]
   md5: e38c69c99e9c6f21063c94bfc0d7af35  # [win64]
 
 build:

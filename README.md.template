@@ -3,35 +3,35 @@ iRODS Command-line Tools written in Go
 
 
 ## Download pre-built binary
-Please download binary file (bundled with `tar` or `zip`) at [$RELEASE_URL]($RELEASE_URL).
+Please download binary file (bundled with `tar` or `zip`) at ["https://github.com/cyverse/gocommands/releases"]("https://github.com/cyverse/gocommands/releases").
 Be sure to download a binary for your target system architecture.
 
 For Darwin-amd64 (Mac OS):
 ```bash
-curl -L -o gocmd.tar.gz $RELEASE_URL/download/v$VERSION/gocmd-v$VERSION-darwin-amd64.tar.gz && \
+curl -L -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/v$VERSION/gocmd-v$VERSION-darwin-amd64.tar.gz && \
 tar zxvf gocmd.tar.gz && rm gocmd.tar.gz
 ```
 
 For Linux-amd64:
 ```bash
-curl -L -o gocmd.tar.gz $RELEASE_URL/download/v$VERSION/gocmd-v$VERSION-linux-amd64.tar.gz && \
+curl -L -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/v$VERSION/gocmd-v$VERSION-linux-amd64.tar.gz && \
 tar zxvf gocmd.tar.gz && rm gocmd.tar.gz
 ```
 
 For Linux-arm64:
 ```bash
-curl -L -o gocmd.tar.gz $RELEASE_URL/download/v$VERSION/gocmd-v$VERSION-linux-arm64.tar.gz && \
+curl -L -o gocmd.tar.gz https://github.com/cyverse/gocommands/releases/download/v$VERSION/gocmd-v$VERSION-linux-arm64.tar.gz && \
 tar zxvf gocmd.tar.gz && rm gocmd.tar.gz
 ```
 
 For Windows-amd64 (using windows Cmd):
 ```bash
-curl -L -o gocmd.zip $RELEASE_URL/download/v$VERSION/gocmd-v$VERSION-windows-amd64.zip && tar zxvf gocmd.zip && del gocmd.zip
+curl -L -o gocmd.zip https://github.com/cyverse/gocommands/releases/download/v$VERSION/gocmd-v$VERSION-windows-amd64.zip && tar zxvf gocmd.zip && del gocmd.zip
 ```
 
 For Windows-amd64 (using windows PowerShell):
 ```bash
-curl -o gocmd.zip $RELEASE_URL/download/v$VERSION/gocmd-v$VERSION-windows-amd64.zip ; tar zxvf gocmd.zip ; del gocmd.zip
+curl -o gocmd.zip https://github.com/cyverse/gocommands/releases/download/v$VERSION/gocmd-v$VERSION-windows-amd64.zip ; tar zxvf gocmd.zip ; del gocmd.zip
 ```
 
 ## How to use

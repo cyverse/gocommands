@@ -1,7 +1,7 @@
 class Gocommands < Formula
   desc "Portable command-line toolkit for iRODS data management service"
-  homepage "$GIT_REPO"
-  url "$GIT_REPO/archive/refs/tags/v$VERSION.tar.gz"
+  homepage "https://github.com/cyverse/gocommands"
+  url "https://github.com/cyverse/gocommands/archive/refs/tags/v$VERSION.tar.gz"
   sha256 "$SOURCE_SHA256"
   license "BSD-3-Clause"
 
@@ -13,7 +13,7 @@ class Gocommands < Formula
   depends_on "go" => :build
 
   def install
-    gocmd_pkg = "$GO_PACKAGE"
+    gocmd_pkg = "github.com/cyverse/gocommands"
     gocmd_version = version.to_s
     ldflags = "-X #{gocmd_pkg}/commons.clientVersion=v#{gocmd_version}"
 
