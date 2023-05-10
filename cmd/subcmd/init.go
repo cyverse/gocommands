@@ -2,7 +2,9 @@ package subcmd
 
 import (
 	"fmt"
+	"os"
 
+	"github.com/cyverse/go-irodsclient/utils/icommands"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -45,9 +47,18 @@ func processInitCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to get iRODS account info from iCommands Environment: %w", err)
 	}
 
+	// test connect
 	err = commons.TestConnect(account)
 	if err != nil {
 		return xerrors.Errorf("failed to connect to iRODS server: %w", err)
+	}
+
+	// test encode
+	uid := os.Getuid()
+	encodedPassword := icommands.EncodePasswordString(account.Password, uid)
+	decodedPassword := icommands.DecodePasswordString(encodedPassword, uid)
+	if account.Password != decodedPassword {
+		return xerrors.Errorf("failed to encode and decode the given password: %w", err)
 	}
 
 	if updated {
