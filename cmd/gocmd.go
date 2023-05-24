@@ -83,6 +83,9 @@ func main() {
 	subcmd.AddPsCommand(rootCmd)
 	subcmd.AddCopySftpIdCommand(rootCmd)
 	subcmd.AddLsticketCommand(rootCmd)
+	subcmd.AddRmticketCommand(rootCmd)
+	subcmd.AddMkticketCommand(rootCmd)
+	subcmd.AddModticketCommand(rootCmd)
 	subcmd.AddBcleanCommand(rootCmd)
 	subcmd.AddUpgradeCommand(rootCmd)
 
