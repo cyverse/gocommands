@@ -12,10 +12,11 @@ import (
 )
 
 var bcleanCmd = &cobra.Command{
-	Use:   "bclean [collection]",
-	Short: "Clean bundle staging directories",
-	Long:  `This cleans bundle files created by 'bput' or 'sync' for uploading data to the given iRODS collection.`,
-	RunE:  processBcleanCommand,
+	Use:     "bclean [collection]",
+	Aliases: []string{"bundle_clean"},
+	Short:   "Clean bundle staging directories",
+	Long:    `This cleans bundle files created by 'bput' or 'sync' for uploading data to the given iRODS collection.`,
+	RunE:    processBcleanCommand,
 }
 
 func AddBcleanCommand(rootCmd *cobra.Command) {

@@ -13,10 +13,11 @@ import (
 )
 
 var modticketCmd = &cobra.Command{
-	Use:   "modticket [ticket_name]",
-	Short: "Modify a ticket",
-	Long:  `This modifies a ticket.`,
-	RunE:  processModticketCommand,
+	Use:     "modticket [ticket_name]",
+	Aliases: []string{"mod_ticket", "modify_ticket", "update_ticket"},
+	Short:   "Modify a ticket",
+	Long:    `This modifies a ticket.`,
+	RunE:    processModticketCommand,
 }
 
 func AddModticketCommand(rootCmd *cobra.Command) {

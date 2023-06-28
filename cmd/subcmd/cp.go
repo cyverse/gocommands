@@ -14,10 +14,11 @@ import (
 )
 
 var cpCmd = &cobra.Command{
-	Use:   "cp [data-object1] [data-object2] [collection1] ... [target collection]",
-	Short: "Copy iRODS data-objects or collections to target collection",
-	Long:  `This copies iRODS data-objects or collections to the given target collection.`,
-	RunE:  processCpCommand,
+	Use:     "cp [data-object1] [data-object2] [collection1] ... [target collection]",
+	Aliases: []string{"icp", "copy"},
+	Short:   "Copy iRODS data-objects or collections to target collection",
+	Long:    `This copies iRODS data-objects or collections to the given target collection.`,
+	RunE:    processCpCommand,
 }
 
 func AddCpCommand(rootCmd *cobra.Command) {

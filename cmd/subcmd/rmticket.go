@@ -9,10 +9,11 @@ import (
 )
 
 var rmticketCmd = &cobra.Command{
-	Use:   "rmticket [ticket_string1] [ticket_string2] ...",
-	Short: "Remove tickets for the user",
-	Long:  `This removes tickets for the user.`,
-	RunE:  processRmticketCommand,
+	Use:     "rmticket [ticket_string1] [ticket_string2] ...",
+	Aliases: []string{"rm_ticket", "remove_ticket"},
+	Short:   "Remove tickets for the user",
+	Long:    `This removes tickets for the user.`,
+	RunE:    processRmticketCommand,
 }
 
 func AddRmticketCommand(rootCmd *cobra.Command) {

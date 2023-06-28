@@ -9,10 +9,11 @@ import (
 )
 
 var mvCmd = &cobra.Command{
-	Use:   "mv [data-object1] [data-object2] [collection1] ... [target collection]",
-	Short: "Move iRODS data-objects or collections to target collection, or rename data-object or collection",
-	Long:  `This moves iRODS data-objects or collections to the given target collection, or rename a single data-object or collection.`,
-	RunE:  processMvCommand,
+	Use:     "mv [data-object1] [data-object2] [collection1] ... [target collection]",
+	Aliases: []string{"imv", "move"},
+	Short:   "Move iRODS data-objects or collections to target collection, or rename data-object or collection",
+	Long:    `This moves iRODS data-objects or collections to the given target collection, or rename a single data-object or collection.`,
+	RunE:    processMvCommand,
 }
 
 func AddMvCommand(rootCmd *cobra.Command) {

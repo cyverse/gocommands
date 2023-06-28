@@ -13,10 +13,11 @@ import (
 )
 
 var mkticketCmd = &cobra.Command{
-	Use:   "mkticket [collection|data object]",
-	Short: "Make a ticket",
-	Long:  `This makes a ticket for given collection or data object.`,
-	RunE:  processMkticketCommand,
+	Use:     "mkticket [collection|data object]",
+	Aliases: []string{"mk_ticket", "make_ticket"},
+	Short:   "Make a ticket",
+	Long:    `This makes a ticket for given collection or data object.`,
+	RunE:    processMkticketCommand,
 }
 
 func AddMkticketCommand(rootCmd *cobra.Command) {

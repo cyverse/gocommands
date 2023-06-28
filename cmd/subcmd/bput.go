@@ -13,10 +13,11 @@ import (
 )
 
 var bputCmd = &cobra.Command{
-	Use:   "bput [local file1] [local file2] [local dir1] ... [collection]",
-	Short: "Bundle-upload files or directories",
-	Long:  `This uploads files or directories to the given iRODS collection. The files or directories are bundled with TAR to maximize data transfer bandwidth, then extracted in the iRODS.`,
-	RunE:  processBputCommand,
+	Use:     "bput [local file1] [local file2] [local dir1] ... [collection]",
+	Aliases: []string{"bundle_put"},
+	Short:   "Bundle-upload files or directories",
+	Long:    `This uploads files or directories to the given iRODS collection. The files or directories are bundled with TAR to maximize data transfer bandwidth, then extracted in the iRODS.`,
+	RunE:    processBputCommand,
 }
 
 func AddBputCommand(rootCmd *cobra.Command) {

@@ -12,10 +12,11 @@ import (
 )
 
 var mkdirCmd = &cobra.Command{
-	Use:   "mkdir [collection1] [collection2] ...",
-	Short: "Make iRODS collections",
-	Long:  `This makes iRODS collections.`,
-	RunE:  processMkdirCommand,
+	Use:     "mkdir [collection1] [collection2] ...",
+	Aliases: []string{"imkdir"},
+	Short:   "Make iRODS collections",
+	Long:    `This makes iRODS collections.`,
+	RunE:    processMkdirCommand,
 }
 
 func AddMkdirCommand(rootCmd *cobra.Command) {

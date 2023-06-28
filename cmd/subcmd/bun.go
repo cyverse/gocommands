@@ -13,10 +13,11 @@ import (
 )
 
 var bunCmd = &cobra.Command{
-	Use:   "bun [data-object1] [data-object2] ... [target collection]",
-	Short: "Extract iRODS data-objects in a structured file format to target collection",
-	Long:  `This extracts iRODS data-objects in a structured file format (e.g., zip and tar) to the given target collection.`,
-	RunE:  processBunCommand,
+	Use:     "bun [data-object1] [data-object2] ... [target collection]",
+	Aliases: []string{"bundle", "ibun"},
+	Short:   "Extract iRODS data-objects in a structured file format to target collection",
+	Long:    `This extracts iRODS data-objects in a structured file format (e.g., zip and tar) to the given target collection.`,
+	RunE:    processBunCommand,
 }
 
 func AddBunCommand(rootCmd *cobra.Command) {

@@ -13,10 +13,11 @@ import (
 )
 
 var svrinfoCmd = &cobra.Command{
-	Use:   "svrinfo",
-	Short: "Display server information",
-	Long:  `This displays server information, such as version.`,
-	RunE:  processSvrinfoCommand,
+	Use:     "svrinfo",
+	Aliases: []string{"server_info"},
+	Short:   "Display server information",
+	Long:    `This displays server information, such as version.`,
+	RunE:    processSvrinfoCommand,
 }
 
 func AddSvrinfoCommand(rootCmd *cobra.Command) {

@@ -18,10 +18,11 @@ import (
 )
 
 var copySftpIdCmd = &cobra.Command{
-	Use:   "copy-sftp-id",
-	Short: "Copy SSH public key to iRODS for SFTP access",
-	Long:  `This copies SSH public key to iRODS for SFTP access.`,
-	RunE:  processCopySftpIdCommand,
+	Use:     "copy-sftp-id",
+	Aliases: []string{"copy_sftp_id"},
+	Short:   "Copy SSH public key to iRODS for SFTP access",
+	Long:    `This copies SSH public key to iRODS for SFTP access.`,
+	RunE:    processCopySftpIdCommand,
 }
 
 func AddCopySftpIdCommand(rootCmd *cobra.Command) {

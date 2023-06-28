@@ -17,10 +17,11 @@ import (
 )
 
 var putCmd = &cobra.Command{
-	Use:   "put [local file1] [local file2] [local dir1] ... [collection]",
-	Short: "Upload files or directories",
-	Long:  `This uploads files or directories to the given iRODS collection.`,
-	RunE:  processPutCommand,
+	Use:     "put [local file1] [local file2] [local dir1] ... [collection]",
+	Aliases: []string{"iput", "upload"},
+	Short:   "Upload files or directories",
+	Long:    `This uploads files or directories to the given iRODS collection.`,
+	RunE:    processPutCommand,
 }
 
 func AddPutCommand(rootCmd *cobra.Command) {

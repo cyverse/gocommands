@@ -14,10 +14,11 @@ import (
 )
 
 var passwdCmd = &cobra.Command{
-	Use:   "passwd",
-	Short: "Change iRODS user password",
-	Long:  `This changes iRODS user password.`,
-	RunE:  processPasswdCommand,
+	Use:     "passwd",
+	Aliases: []string{"ipasswd"},
+	Short:   "Change iRODS user password",
+	Long:    `This changes iRODS user password.`,
+	RunE:    processPasswdCommand,
 }
 
 func AddPasswdCommand(rootCmd *cobra.Command) {

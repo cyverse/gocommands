@@ -13,10 +13,11 @@ import (
 )
 
 var lsticketCmd = &cobra.Command{
-	Use:   "lsticket [ticket_string1] [ticket_string2] ...",
-	Short: "List tickets for the user",
-	Long:  `This lists tickets for the user.`,
-	RunE:  processLsticketCommand,
+	Use:     "lsticket [ticket_string1] [ticket_string2] ...",
+	Aliases: []string{"ls_ticket", "list_ticket"},
+	Short:   "List tickets for the user",
+	Long:    `This lists tickets for the user.`,
+	RunE:    processLsticketCommand,
 }
 
 func AddLsticketCommand(rootCmd *cobra.Command) {

@@ -15,10 +15,11 @@ import (
 )
 
 var lsCmd = &cobra.Command{
-	Use:   "ls [collection1] [collection2] ...",
-	Short: "List entries in iRODS collections",
-	Long:  `This lists data objects and collections in iRODS collections.`,
-	RunE:  processLsCommand,
+	Use:     "ls [collection1] [collection2] ...",
+	Aliases: []string{"ils", "list"},
+	Short:   "List entries in iRODS collections",
+	Long:    `This lists data objects and collections in iRODS collections.`,
+	RunE:    processLsCommand,
 }
 
 func AddLsCommand(rootCmd *cobra.Command) {

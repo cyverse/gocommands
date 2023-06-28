@@ -10,10 +10,11 @@ import (
 )
 
 var cdCmd = &cobra.Command{
-	Use:   "cd [collection1]",
-	Short: "Change current working iRODS collection",
-	Long:  `This changes current working iRODS collection.`,
-	RunE:  processCdCommand,
+	Use:     "cd [collection1]",
+	Aliases: []string{"icd"},
+	Short:   "Change current working iRODS collection",
+	Long:    `This changes current working iRODS collection.`,
+	RunE:    processCdCommand,
 }
 
 func AddCdCommand(rootCmd *cobra.Command) {

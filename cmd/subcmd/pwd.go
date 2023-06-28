@@ -9,10 +9,11 @@ import (
 )
 
 var pwdCmd = &cobra.Command{
-	Use:   "pwd",
-	Short: "Print current working iRODS collection",
-	Long:  `This prints current working iRODS collection.`,
-	RunE:  processPwdCommand,
+	Use:     "pwd",
+	Aliases: []string{"ipwd"},
+	Short:   "Print current working iRODS collection",
+	Long:    `This prints current working iRODS collection.`,
+	RunE:    processPwdCommand,
 }
 
 func AddPwdCommand(rootCmd *cobra.Command) {

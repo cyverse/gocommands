@@ -15,10 +15,11 @@ import (
 )
 
 var psCmd = &cobra.Command{
-	Use:   "ps",
-	Short: "List processes",
-	Long:  `This lists processes for iRODS connections establisted in iRODS server.`,
-	RunE:  processPsCommand,
+	Use:     "ps",
+	Aliases: []string{"ips"},
+	Short:   "List processes",
+	Long:    `This lists processes for iRODS connections establisted in iRODS server.`,
+	RunE:    processPsCommand,
 }
 
 func AddPsCommand(rootCmd *cobra.Command) {

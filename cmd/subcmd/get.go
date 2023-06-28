@@ -16,10 +16,11 @@ import (
 )
 
 var getCmd = &cobra.Command{
-	Use:   "get [data-object1] [data-object2] [collection1] ... [local dir]",
-	Short: "Download iRODS data-objects or collections",
-	Long:  `This downloads iRODS data-objects or collections to the given local path.`,
-	RunE:  processGetCommand,
+	Use:     "get [data-object1] [data-object2] [collection1] ... [local dir]",
+	Aliases: []string{"iget", "download"},
+	Short:   "Download iRODS data-objects or collections",
+	Long:    `This downloads iRODS data-objects or collections to the given local path.`,
+	RunE:    processGetCommand,
 }
 
 func AddGetCommand(rootCmd *cobra.Command) {

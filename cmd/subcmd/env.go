@@ -7,10 +7,11 @@ import (
 )
 
 var envCmd = &cobra.Command{
-	Use:   "env",
-	Short: "Print current irods environment",
-	Long:  `This prints out current irods environment.`,
-	RunE:  processEnvCommand,
+	Use:     "env",
+	Aliases: []string{"ienv"},
+	Short:   "Print current irods environment",
+	Long:    `This prints out current irods environment.`,
+	RunE:    processEnvCommand,
 }
 
 func AddEnvCommand(rootCmd *cobra.Command) {

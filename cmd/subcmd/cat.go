@@ -12,10 +12,11 @@ import (
 )
 
 var catCmd = &cobra.Command{
-	Use:   "cat [data-object]",
-	Short: "Display the content of an iRODS data-object",
-	Long:  `This displays the content of an iRODS data-object.`,
-	RunE:  processCatCommand,
+	Use:     "cat [data-object]",
+	Aliases: []string{"icat"},
+	Short:   "Display the content of an iRODS data-object",
+	Long:    `This displays the content of an iRODS data-object.`,
+	RunE:    processCatCommand,
 }
 
 func AddCatCommand(rootCmd *cobra.Command) {
