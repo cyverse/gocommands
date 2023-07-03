@@ -35,7 +35,6 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	putCmd.Flags().Bool("progress", false, "Display progress bar")
 	putCmd.Flags().Bool("diff", false, "Put files having different content")
 	putCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
-	putCmd.Flags().Bool("no_replication", false, "Disable replication")
 	putCmd.Flags().Int("retry", 1, "Retry if fails")
 	putCmd.Flags().Int("retry_interval", 60, "Retry interval in seconds")
 
@@ -123,17 +122,6 @@ func processPutCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
-	noReplication := false
-	noReplicationFlag := command.Flags().Lookup("no_replication")
-	if noReplicationFlag != nil {
-		noReplication, err = strconv.ParseBool(noReplicationFlag.Value.String())
-		if err != nil {
-			noReplication = false
-		}
-	}
-
-	replication := !noReplication
-
 	retryChild := false
 	retryChildFlag := command.Flags().Lookup("retry_child")
 	if retryChildFlag != nil {
@@ -196,7 +184,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	parallelJobManager.Start()
 
 	for _, sourcePath := range sourcePaths {
-		err = putOne(parallelJobManager, sourcePath, targetPath, force, singleThreaded, replication, diff, noHash)
+		err = putOne(parallelJobManager, sourcePath, targetPath, force, singleThreaded, diff, noHash)
 		if err != nil {
 			return xerrors.Errorf("failed to perform put %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -211,7 +199,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, targetPath string, force bool, singleThreaded bool, replicate bool, diff bool, noHash bool) error {
+func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, targetPath string, force bool, singleThreaded bool, diff bool, noHash bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "putOne",
@@ -247,9 +235,9 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 
 			logger.Debugf("uploading a file %s to %s", sourcePath, targetFilePath)
 			if singleThreaded {
-				err = fs.UploadFile(sourcePath, targetFilePath, "", replicate, callbackPut)
+				err = fs.UploadFile(sourcePath, targetFilePath, "", false, callbackPut)
 			} else {
-				err = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, replicate, callbackPut)
+				err = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, false, callbackPut)
 			}
 
 			if err != nil {
@@ -339,7 +327,7 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 
 		for _, entryInDir := range entries {
 			newSourcePath := filepath.Join(sourcePath, entryInDir.Name())
-			err = putOne(parallelJobManager, newSourcePath, targetDir, force, singleThreaded, replicate, diff, noHash)
+			err = putOne(parallelJobManager, newSourcePath, targetDir, force, singleThreaded, diff, noHash)
 			if err != nil {
 				return xerrors.Errorf("failed to perform put %s to %s: %w", newSourcePath, targetDir, err)
 			}

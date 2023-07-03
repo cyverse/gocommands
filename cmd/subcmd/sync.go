@@ -40,7 +40,6 @@ func AddSyncCommand(rootCmd *cobra.Command) {
 	syncCmd.Flags().String("local_temp", os.TempDir(), "Specify local temp directory path to create bundle files")
 	syncCmd.Flags().String("irods_temp", "", "Specify iRODS temp directory path to upload bundle files to")
 	syncCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
-	syncCmd.Flags().Bool("no_replication", false, "Disable replication")
 	syncCmd.Flags().Int("retry", 1, "Retry if fails")
 	syncCmd.Flags().Int("retry_interval", 60, "Retry interval in seconds")
 
@@ -154,17 +153,6 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 		}
 	}
 
-	noReplication := false
-	noReplicationFlag := command.Flags().Lookup("no_replication")
-	if noReplicationFlag != nil {
-		noReplication, err = strconv.ParseBool(noReplicationFlag.Value.String())
-		if err != nil {
-			noReplication = false
-		}
-	}
-
-	replication := !noReplication
-
 	localTempDirPath := os.TempDir()
 	localTempPathFlag := command.Flags().Lookup("local_temp")
 	if localTempPathFlag != nil {
@@ -277,7 +265,7 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 		}
 
 		// target must starts with "i:"
-		err := syncFromLocal(filesystem, localSources, targetPath[2:], maxFileNum, maxFileSize, singleThreaded, uploadThreadNum, localTempDirPath, irodsTempDirPath, progress, replication, noHash)
+		err := syncFromLocal(filesystem, localSources, targetPath[2:], maxFileNum, maxFileSize, singleThreaded, uploadThreadNum, localTempDirPath, irodsTempDirPath, progress, noHash)
 		if err != nil {
 			return xerrors.Errorf("failed to perform sync (from local): %w", err)
 		}
@@ -294,7 +282,7 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath string, maxFileNum int, maxFileSize int64, singleThreaded bool, uploadThreadNum int, localTempDirPath string, irodsTempDirPath string, progress bool, replication bool, noHash bool) error {
+func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath string, maxFileNum int, maxFileSize int64, singleThreaded bool, uploadThreadNum int, localTempDirPath string, irodsTempDirPath string, progress bool, noHash bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "syncFromLocal",
@@ -343,7 +331,7 @@ func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath s
 		commons.CleanUpOldIRODSBundles(filesystem, unusedStagingDir, true, true)
 	}()
 
-	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, singleThreaded, uploadThreadNum, localTempDirPath, irodsTempDirPath, true, noHash, replication, progress)
+	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, singleThreaded, uploadThreadNum, localTempDirPath, irodsTempDirPath, true, noHash, progress)
 	bundleTransferManager.Start()
 
 	bundleRootPath, err := commons.GetCommonRootLocalDirPathForSync(sourcePaths)

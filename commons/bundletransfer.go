@@ -107,7 +107,6 @@ type BundleTransferManager struct {
 	irodsTempDirPath        string
 	differentFilesOnly      bool
 	noHashForComparison     bool
-	replication             bool
 	showProgress            bool
 	progressWriter          progress.Writer
 	progressTrackers        map[string]*progress.Tracker
@@ -120,7 +119,7 @@ type BundleTransferManager struct {
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
-func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, singleThreaded bool, uploadThreadNum int, localTempDirPath string, irodsTempDirPath string, diff bool, noHash bool, replication bool, showProgress bool) *BundleTransferManager {
+func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, singleThreaded bool, uploadThreadNum int, localTempDirPath string, irodsTempDirPath string, diff bool, noHash bool, showProgress bool) *BundleTransferManager {
 	manager := &BundleTransferManager{
 		id:                      xid.New().String(),
 		filesystem:              fs,
@@ -137,7 +136,6 @@ func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath strin
 		irodsTempDirPath:        irodsTempDirPath,
 		differentFilesOnly:      diff,
 		noHashForComparison:     noHash,
-		replication:             replication,
 		showProgress:            showProgress,
 		progressWriter:          nil,
 		progressTrackers:        map[string]*progress.Tracker{},
@@ -924,9 +922,9 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 
 			var err error
 			if manager.singleThreaded {
-				err = manager.filesystem.UploadFile(file.LocalPath, file.IRODSPath, "", manager.replication, callbackFileUpload)
+				err = manager.filesystem.UploadFile(file.LocalPath, file.IRODSPath, "", false, callbackFileUpload)
 			} else {
-				err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, manager.replication, callbackFileUpload)
+				err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, callbackFileUpload)
 			}
 
 			if err != nil {
