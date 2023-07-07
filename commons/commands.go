@@ -358,19 +358,14 @@ func InputMissingFields() (bool, error) {
 		updated = true
 	}
 
-	for len(env.Username) == 0 {
+	if len(env.Username) == 0 {
 		fmt.Print("iRODS Username: ")
 		fmt.Scanln(&env.Username)
-		if len(env.Username) == 0 {
-			fmt.Println("Please provide username")
-			fmt.Println("")
-		} else {
-			updated = true
-		}
+		updated = true
 	}
 
 	password := environmentManager.Password
-	for len(password) == 0 {
+	if len(password) == 0 && env.Username != "anonymous" {
 		fmt.Print("iRODS Password: ")
 		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 		if err != nil {
@@ -379,19 +374,7 @@ func InputMissingFields() (bool, error) {
 
 		fmt.Print("\n")
 		password = string(bytePassword)
-
-		if env.Username == "anonymous" && len(password) == 0 {
-			// exceptional case
-			updated = true
-			break
-		}
-
-		if len(password) == 0 {
-			fmt.Println("Please provide password")
-			fmt.Println("")
-		} else {
-			updated = true
-		}
+		updated = true
 	}
 	environmentManager.Password = password
 
@@ -442,6 +425,107 @@ func InputMissingFieldsFromStdin() error {
 	environmentManager.Password = configTypeIn.Password
 
 	return nil
+}
+
+// ReinputFields re-inputs fields
+func ReinputFields() (bool, error) {
+	if environmentManager == nil {
+		envMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
+		if err != nil {
+			return false, xerrors.Errorf("failed to get new iCommands Environment: %w", err)
+		}
+
+		environmentManager = envMgr
+		account, err = envMgr.ToIRODSAccount()
+		if err != nil {
+			return false, xerrors.Errorf("failed to get account from iCommands Environment: %w", err)
+		}
+	}
+
+	updated := false
+
+	env := environmentManager.Environment
+	if len(env.Host) == 0 {
+		env.Host = "data.cyverse.org" // default
+	}
+
+	fmt.Printf("iRODS Host [%s]: ", env.Host)
+	newHost := ""
+	fmt.Scanln(&newHost)
+	if len(newHost) > 0 && newHost != env.Host {
+		env.Host = newHost
+		updated = true
+	}
+
+	if env.Port == 0 {
+		env.Port = 1247 // default
+	}
+
+	fmt.Printf("iRODS Port [%d]: ", env.Port)
+	newPort := 0
+	fmt.Scanln(&newPort)
+	if newPort > 0 && newPort != env.Port {
+		env.Port = newPort
+		updated = true
+	}
+
+	if len(env.Zone) == 0 {
+		env.Zone = "iplant" // default
+	}
+
+	fmt.Printf("iRODS Zone [%s]: ", env.Zone)
+	newZone := ""
+	fmt.Scanln(&newZone)
+	if len(newZone) > 0 && newZone != env.Zone {
+		env.Zone = newZone
+		updated = true
+	}
+
+	for {
+		if len(env.Username) > 0 {
+			fmt.Printf("iRODS Username [%s]: ", env.Username)
+		} else {
+			fmt.Printf("iRODS Username: ")
+		}
+
+		newUsername := ""
+		fmt.Scanln(&newUsername)
+		if len(newUsername) > 0 && newUsername != env.Username {
+			env.Username = newUsername
+			updated = true
+		}
+
+		if len(env.Username) > 0 {
+			break
+		}
+	}
+
+	fmt.Print("iRODS Password: ")
+	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+	if err != nil {
+		return false, xerrors.Errorf("failed to read password: %w", err)
+	}
+	fmt.Print("\n")
+	newPassword := string(bytePassword)
+	updated = true
+
+	environmentManager.Password = newPassword
+
+	newAccount, err := environmentManager.ToIRODSAccount()
+	if err != nil {
+		return updated, xerrors.Errorf("failed to get account from iCommands Environment: %w", err)
+	}
+
+	if len(appConfig.DefaultResource) > 0 {
+		newAccount.DefaultResource = appConfig.DefaultResource
+	}
+
+	if len(appConfig.Ticket) > 0 {
+		newAccount.Ticket = appConfig.Ticket
+	}
+
+	account = newAccount
+	return updated, nil
 }
 
 func isICommandsEnvDir(filePath string) bool {

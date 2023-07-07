@@ -38,9 +38,9 @@ func processInitCommand(command *cobra.Command, args []string) error {
 	}
 
 	// handle local flags
-	updated, err := commons.InputMissingFields()
+	updated, err := commons.ReinputFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return xerrors.Errorf("failed to input fields: %w", err)
 	}
 
 	account, err := commons.GetEnvironmentManager().ToIRODSAccount()
