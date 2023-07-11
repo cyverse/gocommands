@@ -31,9 +31,9 @@ func ValidateStagingDir(fs *irodsclient_fs.FileSystem, targetPath string, stagin
 
 	logger.Debugf("target resource servers - %v", targetResourceServers)
 
-	for _, trashResourceServer := range stagingResourceServers {
+	for _, stagingResourceServer := range stagingResourceServers {
 		for _, targetResourceServer := range targetResourceServers {
-			if trashResourceServer == targetResourceServer {
+			if stagingResourceServer == targetResourceServer {
 				// same resource server
 				return true, nil
 			}

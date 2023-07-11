@@ -203,17 +203,6 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 
-	if clearLeftover {
-		trashHome := commons.GetTrashHomeDir()
-		logger.Debugf("clearing trash dir %s", trashHome)
-		commons.CleanUpOldIRODSBundles(filesystem, trashHome, false, true)
-
-		if len(irodsTempDirPath) > 0 {
-			logger.Debugf("clearing irods temp dir %s", irodsTempDirPath)
-			commons.CleanUpOldIRODSBundles(filesystem, irodsTempDirPath, false, true)
-		}
-	}
-
 	if retry > 1 && !retryChild {
 		// we release filesystem here to not hold idle connections
 		filesystem.Release()
@@ -272,6 +261,11 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	}
 
 	logger.Infof("use staging dir - %s", irodsTempDirPath)
+
+	if clearLeftover {
+		logger.Debugf("clearing irods temp dir %s", irodsTempDirPath)
+		commons.CleanUpOldIRODSBundles(filesystem, irodsTempDirPath, false, true)
+	}
 
 	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, singleThreaded, uploadThreadNum, localTempDirPath, irodsTempDirPath, diff, noHash, progress)
 	bundleTransferManager.Start()

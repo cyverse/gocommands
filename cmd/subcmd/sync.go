@@ -208,17 +208,6 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 
-	if clearLeftover {
-		trashHome := commons.GetTrashHomeDir()
-		logger.Debugf("clearing trash dir %s", trashHome)
-		commons.CleanUpOldIRODSBundles(filesystem, trashHome, false, true)
-
-		if len(irodsTempDirPath) > 0 {
-			logger.Debugf("clearing irods temp dir %s", irodsTempDirPath)
-			commons.CleanUpOldIRODSBundles(filesystem, irodsTempDirPath, false, true)
-		}
-	}
-
 	if retry > 1 && !retryChild {
 		// we release filesystem here to not hold idle connections
 		filesystem.Release()
@@ -264,7 +253,7 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 		}
 
 		// target must starts with "i:"
-		err := syncFromLocal(filesystem, localSources, targetPath[2:], maxFileNum, maxFileSize, singleThreaded, uploadThreadNum, localTempDirPath, irodsTempDirPath, progress, noHash)
+		err := syncFromLocal(filesystem, localSources, targetPath[2:], clearLeftover, maxFileNum, maxFileSize, singleThreaded, uploadThreadNum, localTempDirPath, irodsTempDirPath, progress, noHash)
 		if err != nil {
 			return xerrors.Errorf("failed to perform sync (from local): %w", err)
 		}
@@ -281,7 +270,7 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath string, maxFileNum int, maxFileSize int64, singleThreaded bool, uploadThreadNum int, localTempDirPath string, irodsTempDirPath string, progress bool, noHash bool) error {
+func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath string, clearLeftover bool, maxFileNum int, maxFileSize int64, singleThreaded bool, uploadThreadNum int, localTempDirPath string, irodsTempDirPath string, progress bool, noHash bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "syncFromLocal",
@@ -319,6 +308,11 @@ func syncFromLocal(filesystem *fs.FileSystem, sourcePaths []string, targetPath s
 	}
 
 	logger.Debugf("use staging dir - %s", irodsTempDirPath)
+
+	if clearLeftover {
+		logger.Debugf("clearing irods temp dir %s", irodsTempDirPath)
+		commons.CleanUpOldIRODSBundles(filesystem, irodsTempDirPath, false, true)
+	}
 
 	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, singleThreaded, uploadThreadNum, localTempDirPath, irodsTempDirPath, true, noHash, progress)
 	bundleTransferManager.Start()

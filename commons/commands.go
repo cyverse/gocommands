@@ -92,11 +92,6 @@ func GetHomeDir() string {
 	return fmt.Sprintf("/%s/home/%s", env.Zone, env.Username)
 }
 
-func GetTrashHomeDir() string {
-	env := environmentManager.Environment
-	return fmt.Sprintf("/%s/trash/home/%s", env.Zone, env.Username)
-}
-
 func SetCWD(cwd string) {
 	env := environmentManager.Environment
 	session := environmentManager.Session

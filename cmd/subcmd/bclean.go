@@ -87,13 +87,13 @@ func processBcleanCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
-	trashHome := commons.GetTrashHomeDir()
-	logger.Debugf("clearing trash dir %s", trashHome)
-	commons.CleanUpOldIRODSBundles(filesystem, trashHome, false, force)
-
 	if len(irodsTempDirPath) > 0 {
 		logger.Debugf("clearing irods temp dir %s", irodsTempDirPath)
-		commons.CleanUpOldIRODSBundles(filesystem, irodsTempDirPath, false, force)
+		commons.CleanUpOldIRODSBundles(filesystem, irodsTempDirPath, true, force)
+	} else {
+		userHome := commons.GetHomeDir()
+		homeStagingDir := commons.GetDefaultStagingDir(userHome)
+		commons.CleanUpOldIRODSBundles(filesystem, homeStagingDir, true, force)
 	}
 
 	for _, targetPath := range args {
