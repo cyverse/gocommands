@@ -105,6 +105,7 @@ type BundleTransferManager struct {
 	uploadThreadNum         int
 	localTempDirPath        string
 	irodsTempDirPath        string
+	makeIrodsTempDirPath    bool
 	differentFilesOnly      bool
 	noHashForComparison     bool
 	showProgress            bool
@@ -134,6 +135,7 @@ func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath strin
 		uploadThreadNum:         uploadThreadNum,
 		localTempDirPath:        localTempDirPath,
 		irodsTempDirPath:        irodsTempDirPath,
+		makeIrodsTempDirPath:    false,
 		differentFilesOnly:      diff,
 		noHashForComparison:     noHash,
 		showProgress:            showProgress,
@@ -149,8 +151,6 @@ func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath strin
 	if manager.uploadThreadNum > UploadTreadNumMax {
 		manager.uploadThreadNum = UploadTreadNumMax
 	}
-
-	manager.adjustBundleFileSizeAuto()
 
 	manager.scheduleWait.Add(1)
 
@@ -327,8 +327,7 @@ func (manager *BundleTransferManager) CleanUpBundles() {
 
 	logger.Debugf("clearing bundle files in %s", manager.irodsTempDirPath)
 
-	if IsStagingDirInTargetPath(manager.irodsTempDirPath) {
-		// staging dir in target path
+	if manager.makeIrodsTempDirPath {
 		// remove all files in it and the dir
 		err := manager.filesystem.RemoveDir(manager.irodsTempDirPath, true, true)
 		if err != nil {
@@ -473,6 +472,22 @@ func (manager *BundleTransferManager) Start() {
 			}
 
 			ClearIRODSDirCache(manager.filesystem, manager.irodsDestPath)
+		}
+
+		if !manager.filesystem.ExistsDir(manager.irodsTempDirPath) {
+			manager.makeIrodsTempDirPath = true
+			err := manager.filesystem.MakeDir(manager.irodsTempDirPath, true)
+			if err != nil {
+				// mark error
+				manager.mutex.Lock()
+				manager.lastError = err
+				manager.mutex.Unlock()
+
+				logger.Error(err)
+				// don't stop here
+			}
+
+			ClearIRODSDirCache(manager.filesystem, manager.irodsTempDirPath)
 		}
 
 		for bundle := range manager.pendingBundles {
@@ -996,10 +1011,6 @@ func (manager *BundleTransferManager) getProgressName(bundle *Bundle, taskName s
 	return fmt.Sprintf("bundle %d - %s", bundle.index, taskName)
 }
 
-func (manager *BundleTransferManager) adjustBundleFileSizeAuto() {
-	// TODO:
-}
-
 func CleanUpOldLocalBundles(localTempDirPath string, force bool) {
 	logger := log.WithFields(log.Fields{
 		"package":  "commons",
@@ -1070,6 +1081,7 @@ func CleanUpOldIRODSBundles(fs *irodsclient_fs.FileSystem, irodsTempDirPath stri
 	logger.Debugf("clearing old irods bundle files in %s", irodsTempDirPath)
 
 	if !fs.ExistsDir(irodsTempDirPath) {
+		logger.Debugf("staging dir %s doesn't exist", irodsTempDirPath)
 		return
 	}
 
@@ -1090,41 +1102,10 @@ func CleanUpOldIRODSBundles(fs *irodsclient_fs.FileSystem, irodsTempDirPath stri
 		}
 	}
 
-	if len(bundleEntries) == 0 {
-		return
-	}
-
-	if force {
-		for _, entry := range bundleEntries {
-			logger.Debugf("deleting old irods bundle %s", entry)
-			removeErr := fs.RemoveFile(entry, true)
-			if removeErr != nil {
-				logger.WithError(removeErr).Warnf("failed to remove old irods bundle %s", entry)
-			}
-		}
-
-		if removeDir {
-			if IsStagingDirInTargetPath(irodsTempDirPath) {
-				rmdirErr := fs.RemoveDir(irodsTempDirPath, true, true)
-				if rmdirErr != nil {
-					logger.WithError(rmdirErr).Warnf("failed to remove old irods bundle staging dir %s", irodsTempDirPath)
-				}
-			}
-		}
-		return
-	}
-
-	// ask
-	deleteAll := InputYN(fmt.Sprintf("removing %d old irods bundle files found in staging dir %s. Delete all?", len(bundleEntries), irodsTempDirPath))
-	if !deleteAll {
-		fmt.Printf("skip deleting %d old irods bundles in %s\n", len(bundleEntries), irodsTempDirPath)
-		return
-	}
-
 	deletedCount := 0
 	for _, entry := range bundleEntries {
 		logger.Debugf("deleting old irods bundle %s", entry)
-		removeErr := fs.RemoveFile(entry, false)
+		removeErr := fs.RemoveFile(entry, force)
 		if removeErr != nil {
 			logger.WithError(removeErr).Warnf("failed to remove old irods bundle %s", entry)
 		} else {
@@ -1136,7 +1117,7 @@ func CleanUpOldIRODSBundles(fs *irodsclient_fs.FileSystem, irodsTempDirPath stri
 
 	if removeDir {
 		if IsStagingDirInTargetPath(irodsTempDirPath) {
-			rmdirErr := fs.RemoveDir(irodsTempDirPath, false, false)
+			rmdirErr := fs.RemoveDir(irodsTempDirPath, true, force)
 			if rmdirErr != nil {
 				logger.WithError(rmdirErr).Warnf("failed to remove old irods bundle staging dir %s", irodsTempDirPath)
 			}

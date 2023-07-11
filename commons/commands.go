@@ -82,6 +82,11 @@ func GetZone() string {
 	return env.Zone
 }
 
+func GetUsername() string {
+	env := environmentManager.Environment
+	return env.Username
+}
+
 func GetHomeDir() string {
 	env := environmentManager.Environment
 	return fmt.Sprintf("/%s/home/%s", env.Zone, env.Username)

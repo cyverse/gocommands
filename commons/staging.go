@@ -51,6 +51,40 @@ func IsStagingDirInTargetPath(stagingPath string) bool {
 	return path.Base(stagingPath) == ".gocmd_staging"
 }
 
+func CheckSafeStagingDir(stagingPath string) error {
+	dirParts := strings.Split(stagingPath[1:], "/")
+	dirDepth := len(dirParts)
+
+	if dirDepth < 3 {
+		// no
+		return xerrors.Errorf("staging path %s is not safe!", stagingPath)
+	}
+
+	// zone/home/user OR zone/home/shared (public)
+	if dirParts[0] != GetZone() {
+		return xerrors.Errorf("staging path %s is not safe, not in the correct zone", stagingPath)
+	}
+
+	if dirParts[1] != "home" {
+		return xerrors.Errorf("staging path %s is not safe", stagingPath)
+	}
+
+	if dirParts[2] == GetUsername() {
+		if dirDepth <= 3 {
+			// /zone/home/user
+			return xerrors.Errorf("staging path %s is not safe!", stagingPath)
+		}
+	} else {
+		// public or shared?
+		if dirDepth <= 4 {
+			// /zone/home/public/dataset1
+			return xerrors.Errorf("staging path %s is not safe!", stagingPath)
+		}
+	}
+
+	return nil
+}
+
 func GetBundleFileName(managerID string, bundleIndex int64) string {
 	return fmt.Sprintf("bundle_%s_%d.tar", managerID, bundleIndex)
 }
@@ -70,39 +104,8 @@ func GetBundleFileNameParts(name string) (bool, string, string) {
 	return true, parts[1], parts[2]
 }
 
-func GetDefaultStagingDir(fs *irodsclient_fs.FileSystem, targetPath string) (string, error) {
-	logger := log.WithFields(log.Fields{
-		"package":  "commons",
-		"function": "GetDefaultStagingDir",
-	})
-
-	targetStagingDirPath := GetDefaultStagingDirInTargetPath(targetPath)
-	trashDirPath := GetTrashHomeDir()
-
-	trashResourceServers, err := GetResourceServers(fs, trashDirPath)
-	if err != nil {
-		return "", xerrors.Errorf("failed to get resource servers for %s: %w", trashDirPath, err)
-	}
-
-	logger.Debugf("trash resource servers - %v", trashResourceServers)
-
-	targetResourceServers, err := GetResourceServers(fs, targetStagingDirPath)
-	if err != nil {
-		return "", xerrors.Errorf("failed to get resource servers for %s: %w", targetStagingDirPath, err)
-	}
-
-	logger.Debugf("target resource servers - %v", targetResourceServers)
-
-	for _, trashResourceServer := range trashResourceServers {
-		for _, targetResourceServer := range targetResourceServers {
-			if trashResourceServer == targetResourceServer {
-				// same resource server
-				return trashDirPath, nil
-			}
-		}
-	}
-
-	return targetStagingDirPath, nil
+func GetDefaultStagingDir(targetPath string) string {
+	return GetDefaultStagingDirInTargetPath(targetPath)
 }
 
 func GetResourceServers(fs *irodsclient_fs.FileSystem, targetDir string) ([]string, error) {
@@ -112,19 +115,21 @@ func GetResourceServers(fs *irodsclient_fs.FileSystem, targetDir string) ([]stri
 	}
 	defer fs.ReturnMetadataConnection(connection)
 
+	dirCreated := false
 	if !fs.ExistsDir(targetDir) {
 		err := fs.MakeDir(targetDir, true)
 		if err != nil {
 			return nil, xerrors.Errorf("failed to make dir %s: %w", targetDir, err)
 		}
+		dirCreated = true
 	}
 
 	// write a new temp file and check resource server info
 	testFilePath := path.Join(targetDir, "staging_test.txt")
 
-	filehandle, err := fs.CreateFile(testFilePath, "", "w")
+	filehandle, err := fs.CreateFile(testFilePath, "", "w+")
 	if err != nil {
-		return nil, xerrors.Errorf("failed to crate file %s: %w", testFilePath, err)
+		return nil, xerrors.Errorf("failed to create file %s: %w", testFilePath, err)
 	}
 
 	_, err = filehandle.Write([]byte("resource server test\n"))
@@ -157,6 +162,10 @@ func GetResourceServers(fs *irodsclient_fs.FileSystem, targetDir string) ([]stri
 	}
 
 	fs.RemoveFile(testFilePath, true)
+
+	if dirCreated {
+		fs.RemoveDir(targetDir, true, true)
+	}
 
 	return resourceServers, nil
 }

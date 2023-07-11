@@ -1,7 +1,6 @@
 package subcmd
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -246,7 +245,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	fmt.Printf("determining staging dir...\n")
+	logger.Info("determining staging dir...")
 	if len(irodsTempDirPath) > 0 {
 		logger.Debugf("validating staging dir - %s", irodsTempDirPath)
 
@@ -258,30 +257,21 @@ func processBputCommand(command *cobra.Command, args []string) error {
 
 		if !ok {
 			logger.Debugf("unable to use the given staging dir %s since it is in a different resource server, using default staging dir", irodsTempDirPath)
-
-			irodsTempDirPath = commons.GetDefaultStagingDirInTargetPath(targetPath)
+			return xerrors.Errorf("staging dir %s is in a different resource server", irodsTempDirPath)
 		}
-	}
-
-	if len(irodsTempDirPath) == 0 {
+	} else {
 		// set default staging dir
 		logger.Debug("get default staging dir")
 
-		irodsTempDirPath, err = commons.GetDefaultStagingDir(filesystem, targetPath)
-		if err != nil {
-			return xerrors.Errorf("failed to get default staging dir: %w", err)
-		}
+		irodsTempDirPath = commons.GetDefaultStagingDir(targetPath)
 	}
 
-	logger.Debugf("use staging dir - %s", irodsTempDirPath)
-	fmt.Printf("will use %s for staging\n", irodsTempDirPath)
+	err = commons.CheckSafeStagingDir(irodsTempDirPath)
+	if err != nil {
+		return xerrors.Errorf("failed to get safe staging dir: %w", err)
+	}
 
-	// clean up staging dir in the target dir
-	defer func() {
-		unusedStagingDir := commons.GetDefaultStagingDirInTargetPath(targetPath)
-		logger.Debugf("delete staging dir - %s", unusedStagingDir)
-		commons.CleanUpOldIRODSBundles(filesystem, unusedStagingDir, true, true)
-	}()
+	logger.Infof("use staging dir - %s", irodsTempDirPath)
 
 	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, singleThreaded, uploadThreadNum, localTempDirPath, irodsTempDirPath, diff, noHash, progress)
 	bundleTransferManager.Start()
