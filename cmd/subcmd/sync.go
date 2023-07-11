@@ -46,11 +46,6 @@ func AddSyncCommand(rootCmd *cobra.Command) {
 }
 
 func processSyncCommand(command *cobra.Command, args []string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "processSyncCommand",
-	})
-
 	cont, err := commons.ProcessCommonFlags(command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
