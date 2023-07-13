@@ -19,7 +19,7 @@ var bcleanCmd = &cobra.Command{
 
 func AddBcleanCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	commons.SetCommonFlags(bcleanCmd)
+	flag.SetCommonFlags(bcleanCmd)
 
 	// attach bundle temp flags
 	flag.SetBundleTempFlags(bcleanCmd)
@@ -34,7 +34,7 @@ func processBcleanCommand(command *cobra.Command, args []string) error {
 		"function": "processBcleanCommand",
 	})
 
-	cont, err := commons.ProcessCommonFlags(command)
+	cont, err := flag.ProcessCommonFlags(command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}

@@ -24,7 +24,7 @@ var cpCmd = &cobra.Command{
 
 func AddCpCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	commons.SetCommonFlags(cpCmd)
+	flag.SetCommonFlags(cpCmd)
 
 	flag.SetForceFlags(cpCmd, false)
 	flag.SetRecursiveFlags(cpCmd)
@@ -36,7 +36,7 @@ func AddCpCommand(rootCmd *cobra.Command) {
 }
 
 func processCpCommand(command *cobra.Command, args []string) error {
-	cont, err := commons.ProcessCommonFlags(command)
+	cont, err := flag.ProcessCommonFlags(command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}

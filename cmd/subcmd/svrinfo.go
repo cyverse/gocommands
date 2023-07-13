@@ -5,6 +5,7 @@ import (
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/go-irodsclient/irods/types"
+	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/jedib0t/go-pretty/v6/table"
 	log "github.com/sirupsen/logrus"
@@ -23,13 +24,13 @@ var svrinfoCmd = &cobra.Command{
 
 func AddSvrinfoCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	commons.SetCommonFlags(svrinfoCmd)
+	flag.SetCommonFlags(svrinfoCmd)
 
 	rootCmd.AddCommand(svrinfoCmd)
 }
 
 func processSvrinfoCommand(command *cobra.Command, args []string) error {
-	cont, err := commons.ProcessCommonFlags(command)
+	cont, err := flag.ProcessCommonFlags(command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}

@@ -22,7 +22,7 @@ var bputCmd = &cobra.Command{
 
 func AddBputCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	commons.SetCommonFlags(bputCmd)
+	flag.SetCommonFlags(bputCmd)
 
 	flag.SetBundleTempFlags(bputCmd)
 	flag.SetBundleClearFlags(bputCmd)
@@ -42,7 +42,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		"function": "processBputCommand",
 	})
 
-	cont, err := commons.ProcessCommonFlags(command)
+	cont, err := flag.ProcessCommonFlags(command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}

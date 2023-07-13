@@ -23,7 +23,7 @@ var lsticketCmd = &cobra.Command{
 
 func AddLsticketCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	commons.SetCommonFlags(lsticketCmd)
+	flag.SetCommonFlags(lsticketCmd)
 
 	flag.SetListFlags(lsticketCmd)
 
@@ -31,7 +31,7 @@ func AddLsticketCommand(rootCmd *cobra.Command) {
 }
 
 func processLsticketCommand(command *cobra.Command, args []string) error {
-	cont, err := commons.ProcessCommonFlags(command)
+	cont, err := flag.ProcessCommonFlags(command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}

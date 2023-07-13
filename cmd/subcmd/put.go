@@ -27,7 +27,7 @@ var putCmd = &cobra.Command{
 
 func AddPutCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	commons.SetCommonFlags(putCmd)
+	flag.SetCommonFlags(putCmd)
 
 	flag.SetForceFlags(putCmd, false)
 	flag.SetParallelTransferFlags(putCmd, true)
@@ -39,7 +39,7 @@ func AddPutCommand(rootCmd *cobra.Command) {
 }
 
 func processPutCommand(command *cobra.Command, args []string) error {
-	cont, err := commons.ProcessCommonFlags(command)
+	cont, err := flag.ProcessCommonFlags(command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}

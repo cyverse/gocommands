@@ -3,6 +3,7 @@ package subcmd
 import (
 	"fmt"
 
+	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -19,13 +20,13 @@ var pwdCmd = &cobra.Command{
 
 func AddPwdCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	commons.SetCommonFlags(pwdCmd)
+	flag.SetCommonFlags(pwdCmd)
 
 	rootCmd.AddCommand(pwdCmd)
 }
 
 func processPwdCommand(command *cobra.Command, args []string) error {
-	cont, err := commons.ProcessCommonFlags(command)
+	cont, err := flag.ProcessCommonFlags(command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}

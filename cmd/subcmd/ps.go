@@ -25,7 +25,7 @@ var psCmd = &cobra.Command{
 
 func AddPsCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	commons.SetCommonFlags(psCmd)
+	flag.SetCommonFlags(psCmd)
 
 	flag.SetProcessFilterFlags(psCmd)
 
@@ -33,7 +33,7 @@ func AddPsCommand(rootCmd *cobra.Command) {
 }
 
 func processPsCommand(command *cobra.Command, args []string) error {
-	cont, err := commons.ProcessCommonFlags(command)
+	cont, err := flag.ProcessCommonFlags(command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}

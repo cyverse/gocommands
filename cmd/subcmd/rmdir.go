@@ -2,6 +2,7 @@ package subcmd
 
 import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -19,13 +20,13 @@ var rmdirCmd = &cobra.Command{
 
 func AddRmdirCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	commons.SetCommonFlags(rmdirCmd)
+	flag.SetCommonFlags(rmdirCmd)
 
 	rootCmd.AddCommand(rmdirCmd)
 }
 
 func processRmdirCommand(command *cobra.Command, args []string) error {
-	cont, err := commons.ProcessCommonFlags(command)
+	cont, err := flag.ProcessCommonFlags(command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}

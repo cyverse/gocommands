@@ -23,7 +23,7 @@ var bunCmd = &cobra.Command{
 
 func AddBunCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	commons.SetCommonFlags(bunCmd)
+	flag.SetCommonFlags(bunCmd)
 
 	flag.SetForceFlags(bunCmd, false)
 	flag.SetBundleFlags(bunCmd)
@@ -32,7 +32,7 @@ func AddBunCommand(rootCmd *cobra.Command) {
 }
 
 func processBunCommand(command *cobra.Command, args []string) error {
-	cont, err := commons.ProcessCommonFlags(command)
+	cont, err := flag.ProcessCommonFlags(command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}

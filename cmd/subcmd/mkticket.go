@@ -21,7 +21,7 @@ var mkticketCmd = &cobra.Command{
 
 func AddMkticketCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	commons.SetCommonFlags(mkticketCmd)
+	flag.SetCommonFlags(mkticketCmd)
 
 	flag.SetTicketFlags(mkticketCmd)
 
@@ -29,7 +29,7 @@ func AddMkticketCommand(rootCmd *cobra.Command) {
 }
 
 func processMkticketCommand(command *cobra.Command, args []string) error {
-	cont, err := commons.ProcessCommonFlags(command)
+	cont, err := flag.ProcessCommonFlags(command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}

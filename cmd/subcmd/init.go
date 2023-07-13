@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/cyverse/go-irodsclient/utils/icommands"
+	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -23,13 +24,13 @@ var initCmd = &cobra.Command{
 
 func AddInitCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	commons.SetCommonFlags(initCmd)
+	flag.SetCommonFlags(initCmd)
 
 	rootCmd.AddCommand(initCmd)
 }
 
 func processInitCommand(command *cobra.Command, args []string) error {
-	cont, err := commons.ProcessCommonFlags(command)
+	cont, err := flag.ProcessCommonFlags(command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}

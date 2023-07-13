@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
 )
@@ -20,7 +19,7 @@ var syncCmd = &cobra.Command{
 
 func AddSyncCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	commons.SetCommonFlags(syncCmd)
+	flag.SetCommonFlags(syncCmd)
 
 	flag.SetBundleTempFlags(syncCmd)
 	flag.SetBundleClearFlags(syncCmd)

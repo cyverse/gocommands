@@ -6,7 +6,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 
@@ -14,15 +13,10 @@ import (
 	"github.com/cyverse/go-irodsclient/irods/util"
 	irodsclient_icommands "github.com/cyverse/go-irodsclient/utils/icommands"
 	log "github.com/sirupsen/logrus"
-	"github.com/spf13/cobra"
 	"golang.org/x/term"
 	"golang.org/x/xerrors"
 
 	"github.com/jedib0t/go-pretty/v6/table"
-)
-
-const (
-	irodsEnvironmentFileEnvKey string = "IRODS_ENVIRONMENT_FILE"
 )
 
 var (
@@ -39,6 +33,34 @@ func GetEnvironmentManager() *irodsclient_icommands.ICommandsEnvironmentManager 
 
 func GetConfig() *Config {
 	return appConfig
+}
+
+func SetDefaultConfigIfEmpty() {
+	if appConfig == nil {
+		appConfig = GetDefaultConfig()
+	}
+}
+
+func SyncAccount() error {
+	newAccount, err := environmentManager.ToIRODSAccount()
+	if err != nil {
+		return xerrors.Errorf("failed to get account from iCommands Environment: %w", err)
+	}
+
+	if len(appConfig.ClientUsername) > 0 {
+		newAccount.ClientUser = appConfig.ClientUsername
+	}
+
+	if len(appConfig.DefaultResource) > 0 {
+		newAccount.DefaultResource = appConfig.DefaultResource
+	}
+
+	if len(appConfig.Ticket) > 0 {
+		newAccount.Ticket = appConfig.Ticket
+	}
+
+	account = newAccount
+	return nil
 }
 
 func GetAccount() *irodsclient_types.IRODSAccount {
@@ -104,212 +126,6 @@ func SetCWD(cwd string) {
 	environmentManager.SaveSession(sessionID)
 }
 
-func SetCommonFlags(command *cobra.Command) {
-	command.Flags().StringP("config", "c", "", "Set config file or dir (default \"$HOME/.irods\")")
-	command.Flags().BoolP("envconfig", "e", false, "Read config from environmental variables")
-	command.Flags().BoolP("version", "v", false, "Print version")
-	command.Flags().BoolP("help", "h", false, "Print help")
-	command.Flags().BoolP("debug", "d", false, "Enable debug mode")
-	command.Flags().String("log_level", "", "Set log level")
-	command.Flags().Int32P("session", "s", -1, "Set session ID")
-	command.Flags().StringP("resource", "R", "", "Set resource server")
-	command.Flags().StringP("ticket", "T", "", "Set ticket")
-}
-
-func ProcessCommonFlags(command *cobra.Command) (bool, error) {
-	logger := log.WithFields(log.Fields{
-		"package":  "commons",
-		"function": "ProcessCommonFlags",
-	})
-
-	logLevel := ""
-	logLevelFlag := command.Flags().Lookup("log_level")
-	if logLevelFlag != nil {
-		logLevelStr := logLevelFlag.Value.String()
-		if len(logLevelStr) > 0 {
-			lvl, err := log.ParseLevel(logLevelStr)
-			if err != nil {
-				lvl = log.InfoLevel
-			}
-
-			log.SetLevel(lvl)
-			logLevel = logLevelStr
-		}
-	}
-
-	debug := false
-	debugFlag := command.Flags().Lookup("debug")
-	if debugFlag != nil {
-		debugValue, err := strconv.ParseBool(debugFlag.Value.String())
-		if err != nil {
-			debugValue = false
-		}
-
-		if debugValue {
-			log.SetLevel(log.DebugLevel)
-		}
-
-		debug = debugValue
-	}
-
-	helpFlag := command.Flags().Lookup("help")
-	if helpFlag != nil {
-		help, err := strconv.ParseBool(helpFlag.Value.String())
-		if err != nil {
-			help = false
-		}
-
-		if help {
-			PrintHelp(command)
-			return false, nil // stop here
-		}
-	}
-
-	versionFlag := command.Flags().Lookup("version")
-	if versionFlag != nil {
-		version, err := strconv.ParseBool(versionFlag.Value.String())
-		if err != nil {
-			version = false
-		}
-
-		if version {
-			printVersion()
-			return false, nil // stop here
-		}
-	}
-
-	sessionFlag := command.Flags().Lookup("session")
-	if sessionFlag != nil {
-		// load to global variable
-		sessionIDString := sessionFlag.Value.String()
-		sessionIDInt, err := strconv.ParseInt(sessionIDString, 10, 32)
-		if err != nil {
-			return false, xerrors.Errorf("failed to parse int %s: %w", sessionIDString, err) // stop here
-		}
-		sessionID = int(sessionIDInt)
-	}
-
-	if sessionID < 0 {
-		sessionID = os.Getppid()
-	}
-
-	logger.Debugf("use sessionID - %d", sessionID)
-
-	readConfig := false
-
-	configFlag := command.Flags().Lookup("config")
-	if configFlag != nil {
-		configFile := configFlag.Value.String()
-		if len(configFile) > 0 {
-			err := loadConfigFile(configFile)
-			if err != nil {
-				return false, xerrors.Errorf("failed to load config from file %s: %w", configFile, err) // stop here
-			}
-
-			readConfig = true
-		}
-	}
-
-	if !readConfig {
-		envConfigFlag := command.Flags().Lookup("envconfig")
-		if envConfigFlag != nil {
-			envConfig, err := strconv.ParseBool(envConfigFlag.Value.String())
-			if err != nil {
-				return false, xerrors.Errorf("failed to parse bool %s: %w", envConfigFlag.Value.String(), err) // stop here
-			}
-
-			if envConfig {
-				err := loadConfigEnv()
-				if err != nil {
-					return false, xerrors.Errorf("failed to load config from environment: %w", err) // stop here
-				}
-
-				readConfig = true
-			}
-		}
-	}
-
-	// read env config
-	if !readConfig {
-		if irodsEnvironmentFileEnvVal, ok := os.LookupEnv(irodsEnvironmentFileEnvKey); ok {
-			if len(irodsEnvironmentFileEnvVal) > 0 {
-				err := loadConfigFile(irodsEnvironmentFileEnvVal)
-				if err != nil {
-					return false, xerrors.Errorf("failed to load config file %s: %w", irodsEnvironmentFileEnvVal, err) // stop here
-				}
-
-				readConfig = true
-			}
-		}
-	}
-
-	// default config
-	if !readConfig {
-		// auto detect
-		loadConfigFile("~/.irods")
-		//if err != nil {
-		//logger.Error(err)
-		// ignore error
-		//}
-	}
-
-	if appConfig == nil {
-		appConfig = GetDefaultConfig()
-	}
-
-	// re-configure level
-	if len(logLevel) > 0 {
-		lvl, err := log.ParseLevel(logLevel)
-		if err != nil {
-			lvl = log.InfoLevel
-		}
-
-		log.SetLevel(lvl)
-	}
-	if debug {
-		log.SetLevel(log.DebugLevel)
-	}
-
-	retryChild := false
-	retryChildFlag := command.Flags().Lookup("retry_child")
-	if retryChildFlag != nil {
-		retryChildValue, err := strconv.ParseBool(retryChildFlag.Value.String())
-		if err != nil {
-			retryChildValue = false
-		}
-
-		retryChild = retryChildValue
-	}
-
-	if retryChild {
-		// read from stdin
-		err := InputMissingFieldsFromStdin()
-		if err != nil {
-			return false, xerrors.Errorf("failed to load config from stdin: %w", err) // stop here
-		}
-	}
-
-	resourceFlag := command.Flags().Lookup("resource")
-	if resourceFlag != nil {
-		// load to global variable
-		appConfig.DefaultResource = resourceFlag.Value.String()
-		if len(appConfig.DefaultResource) > 0 {
-			logger.Debugf("use default resource server - %s", appConfig.DefaultResource)
-		}
-	}
-
-	ticketFlag := command.Flags().Lookup("ticket")
-	if ticketFlag != nil {
-		// load to global variable
-		appConfig.Ticket = ticketFlag.Value.String()
-		if len(appConfig.Ticket) > 0 {
-			logger.Debugf("use ticket - %s", appConfig.Ticket)
-		}
-	}
-
-	return true, nil // contiue
-}
-
 // InputMissingFields inputs missing fields
 func InputMissingFields() (bool, error) {
 	if environmentManager == nil {
@@ -319,9 +135,9 @@ func InputMissingFields() (bool, error) {
 		}
 
 		environmentManager = envMgr
-		account, err = envMgr.ToIRODSAccount()
+		err = SyncAccount()
 		if err != nil {
-			return false, xerrors.Errorf("failed to get account from iCommands Environment: %w", err)
+			return false, xerrors.Errorf("failed to get iCommands Environment: %w", err)
 		}
 	}
 
@@ -373,21 +189,11 @@ func InputMissingFields() (bool, error) {
 		updated = true
 	}
 	environmentManager.Password = password
-
-	newAccount, err := environmentManager.ToIRODSAccount()
+	err := SyncAccount()
 	if err != nil {
-		return updated, xerrors.Errorf("failed to get account from iCommands Environment: %w", err)
+		return updated, xerrors.Errorf("failed to get iCommands Environment: %w", err)
 	}
 
-	if len(appConfig.DefaultResource) > 0 {
-		newAccount.DefaultResource = appConfig.DefaultResource
-	}
-
-	if len(appConfig.Ticket) > 0 {
-		newAccount.Ticket = appConfig.Ticket
-	}
-
-	account = newAccount
 	return updated, nil
 }
 
@@ -432,9 +238,9 @@ func ReinputFields() (bool, error) {
 		}
 
 		environmentManager = envMgr
-		account, err = envMgr.ToIRODSAccount()
+		err = SyncAccount()
 		if err != nil {
-			return false, xerrors.Errorf("failed to get account from iCommands Environment: %w", err)
+			return false, xerrors.Errorf("failed to get iCommands Environment: %w", err)
 		}
 	}
 
@@ -507,20 +313,11 @@ func ReinputFields() (bool, error) {
 
 	environmentManager.Password = newPassword
 
-	newAccount, err := environmentManager.ToIRODSAccount()
+	err = SyncAccount()
 	if err != nil {
-		return updated, xerrors.Errorf("failed to get account from iCommands Environment: %w", err)
+		return updated, xerrors.Errorf("failed to get iCommands Environment: %w", err)
 	}
 
-	if len(appConfig.DefaultResource) > 0 {
-		newAccount.DefaultResource = appConfig.DefaultResource
-	}
-
-	if len(appConfig.Ticket) > 0 {
-		newAccount.Ticket = appConfig.Ticket
-	}
-
-	account = newAccount
 	return updated, nil
 }
 
@@ -637,10 +434,10 @@ func getLogrusLogLevel(irodsLogLevel int) log.Level {
 	return log.TraceLevel
 }
 
-func loadConfigFile(configPath string) error {
+func LoadConfigFromFile(configPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "commons",
-		"function": "loadConfigFile",
+		"function": "LoadConfigFromFile",
 	})
 
 	configPath, err := ExpandHomeDir(configPath)
@@ -702,17 +499,14 @@ func loadConfigFile(configPath string) error {
 			log.SetLevel(logLevel)
 		}
 
-		loadedAccount, err := iCommandsEnvMgr.ToIRODSAccount()
-		if err != nil {
-			return xerrors.Errorf("failed to get iCommands Environment: %w", err)
-		}
-
-		loadedAccount.ClientUser = config.ClientUsername
-		loadedAccount.Ticket = config.Ticket
-
 		environmentManager = iCommandsEnvMgr
 		appConfig = config
-		account = loadedAccount
+
+		err = SyncAccount()
+		if err != nil {
+			return xerrors.Errorf("failed to sync account: %w", err)
+		}
+
 		return nil
 	}
 
@@ -739,28 +533,30 @@ func loadConfigFile(configPath string) error {
 		return xerrors.Errorf("failed to read iCommands Environment: %w", err)
 	}
 
+	config := GetDefaultConfig()
+
+	setICommandsEnvMgrToConfig(config, iCommandsEnvMgr)
+
 	if iCommandsEnvMgr.Environment.LogLevel > 0 {
 		logLevel := getLogrusLogLevel(iCommandsEnvMgr.Environment.LogLevel)
 		log.SetLevel(logLevel)
 	}
 
-	loadedAccount, err := iCommandsEnvMgr.ToIRODSAccount()
-	if err != nil {
-		return xerrors.Errorf("failed to get iCommands Environment: %w", err)
-	}
-
 	environmentManager = iCommandsEnvMgr
-	appConfig = GetDefaultConfig()
-	setICommandsEnvMgrToConfig(appConfig, iCommandsEnvMgr)
-	account = loadedAccount
+	appConfig = config
+
+	err = SyncAccount()
+	if err != nil {
+		return xerrors.Errorf("failed to sync account: %w", err)
+	}
 
 	return nil
 }
 
-func loadConfigEnv() error {
+func LoadConfigFromEnv() error {
 	logger := log.WithFields(log.Fields{
 		"package":  "commons",
-		"function": "loadConfigEnv",
+		"function": "LoadConfigFromEnv",
 	})
 
 	logger.Debug("reading config from environment variables")
@@ -782,32 +578,15 @@ func loadConfigEnv() error {
 		log.SetLevel(logLevel)
 	}
 
-	loadedAccount, err := iCommandsEnvMgr.ToIRODSAccount()
+	environmentManager = iCommandsEnvMgr
+	appConfig = config
+
+	err = SyncAccount()
 	if err != nil {
 		return xerrors.Errorf("failed to get iCommands Environment: %w", err)
 	}
 
-	loadedAccount.ClientUser = config.ClientUsername
-	loadedAccount.Ticket = config.Ticket
-
-	environmentManager = iCommandsEnvMgr
-	appConfig = config
-	account = loadedAccount
 	return nil
-}
-
-func printVersion() error {
-	info, err := GetVersionJSON()
-	if err != nil {
-		return xerrors.Errorf("failed to get version json: %w", err)
-	}
-
-	fmt.Println(info)
-	return nil
-}
-
-func PrintHelp(command *cobra.Command) error {
-	return command.Usage()
 }
 
 func PrintAccount() error {

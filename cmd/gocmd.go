@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/cmd/subcmd"
-	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -30,7 +30,7 @@ func processCommand(command *cobra.Command, args []string) error {
 		"function": "processCommand",
 	})
 
-	cont, err := commons.ProcessCommonFlags(command)
+	cont, err := flag.ProcessCommonFlags(command)
 	if err != nil {
 		logger.Errorf("%+v", err)
 	}
@@ -40,7 +40,7 @@ func processCommand(command *cobra.Command, args []string) error {
 	}
 
 	// if nothing is given
-	commons.PrintHelp(command)
+	command.Usage()
 
 	return nil
 }
@@ -59,7 +59,7 @@ func main() {
 	})
 
 	// attach common flags
-	commons.SetCommonFlags(rootCmd)
+	flag.SetCommonFlags(rootCmd)
 
 	// add sub commands
 	subcmd.AddInitCommand(rootCmd)
