@@ -14,6 +14,7 @@ var rmticketCmd = &cobra.Command{
 	Short:   "Remove tickets for the user",
 	Long:    `This removes tickets for the user.`,
 	RunE:    processRmticketCommand,
+	Args:    cobra.MinimumNArgs(1),
 }
 
 func AddRmticketCommand(rootCmd *cobra.Command) {
@@ -47,10 +48,6 @@ func processRmticketCommand(command *cobra.Command, args []string) error {
 	}
 
 	defer filesystem.Release()
-
-	if len(args) == 0 {
-		return xerrors.Errorf("not enough input arguments")
-	}
 
 	for _, ticketName := range args {
 		err = removeTicket(filesystem, ticketName)

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
+	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
@@ -21,20 +21,18 @@ var getCmd = &cobra.Command{
 	Short:   "Download iRODS data-objects or collections",
 	Long:    `This downloads iRODS data-objects or collections to the given local path.`,
 	RunE:    processGetCommand,
+	Args:    cobra.MinimumNArgs(1),
 }
 
 func AddGetCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(getCmd)
 
-	getCmd.Flags().BoolP("force", "f", false, "Get forcefully")
-	getCmd.Flags().Int("download_thread_num", commons.MaxParallelJobThreadNumDefault, "Specify the number of download threads")
-	getCmd.Flags().String("tcp_buffer_size", commons.TcpBufferSizeStringDefault, "Specify TCP socket buffer size")
-	getCmd.Flags().Bool("progress", false, "Display progress bar")
-	getCmd.Flags().Bool("diff", false, "Get files having different content")
-	getCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
-	getCmd.Flags().Int("retry", 1, "Retry if fails")
-	getCmd.Flags().Int("retry_interval", 60, "Retry interval in seconds")
+	flag.SetForceFlags(getCmd, false)
+	flag.SetParallelTransferFlags(getCmd, false)
+	flag.SetProgressFlags(getCmd)
+	flag.SetRetryFlags(getCmd)
+	flag.SetDifferentialTransferFlags(getCmd, true)
 
 	rootCmd.AddCommand(getCmd)
 }
@@ -55,111 +53,30 @@ func processGetCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	force := false
-	forceFlag := command.Flags().Lookup("force")
-	if forceFlag != nil {
-		force, err = strconv.ParseBool(forceFlag.Value.String())
+	forceFlagValues := flag.GetForceFlagValues()
+	parallelTransferFlagValues := flag.GetParallelTransferFlagValues()
+	progressFlagValues := flag.GetProgressFlagValues()
+	retryFlagValues := flag.GetRetryFlagValues()
+	differentialTransferFlagValues := flag.GetDifferentialTransferFlagValues()
+
+	maxConnectionNum := parallelTransferFlagValues.ThreadNumber + 2 // 2 for metadata op
+
+	if retryFlagValues.RetryNumber > 1 && !retryFlagValues.RetryChild {
+		err = commons.RunWithRetry(retryFlagValues.RetryNumber, retryFlagValues.RetryIntervalSeconds)
 		if err != nil {
-			force = false
-		}
-	}
-
-	downloadThreadNum := commons.MaxParallelJobThreadNumDefault
-	downloadThreadNumFlag := command.Flags().Lookup("download_thread_num")
-	if downloadThreadNumFlag != nil {
-		n, err := strconv.ParseInt(downloadThreadNumFlag.Value.String(), 10, 32)
-		if err == nil {
-			downloadThreadNum = int(n)
-		}
-	}
-
-	maxConnectionNum := downloadThreadNum + 2 // 2 for metadata op
-
-	tcpBufferSize := commons.TcpBufferSizeDefault
-	tcpBufferSizeFlag := command.Flags().Lookup("tcp_buffer_size")
-	if tcpBufferSizeFlag != nil {
-		n, err := commons.ParseSize(tcpBufferSizeFlag.Value.String())
-		if err == nil {
-			tcpBufferSize = int(n)
-		}
-	}
-
-	progress := false
-	progressFlag := command.Flags().Lookup("progress")
-	if progressFlag != nil {
-		progress, err = strconv.ParseBool(progressFlag.Value.String())
-		if err != nil {
-			progress = false
-		}
-	}
-
-	diff := false
-	diffFlag := command.Flags().Lookup("diff")
-	if diffFlag != nil {
-		diff, err = strconv.ParseBool(diffFlag.Value.String())
-		if err != nil {
-			diff = false
-		}
-	}
-
-	noHash := false
-	noHashFlag := command.Flags().Lookup("no_hash")
-	if noHashFlag != nil {
-		noHash, err = strconv.ParseBool(noHashFlag.Value.String())
-		if err != nil {
-			noHash = false
-		}
-	}
-
-	retryChild := false
-	retryChildFlag := command.Flags().Lookup("retry_child")
-	if retryChildFlag != nil {
-		retryChildValue, err := strconv.ParseBool(retryChildFlag.Value.String())
-		if err != nil {
-			retryChildValue = false
-		}
-
-		retryChild = retryChildValue
-	}
-
-	retry := int64(1)
-	retryFlag := command.Flags().Lookup("retry")
-	if retryFlag != nil {
-		retry, err = strconv.ParseInt(retryFlag.Value.String(), 10, 32)
-		if err != nil {
-			retry = 1
-		}
-	}
-
-	retryInterval := int64(60)
-	retryIntervalFlag := command.Flags().Lookup("retry_interval")
-	if retryIntervalFlag != nil {
-		retryInterval, err = strconv.ParseInt(retryIntervalFlag.Value.String(), 10, 32)
-		if err != nil {
-			retryInterval = 60
-		}
-	}
-
-	if retry > 1 && !retryChild {
-		err = commons.RunWithRetry(int(retry), int(retryInterval))
-		if err != nil {
-			return err
+			return xerrors.Errorf("failed to run with retry %d: %w", retryFlagValues.RetryNumber, err)
 		}
 		return nil
 	}
 
 	// Create a file system
 	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClientAdvanced(account, maxConnectionNum, tcpBufferSize)
+	filesystem, err := commons.GetIRODSFSClientAdvanced(account, maxConnectionNum, parallelTransferFlagValues.TCPBufferSize)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 
 	defer filesystem.Release()
-
-	if len(args) == 0 {
-		return xerrors.Errorf("not enough input arguments")
-	}
 
 	targetPath := "./"
 	sourcePaths := args[:]
@@ -169,11 +86,11 @@ func processGetCommand(command *cobra.Command, args []string) error {
 		sourcePaths = args[:len(args)-1]
 	}
 
-	parallelJobManager := commons.NewParallelJobManager(filesystem, downloadThreadNum, progress)
+	parallelJobManager := commons.NewParallelJobManager(filesystem, parallelTransferFlagValues.ThreadNumber, progressFlagValues.ShowProgress)
 	parallelJobManager.Start()
 
 	for _, sourcePath := range sourcePaths {
-		err = getOne(parallelJobManager, sourcePath, targetPath, force, diff, noHash)
+		err = getOne(parallelJobManager, sourcePath, targetPath, forceFlagValues.Force, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash)
 		if err != nil {
 			return xerrors.Errorf("failed to perform get %s to %s: %w", sourcePath, targetPath, err)
 		}

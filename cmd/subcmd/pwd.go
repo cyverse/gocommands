@@ -14,6 +14,7 @@ var pwdCmd = &cobra.Command{
 	Short:   "Print current working iRODS collection",
 	Long:    `This prints current working iRODS collection.`,
 	RunE:    processPwdCommand,
+	Args:    cobra.NoArgs,
 }
 
 func AddPwdCommand(rootCmd *cobra.Command) {

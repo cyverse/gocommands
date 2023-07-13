@@ -3,8 +3,8 @@ package subcmd
 import (
 	"fmt"
 	"runtime"
-	"strconv"
 
+	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -15,13 +15,14 @@ var upgradeCmd = &cobra.Command{
 	Short: "Upgrade Gocommands to the latest version available",
 	Long:  `This upgrades Gocommands to the latest version available.`,
 	RunE:  processUpgradeCommand,
+	Args:  cobra.NoArgs,
 }
 
 func AddUpgradeCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(upgradeCmd)
 
-	upgradeCmd.Flags().Bool("check", false, "Check the latest version only")
+	flag.SetCheckVersionFlags(upgradeCmd)
 
 	rootCmd.AddCommand(upgradeCmd)
 }
@@ -36,16 +37,9 @@ func processUpgradeCommand(command *cobra.Command, args []string) error {
 		return nil
 	}
 
-	check := false
-	checkFlag := command.Flags().Lookup("check")
-	if checkFlag != nil {
-		check, err = strconv.ParseBool(checkFlag.Value.String())
-		if err != nil {
-			check = false
-		}
-	}
+	checkVersionFlagValues := flag.GetCheckVersionFlagValues()
 
-	if check {
+	if checkVersionFlagValues.Check {
 		err = checkNewVersion()
 		if err != nil {
 			return xerrors.Errorf("failed to check new release: %w", err)

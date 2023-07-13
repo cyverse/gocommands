@@ -1,10 +1,9 @@
 package subcmd
 
 import (
-	"strconv"
-
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
+	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -17,12 +16,14 @@ var mkdirCmd = &cobra.Command{
 	Short:   "Make iRODS collections",
 	Long:    `This makes iRODS collections.`,
 	RunE:    processMkdirCommand,
+	Args:    cobra.MinimumNArgs(1),
 }
 
 func AddMkdirCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(mkdirCmd)
-	mkdirCmd.Flags().Bool("parents", false, "Make parent collections")
+
+	flag.SetParentsFlags(mkdirCmd)
 
 	rootCmd.AddCommand(mkdirCmd)
 }
@@ -43,14 +44,7 @@ func processMkdirCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	parent := false
-	parentFlag := command.Flags().Lookup("parent")
-	if parentFlag != nil {
-		parent, err = strconv.ParseBool(parentFlag.Value.String())
-		if err != nil {
-			parent = false
-		}
-	}
+	parentsFlagValues := flag.GetParentsFlagValues()
 
 	// Create a connection
 	account := commons.GetAccount()
@@ -61,12 +55,8 @@ func processMkdirCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
-	if len(args) == 0 {
-		return xerrors.Errorf("not enough input arguments")
-	}
-
 	for _, targetPath := range args {
-		err = makeOne(filesystem, targetPath, parent)
+		err = makeOne(filesystem, targetPath, parentsFlagValues.MakeParents)
 		if err != nil {
 			return xerrors.Errorf("failed to perform mkdir %s: %w", targetPath, err)
 		}

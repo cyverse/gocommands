@@ -18,6 +18,7 @@ var svrinfoCmd = &cobra.Command{
 	Short:   "Display server information",
 	Long:    `This displays server information, such as version.`,
 	RunE:    processSvrinfoCommand,
+	Args:    cobra.NoArgs,
 }
 
 func AddSvrinfoCommand(rootCmd *cobra.Command) {

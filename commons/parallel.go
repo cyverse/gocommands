@@ -9,11 +9,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// default values
-const (
-	MaxParallelJobThreadNumDefault int = 5
-)
-
 type ParallelJobTask func(job *ParallelJob) error
 
 type ParallelJob struct {

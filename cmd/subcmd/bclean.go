@@ -1,10 +1,8 @@
 package subcmd
 
 import (
-	"os"
-	"strconv"
-
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -23,9 +21,9 @@ func AddBcleanCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(bcleanCmd)
 
-	bcleanCmd.Flags().BoolP("force", "f", false, "Put forcefully")
-	bcleanCmd.Flags().String("local_temp", os.TempDir(), "Specify local temp directory path to create bundle files")
-	bcleanCmd.Flags().String("irods_temp", "", "Specify iRODS temp directory path to upload bundle files to")
+	// attach bundle temp flags
+	flag.SetBundleTempFlags(bcleanCmd)
+	flag.SetForceFlags(bcleanCmd, false)
 
 	rootCmd.AddCommand(bcleanCmd)
 }
@@ -51,32 +49,11 @@ func processBcleanCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	force := false
-	forceFlag := command.Flags().Lookup("force")
-	if forceFlag != nil {
-		force, err = strconv.ParseBool(forceFlag.Value.String())
-		if err != nil {
-			force = false
-		}
-	}
-
-	localTempDirPath := os.TempDir()
-	localTempPathFlag := command.Flags().Lookup("local_temp")
-	if localTempPathFlag != nil {
-		localTempDirPath = localTempPathFlag.Value.String()
-	}
-
-	irodsTempDirPath := ""
-	irodsTempPathFlag := command.Flags().Lookup("irods_temp")
-	if irodsTempPathFlag != nil {
-		tempDirPath := irodsTempPathFlag.Value.String()
-		if len(tempDirPath) > 0 {
-			irodsTempDirPath = tempDirPath
-		}
-	}
+	forceFlagValues := flag.GetForceFlagValues()
+	bundleTempFlagValues := flag.GetBundleTempFlagValues()
 
 	// clear local
-	commons.CleanUpOldLocalBundles(localTempDirPath, force)
+	commons.CleanUpOldLocalBundles(bundleTempFlagValues.LocalTempPath, forceFlagValues.Force)
 
 	// Create a file system
 	account := commons.GetAccount()
@@ -87,17 +64,17 @@ func processBcleanCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
-	if len(irodsTempDirPath) > 0 {
-		logger.Debugf("clearing irods temp dir %s", irodsTempDirPath)
-		commons.CleanUpOldIRODSBundles(filesystem, irodsTempDirPath, true, force)
+	if len(bundleTempFlagValues.IRODSTempPath) > 0 {
+		logger.Debugf("clearing irods temp dir %s", bundleTempFlagValues.IRODSTempPath)
+		commons.CleanUpOldIRODSBundles(filesystem, bundleTempFlagValues.IRODSTempPath, true, forceFlagValues.Force)
 	} else {
 		userHome := commons.GetHomeDir()
 		homeStagingDir := commons.GetDefaultStagingDir(userHome)
-		commons.CleanUpOldIRODSBundles(filesystem, homeStagingDir, true, force)
+		commons.CleanUpOldIRODSBundles(filesystem, homeStagingDir, true, forceFlagValues.Force)
 	}
 
 	for _, targetPath := range args {
-		bcleanOne(filesystem, targetPath, force)
+		bcleanOne(filesystem, targetPath, forceFlagValues.Force)
 	}
 
 	return nil

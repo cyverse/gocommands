@@ -114,10 +114,6 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().Int32P("session", "s", -1, "Set session ID")
 	command.Flags().StringP("resource", "R", "", "Set resource server")
 	command.Flags().StringP("ticket", "T", "", "Set ticket")
-
-	// this is hidden
-	command.Flags().Bool("retry_child", false, "Set this to retry child process")
-	command.Flags().MarkHidden("retry_child")
 }
 
 func ProcessCommonFlags(command *cobra.Command) (bool, error) {

@@ -19,6 +19,7 @@ var passwdCmd = &cobra.Command{
 	Short:   "Change iRODS user password",
 	Long:    `This changes iRODS user password.`,
 	RunE:    processPasswdCommand,
+	Args:    cobra.NoArgs,
 }
 
 func AddPasswdCommand(rootCmd *cobra.Command) {
@@ -85,12 +86,6 @@ func changePassword(fs *irodsclient_fs.FileSystem) error {
 		fmt.Print("\n")
 		currentPassword := string(bytePassword)
 
-		if len(currentPassword) == 0 {
-			fmt.Println("Please provide password")
-			fmt.Println("")
-			continue
-		}
-
 		if currentPassword == account.Password {
 			pass = true
 			break
@@ -115,12 +110,6 @@ func changePassword(fs *irodsclient_fs.FileSystem) error {
 
 		fmt.Print("\n")
 		newPassword = string(bytePassword)
-
-		if len(newPassword) == 0 {
-			fmt.Println("Please provide password")
-			fmt.Println("")
-			continue
-		}
 
 		if newPassword != account.Password {
 			pass = true

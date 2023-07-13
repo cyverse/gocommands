@@ -3,8 +3,8 @@ package subcmd
 import (
 	"os"
 	"path/filepath"
-	"strconv"
 
+	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -17,28 +17,21 @@ var bputCmd = &cobra.Command{
 	Short:   "Bundle-upload files or directories",
 	Long:    `This uploads files or directories to the given iRODS collection. The files or directories are bundled with TAR to maximize data transfer bandwidth, then extracted in the iRODS.`,
 	RunE:    processBputCommand,
+	Args:    cobra.MinimumNArgs(1),
 }
 
 func AddBputCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(bputCmd)
 
-	// unused, but required for compatibility with retry
-	bputCmd.Flags().BoolP("force", "f", false, "unused")
-	bputCmd.Flags().MarkHidden("force")
-	bputCmd.Flags().Bool("clear_leftover", false, "Clear leftover bundle files")
-	bputCmd.Flags().Int("max_file_num", commons.MaxBundleFileNumDefault, "Specify max file number in a bundle file")
-	bputCmd.Flags().String("max_file_size", strconv.FormatInt(commons.MaxBundleFileSizeDefault, 10), "Specify max file size of a bundle file")
-	bputCmd.Flags().Bool("single_threaded", false, "Transfer a file using a single thread")
-	bputCmd.Flags().Int("upload_thread_num", commons.UploadTreadNumDefault, "Specify the number of upload threads")
-	bputCmd.Flags().String("tcp_buffer_size", commons.TcpBufferSizeStringDefault, "Specify TCP socket buffer size")
-	bputCmd.Flags().Bool("progress", false, "Display progress bars")
-	bputCmd.Flags().String("local_temp", os.TempDir(), "Specify local temp directory path to create bundle files")
-	bputCmd.Flags().String("irods_temp", "", "Specify iRODS temp directory path to upload bundle files to")
-	bputCmd.Flags().Bool("diff", false, "Put files having different content")
-	bputCmd.Flags().Bool("no_hash", false, "Compare files without using md5 hash")
-	bputCmd.Flags().Int("retry", 1, "Retry if fails")
-	bputCmd.Flags().Int("retry_interval", 60, "Retry interval in seconds")
+	flag.SetBundleTempFlags(bputCmd)
+	flag.SetBundleClearFlags(bputCmd)
+	flag.SetBundleConfigFlags(bputCmd)
+	flag.SetParallelTransferFlags(bputCmd, true)
+	flag.SetForceFlags(bputCmd, true)
+	flag.SetProgressFlags(bputCmd)
+	flag.SetRetryFlags(bputCmd)
+	flag.SetDifferentialTransferFlags(bputCmd, true)
 
 	rootCmd.AddCommand(bputCmd)
 }
@@ -64,162 +57,37 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	clearLeftover := false
-	clearLeftoverFlag := command.Flags().Lookup("clear_leftover")
-	if clearLeftoverFlag != nil {
-		clearLeftover, err = strconv.ParseBool(clearLeftoverFlag.Value.String())
-		if err != nil {
-			clearLeftover = false
-		}
-	}
+	bundleTempFlagValues := flag.GetBundleTempFlagValues()
+	bundleClearFlagValues := flag.GetBundleClearFlagValues()
+	bundleConfigFlagValues := flag.GetBundleConfigFlagValues()
+	parallelTransferFlagValues := flag.GetParallelTransferFlagValues()
+	progressFlagValues := flag.GetProgressFlagValues()
+	retryFlagValues := flag.GetRetryFlagValues()
+	differentialTransferFlagValues := flag.GetDifferentialTransferFlagValues()
 
-	maxFileNum := commons.MaxBundleFileNumDefault
-	maxFileNumFlag := command.Flags().Lookup("max_file_num")
-	if maxFileNumFlag != nil {
-		n, err := strconv.ParseInt(maxFileNumFlag.Value.String(), 10, 32)
-		if err == nil {
-			maxFileNum = int(n)
-		}
-	}
-
-	maxFileSize := commons.MaxBundleFileSizeDefault
-	maxFileSizeFlag := command.Flags().Lookup("max_file_size")
-	if maxFileSizeFlag != nil {
-		n, err := commons.ParseSize(maxFileSizeFlag.Value.String())
-		if err == nil {
-			maxFileSize = n
-		}
-	}
-
-	singleThreaded := false
-	singleThreadedFlag := command.Flags().Lookup("single_threaded")
-	if singleThreadedFlag != nil {
-		singleThreaded, err = strconv.ParseBool(singleThreadedFlag.Value.String())
-		if err != nil {
-			singleThreaded = false
-		}
-	}
-
-	uploadThreadNum := commons.UploadTreadNumDefault
-	uploadThreadNumFlag := command.Flags().Lookup("upload_thread_num")
-	if uploadThreadNumFlag != nil {
-		n, err := strconv.ParseInt(uploadThreadNumFlag.Value.String(), 10, 32)
-		if err == nil {
-			uploadThreadNum = int(n)
-		}
-	}
-
-	maxConnectionNum := uploadThreadNum + 2 + 2 // 2 for metadata op, 2 for extraction
-
-	tcpBufferSize := commons.TcpBufferSizeDefault
-	tcpBufferSizeFlag := command.Flags().Lookup("tcp_buffer_size")
-	if tcpBufferSizeFlag != nil {
-		n, err := commons.ParseSize(tcpBufferSizeFlag.Value.String())
-		if err == nil {
-			tcpBufferSize = int(n)
-		}
-	}
-
-	progress := false
-	progressFlag := command.Flags().Lookup("progress")
-	if progressFlag != nil {
-		progress, err = strconv.ParseBool(progressFlag.Value.String())
-		if err != nil {
-			progress = false
-		}
-	}
-
-	diff := false
-	diffFlag := command.Flags().Lookup("diff")
-	if diffFlag != nil {
-		diff, err = strconv.ParseBool(diffFlag.Value.String())
-		if err != nil {
-			diff = false
-		}
-	}
-
-	noHash := false
-	noHashFlag := command.Flags().Lookup("no_hash")
-	if noHashFlag != nil {
-		noHash, err = strconv.ParseBool(noHashFlag.Value.String())
-		if err != nil {
-			noHash = false
-		}
-	}
-
-	localTempDirPath := os.TempDir()
-	localTempPathFlag := command.Flags().Lookup("local_temp")
-	if localTempPathFlag != nil {
-		localTempDirPath = localTempPathFlag.Value.String()
-	}
-
-	irodsTempDirPath := ""
-	irodsTempPathFlag := command.Flags().Lookup("irods_temp")
-	if irodsTempPathFlag != nil {
-		tempDirPath := irodsTempPathFlag.Value.String()
-		if len(tempDirPath) > 0 {
-			irodsTempDirPath = tempDirPath
-		}
-	}
-
-	retryChild := false
-	retryChildFlag := command.Flags().Lookup("retry_child")
-	if retryChildFlag != nil {
-		retryChildValue, err := strconv.ParseBool(retryChildFlag.Value.String())
-		if err != nil {
-			retryChildValue = false
-		}
-
-		retryChild = retryChildValue
-	}
-
-	retry := int64(1)
-	retryFlag := command.Flags().Lookup("retry")
-	if retryFlag != nil {
-		retry, err = strconv.ParseInt(retryFlag.Value.String(), 10, 32)
-		if err != nil {
-			retry = 1
-		}
-	}
-
-	retryInterval := int64(60)
-	retryIntervalFlag := command.Flags().Lookup("retry_interval")
-	if retryIntervalFlag != nil {
-		retryInterval, err = strconv.ParseInt(retryIntervalFlag.Value.String(), 10, 32)
-		if err != nil {
-			retryInterval = 60
-		}
-	}
+	maxConnectionNum := parallelTransferFlagValues.ThreadNumber + 2 + 2 // 2 for metadata op, 2 for extraction
 
 	// clear local
-	if clearLeftover {
-		commons.CleanUpOldLocalBundles(localTempDirPath, true)
+	if bundleClearFlagValues.Clear {
+		commons.CleanUpOldLocalBundles(bundleTempFlagValues.LocalTempPath, true)
 	}
 
-	// Create a file system
-	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClientAdvanced(account, maxConnectionNum, tcpBufferSize)
-	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
-	}
-
-	if retry > 1 && !retryChild {
-		// we release filesystem here to not hold idle connections
-		filesystem.Release()
-
-		err = commons.RunWithRetry(int(retry), int(retryInterval))
+	if retryFlagValues.RetryNumber > 1 && !retryFlagValues.RetryChild {
+		err = commons.RunWithRetry(retryFlagValues.RetryNumber, retryFlagValues.RetryIntervalSeconds)
 		if err != nil {
-			return xerrors.Errorf("failed to run with retry %d: %w", retry, err)
+			return xerrors.Errorf("failed to run with retry %d: %w", retryFlagValues.RetryNumber, err)
 		}
 		return nil
 	}
 
-	// release filesystem after use
-	defer filesystem.Release()
-
-	if len(args) == 0 {
-		return xerrors.Errorf("not enough input arguments")
+	// Create a file system
+	account := commons.GetAccount()
+	filesystem, err := commons.GetIRODSFSClientAdvanced(account, maxConnectionNum, parallelTransferFlagValues.TCPBufferSize)
+	if err != nil {
+		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
+
+	defer filesystem.Release()
 
 	targetPath := "./"
 	sourcePaths := args[:]
@@ -235,39 +103,39 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	logger.Info("determining staging dir...")
-	if len(irodsTempDirPath) > 0 {
-		logger.Debugf("validating staging dir - %s", irodsTempDirPath)
+	if len(bundleTempFlagValues.IRODSTempPath) > 0 {
+		logger.Debugf("validating staging dir - %s", bundleTempFlagValues.IRODSTempPath)
 
-		irodsTempDirPath = commons.MakeIRODSPath(cwd, home, zone, irodsTempDirPath)
-		ok, err := commons.ValidateStagingDir(filesystem, targetPath, irodsTempDirPath)
+		bundleTempFlagValues.IRODSTempPath = commons.MakeIRODSPath(cwd, home, zone, bundleTempFlagValues.IRODSTempPath)
+		ok, err := commons.ValidateStagingDir(filesystem, targetPath, bundleTempFlagValues.IRODSTempPath)
 		if err != nil {
-			return xerrors.Errorf("failed to validate staging dir - %s: %w", irodsTempDirPath, err)
+			return xerrors.Errorf("failed to validate staging dir - %s: %w", bundleTempFlagValues.IRODSTempPath, err)
 		}
 
 		if !ok {
-			logger.Debugf("unable to use the given staging dir %s since it is in a different resource server, using default staging dir", irodsTempDirPath)
-			return xerrors.Errorf("staging dir %s is in a different resource server", irodsTempDirPath)
+			logger.Debugf("unable to use the given staging dir %s since it is in a different resource server, using default staging dir", bundleTempFlagValues.IRODSTempPath)
+			return xerrors.Errorf("staging dir %s is in a different resource server", bundleTempFlagValues.IRODSTempPath)
 		}
 	} else {
 		// set default staging dir
 		logger.Debug("get default staging dir")
 
-		irodsTempDirPath = commons.GetDefaultStagingDir(targetPath)
+		bundleTempFlagValues.IRODSTempPath = commons.GetDefaultStagingDir(targetPath)
 	}
 
-	err = commons.CheckSafeStagingDir(irodsTempDirPath)
+	err = commons.CheckSafeStagingDir(bundleTempFlagValues.IRODSTempPath)
 	if err != nil {
 		return xerrors.Errorf("failed to get safe staging dir: %w", err)
 	}
 
-	logger.Infof("use staging dir - %s", irodsTempDirPath)
+	logger.Infof("use staging dir - %s", bundleTempFlagValues.IRODSTempPath)
 
-	if clearLeftover {
-		logger.Debugf("clearing irods temp dir %s", irodsTempDirPath)
-		commons.CleanUpOldIRODSBundles(filesystem, irodsTempDirPath, false, true)
+	if bundleClearFlagValues.Clear {
+		logger.Debugf("clearing irods temp dir %s", bundleTempFlagValues.IRODSTempPath)
+		commons.CleanUpOldIRODSBundles(filesystem, bundleTempFlagValues.IRODSTempPath, false, true)
 	}
 
-	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, maxFileNum, maxFileSize, singleThreaded, uploadThreadNum, localTempDirPath, irodsTempDirPath, diff, noHash, progress)
+	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, bundleConfigFlagValues.MaxFileNum, bundleConfigFlagValues.MaxFileSize, parallelTransferFlagValues.SingleTread, parallelTransferFlagValues.ThreadNumber, bundleTempFlagValues.LocalTempPath, bundleTempFlagValues.IRODSTempPath, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash, progressFlagValues.ShowProgress)
 	bundleTransferManager.Start()
 
 	bundleRootPath, err := commons.GetCommonRootLocalDirPath(sourcePaths)

@@ -16,7 +16,7 @@ func MakeDateTimeString(t time.Time) string {
 }
 
 func MakeDateTimeFromString(str string) (time.Time, error) {
-	if len(str) == 0 {
+	if len(str) == 0 || str == "0" {
 		return time.Time{}, nil
 	}
 

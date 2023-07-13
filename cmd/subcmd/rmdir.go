@@ -9,11 +9,12 @@ import (
 )
 
 var rmdirCmd = &cobra.Command{
-	Use:   "rmdir [collection1] [collection2] ...",
+	Use:     "rmdir [collection1] [collection2] ...",
 	Aliases: []string{"irmdir"},
-	Short: "Remove iRODS collections",
-	Long:  `This removes iRODS collections.`,
-	RunE:  processRmdirCommand,
+	Short:   "Remove iRODS collections",
+	Long:    `This removes iRODS collections.`,
+	RunE:    processRmdirCommand,
+	Args:    cobra.MinimumNArgs(1),
 }
 
 func AddRmdirCommand(rootCmd *cobra.Command) {
@@ -47,10 +48,6 @@ func processRmdirCommand(command *cobra.Command, args []string) error {
 	}
 
 	defer filesystem.Release()
-
-	if len(args) == 0 {
-		return xerrors.Errorf("not enough input arguments")
-	}
 
 	for _, targetPath := range args {
 		err = removeDirOne(filesystem, targetPath)

@@ -1,9 +1,8 @@
 package subcmd
 
 import (
-	"strconv"
-
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -16,13 +15,15 @@ var rmCmd = &cobra.Command{
 	Short:   "Remove iRODS data-objects or collections",
 	Long:    `This removes iRODS data-objects or collections.`,
 	RunE:    processRmCommand,
+	Args:    cobra.MinimumNArgs(1),
 }
 
 func AddRmCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(rmCmd)
-	rmCmd.Flags().BoolP("recurse", "r", false, "Remove non-empty collections")
-	rmCmd.Flags().BoolP("force", "f", false, "Remove forcefully")
+
+	flag.SetForceFlags(rmCmd, false)
+	flag.SetRecursiveFlags(rmCmd)
 
 	rootCmd.AddCommand(rmCmd)
 }
@@ -43,23 +44,8 @@ func processRmCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	recurse := false
-	recurseFlag := command.Flags().Lookup("recurse")
-	if recurseFlag != nil {
-		recurse, err = strconv.ParseBool(recurseFlag.Value.String())
-		if err != nil {
-			recurse = false
-		}
-	}
-
-	force := false
-	forceFlag := command.Flags().Lookup("force")
-	if forceFlag != nil {
-		force, err = strconv.ParseBool(forceFlag.Value.String())
-		if err != nil {
-			force = false
-		}
-	}
+	recursiveFlagValues := flag.GetRecursiveFlagValues()
+	forceFlagValues := flag.GetForceFlagValues()
 
 	// Create a file system
 	account := commons.GetAccount()
@@ -70,12 +56,8 @@ func processRmCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
-	if len(args) == 0 {
-		return xerrors.Errorf("not enough input arguments")
-	}
-
 	for _, sourcePath := range args {
-		err = removeOne(filesystem, sourcePath, force, recurse)
+		err = removeOne(filesystem, sourcePath, forceFlagValues.Force, recursiveFlagValues.Recursive)
 		if err != nil {
 			return xerrors.Errorf("failed to perform rm %s: %w", sourcePath, err)
 		}

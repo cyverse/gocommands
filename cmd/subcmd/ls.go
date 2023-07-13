@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"path"
 	"sort"
-	"strconv"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -20,14 +20,14 @@ var lsCmd = &cobra.Command{
 	Short:   "List entries in iRODS collections",
 	Long:    `This lists data objects and collections in iRODS collections.`,
 	RunE:    processLsCommand,
+	Args:    cobra.ArbitraryArgs,
 }
 
 func AddLsCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(lsCmd)
 
-	lsCmd.Flags().BoolP("long", "l", false, "List data objects in a long format")
-	lsCmd.Flags().BoolP("verylong", "L", false, "List data objects in a very long format")
+	flag.SetListFlags(lsCmd)
 
 	rootCmd.AddCommand(lsCmd)
 }
@@ -48,23 +48,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	longFormat := false
-	longFlag := command.Flags().Lookup("long")
-	if longFlag != nil {
-		longFormat, err = strconv.ParseBool(longFlag.Value.String())
-		if err != nil {
-			longFormat = false
-		}
-	}
-
-	veryLongFormat := false
-	veryLongFlag := command.Flags().Lookup("verylong")
-	if veryLongFlag != nil {
-		veryLongFormat, err = strconv.ParseBool(veryLongFlag.Value.String())
-		if err != nil {
-			veryLongFormat = false
-		}
-	}
+	listFlagValues := flag.GetListFlagValues()
 
 	// Create a file system
 	account := commons.GetAccount()
@@ -82,7 +66,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	}
 
 	for _, sourcePath := range sourcePaths {
-		err = listOne(filesystem, sourcePath, longFormat, veryLongFormat)
+		err = listOne(filesystem, sourcePath, listFlagValues.Format)
 		if err != nil {
 			return xerrors.Errorf("failed to perform ls %s: %w", sourcePath, err)
 		}
@@ -91,7 +75,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, longFormat bool, veryLongFormat bool) error {
+func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, format flag.ListFormat) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
@@ -121,7 +105,7 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, longFormat bool, 
 			return xerrors.Errorf("failed to list data-objects in %s: %w", sourcePath, err)
 		}
 
-		printDataObjects(objs, veryLongFormat, longFormat)
+		printDataObjects(objs, format)
 		printCollections(colls)
 		return nil
 	}
@@ -139,34 +123,35 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, longFormat bool, 
 		return xerrors.Errorf("failed to get data-object %s: %w", sourcePath, err)
 	}
 
-	printDataObject(entry, veryLongFormat, longFormat)
+	printDataObject(entry, format)
 	return nil
 }
 
-func printDataObjects(entries []*irodsclient_types.IRODSDataObject, veryLongFormat bool, longFormat bool) {
+func printDataObjects(entries []*irodsclient_types.IRODSDataObject, format flag.ListFormat) {
 	// sort by name
 	sort.SliceStable(entries, func(i int, j int) bool {
 		return entries[i].Name < entries[j].Name
 	})
 
 	for _, entry := range entries {
-		printDataObject(entry, veryLongFormat, longFormat)
+		printDataObject(entry, format)
 	}
 }
 
-func printDataObject(entry *irodsclient_types.IRODSDataObject, veryLongFormat bool, longFormat bool) {
-	if veryLongFormat {
+func printDataObject(entry *irodsclient_types.IRODSDataObject, format flag.ListFormat) {
+	switch format {
+	case flag.ListFormatLong:
+		for _, replica := range entry.Replicas {
+			modTime := commons.MakeDateTimeString(replica.ModifyTime)
+			fmt.Printf("  %s\t%d\t%s\t%d\t%s\t%s\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, entry.Size, modTime, getStatusMark(replica.Status), entry.Name)
+		}
+	case flag.ListFormatVeryLong:
 		for _, replica := range entry.Replicas {
 			modTime := commons.MakeDateTimeString(replica.ModifyTime)
 			fmt.Printf("  %s\t%d\t%s\t%d\t%s\t%s\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, entry.Size, modTime, getStatusMark(replica.Status), entry.Name)
 			fmt.Printf("    %s\t%s\n", replica.CheckSum, replica.Path)
 		}
-	} else if longFormat {
-		for _, replica := range entry.Replicas {
-			modTime := commons.MakeDateTimeString(replica.ModifyTime)
-			fmt.Printf("  %s\t%d\t%s\t%d\t%s\t%s\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, entry.Size, modTime, getStatusMark(replica.Status), entry.Name)
-		}
-	} else {
+	default:
 		fmt.Printf("  %s\n", entry.Name)
 	}
 }

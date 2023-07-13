@@ -14,6 +14,7 @@ var mvCmd = &cobra.Command{
 	Short:   "Move iRODS data-objects or collections to target collection, or rename data-object or collection",
 	Long:    `This moves iRODS data-objects or collections to the given target collection, or rename a single data-object or collection.`,
 	RunE:    processMvCommand,
+	Args:    cobra.MinimumNArgs(2),
 }
 
 func AddMvCommand(rootCmd *cobra.Command) {
@@ -47,10 +48,6 @@ func processMvCommand(command *cobra.Command, args []string) error {
 	}
 
 	defer filesystem.Release()
-
-	if len(args) < 2 {
-		return xerrors.Errorf("not enough input arguments")
-	}
 
 	targetPath := args[len(args)-1]
 	sourcePaths := args[:len(args)-1]

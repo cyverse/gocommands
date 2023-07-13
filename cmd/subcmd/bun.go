@@ -1,11 +1,11 @@
 package subcmd
 
 import (
-	"strconv"
 	"strings"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -18,14 +18,15 @@ var bunCmd = &cobra.Command{
 	Short:   "Extract iRODS data-objects in a structured file format to target collection",
 	Long:    `This extracts iRODS data-objects in a structured file format (e.g., zip and tar) to the given target collection.`,
 	RunE:    processBunCommand,
+	Args:    cobra.MinimumNArgs(2),
 }
 
 func AddBunCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(bunCmd)
-	bunCmd.Flags().BoolP("force", "f", false, "Extract forcefully")
-	bunCmd.Flags().BoolP("extract", "x", false, "Extract data-objects")
-	bunCmd.Flags().StringP("data_type", "D", "", "Set data type (tar, zip ...)")
+
+	flag.SetForceFlags(bunCmd, false)
+	flag.SetBundleFlags(bunCmd)
 
 	rootCmd.AddCommand(bunCmd)
 }
@@ -46,32 +47,11 @@ func processBunCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	force := false
-	forceFlag := command.Flags().Lookup("force")
-	if forceFlag != nil {
-		force, err = strconv.ParseBool(forceFlag.Value.String())
-		if err != nil {
-			force = false
-		}
-	}
+	forceFlagValues := flag.GetForceFlagValues()
+	bundleFlagValues := flag.GetBundleFlagValues()
 
-	extract := false
-	extractFlag := command.Flags().Lookup("extract")
-	if extractFlag != nil {
-		extract, err = strconv.ParseBool(extractFlag.Value.String())
-		if err != nil {
-			extract = false
-		}
-	}
-
-	if !extract {
+	if !bundleFlagValues.Extract {
 		return xerrors.Errorf("support only extract mode")
-	}
-
-	dataType := "" // auto
-	dataTypeFlag := command.Flags().Lookup("data_type")
-	if dataTypeFlag != nil {
-		dataType = dataTypeFlag.Value.String()
 	}
 
 	// Create a file system
@@ -83,14 +63,10 @@ func processBunCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
-	if len(args) < 2 {
-		return xerrors.Errorf("not enough input arguments")
-	}
-
 	targetPath := args[len(args)-1]
 	for _, sourcePath := range args[:len(args)-1] {
-		if extract {
-			err = extractOne(filesystem, sourcePath, targetPath, dataType, force)
+		if bundleFlagValues.Extract {
+			err = extractOne(filesystem, sourcePath, targetPath, bundleFlagValues.DataType, forceFlagValues.Force)
 			if err != nil {
 				return xerrors.Errorf("failed to perform bun %s to %s: %w", sourcePath, targetPath, err)
 			}

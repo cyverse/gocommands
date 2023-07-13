@@ -17,6 +17,7 @@ var catCmd = &cobra.Command{
 	Short:   "Display the content of an iRODS data-object",
 	Long:    `This displays the content of an iRODS data-object.`,
 	RunE:    processCatCommand,
+	Args:    cobra.MinimumNArgs(1),
 }
 
 func AddCatCommand(rootCmd *cobra.Command) {
@@ -50,10 +51,6 @@ func processCatCommand(command *cobra.Command, args []string) error {
 	}
 
 	defer filesystem.Release()
-
-	if len(args) == 0 {
-		return xerrors.Errorf("not enough input arguments")
-	}
 
 	for _, sourcePath := range args {
 		err = catOne(filesystem, sourcePath)

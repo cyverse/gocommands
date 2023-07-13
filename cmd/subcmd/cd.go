@@ -15,6 +15,7 @@ var cdCmd = &cobra.Command{
 	Short:   "Change current working iRODS collection",
 	Long:    `This changes current working iRODS collection.`,
 	RunE:    processCdCommand,
+	Args:    cobra.MaximumNArgs(1),
 }
 
 func AddCdCommand(rootCmd *cobra.Command) {
@@ -48,10 +49,6 @@ func processCdCommand(command *cobra.Command, args []string) error {
 	}
 
 	defer filesystem.Release()
-
-	if len(args) > 1 {
-		return xerrors.Errorf("too many arguments")
-	}
 
 	targetPath := ""
 	if len(args) == 0 {

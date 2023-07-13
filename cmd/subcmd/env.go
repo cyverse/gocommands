@@ -12,6 +12,7 @@ var envCmd = &cobra.Command{
 	Short:   "Print current irods environment",
 	Long:    `This prints out current irods environment.`,
 	RunE:    processEnvCommand,
+	Args:    cobra.NoArgs,
 }
 
 func AddEnvCommand(rootCmd *cobra.Command) {

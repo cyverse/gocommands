@@ -6,10 +6,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/gliderlabs/ssh"
 	log "github.com/sirupsen/logrus"
@@ -23,14 +23,16 @@ var copySftpIdCmd = &cobra.Command{
 	Short:   "Copy SSH public key to iRODS for SFTP access",
 	Long:    `This copies SSH public key to iRODS for SFTP access.`,
 	RunE:    processCopySftpIdCommand,
+	Args:    cobra.NoArgs,
 }
 
 func AddCopySftpIdCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(copySftpIdCmd)
-	copySftpIdCmd.Flags().BoolP("force", "f", false, "Copy keys forcefully without duplication check")
-	copySftpIdCmd.Flags().BoolP("dryrun", "n", false, "No keys are actually copied")
-	copySftpIdCmd.Flags().StringP("identity_file", "i", "", "Specify identity file")
+
+	flag.SetForceFlags(copySftpIdCmd, false)
+	flag.SetDryRunFlags(copySftpIdCmd)
+	flag.SetSFTPIDFlags(copySftpIdCmd)
 
 	rootCmd.AddCommand(copySftpIdCmd)
 }
@@ -51,29 +53,9 @@ func processCopySftpIdCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	force := false
-	forceFlag := command.Flags().Lookup("force")
-	if forceFlag != nil {
-		force, err = strconv.ParseBool(forceFlag.Value.String())
-		if err != nil {
-			force = false
-		}
-	}
-
-	dryrun := false
-	dryrunFlag := command.Flags().Lookup("dryrun")
-	if dryrunFlag != nil {
-		dryrun, err = strconv.ParseBool(dryrunFlag.Value.String())
-		if err != nil {
-			dryrun = false
-		}
-	}
-
-	identityFile := ""
-	identityFileFlag := command.Flags().Lookup("identity_file")
-	if identityFileFlag != nil {
-		identityFile = identityFileFlag.Value.String()
-	}
+	forceFlagValues := flag.GetForceFlagValues()
+	dryRunFlagValues := flag.GetDryRunFlagValues()
+	sftpIDFlagValues := flag.GetSFTPIDFlagValues()
 
 	// Create a file system
 	account := commons.GetAccount()
@@ -86,9 +68,9 @@ func processCopySftpIdCommand(command *cobra.Command, args []string) error {
 
 	// search identity files to be copied
 	identityFiles := []string{}
-	if len(identityFile) > 0 {
+	if len(sftpIDFlagValues.IdentityFilePath) > 0 {
 		// if identity file is given via flag
-		identityFilePath := commons.MakeLocalPath(identityFile)
+		identityFilePath := commons.MakeLocalPath(sftpIDFlagValues.IdentityFilePath)
 		identityFiles = append(identityFiles, identityFilePath)
 	} else {
 		// scan defaults
@@ -99,10 +81,10 @@ func processCopySftpIdCommand(command *cobra.Command, args []string) error {
 	}
 
 	if len(identityFiles) == 0 {
-		return xerrors.Errorf("failed to find SSH identity files '~/.ssh/*.pub'")
+		return xerrors.Errorf("failed to find SSH identity files")
 	}
 
-	err = copySftpId(filesystem, force, dryrun, identityFiles)
+	err = copySftpId(filesystem, forceFlagValues.Force, dryRunFlagValues.DryRun, identityFiles)
 	if err != nil {
 		return xerrors.Errorf("failed to perform copy-sftp-id: %w", err)
 	}

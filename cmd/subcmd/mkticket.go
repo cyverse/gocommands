@@ -1,12 +1,10 @@
 package subcmd
 
 import (
-	"strings"
-
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/go-irodsclient/irods/types"
+	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
-	"github.com/rs/xid"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -18,14 +16,14 @@ var mkticketCmd = &cobra.Command{
 	Short:   "Make a ticket",
 	Long:    `This makes a ticket for given collection or data object.`,
 	RunE:    processMkticketCommand,
+	Args:    cobra.ExactArgs(1),
 }
 
 func AddMkticketCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(mkticketCmd)
 
-	mkticketCmd.Flags().StringP("name", "n", "", "Specify ticket name")
-	mkticketCmd.Flags().StringP("type", "t", "read", "Specify ticket type (read|write)")
+	flag.SetTicketFlags(mkticketCmd)
 
 	rootCmd.AddCommand(mkticketCmd)
 }
@@ -46,26 +44,7 @@ func processMkticketCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	ticketName := xid.New().String()
-	ticketNameFlag := command.Flags().Lookup("name")
-	if ticketNameFlag != nil {
-		ticketName = ticketNameFlag.Value.String()
-	}
-
-	ticketType := string(types.TicketTypeRead)
-	ticketTypeFlag := command.Flags().Lookup("type")
-	if ticketTypeFlag != nil {
-		ticketType = ticketTypeFlag.Value.String()
-	}
-
-	switch strings.ToLower(ticketType) {
-	case string(types.TicketTypeRead), "r":
-		ticketType = string(types.TicketTypeRead)
-	case string(types.TicketTypeWrite), "w", "rw", "readwrite", "read-write":
-		ticketType = string(types.TicketTypeWrite)
-	default:
-		ticketType = string(types.TicketTypeRead)
-	}
+	ticketFlagValues := flag.GetTicketFlagValues()
 
 	// Create a connection
 	account := commons.GetAccount()
@@ -76,17 +55,9 @@ func processMkticketCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
-	if len(args) > 1 {
-		return xerrors.Errorf("too many arguments")
-	}
-
-	if len(args) == 0 {
-		return xerrors.Errorf("not enough input arguments")
-	}
-
-	err = makeTicket(filesystem, ticketName, types.TicketType(ticketType), args[0])
+	err = makeTicket(filesystem, ticketFlagValues.Name, ticketFlagValues.Type, args[0])
 	if err != nil {
-		return xerrors.Errorf("failed to perform make ticket for %s, %s, %s: %w", ticketName, ticketType, args[0], err)
+		return xerrors.Errorf("failed to perform make ticket for %s, %s, %s: %w", ticketFlagValues.Name, ticketFlagValues.Type, args[0], err)
 	}
 	return nil
 }

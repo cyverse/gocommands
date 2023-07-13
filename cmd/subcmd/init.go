@@ -18,6 +18,7 @@ var initCmd = &cobra.Command{
 	Once the configuration is set, configuration files are created under ~/.irods directory.
 	The configuration is fully-compatible to that of icommands`,
 	RunE: processInitCommand,
+	Args: cobra.NoArgs,
 }
 
 func AddInitCommand(rootCmd *cobra.Command) {

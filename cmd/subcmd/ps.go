@@ -3,10 +3,10 @@ package subcmd
 import (
 	"fmt"
 	"os"
-	"strconv"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
+	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/jedib0t/go-pretty/v6/table"
 	log "github.com/sirupsen/logrus"
@@ -20,16 +20,14 @@ var psCmd = &cobra.Command{
 	Short:   "List processes",
 	Long:    `This lists processes for iRODS connections establisted in iRODS server.`,
 	RunE:    processPsCommand,
+	Args:    cobra.NoArgs,
 }
 
 func AddPsCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	commons.SetCommonFlags(psCmd)
 
-	psCmd.Flags().Bool("groupbyuser", false, "Group processes by user")
-	psCmd.Flags().Bool("groupbyprog", false, "Group processes by client program")
-	psCmd.Flags().String("zone", "", "Filter by zone")
-	psCmd.Flags().String("address", "", "Filter by address")
+	flag.SetProcessFilterFlags(psCmd)
 
 	rootCmd.AddCommand(psCmd)
 }
@@ -50,35 +48,7 @@ func processPsCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	address := ""
-	addressFlag := command.Flags().Lookup("address")
-	if addressFlag != nil {
-		address = addressFlag.Value.String()
-	}
-
-	zone := ""
-	zoneFlag := command.Flags().Lookup("zone")
-	if zoneFlag != nil {
-		zone = zoneFlag.Value.String()
-	}
-
-	groupbyuser := false
-	groupbyuserFlag := command.Flags().Lookup("groupbyuser")
-	if groupbyuserFlag != nil {
-		groupbyuser, err = strconv.ParseBool(groupbyuserFlag.Value.String())
-		if err != nil {
-			groupbyuser = false
-		}
-	}
-
-	groupbyprog := false
-	groupbyprogFlag := command.Flags().Lookup("groupbyprog")
-	if groupbyprogFlag != nil {
-		groupbyprog, err = strconv.ParseBool(groupbyprogFlag.Value.String())
-		if err != nil {
-			groupbyprog = false
-		}
-	}
+	processFilterFlagValues := flag.GetProcessFilterFlagValues()
 
 	// Create a connection
 	account := commons.GetAccount()
@@ -89,15 +59,15 @@ func processPsCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
-	err = listProcesses(filesystem, address, zone, groupbyuser, groupbyprog)
+	err = listProcesses(filesystem, processFilterFlagValues.Address, processFilterFlagValues.Zone, processFilterFlagValues.GroupBy)
 	if err != nil {
-		return xerrors.Errorf("failed to perform list processes addr %s, zone %s : %w", address, zone, err)
+		return xerrors.Errorf("failed to perform list processes addr %s, zone %s : %w", processFilterFlagValues.Address, processFilterFlagValues.Zone, err)
 	}
 
 	return nil
 }
 
-func listProcesses(fs *irodsclient_fs.FileSystem, address string, zone string, groupbyuser bool, groupbyprog bool) error {
+func listProcesses(fs *irodsclient_fs.FileSystem, address string, zone string, groupby flag.ProcessGroupBy) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "listProcesses",
@@ -119,7 +89,8 @@ func listProcesses(fs *irodsclient_fs.FileSystem, address string, zone string, g
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 
-	if !groupbyprog && !groupbyuser {
+	switch groupby {
+	case flag.ProcessGroupByNone:
 		t.AppendHeader(table.Row{
 			"Process ID",
 			"Proxy User",
@@ -141,7 +112,7 @@ func listProcesses(fs *irodsclient_fs.FileSystem, address string, zone string, g
 				process.StartTime,
 			}, table.RowConfig{})
 		}
-	} else if groupbyuser {
+	case flag.ProcessGroupByUser:
 		t.AppendHeader(table.Row{
 			"Proxy User",
 			"Client User",
@@ -172,7 +143,7 @@ func listProcesses(fs *irodsclient_fs.FileSystem, address string, zone string, g
 				}, table.RowConfig{})
 			}
 		}
-	} else if groupbyprog {
+	case flag.ProcessGroupByProgram:
 		t.AppendHeader(table.Row{
 			"Client Program",
 			"Process Count",
