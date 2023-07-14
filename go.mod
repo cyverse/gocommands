@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/creativeprojects/go-selfupdate v1.0.1
-	github.com/cyverse/go-irodsclient v0.12.6
+	github.com/cyverse/go-irodsclient v0.12.7-0.20230714233653-3fbef93a9554
 	github.com/gliderlabs/ssh v0.3.5
 	github.com/jedib0t/go-pretty/v6 v6.3.1
 	github.com/kelseyhightower/envconfig v1.4.0

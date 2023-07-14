@@ -91,8 +91,10 @@ func main() {
 
 	err := Execute()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %+v\n", err)
 		logger.Errorf("%+v", err)
+
+		fmt.Fprintf(os.Stderr, "Error: %s\nError Trace:\n  - %+v\n", err.Error(), err)
+
 		os.Exit(1)
 	}
 }
