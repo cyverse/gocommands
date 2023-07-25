@@ -55,13 +55,13 @@ func StatIRODSPath(filesystem *irodsclient_fs.FileSystem, irodsPath string) (*ir
 	dirParts := strings.Split(irodsPath[1:], "/")
 	dirDepth := len(dirParts)
 
+	if entry, ok := statCache[irodsPath]; ok {
+		return entry, nil
+	}
+
 	// zone/home/user OR zone/home/shared (public)
 	// don't scan parent
 	if dirDepth <= 3 {
-		if entry, ok := statCache[irodsPath]; ok {
-			return entry, nil
-		}
-
 		entry, err := filesystem.Stat(irodsPath)
 		if err != nil {
 			return nil, xerrors.Errorf("failed to stat %s: %w", irodsPath, err)
@@ -71,32 +71,41 @@ func StatIRODSPath(filesystem *irodsclient_fs.FileSystem, irodsPath string) (*ir
 		return entry, nil
 	}
 
-	if entry, ok := statCache[irodsPath]; ok {
-		return entry, nil
-	}
-
 	// otherwise, list parent dir and cache all files in the dir
+	// this may fail if the user doesn't have right permission to read
 	parentDirPath := path.Dir(irodsPath)
 
 	// no cache
+	dirCachingFailed := false
 	if _, ok := dirCache[parentDirPath]; !ok {
 		parentDirStat, err := filesystem.StatDir(parentDirPath)
+		if err == nil {
+			// have an access permission
+			statCache[parentDirPath] = parentDirStat
+
+			entries, listErr := filesystem.List(parentDirPath)
+			if listErr == nil {
+				for _, entry := range entries {
+					statCache[entry.Path] = entry
+				}
+
+				dirCache[parentDirPath] = entries
+			} else {
+				dirCachingFailed = true
+			}
+		} else {
+			dirCachingFailed = true
+		}
+	}
+
+	if dirCachingFailed {
+		// dir caching failed
+		entry, err := filesystem.Stat(irodsPath)
 		if err != nil {
-			return nil, xerrors.Errorf("failed to stat %s: %w", parentDirPath, err)
+			return nil, xerrors.Errorf("failed to stat %s: %w", irodsPath, err)
 		}
 
-		statCache[parentDirPath] = parentDirStat
-
-		entries, err := filesystem.List(parentDirPath)
-		if err != nil {
-			return nil, xerrors.Errorf("failed to list dir %s: %w", parentDirPath, err)
-		}
-
-		for _, entry := range entries {
-			statCache[entry.Path] = entry
-		}
-
-		dirCache[parentDirPath] = entries
+		statCache[irodsPath] = entry
 	}
 
 	if entry, ok := statCache[irodsPath]; ok {
