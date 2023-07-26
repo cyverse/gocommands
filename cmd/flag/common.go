@@ -141,11 +141,11 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	// default config
 	if !readConfig {
 		// auto detect
-		commons.LoadConfigFromFile("~/.irods")
-		//if err != nil {
-		//logger.Error(err)
-		// ignore error
-		//}
+		err := commons.LoadConfigFromFile("~/.irods")
+		if err != nil {
+			logger.Debug(err)
+			// ignore error
+		}
 	}
 
 	commons.SetDefaultConfigIfEmpty()
