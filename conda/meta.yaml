@@ -1,4 +1,4 @@
-{% set version = "0.7.4" %}
+{% set version = "0.7.5" %}
 {% set git_repo = "https://github.com/cyverse/gocommands" %}
 
 package:
