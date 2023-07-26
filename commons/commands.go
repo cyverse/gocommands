@@ -38,7 +38,6 @@ func GetConfig() *Config {
 func SetDefaultConfigIfEmpty() {
 	if environmentManager == nil {
 		iCommandsEnvMgr, _ := irodsclient_icommands.CreateIcommandsEnvironmentManager()
-		iCommandsEnvMgr.SetEnvironmentFilePath("./")
 		environmentManager = iCommandsEnvMgr
 	}
 
