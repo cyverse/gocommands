@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/cmd/subcmd"
 	log "github.com/sirupsen/logrus"
@@ -93,7 +94,13 @@ func main() {
 	if err != nil {
 		logger.Errorf("%+v", err)
 
-		fmt.Fprintf(os.Stderr, "Error: %s\nError Trace:\n  - %+v\n", err.Error(), err)
+		if irodsclient_types.IsConnectionConfigError(err) || irodsclient_types.IsConnectionError(err) {
+			fmt.Fprintf(os.Stderr, "Failed to establish a connection to iRODS server!\n")
+		} else if irodsclient_types.IsAuthError(err) {
+			fmt.Fprintf(os.Stderr, "Authentication failed!\n")
+		} else {
+			fmt.Fprintf(os.Stderr, "Error: %s\nError Trace:\n  - %+v\n", err.Error(), err)
+		}
 
 		os.Exit(1)
 	}
