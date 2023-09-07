@@ -338,7 +338,6 @@ func isICommandsEnvDir(filePath string) bool {
 	}
 
 	envFilePath := filepath.Join(filePath, "irods_environment.json")
-	passFilePath := filepath.Join(filePath, ".irodsA")
 
 	stEnv, err := os.Stat(envFilePath)
 	if err != nil {
@@ -346,15 +345,6 @@ func isICommandsEnvDir(filePath string) bool {
 	}
 
 	if stEnv.IsDir() {
-		return false
-	}
-
-	stPass, err := os.Stat(passFilePath)
-	if err != nil {
-		return false
-	}
-
-	if stPass.IsDir() {
 		return false
 	}
 

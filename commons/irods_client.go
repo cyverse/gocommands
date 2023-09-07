@@ -51,14 +51,3 @@ func GetIRODSConnection(account *irodsclient_types.IRODSAccount) (*irodsclient_c
 
 	return conn, nil
 }
-
-// TestConnect just test connection creation
-func TestConnect(account *irodsclient_types.IRODSAccount) error {
-	conn, err := GetIRODSConnection(account)
-	if err != nil {
-		return nil
-	}
-
-	defer conn.Disconnect()
-	return nil
-}
