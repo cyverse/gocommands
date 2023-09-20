@@ -1,4 +1,4 @@
-{% set version = "0.7.7" %}
+{% set version = "0.7.8" %}
 {% set git_repo = "https://github.com/cyverse/gocommands" %}
 
 package:
@@ -7,21 +7,21 @@ package:
 
 source:
   url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-darwin-amd64.tar.gz  # [osx and x86_64]
-  md5: ec34d64bd6370151a5b873de78d6a3a5  # [osx and x86_64]
+  md5: NotFound  # [osx and x86_64]
   url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-darwin-arm64.tar.gz  # [arm64]
-  md5: c9957ffe262d962623f0f40250ee509e  # [arm64]
+  md5: NotFound  # [arm64]
   url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-linux-386.tar.gz  # [linux32]
-  md5: abc13d4c1fbd3f961d4ca6d821802988  # [linux32]
+  md5: NotFound  # [linux32]
   url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-linux-amd64.tar.gz  # [linux64]
-  md5: 8105db518832bc4db165d2a175f02483  # [linux64]
+  md5: NotFound  # [linux64]
   url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-linux-arm.tar.gz  # [linux and (armv7l or arm6l)]
-  md5: 825b79f3315c06ecaede3fd47bdc4b27  # [linux and (armv7l or arm6l)]
+  md5: NotFound  # [linux and (armv7l or arm6l)]
   url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-linux-arm64.tar.gz  # [aarch64]
-  md5: c90992c9df5212c503da40499d732d70  # [aarch64]
+  md5: NotFound  # [aarch64]
   url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-windows-386.zip  # [win32]
-  md5: cb09b4c388bb2ed07a4961bdd4d9e6d5  # [win32]
+  md5: NotFound  # [win32]
   url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-windows-amd64.zip  # [win64]
-  md5: 1e350b7eec18790ec17a65e79fb0f82e  # [win64]
+  md5: NotFound  # [win64]
 
 build:
   number: 0
