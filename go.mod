@@ -6,6 +6,7 @@ require (
 	github.com/creativeprojects/go-selfupdate v1.0.1
 	github.com/cyverse/go-irodsclient v0.12.9
 	github.com/gliderlabs/ssh v0.3.5
+	github.com/dustin/go-humanize v1.0.1
 	github.com/jedib0t/go-pretty/v6 v6.3.1
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/rs/xid v1.3.0
