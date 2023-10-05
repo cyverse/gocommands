@@ -10,6 +10,7 @@ import (
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
+	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
 )
@@ -66,7 +67,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	}
 
 	for _, sourcePath := range sourcePaths {
-		err = listOne(filesystem, sourcePath, listFlagValues.Format)
+		err = listOne(filesystem, sourcePath, listFlagValues.Format, listFlagValues.HumanReadableSizes)
 		if err != nil {
 			return xerrors.Errorf("failed to perform ls %s: %w", sourcePath, err)
 		}
@@ -75,7 +76,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, format flag.ListFormat) error {
+func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, format flag.ListFormat, humanReadableSizes bool) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
@@ -105,7 +106,7 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, format flag.ListF
 			return xerrors.Errorf("failed to list data-objects in %s: %w", sourcePath, err)
 		}
 
-		printDataObjects(objs, format)
+		printDataObjects(objs, format, humanReadableSizes)
 		printCollections(colls)
 		return nil
 	}
@@ -123,32 +124,36 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, format flag.ListF
 		return xerrors.Errorf("failed to get data-object %s: %w", sourcePath, err)
 	}
 
-	printDataObject(entry, format)
+	printDataObject(entry, format, humanReadableSizes)
 	return nil
 }
 
-func printDataObjects(entries []*irodsclient_types.IRODSDataObject, format flag.ListFormat) {
+func printDataObjects(entries []*irodsclient_types.IRODSDataObject, format flag.ListFormat, humanReadableSizes bool) {
 	// sort by name
 	sort.SliceStable(entries, func(i int, j int) bool {
 		return entries[i].Name < entries[j].Name
 	})
 
 	for _, entry := range entries {
-		printDataObject(entry, format)
+		printDataObject(entry, format, humanReadableSizes)
 	}
 }
 
-func printDataObject(entry *irodsclient_types.IRODSDataObject, format flag.ListFormat) {
+func printDataObject(entry *irodsclient_types.IRODSDataObject, format flag.ListFormat, humanReadableSizes bool) {
+	size := fmt.Sprintf("%v", entry.Size)
+	if humanReadableSizes {
+		size = humanize.Bytes(uint64(entry.Size))
+	}
 	switch format {
 	case flag.ListFormatLong:
 		for _, replica := range entry.Replicas {
 			modTime := commons.MakeDateTimeString(replica.ModifyTime)
-			fmt.Printf("  %s\t%d\t%s\t%d\t%s\t%s\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, entry.Size, modTime, getStatusMark(replica.Status), entry.Name)
+			fmt.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, size, modTime, getStatusMark(replica.Status), entry.Name)
 		}
 	case flag.ListFormatVeryLong:
 		for _, replica := range entry.Replicas {
 			modTime := commons.MakeDateTimeString(replica.ModifyTime)
-			fmt.Printf("  %s\t%d\t%s\t%d\t%s\t%s\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, entry.Size, modTime, getStatusMark(replica.Status), entry.Name)
+			fmt.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, size, modTime, getStatusMark(replica.Status), entry.Name)
 			fmt.Printf("    %s\t%s\n", replica.CheckSum, replica.Path)
 		}
 	default:
