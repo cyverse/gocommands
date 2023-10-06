@@ -82,7 +82,7 @@ func GetBasename(path string) string {
 	idx2 := strings.LastIndex(path, "/")
 
 	if idx1 < 0 && idx2 < 0 {
-		return "."
+		return path
 	}
 
 	if idx1 >= idx2 {
