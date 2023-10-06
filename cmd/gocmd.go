@@ -19,6 +19,12 @@ var rootCmd = &cobra.Command{
 	RunE:          processCommand,
 	SilenceUsage:  true,
 	SilenceErrors: true,
+	CompletionOptions: cobra.CompletionOptions{
+		DisableDefaultCmd:   true,
+		DisableNoDescFlag:   true,
+		DisableDescriptions: true,
+		HiddenDefaultCmd:    true,
+	},
 }
 
 func Execute() error {
