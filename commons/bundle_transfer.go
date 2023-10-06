@@ -172,7 +172,7 @@ func (manager *BundleTransferManager) getLocalBundleFilePath(index int64) string
 }
 
 func (manager *BundleTransferManager) getIrodsBundleFilePath(index int64) string {
-	return filepath.Join(manager.irodsTempDirPath, manager.getBundleFileName(index))
+	return path.Join(manager.irodsTempDirPath, manager.getBundleFileName(index))
 }
 
 func (manager *BundleTransferManager) progress(name string, processed int64, total int64, progressUnit progress.Units, errored bool) {
