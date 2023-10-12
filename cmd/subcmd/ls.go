@@ -154,7 +154,7 @@ func printDataObject(entry *irodsclient_types.IRODSDataObject, format flag.ListF
 		for _, replica := range entry.Replicas {
 			modTime := commons.MakeDateTimeString(replica.ModifyTime)
 			fmt.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, size, modTime, getStatusMark(replica.Status), entry.Name)
-			fmt.Printf("    %s\t%s\n", replica.CheckSum, replica.Path)
+			fmt.Printf("    %s\t%s\n", replica.Checksum.OriginalChecksum, replica.Path)
 		}
 	default:
 		fmt.Printf("  %s\n", entry.Name)
