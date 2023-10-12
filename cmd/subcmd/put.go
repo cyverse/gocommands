@@ -173,12 +173,12 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 					if targetEntry.Size == sourceStat.Size() {
 						if len(targetEntry.CheckSum) > 0 {
 							// compare hash
-							md5hash, err := commons.HashLocalFileMD5(sourcePath)
+							hash, err := commons.HashLocalFile(sourcePath, targetEntry.CheckSumAlgorithm)
 							if err != nil {
 								return xerrors.Errorf("failed to get hash for %s: %w", sourcePath, err)
 							}
 
-							if md5hash == targetEntry.CheckSum {
+							if hash == targetEntry.CheckSum {
 								fmt.Printf("skip uploading a file %s. The file with the same hash already exists!\n", targetFilePath)
 								return nil
 							}

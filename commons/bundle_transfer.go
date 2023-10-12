@@ -254,18 +254,18 @@ func (manager *BundleTransferManager) Schedule(source string, size int64, lastMo
 				if targetEntry.Size == size {
 					if len(targetEntry.CheckSum) > 0 {
 						// compare hash
-						md5hash, err := HashLocalFileMD5(source)
+						hash, err := HashLocalFile(source, targetEntry.CheckSumAlgorithm)
 						if err != nil {
 							return xerrors.Errorf("failed to get hash %s: %w", source, err)
 						}
 
-						if md5hash == targetEntry.CheckSum {
+						if hash == targetEntry.CheckSum {
 							fmt.Printf("skip adding a file %s to the bundle. The file with the same hash already exists!\n", source)
 							logger.Debugf("skip adding a file %s to the bundle. The file with the same hash already exists!", source)
 							return nil
 						}
 
-						logger.Debugf("adding a file %s to the bundle as it has different hash, %s vs %s", source, md5hash, targetEntry.CheckSum)
+						logger.Debugf("adding a file %s to the bundle as it has different hash, %s vs %s (alg %s)", source, hash, targetEntry.CheckSum, targetEntry.CheckSumAlgorithm)
 					} else {
 						logger.Debugf("adding a file %s to the bundle as the file in iRODS doesn't have hash yet", source)
 					}

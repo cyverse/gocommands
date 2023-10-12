@@ -170,12 +170,12 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 					if targetEntry.Size() == sourceEntry.Size {
 						if len(sourceEntry.CheckSum) > 0 {
 							// compare hash
-							md5hash, err := commons.HashLocalFileMD5(targetFilePath)
+							hash, err := commons.HashLocalFile(targetFilePath, sourceEntry.CheckSumAlgorithm)
 							if err != nil {
 								return xerrors.Errorf("failed to get hash of %s: %w", targetFilePath, err)
 							}
 
-							if sourceEntry.CheckSum == md5hash {
+							if sourceEntry.CheckSum == hash {
 								fmt.Printf("skip downloading a data object %s. The file with the same hash already exists!\n", targetFilePath)
 								return nil
 							}
