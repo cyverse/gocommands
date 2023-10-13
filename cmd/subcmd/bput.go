@@ -135,7 +135,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		commons.CleanUpOldIRODSBundles(filesystem, bundleTempFlagValues.IRODSTempPath, false, true)
 	}
 
-	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, bundleConfigFlagValues.MaxFileNum, bundleConfigFlagValues.MaxFileSize, parallelTransferFlagValues.SingleTread, parallelTransferFlagValues.ThreadNumber, bundleTempFlagValues.LocalTempPath, bundleTempFlagValues.IRODSTempPath, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash, progressFlagValues.ShowProgress)
+	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, bundleConfigFlagValues.MaxFileNum, bundleConfigFlagValues.MaxFileSize, parallelTransferFlagValues.SingleTread, parallelTransferFlagValues.ThreadNumber, bundleTempFlagValues.LocalTempPath, bundleTempFlagValues.IRODSTempPath, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash, bundleConfigFlagValues.NoBulkRegistration, progressFlagValues.ShowProgress)
 	bundleTransferManager.Start()
 
 	bundleRootPath, err := commons.GetCommonRootLocalDirPath(sourcePaths)

@@ -18,9 +18,10 @@ type BundleClearFlagVlaues struct {
 }
 
 type BundleConfigFlagValues struct {
-	MaxFileNum       int
-	MaxFileSize      int64
-	maxFileSizeInput string
+	MaxFileNum         int
+	MaxFileSize        int64
+	NoBulkRegistration bool
+	maxFileSizeInput   string
 }
 
 var (
@@ -49,6 +50,7 @@ func GetBundleClearFlagValues() *BundleClearFlagVlaues {
 func SetBundleConfigFlags(command *cobra.Command) {
 	command.Flags().IntVar(&bundleConfigFlagValues.MaxFileNum, "max_file_num", commons.MaxBundleFileNumDefault, "Specify max file number in a bundle file")
 	command.Flags().StringVar(&bundleConfigFlagValues.maxFileSizeInput, "max_file_size", strconv.FormatInt(commons.MaxBundleFileSizeDefault, 10), "Specify max file size of a bundle file")
+	command.Flags().BoolVar(&bundleConfigFlagValues.NoBulkRegistration, "no_bulk_reg", false, "Disable bulk registration")
 }
 
 func GetBundleConfigFlagValues() *BundleConfigFlagValues {

@@ -66,7 +66,7 @@ func processBunCommand(command *cobra.Command, args []string) error {
 	targetPath := args[len(args)-1]
 	for _, sourcePath := range args[:len(args)-1] {
 		if bundleFlagValues.Extract {
-			err = extractOne(filesystem, sourcePath, targetPath, bundleFlagValues.DataType, forceFlagValues.Force)
+			err = extractOne(filesystem, sourcePath, targetPath, bundleFlagValues.DataType, forceFlagValues.Force, bundleFlagValues.BulkRegistration)
 			if err != nil {
 				return xerrors.Errorf("failed to perform bun %s to %s: %w", sourcePath, targetPath, err)
 			}
@@ -108,7 +108,7 @@ func getDataType(irodsPath string, dataType string) (irodsclient_types.DataType,
 	}
 }
 
-func extractOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, dataType string, force bool) error {
+func extractOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, dataType string, force bool, bulkReg bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "extractOne",
@@ -145,7 +145,7 @@ func extractOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, target
 			return xerrors.Errorf("failed to get type %s: %w", sourcePath, err)
 		}
 
-		err = filesystem.ExtractStructFile(sourcePath, targetPath, "", dt, force)
+		err = filesystem.ExtractStructFile(sourcePath, targetPath, "", dt, force, bulkReg)
 		if err != nil {
 			return xerrors.Errorf("failed to extract file %s to %s: %w", sourcePath, targetPath, err)
 		}

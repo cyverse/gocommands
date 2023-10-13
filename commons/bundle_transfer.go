@@ -108,6 +108,7 @@ type BundleTransferManager struct {
 	makeIrodsTempDirPath    bool
 	differentFilesOnly      bool
 	noHashForComparison     bool
+	noBulkRegistration      bool
 	showProgress            bool
 	progressWriter          progress.Writer
 	progressTrackers        map[string]*progress.Tracker
@@ -120,7 +121,7 @@ type BundleTransferManager struct {
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
-func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, singleThreaded bool, uploadThreadNum int, localTempDirPath string, irodsTempDirPath string, diff bool, noHash bool, showProgress bool) *BundleTransferManager {
+func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, singleThreaded bool, uploadThreadNum int, localTempDirPath string, irodsTempDirPath string, diff bool, noHash bool, noBulkReg bool, showProgress bool) *BundleTransferManager {
 	manager := &BundleTransferManager{
 		id:                      xid.New().String(),
 		filesystem:              fs,
@@ -138,6 +139,7 @@ func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath strin
 		makeIrodsTempDirPath:    false,
 		differentFilesOnly:      diff,
 		noHashForComparison:     noHash,
+		noBulkRegistration:      noBulkReg,
 		showProgress:            showProgress,
 		progressWriter:          nil,
 		progressTrackers:        map[string]*progress.Tracker{},
@@ -987,7 +989,7 @@ func (manager *BundleTransferManager) processBundleExtract(bundle *Bundle) error
 		return nil
 	}
 
-	err := manager.filesystem.ExtractStructFile(bundle.irodsBundlePath, manager.irodsDestPath, "", types.TAR_FILE_DT, true)
+	err := manager.filesystem.ExtractStructFile(bundle.irodsBundlePath, manager.irodsDestPath, "", types.TAR_FILE_DT, true, !manager.noBulkRegistration)
 	if err != nil {
 		if manager.showProgress {
 			manager.progress(progressName, -1, totalFileNum, progress.UnitsDefault, true)
