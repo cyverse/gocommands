@@ -13,6 +13,8 @@ import (
 )
 
 func MakeIRODSPath(cwd string, homedir string, zone string, irodsPath string) string {
+	irodsPath = strings.TrimPrefix(irodsPath, "i:")
+
 	if strings.HasPrefix(irodsPath, fmt.Sprintf("/%s/~", zone)) {
 		// compat to icommands
 		// relative path from user's home

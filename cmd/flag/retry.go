@@ -15,7 +15,7 @@ var (
 )
 
 func SetRetryFlags(command *cobra.Command) {
-	command.Flags().IntVar(&retryFlagValues.RetryNumber, "retry", 1, "Retry if fails")
+	command.Flags().IntVar(&retryFlagValues.RetryNumber, "retry", 0, "Retry if fails")
 	command.Flags().IntVar(&retryFlagValues.RetryIntervalSeconds, "retry_interval", 60, "Retry interval in seconds")
 
 	// this is hidden

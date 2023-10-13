@@ -1,9 +1,12 @@
 package subcmd
 
 import (
+	"os"
 	"strings"
 
 	"github.com/cyverse/gocommands/cmd/flag"
+	"github.com/cyverse/gocommands/commons"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
 )
@@ -34,6 +37,31 @@ func AddSyncCommand(rootCmd *cobra.Command) {
 }
 
 func processSyncCommand(command *cobra.Command, args []string) error {
+	cont, err := flag.ProcessCommonFlags(command)
+	if err != nil {
+		return xerrors.Errorf("failed to process common flags: %w", err)
+	}
+
+	if !cont {
+		return nil
+	}
+
+	// handle local flags
+	_, err = commons.InputMissingFields()
+	if err != nil {
+		return xerrors.Errorf("failed to input missing fields: %w", err)
+	}
+
+	retryFlagValues := flag.GetRetryFlagValues()
+
+	if retryFlagValues.RetryNumber > 0 && !retryFlagValues.RetryChild {
+		err = commons.RunWithRetry(retryFlagValues.RetryNumber, retryFlagValues.RetryIntervalSeconds)
+		if err != nil {
+			return xerrors.Errorf("failed to run with retry %d: %w", retryFlagValues.RetryNumber, err)
+		}
+		return nil
+	}
+
 	targetPath := args[len(args)-1]
 	sourcePaths := args[:len(args)-1]
 
@@ -57,7 +85,7 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 
 		// local to iRODS
 		// target must starts with "i:"
-		err := syncFromLocalToIRODS(command, localSources, targetPath[2:])
+		err := syncFromLocalToIRODS(command)
 		if err != nil {
 			return xerrors.Errorf("failed to perform sync (from local to iRODS): %w", err)
 		}
@@ -83,29 +111,128 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func syncFromLocalToIRODS(command *cobra.Command, sourcePaths []string, targetPath string) error {
-	newArgs := []string{}
-	newArgs = append(newArgs, sourcePaths...)
-	newArgs = append(newArgs, targetPath)
+func syncFromLocalToIRODS(command *cobra.Command) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "syncFromLocalToIRODS",
+	})
 
-	// pass to bput
-	return processBputCommand(command, newArgs)
+	newArgs := []string{}
+
+	commandName := command.CalledAs()
+	commandIdx := -1
+
+	osArgs := os.Args[1:]
+	for argIdx, arg := range osArgs {
+		if arg == commandName {
+			commandIdx = argIdx
+			break
+		}
+	}
+
+	if commandIdx < 0 {
+		return xerrors.Errorf("failed to find command location")
+	}
+
+	newArgs = append(newArgs, osArgs[:commandIdx]...)
+	newArgs = append(newArgs, "--diff")
+	newArgs = append(newArgs, osArgs[commandIdx+1:]...)
+
+	// filter out retry flag
+	newArgs2 := []string{}
+	for _, arg := range newArgs {
+		if arg != "--retry_child" {
+			newArgs2 = append(newArgs2, arg)
+		}
+	}
+
+	// run bput
+	logger.Debugf("run bput with args: %v", newArgs2)
+	bputCmd.ParseFlags(newArgs2)
+	argWoFlags := bputCmd.Flags().Args()
+	return bputCmd.RunE(bputCmd, argWoFlags)
 }
 
 func syncFromIRODSToIRODS(command *cobra.Command, sourcePaths []string, targetPath string) error {
-	newArgs := []string{}
-	newArgs = append(newArgs, sourcePaths...)
-	newArgs = append(newArgs, targetPath)
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "syncFromIRODSToIRODS",
+	})
 
-	// pass to cp
-	return processCpCommand(command, newArgs)
+	newArgs := []string{}
+
+	commandName := command.CalledAs()
+	commandIdx := -1
+
+	osArgs := os.Args[1:]
+	for argIdx, arg := range osArgs {
+		if arg == commandName {
+			commandIdx = argIdx
+			break
+		}
+	}
+
+	if commandIdx < 0 {
+		return xerrors.Errorf("failed to find command location")
+	}
+
+	newArgs = append(newArgs, osArgs[:commandIdx]...)
+	newArgs = append(newArgs, "--diff")
+	newArgs = append(newArgs, osArgs[commandIdx+1:]...)
+
+	// filter out retry flag
+	newArgs2 := []string{}
+	for _, arg := range newArgs {
+		if arg != "--retry_child" {
+			newArgs2 = append(newArgs2, arg)
+		}
+	}
+
+	// run bput
+	logger.Debugf("run cp with args: %v", newArgs2)
+	cpCmd.ParseFlags(newArgs2)
+	argWoFlags := cpCmd.Flags().Args()
+	return cpCmd.RunE(cpCmd, argWoFlags)
 }
 
 func syncFromIRODSToLocal(command *cobra.Command, sourcePaths []string, targetPath string) error {
-	newArgs := []string{}
-	newArgs = append(newArgs, sourcePaths...)
-	newArgs = append(newArgs, targetPath)
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "syncFromIRODSToLocal",
+	})
 
-	// pass to get
-	return processGetCommand(command, newArgs)
+	newArgs := []string{}
+
+	commandName := command.CalledAs()
+	commandIdx := -1
+
+	osArgs := os.Args[1:]
+	for argIdx, arg := range osArgs {
+		if arg == commandName {
+			commandIdx = argIdx
+			break
+		}
+	}
+
+	if commandIdx < 0 {
+		return xerrors.Errorf("failed to find command location")
+	}
+
+	newArgs = append(newArgs, osArgs[:commandIdx]...)
+	newArgs = append(newArgs, "--diff")
+	newArgs = append(newArgs, osArgs[commandIdx+1:]...)
+
+	// filter out retry flag
+	newArgs2 := []string{}
+	for _, arg := range newArgs {
+		if arg != "--retry_child" {
+			newArgs2 = append(newArgs2, arg)
+		}
+	}
+
+	// run bput
+	logger.Debugf("run get with args: %v", newArgs2)
+	getCmd.ParseFlags(newArgs2)
+	argWoFlags := getCmd.Flags().Args()
+	return getCmd.RunE(getCmd, argWoFlags)
 }

@@ -269,6 +269,8 @@ func (manager *BundleTransferManager) Schedule(source string, size int64, lastMo
 					} else {
 						logger.Debugf("adding a file %s to the bundle as the file in iRODS doesn't have hash yet", source)
 					}
+				} else {
+					logger.Debugf("adding a file %s to the bundle as it has different size %d != %d", source, targetEntry.Size, size)
 				}
 			}
 		} else {

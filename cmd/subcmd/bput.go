@@ -72,7 +72,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		commons.CleanUpOldLocalBundles(bundleTempFlagValues.LocalTempPath, true)
 	}
 
-	if retryFlagValues.RetryNumber > 1 && !retryFlagValues.RetryChild {
+	if retryFlagValues.RetryNumber > 0 && !retryFlagValues.RetryChild {
 		err = commons.RunWithRetry(retryFlagValues.RetryNumber, retryFlagValues.RetryIntervalSeconds)
 		if err != nil {
 			return xerrors.Errorf("failed to run with retry %d: %w", retryFlagValues.RetryNumber, err)
