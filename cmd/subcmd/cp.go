@@ -118,7 +118,13 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
 		// file
 		targetFilePath := commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetPath)
-		exist := commons.ExistsIRODSFile(filesystem, targetFilePath)
+		targetDirPath := commons.GetDir(targetFilePath)
+		_, err := commons.StatIRODSPath(filesystem, targetDirPath)
+		if err != nil {
+			return xerrors.Errorf("failed to stat dir %s: %w", targetDirPath, err)
+		}
+
+		fileExist := commons.ExistsIRODSFile(filesystem, targetFilePath)
 
 		copyTask := func(job *commons.ParallelJob) error {
 			manager := job.GetManager()
@@ -138,7 +144,7 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 			return nil
 		}
 
-		if exist {
+		if fileExist {
 			targetEntry, err := commons.StatIRODSPath(filesystem, targetFilePath)
 			if err != nil {
 				return xerrors.Errorf("failed to stat %s: %w", targetFilePath, err)

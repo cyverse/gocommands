@@ -69,28 +69,42 @@ func MakeTargetLocalFilePath(source string, target string) string {
 	return target
 }
 
-func GetFileExtension(path string) string {
-	base := GetBasename(path)
+func GetFileExtension(p string) string {
+	base := GetBasename(p)
 
 	idx := strings.Index(base, ".")
 	if idx >= 0 {
-		return path[idx:]
+		return p[idx:]
 	}
-	return path
+	return p
 }
 
-func GetBasename(path string) string {
-	idx1 := strings.LastIndex(path, string(os.PathSeparator))
-	idx2 := strings.LastIndex(path, "/")
+func GetBasename(p string) string {
+	idx1 := strings.LastIndex(p, string(os.PathSeparator))
+	idx2 := strings.LastIndex(p, "/")
 
 	if idx1 < 0 && idx2 < 0 {
-		return path
+		return p
 	}
 
 	if idx1 >= idx2 {
-		return path[idx1+1:]
+		return p[idx1+1:]
 	}
-	return path[idx2+1:]
+	return p[idx2+1:]
+}
+
+func GetDir(p string) string {
+	idx1 := strings.LastIndex(p, string(os.PathSeparator))
+	idx2 := strings.LastIndex(p, "/")
+
+	if idx1 < 0 && idx2 < 0 {
+		return "/"
+	}
+
+	if idx1 >= idx2 {
+		return p[:idx1]
+	}
+	return p[:idx2]
 }
 
 // GetParentLocalDirs returns all parent dirs

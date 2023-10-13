@@ -128,7 +128,13 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 	if !sourceStat.IsDir() {
 		// file
 		targetFilePath := commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetPath)
-		exist := commons.ExistsIRODSFile(filesystem, targetFilePath)
+		targetDirPath := commons.GetDir(targetFilePath)
+		_, err := commons.StatIRODSPath(filesystem, targetDirPath)
+		if err != nil {
+			return xerrors.Errorf("failed to stat dir %s: %w", targetDirPath, err)
+		}
+
+		fileExist := commons.ExistsIRODSFile(filesystem, targetFilePath)
 
 		putTask := func(job *commons.ParallelJob) error {
 			manager := job.GetManager()
@@ -157,7 +163,7 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 			return nil
 		}
 
-		if exist {
+		if fileExist {
 			targetEntry, err := commons.StatIRODSPath(filesystem, targetFilePath)
 			if err != nil {
 				return xerrors.Errorf("failed to stat %s: %w", targetFilePath, err)
@@ -218,6 +224,11 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 		logger.Debugf("scheduled a local file upload %s to %s", sourcePath, targetFilePath)
 	} else {
 		// dir
+		_, err := commons.StatIRODSPath(filesystem, targetPath)
+		if err != nil {
+			return xerrors.Errorf("failed to stat dir %s: %w", targetPath, err)
+		}
+
 		logger.Debugf("uploading a local directory %s to %s", sourcePath, targetPath)
 
 		entries, err := os.ReadDir(sourcePath)

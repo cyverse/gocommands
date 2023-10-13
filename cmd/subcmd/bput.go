@@ -102,6 +102,11 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
+	_, err = commons.StatIRODSPath(filesystem, targetPath)
+	if err != nil {
+		return xerrors.Errorf("failed to stat dir %s: %w", targetPath, err)
+	}
+
 	logger.Info("determining staging dir...")
 	if len(bundleTempFlagValues.IRODSTempPath) > 0 {
 		logger.Debugf("validating staging dir - %s", bundleTempFlagValues.IRODSTempPath)

@@ -104,10 +104,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Failed to establish a connection to iRODS server!\n")
 		} else if irodsclient_types.IsAuthError(err) {
 			fmt.Fprintf(os.Stderr, "Authentication failed!\n")
-		} else {
-			fmt.Fprintf(os.Stderr, "Error: %s\nError Trace:\n  - %+v\n", err.Error(), err)
+		} else if irodsclient_types.IsFileNotFoundError(err) {
+			fmt.Fprintf(os.Stderr, "File or dir not found!\n")
 		}
 
+		fmt.Fprintf(os.Stderr, "\nError Trace:\n  - %+v\n", err)
 		os.Exit(1)
 	}
 }

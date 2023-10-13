@@ -126,6 +126,11 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
 		targetFilePath := commons.MakeTargetLocalFilePath(sourcePath, targetPath)
+		targetDirPath := commons.GetDir(targetFilePath)
+		_, err := os.Stat(targetDirPath)
+		if err != nil {
+			return xerrors.Errorf("failed to stat dir %s: %w", targetDirPath, err)
+		}
 
 		exist := false
 		targetEntry, err := os.Stat(targetFilePath)
@@ -215,6 +220,11 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 		logger.Debugf("scheduled a data object download %s to %s", sourcePath, targetFilePath)
 	} else {
 		// dir
+		_, err := os.Stat(targetPath)
+		if err != nil {
+			return xerrors.Errorf("failed to stat dir %s: %w", targetPath, err)
+		}
+
 		logger.Debugf("downloading a collection %s to %s", sourcePath, targetPath)
 
 		entries, err := commons.ListIRODSDir(filesystem, sourceEntry.Path)
