@@ -101,7 +101,9 @@ func main() {
 	if err != nil {
 		logger.Errorf("%+v", err)
 
-		if irodsclient_types.IsConnectionConfigError(err) {
+		if os.IsNotExist(err) {
+			fmt.Fprintf(os.Stderr, "File or dir not found!\n")
+		} else if irodsclient_types.IsConnectionConfigError(err) {
 			var connectionConfigError *irodsclient_types.ConnectionConfigError
 			if errors.As(err, &connectionConfigError) {
 				fmt.Fprintf(os.Stderr, "Failed to establish a connection to iRODS server (host: '%s', port: '%d')!\n", connectionConfigError.Config.Host, connectionConfigError.Config.Port)

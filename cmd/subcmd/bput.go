@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
@@ -176,6 +177,10 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string, ta
 
 	sourceStat, err := os.Stat(sourcePath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return irodsclient_types.NewFileNotFoundError(sourcePath)
+		}
+
 		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
 

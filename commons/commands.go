@@ -450,6 +450,9 @@ func LoadConfigFromFile(configPath string) error {
 	// check if it is a file or a dir
 	_, err = os.Stat(configPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return irodsclient_types.NewFileNotFoundError(configPath)
+		}
 		return xerrors.Errorf("failed to stat %s: %w", configPath, err)
 	}
 

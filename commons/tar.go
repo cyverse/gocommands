@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"golang.org/x/xerrors"
 )
 
@@ -31,6 +32,10 @@ func Tar(baseDir string, sources []string, target string, callback TrackerCallBa
 	for _, source := range sources {
 		sourceStat, err := os.Stat(source)
 		if err != nil {
+			if os.IsNotExist(err) {
+				return irodsclient_types.NewFileNotFoundError(source)
+			}
+
 			return xerrors.Errorf("failed to stat %s: %w", source, err)
 		}
 
@@ -69,6 +74,10 @@ func makeTar(entries []*TarEntry, target string, callback TrackerCallBack) error
 	for _, entry := range entries {
 		sourceStat, err := os.Stat(entry.source)
 		if err != nil {
+			if os.IsNotExist(err) {
+				return irodsclient_types.NewFileNotFoundError(entry.source)
+			}
+
 			return xerrors.Errorf("failed to stat %s: %w", entry.source, err)
 		}
 
@@ -94,6 +103,10 @@ func makeTar(entries []*TarEntry, target string, callback TrackerCallBack) error
 	for _, entry := range entries {
 		sourceStat, err := os.Stat(entry.source)
 		if err != nil {
+			if os.IsNotExist(err) {
+				return irodsclient_types.NewFileNotFoundError(entry.source)
+			}
+
 			return xerrors.Errorf("failed to stat %s: %w", entry.source, err)
 		}
 

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"golang.org/x/xerrors"
 )
 
@@ -202,6 +203,10 @@ func GetCommonRootLocalDirPathForSync(paths []string) (string, error) {
 	commonRoot := commonPrefix(filepath.Separator, absPaths...)
 	commonRootStat, err := os.Stat(commonRoot)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return "", irodsclient_types.NewFileNotFoundError(commonRoot)
+		}
+
 		return "", xerrors.Errorf("failed to stat %s: %w", commonRoot, err)
 	}
 

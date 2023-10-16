@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
@@ -129,6 +130,10 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 		targetDirPath := commons.GetDir(targetFilePath)
 		_, err := os.Stat(targetDirPath)
 		if err != nil {
+			if os.IsNotExist(err) {
+				return irodsclient_types.NewFileNotFoundError(targetDirPath)
+			}
+
 			return xerrors.Errorf("failed to stat dir %s: %w", targetDirPath, err)
 		}
 
@@ -222,6 +227,10 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 		// dir
 		_, err := os.Stat(targetPath)
 		if err != nil {
+			if os.IsNotExist(err) {
+				return irodsclient_types.NewFileNotFoundError(targetPath)
+			}
+
 			return xerrors.Errorf("failed to stat dir %s: %w", targetPath, err)
 		}
 
