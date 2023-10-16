@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -100,12 +101,43 @@ func main() {
 	if err != nil {
 		logger.Errorf("%+v", err)
 
-		if irodsclient_types.IsConnectionConfigError(err) || irodsclient_types.IsConnectionError(err) {
+		if irodsclient_types.IsConnectionConfigError(err) {
+			var connectionConfigError *irodsclient_types.ConnectionConfigError
+			if errors.As(err, &connectionConfigError) {
+				fmt.Fprintf(os.Stderr, "Failed to establish a connection to iRODS server (host: '%s', port: '%d')!\n", connectionConfigError.Config.Host, connectionConfigError.Config.Port)
+			} else {
+				fmt.Fprintf(os.Stderr, "Failed to establish a connection to iRODS server!\n")
+			}
+		} else if irodsclient_types.IsConnectionError(err) {
 			fmt.Fprintf(os.Stderr, "Failed to establish a connection to iRODS server!\n")
 		} else if irodsclient_types.IsAuthError(err) {
-			fmt.Fprintf(os.Stderr, "Authentication failed!\n")
+			var authError *irodsclient_types.AuthError
+			if errors.As(err, &authError) {
+				fmt.Fprintf(os.Stderr, "Authentication failed (auth scheme: '%s', username: '%s', zone: '%s')!\n", authError.Config.AuthenticationScheme, authError.Config.ClientUser, authError.Config.ClientZone)
+			} else {
+				fmt.Fprintf(os.Stderr, "Authentication failed!\n")
+			}
 		} else if irodsclient_types.IsFileNotFoundError(err) {
-			fmt.Fprintf(os.Stderr, "File or dir not found!\n")
+			var fileNotFoundError *irodsclient_types.FileNotFoundError
+			if errors.As(err, &fileNotFoundError) {
+				fmt.Fprintf(os.Stderr, "File or dir '%s' not found!\n", fileNotFoundError.Path)
+			} else {
+				fmt.Fprintf(os.Stderr, "File or dir not found!\n")
+			}
+		} else if irodsclient_types.IsCollectionNotEmptyError(err) {
+			var collectionNotEmptyError *irodsclient_types.CollectionNotEmptyError
+			if errors.As(err, &collectionNotEmptyError) {
+				fmt.Fprintf(os.Stderr, "Dir '%s' not empty!\n", collectionNotEmptyError.Path)
+			} else {
+				fmt.Fprintf(os.Stderr, "Dir not empty!\n")
+			}
+		} else if irodsclient_types.IsIRODSError(err) {
+			var irodsError *irodsclient_types.IRODSError
+			if errors.As(err, &irodsError) {
+				fmt.Fprintf(os.Stderr, "iRODS Error: %s\n", irodsError.Error())
+			} else {
+				fmt.Fprintf(os.Stderr, "iRODS Error!\n")
+			}
 		}
 
 		fmt.Fprintf(os.Stderr, "\nError Trace:\n  - %+v\n", err)
