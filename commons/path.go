@@ -216,30 +216,30 @@ func GetCommonRootLocalDirPathForSync(paths []string) (string, error) {
 	return filepath.Dir(commonRoot), nil
 }
 
-func ExpandHomeDir(path string) (string, error) {
+func ExpandHomeDir(p string) (string, error) {
 	// resolve "~/"
-	if path == "~" {
+	if p == "~" {
 		homedir, err := os.UserHomeDir()
 		if err != nil {
 			return "", xerrors.Errorf("failed to get user home dir: %w", err)
 		}
 
 		return homedir, nil
-	} else if strings.HasPrefix(path, "~/") {
+	} else if strings.HasPrefix(p, "~/") {
 		homedir, err := os.UserHomeDir()
 		if err != nil {
 			return "", xerrors.Errorf("failed to get user home dir: %w", err)
 		}
 
-		path = filepath.Join(homedir, path[2:])
-		return filepath.Clean(path), nil
+		p = filepath.Join(homedir, p[2:])
+		return filepath.Clean(p), nil
 	}
 
-	return path, nil
+	return p, nil
 }
 
-func ExistFile(path string) bool {
-	st, err := os.Stat(path)
+func ExistFile(p string) bool {
+	st, err := os.Stat(p)
 	if err != nil {
 		return false
 	}
