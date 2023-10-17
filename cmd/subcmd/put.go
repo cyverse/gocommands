@@ -153,9 +153,9 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 
 			logger.Debugf("uploading a file %s to %s", sourcePath, targetFilePath)
 			if singleThreaded {
-				err = fs.UploadFile(sourcePath, targetFilePath, "", false, callbackPut)
+				err = fs.UploadFile(sourcePath, targetFilePath, "", true, callbackPut)
 			} else {
-				err = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, false, callbackPut)
+				err = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, true, callbackPut)
 			}
 
 			if err != nil {
@@ -196,30 +196,14 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 						}
 					}
 				}
-
-				logger.Debugf("deleting an existing data object %s", targetFilePath)
-				err := filesystem.RemoveFile(targetFilePath, true)
-				if err != nil {
-					return xerrors.Errorf("failed to remove %s: %w", targetFilePath, err)
-				}
-			} else if force {
-				logger.Debugf("deleting an existing data object %s", targetFilePath)
-				err := filesystem.RemoveFile(targetFilePath, true)
-				if err != nil {
-					return xerrors.Errorf("failed to remove %s: %w", targetFilePath, err)
-				}
 			} else {
-				// ask
-				overwrite := commons.InputYN(fmt.Sprintf("file %s already exists. Overwrite?", targetFilePath))
-				if overwrite {
-					logger.Debugf("deleting an existing data object %s", targetFilePath)
-					err := filesystem.RemoveFile(targetFilePath, true)
-					if err != nil {
-						return xerrors.Errorf("failed to remove %s: %w", targetFilePath, err)
+				if !force {
+					// ask
+					overwrite := commons.InputYN(fmt.Sprintf("file %s already exists. Overwrite?", targetFilePath))
+					if !overwrite {
+						fmt.Printf("skip uploading a file %s. The data object already exists!\n", targetFilePath)
+						return nil
 					}
-				} else {
-					fmt.Printf("skip uploading a file %s. The data object already exists!\n", targetFilePath)
-					return nil
 				}
 			}
 		}

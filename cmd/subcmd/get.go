@@ -192,30 +192,14 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 						}
 					}
 				}
-
-				logger.Debugf("deleting an existing file %s", targetFilePath)
-				err := os.Remove(targetFilePath)
-				if err != nil {
-					return xerrors.Errorf("failed to remove %s: %w", targetFilePath, err)
-				}
-			} else if force {
-				logger.Debugf("deleting an existing file %s", targetFilePath)
-				err := os.Remove(targetFilePath)
-				if err != nil {
-					return xerrors.Errorf("failed to remove %s: %w", targetFilePath, err)
-				}
 			} else {
-				// ask
-				overwrite := commons.InputYN(fmt.Sprintf("file %s already exists. Overwrite?", targetFilePath))
-				if overwrite {
-					logger.Debugf("deleting an existing file %s", targetFilePath)
-					err := os.Remove(targetFilePath)
-					if err != nil {
-						return xerrors.Errorf("failed to remove %s: %w", targetFilePath, err)
+				if !force {
+					// ask
+					overwrite := commons.InputYN(fmt.Sprintf("file %s already exists. Overwrite?", targetFilePath))
+					if !overwrite {
+						fmt.Printf("skip downloading a data object %s. The file already exists!\n", targetFilePath)
+						return nil
 					}
-				} else {
-					fmt.Printf("skip downloading a data object %s. The file already exists!\n", targetFilePath)
-					return nil
 				}
 			}
 		}
