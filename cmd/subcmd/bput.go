@@ -33,6 +33,7 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	flag.SetProgressFlags(bputCmd)
 	flag.SetRetryFlags(bputCmd)
 	flag.SetDifferentialTransferFlags(bputCmd, true)
+	flag.SetNoRootFlags(bputCmd)
 
 	rootCmd.AddCommand(bputCmd)
 }
@@ -65,6 +66,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	progressFlagValues := flag.GetProgressFlagValues()
 	retryFlagValues := flag.GetRetryFlagValues()
 	differentialTransferFlagValues := flag.GetDifferentialTransferFlagValues()
+	noRootFlagValues := flag.GetNoRootFlagValues()
 
 	maxConnectionNum := parallelTransferFlagValues.ThreadNumber + 2 + 2 // 2 for metadata op, 2 for extraction
 
@@ -96,6 +98,10 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	if len(args) >= 2 {
 		targetPath = args[len(args)-1]
 		sourcePaths = args[:len(args)-1]
+	}
+
+	if noRootFlagValues.NoRoot && len(sourcePaths) > 1 {
+		return xerrors.Errorf("failed to put multiple source dirs without creating root directory")
 	}
 
 	cwd := commons.GetCWD()
@@ -144,12 +150,21 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	bundleTransferManager := commons.NewBundleTransferManager(filesystem, targetPath, bundleConfigFlagValues.MaxFileNum, bundleConfigFlagValues.MaxFileSize, parallelTransferFlagValues.SingleTread, parallelTransferFlagValues.ThreadNumber, bundleTempFlagValues.LocalTempPath, bundleTempFlagValues.IRODSTempPath, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash, bundleConfigFlagValues.NoBulkRegistration, progressFlagValues.ShowProgress)
 	bundleTransferManager.Start()
 
-	bundleRootPath, err := commons.GetCommonRootLocalDirPath(sourcePaths)
-	if err != nil {
-		return xerrors.Errorf("failed to get common root dir for source paths: %w", err)
-	}
+	if noRootFlagValues.NoRoot && len(sourcePaths) == 1 {
+		bundleRootPath, err := commons.GetCommonRootLocalDirPathForSync(sourcePaths)
+		if err != nil {
+			return xerrors.Errorf("failed to get common root dir for source paths: %w", err)
+		}
 
-	bundleTransferManager.SetBundleRootPath(bundleRootPath)
+		bundleTransferManager.SetBundleRootPath(bundleRootPath)
+	} else {
+		bundleRootPath, err := commons.GetCommonRootLocalDirPath(sourcePaths)
+		if err != nil {
+			return xerrors.Errorf("failed to get common root dir for source paths: %w", err)
+		}
+
+		bundleTransferManager.SetBundleRootPath(bundleRootPath)
+	}
 
 	for _, sourcePath := range sourcePaths {
 		err = bputOne(bundleTransferManager, sourcePath, targetPath)

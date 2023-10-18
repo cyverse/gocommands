@@ -35,6 +35,7 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	flag.SetProgressFlags(getCmd)
 	flag.SetRetryFlags(getCmd)
 	flag.SetDifferentialTransferFlags(getCmd, true)
+	flag.SetNoRootFlags(getCmd)
 
 	rootCmd.AddCommand(getCmd)
 }
@@ -66,6 +67,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	progressFlagValues := flag.GetProgressFlagValues()
 	retryFlagValues := flag.GetRetryFlagValues()
 	differentialTransferFlagValues := flag.GetDifferentialTransferFlagValues()
+	noRootFlagValues := flag.GetNoRootFlagValues()
 
 	maxConnectionNum := parallelTransferFlagValues.ThreadNumber + 2 // 2 for metadata op
 
@@ -109,11 +111,15 @@ func processGetCommand(command *cobra.Command, args []string) error {
 		sourcePaths = args[:len(args)-1]
 	}
 
+	if noRootFlagValues.NoRoot && len(sourcePaths) > 1 {
+		return xerrors.Errorf("failed to get multiple source collections without creating root directory")
+	}
+
 	parallelJobManager := commons.NewParallelJobManager(filesystem, parallelTransferFlagValues.ThreadNumber, progressFlagValues.ShowProgress)
 	parallelJobManager.Start()
 
 	for _, sourcePath := range sourcePaths {
-		err = getOne(parallelJobManager, sourcePath, targetPath, forceFlagValues.Force, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash)
+		err = getOne(parallelJobManager, sourcePath, targetPath, forceFlagValues.Force, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash, noRootFlagValues.NoRoot)
 		if err != nil {
 			return xerrors.Errorf("failed to perform get %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -128,7 +134,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, targetPath string, force bool, diff bool, noHash bool) error {
+func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, targetPath string, force bool, diff bool, noHash bool, noRoot bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "getOne",
@@ -247,17 +253,20 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 			return xerrors.Errorf("failed to list dir %s: %w", sourceEntry.Path, err)
 		}
 
-		// make target dir
-		targetDir := filepath.Join(targetPath, sourceEntry.Name)
-		err = os.MkdirAll(targetDir, 0766)
-		if err != nil {
-			return xerrors.Errorf("failed to make dir %s: %w", targetDir, err)
+		targetDir := targetPath
+		if !noRoot {
+			// make target dir
+			targetDir = filepath.Join(targetPath, sourceEntry.Name)
+			err = os.MkdirAll(targetDir, 0766)
+			if err != nil {
+				return xerrors.Errorf("failed to make dir %s: %w", targetDir, err)
+			}
 		}
 
 		for idx := range entries {
 			path := entries[idx].Path
 
-			err = getOne(parallelJobManager, path, targetDir, force, diff, noHash)
+			err = getOne(parallelJobManager, path, targetDir, force, diff, noHash, false)
 			if err != nil {
 				return xerrors.Errorf("failed to perform get %s to %s: %w", path, targetDir, err)
 			}

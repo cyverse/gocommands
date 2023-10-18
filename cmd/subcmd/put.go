@@ -36,6 +36,7 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	flag.SetProgressFlags(putCmd)
 	flag.SetRetryFlags(putCmd)
 	flag.SetDifferentialTransferFlags(putCmd, true)
+	flag.SetNoRootFlags(putCmd)
 
 	rootCmd.AddCommand(putCmd)
 }
@@ -67,6 +68,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	progressFlagValues := flag.GetProgressFlagValues()
 	retryFlagValues := flag.GetRetryFlagValues()
 	differentialTransferFlagValues := flag.GetDifferentialTransferFlagValues()
+	noRootFlagValues := flag.GetNoRootFlagValues()
 
 	maxConnectionNum := parallelTransferFlagValues.ThreadNumber + 2 // 2 for metadata op
 
@@ -110,11 +112,15 @@ func processPutCommand(command *cobra.Command, args []string) error {
 		sourcePaths = args[:len(args)-1]
 	}
 
+	if noRootFlagValues.NoRoot && len(sourcePaths) > 1 {
+		return xerrors.Errorf("failed to put multiple source dirs without creating root directory")
+	}
+
 	parallelJobManager := commons.NewParallelJobManager(filesystem, parallelTransferFlagValues.ThreadNumber, progressFlagValues.ShowProgress)
 	parallelJobManager.Start()
 
 	for _, sourcePath := range sourcePaths {
-		err = putOne(parallelJobManager, sourcePath, targetPath, forceFlagValues.Force, parallelTransferFlagValues.SingleTread, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash)
+		err = putOne(parallelJobManager, sourcePath, targetPath, forceFlagValues.Force, parallelTransferFlagValues.SingleTread, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash, noRootFlagValues.NoRoot)
 		if err != nil {
 			return xerrors.Errorf("failed to perform put %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -129,7 +135,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, targetPath string, force bool, singleThreaded bool, diff bool, noHash bool) error {
+func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, targetPath string, force bool, singleThreaded bool, diff bool, noHash bool, noRoot bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "putOne",
@@ -247,16 +253,19 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 			return xerrors.Errorf("failed to read dir %s: %w", sourcePath, err)
 		}
 
-		// make target dir
-		targetDir := path.Join(targetPath, filepath.Base(sourcePath))
-		err = filesystem.MakeDir(targetDir, true)
-		if err != nil {
-			return xerrors.Errorf("failed to make dir %s: %w", targetDir, err)
+		targetDir := targetPath
+		if !noRoot {
+			// make target dir
+			targetDir := path.Join(targetPath, filepath.Base(sourcePath))
+			err = filesystem.MakeDir(targetDir, true)
+			if err != nil {
+				return xerrors.Errorf("failed to make dir %s: %w", targetDir, err)
+			}
 		}
 
 		for _, entryInDir := range entries {
 			newSourcePath := filepath.Join(sourcePath, entryInDir.Name())
-			err = putOne(parallelJobManager, newSourcePath, targetDir, force, singleThreaded, diff, noHash)
+			err = putOne(parallelJobManager, newSourcePath, targetDir, force, singleThreaded, diff, noHash, false)
 			if err != nil {
 				return xerrors.Errorf("failed to perform put %s to %s: %w", newSourcePath, targetDir, err)
 			}
