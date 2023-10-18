@@ -11,6 +11,7 @@ import (
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/dustin/go-humanize"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
 )
@@ -29,11 +30,17 @@ func AddLsCommand(rootCmd *cobra.Command) {
 	flag.SetCommonFlags(lsCmd)
 
 	flag.SetListFlags(lsCmd)
+	flag.SetTicketAccessFlags(lsCmd)
 
 	rootCmd.AddCommand(lsCmd)
 }
 
 func processLsCommand(command *cobra.Command, args []string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "processLsCommand",
+	})
+
 	cont, err := flag.ProcessCommonFlags(command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
@@ -49,7 +56,23 @@ func processLsCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
+	ticketAccessFlagValues := flag.GetTicketAccessFlagValues()
 	listFlagValues := flag.GetListFlagValues()
+
+	appConfig := commons.GetConfig()
+	syncAccount := false
+	if len(ticketAccessFlagValues.Name) > 0 {
+		logger.Debugf("use ticket: %s", ticketAccessFlagValues.Name)
+		appConfig.Ticket = ticketAccessFlagValues.Name
+		syncAccount = true
+	}
+
+	if syncAccount {
+		err := commons.SyncAccount()
+		if err != nil {
+			return err
+		}
+	}
 
 	// Create a file system
 	account := commons.GetAccount()

@@ -10,6 +10,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type TicketAccessFlagValues struct {
+	Name string
+}
+
 type TicketFlagValues struct {
 	Name      string
 	typeInput string
@@ -39,9 +43,18 @@ type TicketUpdateFlagValues struct {
 }
 
 var (
+	ticketAccessFlagValues TicketAccessFlagValues
 	ticketFlagValues       TicketFlagValues
 	ticketUpdateFlagValues TicketUpdateFlagValues
 )
+
+func SetTicketAccessFlags(command *cobra.Command) {
+	command.Flags().StringVarP(&ticketAccessFlagValues.Name, "ticket", "T", "", "Set ticket")
+}
+
+func GetTicketAccessFlagValues() *TicketAccessFlagValues {
+	return &ticketAccessFlagValues
+}
 
 func SetTicketFlags(command *cobra.Command) {
 	command.Flags().StringVarP(&ticketFlagValues.Name, "name", "n", "", "Specify ticket name")

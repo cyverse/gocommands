@@ -30,6 +30,7 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	flag.SetCommonFlags(getCmd)
 
 	flag.SetForceFlags(getCmd, false)
+	flag.SetTicketAccessFlags(getCmd)
 	flag.SetParallelTransferFlags(getCmd, false)
 	flag.SetProgressFlags(getCmd)
 	flag.SetRetryFlags(getCmd)
@@ -39,6 +40,11 @@ func AddGetCommand(rootCmd *cobra.Command) {
 }
 
 func processGetCommand(command *cobra.Command, args []string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "processGetCommand",
+	})
+
 	cont, err := flag.ProcessCommonFlags(command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
@@ -55,6 +61,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	}
 
 	forceFlagValues := flag.GetForceFlagValues()
+	ticketAccessFlagValues := flag.GetTicketAccessFlagValues()
 	parallelTransferFlagValues := flag.GetParallelTransferFlagValues()
 	progressFlagValues := flag.GetProgressFlagValues()
 	retryFlagValues := flag.GetRetryFlagValues()
@@ -68,6 +75,21 @@ func processGetCommand(command *cobra.Command, args []string) error {
 			return xerrors.Errorf("failed to run with retry %d: %w", retryFlagValues.RetryNumber, err)
 		}
 		return nil
+	}
+
+	appConfig := commons.GetConfig()
+	syncAccount := false
+	if len(ticketAccessFlagValues.Name) > 0 {
+		logger.Debugf("use ticket: %s", ticketAccessFlagValues.Name)
+		appConfig.Ticket = ticketAccessFlagValues.Name
+		syncAccount = true
+	}
+
+	if syncAccount {
+		err := commons.SyncAccount()
+		if err != nil {
+			return err
+		}
 	}
 
 	// Create a file system

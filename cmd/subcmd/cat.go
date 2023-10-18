@@ -25,10 +25,17 @@ func AddCatCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(catCmd)
 
+	flag.SetTicketAccessFlags(catCmd)
+
 	rootCmd.AddCommand(catCmd)
 }
 
 func processCatCommand(command *cobra.Command, args []string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "processCatCommand",
+	})
+
 	cont, err := flag.ProcessCommonFlags(command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
@@ -42,6 +49,23 @@ func processCatCommand(command *cobra.Command, args []string) error {
 	_, err = commons.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
+	}
+
+	ticketAccessFlagValues := flag.GetTicketAccessFlagValues()
+
+	appConfig := commons.GetConfig()
+	syncAccount := false
+	if len(ticketAccessFlagValues.Name) > 0 {
+		logger.Debugf("use ticket: %s", ticketAccessFlagValues.Name)
+		appConfig.Ticket = ticketAccessFlagValues.Name
+		syncAccount = true
+	}
+
+	if syncAccount {
+		err := commons.SyncAccount()
+		if err != nil {
+			return err
+		}
 	}
 
 	// Create a file system

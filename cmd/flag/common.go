@@ -22,8 +22,6 @@ type CommonFlagValues struct {
 	SessionID       int
 	Resource        string
 	ResourceUpdated bool
-	Ticket          string
-	TicketUpdated   bool
 }
 
 const (
@@ -43,12 +41,10 @@ func SetCommonFlags(command *cobra.Command) {
 	command.Flags().StringVar(&commonFlagValues.logLevelInput, "log_level", "", "Set log level")
 	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Set session ID")
 	command.Flags().StringVarP(&commonFlagValues.Resource, "resource", "R", "", "Set resource server")
-	command.Flags().StringVarP(&commonFlagValues.Ticket, "ticket", "T", "", "Set ticket")
 
 	command.MarkFlagsMutuallyExclusive("debug", "version")
 	command.MarkFlagsMutuallyExclusive("log_level", "version")
 	command.MarkFlagsMutuallyExclusive("resource", "version")
-	command.MarkFlagsMutuallyExclusive("ticket", "version")
 	command.MarkFlagsMutuallyExclusive("session", "version")
 
 	command.MarkFlagsMutuallyExclusive("config", "envconfig")
@@ -66,10 +62,6 @@ func GetCommonFlagValues(command *cobra.Command) *CommonFlagValues {
 
 	if command.Flags().Changed("resource") {
 		commonFlagValues.ResourceUpdated = true
-	}
-
-	if command.Flags().Changed("ticket") {
-		commonFlagValues.TicketUpdated = true
 	}
 
 	return &commonFlagValues
@@ -173,12 +165,6 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	if myCommonFlagValues.ResourceUpdated {
 		appConfig.DefaultResource = myCommonFlagValues.Resource
 		logger.Debugf("use default resource server - %s", appConfig.DefaultResource)
-		syncAccount = true
-	}
-
-	if myCommonFlagValues.TicketUpdated {
-		appConfig.Ticket = myCommonFlagValues.Ticket
-		logger.Debugf("use ticket - %s", appConfig.Ticket)
 		syncAccount = true
 	}
 
