@@ -39,11 +39,6 @@ func Tar(baseDir string, sources []string, target string, callback TrackerCallBa
 			return xerrors.Errorf("failed to stat %s: %w", source, err)
 		}
 
-		if sourceStat.IsDir() {
-			// do not include dir for now
-			continue
-		}
-
 		rel, err := filepath.Rel(baseDir, source)
 		if err != nil {
 			return xerrors.Errorf("failed to compute relative path %s to %s: %w", source, baseDir, err)
@@ -63,6 +58,10 @@ func Tar(baseDir string, sources []string, target string, callback TrackerCallBa
 		// make entries for file
 		entry := NewTarEntry(source, filepath.ToSlash(rel))
 		entries = append(entries, entry)
+
+		if sourceStat.IsDir() {
+			createdDirs[rel] = true
+		}
 	}
 
 	return makeTar(entries, target, callback)

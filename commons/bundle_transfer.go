@@ -30,19 +30,18 @@ const (
 	BundleTaskNameExtract string = "Extract"
 )
 
-type BundleFile struct {
-	LocalPath        string
-	IRODSPath        string
-	Size             int64
-	Hash             string
-	LastModifiedTime time.Time
+type BundleEntry struct {
+	LocalPath string
+	IRODSPath string
+	Size      int64
+	Dir       bool
 }
 
 type Bundle struct {
 	manager *BundleTransferManager
 
 	index             int64
-	files             []*BundleFile
+	entries           []*BundleEntry
 	size              int64
 	localBundlePath   string
 	irodsBundlePath   string
@@ -54,7 +53,7 @@ func newBundle(manager *BundleTransferManager, index int64) *Bundle {
 	return &Bundle{
 		manager:           manager,
 		index:             index,
-		files:             []*BundleFile{},
+		entries:           []*BundleEntry{},
 		size:              0,
 		localBundlePath:   manager.getLocalBundleFilePath(index),
 		irodsBundlePath:   manager.getIrodsBundleFilePath(index),
@@ -63,32 +62,48 @@ func newBundle(manager *BundleTransferManager, index int64) *Bundle {
 	}
 }
 
-func (bundle *Bundle) addFile(localPath string, size int64, hash string, lastModTime time.Time) error {
+func (bundle *Bundle) addFile(localPath string, size int64) error {
 	irodsPath, err := bundle.manager.getTargetPath(localPath)
 	if err != nil {
 		return xerrors.Errorf("failed to get target path for %s: %w", localPath, err)
 	}
 
-	f := &BundleFile{
-		LocalPath:        localPath,
-		IRODSPath:        irodsPath,
-		Size:             size,
-		Hash:             hash,
-		LastModifiedTime: lastModTime,
+	e := &BundleEntry{
+		LocalPath: localPath,
+		IRODSPath: irodsPath,
+		Size:      size,
+		Dir:       false,
 	}
 
-	bundle.files = append(bundle.files, f)
+	bundle.entries = append(bundle.entries, e)
 	bundle.size += size
 
 	return nil
 }
 
+func (bundle *Bundle) addDir(localPath string) error {
+	irodsPath, err := bundle.manager.getTargetPath(localPath)
+	if err != nil {
+		return xerrors.Errorf("failed to get target path for %s: %w", localPath, err)
+	}
+
+	e := &BundleEntry{
+		LocalPath: localPath,
+		IRODSPath: irodsPath,
+		Size:      0,
+		Dir:       true,
+	}
+
+	bundle.entries = append(bundle.entries, e)
+	return nil
+}
+
 func (bundle *Bundle) isFull() bool {
-	return bundle.size >= bundle.manager.maxBundleFileSize || len(bundle.files) >= bundle.manager.maxBundleFileNum
+	return bundle.size >= bundle.manager.maxBundleFileSize || len(bundle.entries) >= bundle.manager.maxBundleFileNum
 }
 
 func (bundle *Bundle) requireTar() bool {
-	return len(bundle.files) >= MinBundleFileNumDefault
+	return len(bundle.entries) >= MinBundleFileNumDefault
 }
 
 type BundleTransferManager struct {
@@ -98,6 +113,7 @@ type BundleTransferManager struct {
 	currentBundle           *Bundle
 	nextBundleIndex         int64
 	pendingBundles          chan *Bundle
+	bundles                 []*Bundle
 	bundleRootPath          string
 	maxBundleFileNum        int
 	maxBundleFileSize       int64
@@ -129,6 +145,7 @@ func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath strin
 		currentBundle:           nil,
 		nextBundleIndex:         0,
 		pendingBundles:          make(chan *Bundle, 100),
+		bundles:                 []*Bundle{},
 		bundleRootPath:          "/",
 		maxBundleFileNum:        maxBundleFileNum,
 		maxBundleFileSize:       maxBundleFileSize,
@@ -157,6 +174,10 @@ func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath strin
 	manager.scheduleWait.Add(1)
 
 	return manager
+}
+
+func (manager *BundleTransferManager) GetFilesystem() *irodsclient_fs.FileSystem {
+	return manager.filesystem
 }
 
 func (manager *BundleTransferManager) getNextBundleIndex() int64 {
@@ -192,7 +213,7 @@ func (manager *BundleTransferManager) getTargetPath(localPath string) (string, e
 	return path.Join(manager.irodsDestPath, filepath.ToSlash(relPath)), nil
 }
 
-func (manager *BundleTransferManager) Schedule(source string, size int64, lastModTime time.Time) error {
+func (manager *BundleTransferManager) Schedule(source string, dir bool, size int64, lastModTime time.Time) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "commons",
 		"struct":   "BundleTransferManager",
@@ -214,6 +235,7 @@ func (manager *BundleTransferManager) Schedule(source string, size int64, lastMo
 			manager.mutex.Unlock()
 
 			manager.pendingBundles <- manager.currentBundle
+			manager.bundles = append(manager.bundles, manager.currentBundle)
 
 			manager.mutex.Lock()
 			manager.currentBundle = nil
@@ -230,59 +252,76 @@ func (manager *BundleTransferManager) Schedule(source string, size int64, lastMo
 	defer manager.mutex.Unlock()
 
 	if manager.differentFilesOnly {
-		targetFilePath, err := manager.getTargetPath(source)
+		targePath, err := manager.getTargetPath(source)
 		if err != nil {
 			return xerrors.Errorf("failed to get target path for %s: %w", source, err)
 		}
 
-		logger.Debugf("checking if target file %s for source %s exists", targetFilePath, source)
+		logger.Debugf("checking if target %s for source %s exists", targePath, source)
 
-		exist := ExistsIRODSFile(manager.filesystem, targetFilePath)
-		if exist {
-			targetEntry, err := StatIRODSPath(manager.filesystem, targetFilePath)
-			if err != nil {
-				return xerrors.Errorf("failed to stat %s: %w", targetFilePath, err)
+		if dir {
+			// handle dir
+			exist := ExistsIRODSDir(manager.filesystem, targePath)
+			if exist {
+				fmt.Printf("skip adding a dir %s to the bundle. The dir already exists!\n", source)
+				logger.Debugf("skip adding a dir %s to the bundle. The dir already exists!", source)
+				return nil
 			}
 
-			if manager.noHashForComparison {
-				if targetEntry.Size == size {
-					fmt.Printf("skip adding a file %s to the bundle. The file already exists!\n", source)
-					logger.Debugf("skip adding a file %s to the bundle. The file already exists!", source)
-					return nil
-				}
-
-				logger.Debugf("adding a file %s to the bundle as it has different size %d != %d", source, targetEntry.Size, size)
-			} else {
-				if targetEntry.Size == size {
-					if len(targetEntry.CheckSum) > 0 {
-						// compare hash
-						hash, err := HashLocalFile(source, targetEntry.CheckSumAlgorithm)
-						if err != nil {
-							return xerrors.Errorf("failed to get hash %s: %w", source, err)
-						}
-
-						if hash == targetEntry.CheckSum {
-							fmt.Printf("skip adding a file %s to the bundle. The file with the same hash already exists!\n", source)
-							logger.Debugf("skip adding a file %s to the bundle. The file with the same hash already exists!", source)
-							return nil
-						}
-
-						logger.Debugf("adding a file %s to the bundle as it has different hash, %s vs %s (alg %s)", source, hash, targetEntry.CheckSum, targetEntry.CheckSumAlgorithm)
-					} else {
-						logger.Debugf("adding a file %s to the bundle as the file in iRODS doesn't have hash yet", source)
-					}
-				} else {
-					logger.Debugf("adding a file %s to the bundle as it has different size %d != %d", source, targetEntry.Size, size)
-				}
-			}
+			logger.Debugf("adding a dir %s to the bundle as it doesn't exist", source)
 		} else {
-			logger.Debugf("adding a file %s to the bundle as it doesn't exist", source)
+			exist := ExistsIRODSFile(manager.filesystem, targePath)
+			if exist {
+				targetEntry, err := StatIRODSPath(manager.filesystem, targePath)
+				if err != nil {
+					return xerrors.Errorf("failed to stat %s: %w", targePath, err)
+				}
+
+				if manager.noHashForComparison {
+					if targetEntry.Size == size {
+						fmt.Printf("skip adding a file %s to the bundle. The file already exists!\n", source)
+						logger.Debugf("skip adding a file %s to the bundle. The file already exists!", source)
+						return nil
+					}
+
+					logger.Debugf("adding a file %s to the bundle as it has different size %d != %d", source, targetEntry.Size, size)
+				} else {
+					if targetEntry.Size == size {
+						if len(targetEntry.CheckSum) > 0 {
+							// compare hash
+							hash, err := HashLocalFile(source, targetEntry.CheckSumAlgorithm)
+							if err != nil {
+								return xerrors.Errorf("failed to get hash %s: %w", source, err)
+							}
+
+							if hash == targetEntry.CheckSum {
+								fmt.Printf("skip adding a file %s to the bundle. The file with the same hash already exists!\n", source)
+								logger.Debugf("skip adding a file %s to the bundle. The file with the same hash already exists!", source)
+								return nil
+							}
+
+							logger.Debugf("adding a file %s to the bundle as it has different hash, %s vs %s (alg %s)", source, hash, targetEntry.CheckSum, targetEntry.CheckSumAlgorithm)
+						} else {
+							logger.Debugf("adding a file %s to the bundle as the file in iRODS doesn't have hash yet", source)
+						}
+					} else {
+						logger.Debugf("adding a file %s to the bundle as it has different size %d != %d", source, targetEntry.Size, size)
+					}
+				}
+			} else {
+				logger.Debugf("adding a file %s to the bundle as it doesn't exist", source)
+			}
 		}
 	}
 
-	manager.currentBundle.addFile(source, size, "", lastModTime)
-	logger.Debugf("> scheduled a local file bundle-upload %s", source)
+	if dir {
+		manager.currentBundle.addDir(source)
+		logger.Debugf("> scheduled a local file bundle-upload %s", source)
+		return nil
+	}
 
+	manager.currentBundle.addFile(source, size)
+	logger.Debugf("> scheduled a local file bundle-upload %s", source)
 	return nil
 }
 
@@ -290,6 +329,7 @@ func (manager *BundleTransferManager) DoneScheduling() {
 	manager.mutex.Lock()
 	if manager.currentBundle != nil {
 		manager.pendingBundles <- manager.currentBundle
+		manager.bundles = append(manager.bundles, manager.currentBundle)
 		manager.currentBundle = nil
 		manager.transferWait.Add(1)
 	}
@@ -297,6 +337,10 @@ func (manager *BundleTransferManager) DoneScheduling() {
 
 	close(manager.pendingBundles)
 	manager.scheduleWait.Done()
+}
+
+func (manager *BundleTransferManager) GetBundles() []*Bundle {
+	return manager.bundles
 }
 
 func (manager *BundleTransferManager) Wait() error {
@@ -518,7 +562,7 @@ func (manager *BundleTransferManager) Start() {
 			}
 			manager.mutex.RUnlock()
 
-			if cont && len(bundle.files) > 0 {
+			if cont && len(bundle.entries) > 0 {
 				err := manager.processBundleTar(bundle)
 				if err != nil {
 					// mark error
@@ -556,7 +600,7 @@ func (manager *BundleTransferManager) Start() {
 				}
 				manager.mutex.RUnlock()
 
-				if cont && len(bundle.files) > 0 {
+				if cont && len(bundle.entries) > 0 {
 					err := manager.processBundleUpload(bundle)
 					if err != nil {
 						// mark error
@@ -606,7 +650,7 @@ func (manager *BundleTransferManager) Start() {
 			}
 			manager.mutex.RUnlock()
 
-			if cont && len(bundle.files) > 0 {
+			if cont && len(bundle.entries) > 0 {
 				err := manager.processBundleRemoveFiles(bundle)
 				if err != nil {
 					// mark error
@@ -655,7 +699,7 @@ func (manager *BundleTransferManager) Start() {
 						}
 						manager.mutex.RUnlock()
 
-						if cont && len(bundle1.files) > 0 {
+						if cont && len(bundle1.entries) > 0 {
 							err := manager.processBundleExtract(bundle1)
 							if err != nil {
 								// mark error
@@ -669,6 +713,7 @@ func (manager *BundleTransferManager) Start() {
 								logger.Error(err)
 								// don't stop here
 							}
+
 						} else {
 							if bundle1.requireTar() {
 								// remove irods bundle file
@@ -703,7 +748,7 @@ func (manager *BundleTransferManager) Start() {
 						}
 						manager.mutex.RUnlock()
 
-						if cont && len(bundle2.files) > 0 {
+						if cont && len(bundle2.entries) > 0 {
 							err := manager.processBundleExtract(bundle2)
 							if err != nil {
 								// mark error
@@ -767,7 +812,7 @@ func (manager *BundleTransferManager) processBundleRemoveFiles(bundle *Bundle) e
 
 	progressName := manager.getProgressName(bundle, BundleTaskNameRemove)
 
-	totalFileNum := int64(len(bundle.files))
+	totalFileNum := int64(len(bundle.entries))
 	processedFiles := int64(0)
 
 	if manager.showProgress {
@@ -784,7 +829,7 @@ func (manager *BundleTransferManager) processBundleRemoveFiles(bundle *Bundle) e
 		return nil
 	}
 
-	for _, file := range bundle.files {
+	for _, file := range bundle.entries {
 		if ExistsIRODSFile(manager.filesystem, file.IRODSPath) {
 			logger.Debugf("deleting exising data object %s", file.IRODSPath)
 
@@ -820,7 +865,7 @@ func (manager *BundleTransferManager) processBundleTar(bundle *Bundle) error {
 
 	progressName := manager.getProgressName(bundle, BundleTaskNameTar)
 
-	totalFileNum := int64(len(bundle.files))
+	totalFileNum := int64(len(bundle.entries))
 
 	var callback func(processed int64, total int64)
 	if manager.showProgress {
@@ -843,12 +888,12 @@ func (manager *BundleTransferManager) processBundleTar(bundle *Bundle) error {
 		return nil
 	}
 
-	files := make([]string, len(bundle.files))
-	for idx, file := range bundle.files {
-		files[idx] = file.LocalPath
+	entries := make([]string, len(bundle.entries))
+	for idx, entry := range bundle.entries {
+		entries[idx] = entry.LocalPath
 	}
 
-	err := Tar(manager.bundleRootPath, files, bundle.localBundlePath, callback)
+	err := Tar(manager.bundleRootPath, entries, bundle.localBundlePath, callback)
 	if err != nil {
 		if manager.showProgress {
 			manager.progress(progressName, 0, totalFileNum, progress.UnitsDefault, true)
@@ -900,14 +945,14 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 		// remove local bundle file
 		os.Remove(bundle.localBundlePath)
 	} else {
-		fileUploadProgress := make([]int64, len(bundle.files))
+		fileUploadProgress := make([]int64, len(bundle.entries))
 		fileUploadProgressMutex := sync.Mutex{}
 
 		if manager.showProgress {
 			manager.progress(progressName, 0, totalFileSize, progress.UnitsBytes, false)
 		}
 
-		for fileIdx, file := range bundle.files {
+		for fileIdx, file := range bundle.entries {
 			var callbackFileUpload func(processed int64, total int64)
 			if manager.showProgress {
 				callbackFileUpload = func(processed int64, total int64) {
@@ -973,7 +1018,7 @@ func (manager *BundleTransferManager) processBundleExtract(bundle *Bundle) error
 
 	progressName := manager.getProgressName(bundle, BundleTaskNameExtract)
 
-	totalFileNum := int64(len(bundle.files))
+	totalFileNum := int64(len(bundle.entries))
 
 	if manager.showProgress {
 		manager.progress(progressName, 0, totalFileNum, progress.UnitsDefault, false)

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
@@ -34,6 +35,7 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	flag.SetRetryFlags(bputCmd)
 	flag.SetDifferentialTransferFlags(bputCmd, true)
 	flag.SetNoRootFlags(bputCmd)
+	flag.SetSyncFlags(bputCmd)
 
 	rootCmd.AddCommand(bputCmd)
 }
@@ -67,6 +69,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	retryFlagValues := flag.GetRetryFlagValues()
 	differentialTransferFlagValues := flag.GetDifferentialTransferFlagValues()
 	noRootFlagValues := flag.GetNoRootFlagValues()
+	syncFlagValues := flag.GetSyncFlagValues()
 
 	maxConnectionNum := parallelTransferFlagValues.ThreadNumber + 2 + 2 // 2 for metadata op, 2 for extraction
 
@@ -179,6 +182,14 @@ func processBputCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to perform bundle transfer: %w", err)
 	}
 
+	// delete extra
+	if syncFlagValues.Delete {
+		err = bputDeleteExtra(bundleTransferManager, targetPath)
+		if err != nil {
+			return xerrors.Errorf("failed to delete extra files: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -201,7 +212,7 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string, ta
 
 	if !sourceStat.IsDir() {
 		// file
-		bundleManager.Schedule(sourcePath, sourceStat.Size(), sourceStat.ModTime().Local())
+		bundleManager.Schedule(sourcePath, false, sourceStat.Size(), sourceStat.ModTime().Local())
 	} else {
 		// dir
 		logger.Debugf("bundle-uploading a local directory %s", sourcePath)
@@ -211,16 +222,12 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string, ta
 				return xerrors.Errorf("failed to walk for %s: %w", path, err2)
 			}
 
-			if entry.IsDir() {
-				return nil
-			}
-
 			info, err := entry.Info()
 			if err != nil {
 				return xerrors.Errorf("failed to get info for %s: %w", path, err)
 			}
 
-			err = bundleManager.Schedule(path, info.Size(), info.ModTime())
+			err = bundleManager.Schedule(path, info.IsDir(), info.Size(), info.ModTime())
 			if err != nil {
 				return xerrors.Errorf("failed to schedule %s: %w", path, err)
 			}
@@ -232,5 +239,59 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string, ta
 			return xerrors.Errorf("failed to walk for %s: %w", sourcePath, err)
 		}
 	}
+	return nil
+}
+
+func bputDeleteExtra(bundleManager *commons.BundleTransferManager, targetPath string) error {
+	return nil
+}
+
+func bputDeleteExtraInternal(filesystem *irodsclient_fs.FileSystem, bputSources map[string]bool, targetPath string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "bputDeleteExtraInternal",
+	})
+
+	targetEntry, err := commons.StatIRODSPath(filesystem, targetPath)
+	if err != nil {
+		return xerrors.Errorf("failed to stat %s: %w", targetPath, err)
+	}
+
+	if targetEntry.Type == irodsclient_fs.FileEntry {
+		if _, ok := bputSources[targetPath]; !ok {
+			// extra file
+			logger.Debugf("removing a data object %s as it's extra", targetPath)
+			removeErr := filesystem.RemoveFile(targetPath, true)
+			if removeErr != nil {
+				return removeErr
+			}
+		}
+	} else {
+		// dir
+		if _, ok := bputSources[targetPath]; !ok {
+			// extra dir
+			logger.Debugf("removing a collection %s as it's extra", targetPath)
+			removeErr := filesystem.RemoveDir(targetPath, true, true)
+			if removeErr != nil {
+				return removeErr
+			}
+		} else {
+			// non extra dir
+			entries, err := commons.ListIRODSDir(filesystem, targetPath)
+			if err != nil {
+				return xerrors.Errorf("failed to list dir %s: %w", targetPath, err)
+			}
+
+			for idx := range entries {
+				newTargetPath := entries[idx].Path
+
+				err = bputDeleteExtraInternal(filesystem, bputSources, newTargetPath)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
 	return nil
 }

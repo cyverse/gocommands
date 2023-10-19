@@ -33,6 +33,7 @@ func AddSyncCommand(rootCmd *cobra.Command) {
 	flag.SetRetryFlags(syncCmd)
 	flag.SetDifferentialTransferFlags(syncCmd, false)
 	flag.SetNoRootFlags(syncCmd)
+	flag.SetSyncFlags(syncCmd)
 
 	rootCmd.AddCommand(syncCmd)
 }
