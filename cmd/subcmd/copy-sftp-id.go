@@ -132,7 +132,7 @@ func copySftpId(filesystem *irodsclient_fs.FileSystem, force bool, dryrun bool, 
 	irodsSshPath := path.Join(home, ".ssh")
 	authorizedKeyPath := path.Join(irodsSshPath, "authorized_keys")
 
-	if !commons.ExistsIRODSDir(filesystem, irodsSshPath) {
+	if !filesystem.ExistsDir(irodsSshPath) {
 		logger.Debugf("SSH directory %s does not exist on iRODS for user %s, creating one", irodsSshPath, account.ClientUser)
 		if !dryrun {
 			// create ssh dir
@@ -145,7 +145,7 @@ func copySftpId(filesystem *irodsclient_fs.FileSystem, force bool, dryrun bool, 
 
 	// read existing authorized_keys
 	authorizedKeysArray := []string{}
-	if commons.ExistsIRODSFile(filesystem, authorizedKeyPath) {
+	if filesystem.ExistsFile(authorizedKeyPath) {
 		logger.Debugf("reading authorized_keys %s on iRODS for user %s", authorizedKeyPath, account.ClientUser)
 
 		handle, err := filesystem.OpenFile(authorizedKeyPath, "", "r")

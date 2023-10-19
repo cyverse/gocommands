@@ -36,6 +36,7 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	flag.SetRetryFlags(getCmd)
 	flag.SetDifferentialTransferFlags(getCmd, true)
 	flag.SetNoRootFlags(getCmd)
+	flag.SetSyncFlags(getCmd)
 
 	rootCmd.AddCommand(getCmd)
 }
@@ -68,6 +69,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	retryFlagValues := flag.GetRetryFlagValues()
 	differentialTransferFlagValues := flag.GetDifferentialTransferFlagValues()
 	noRootFlagValues := flag.GetNoRootFlagValues()
+	syncFlagValues := flag.GetSyncFlagValues()
 
 	maxConnectionNum := parallelTransferFlagValues.ThreadNumber + 2 // 2 for metadata op
 
@@ -118,8 +120,10 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	parallelJobManager := commons.NewParallelJobManager(filesystem, parallelTransferFlagValues.ThreadNumber, progressFlagValues.ShowProgress)
 	parallelJobManager.Start()
 
+	inputPathMap := map[string]bool{}
+
 	for _, sourcePath := range sourcePaths {
-		err = getOne(parallelJobManager, sourcePath, targetPath, forceFlagValues.Force, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash, noRootFlagValues.NoRoot)
+		err = getOne(parallelJobManager, inputPathMap, sourcePath, targetPath, forceFlagValues.Force, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash, noRootFlagValues.NoRoot)
 		if err != nil {
 			return xerrors.Errorf("failed to perform get %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -131,10 +135,20 @@ func processGetCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to perform parallel jobs: %w", err)
 	}
 
+	// delete extra
+	if syncFlagValues.Delete {
+		logger.Infof("deleting extra files and dirs under %s", targetPath)
+
+		err = getDeleteExtra(inputPathMap, targetPath)
+		if err != nil {
+			return xerrors.Errorf("failed to delete extra files: %w", err)
+		}
+	}
+
 	return nil
 }
 
-func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, targetPath string, force bool, diff bool, noHash bool, noRoot bool) error {
+func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, force bool, diff bool, noHash bool, noRoot bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "getOne",
@@ -148,12 +162,13 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 
 	filesystem := parallelJobManager.GetFilesystem()
 
-	sourceEntry, err := commons.StatIRODSPath(filesystem, sourcePath)
+	sourceEntry, err := filesystem.Stat(sourcePath)
 	if err != nil {
 		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
 
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
+		// file
 		targetFilePath := commons.MakeTargetLocalFilePath(sourcePath, targetPath)
 		targetDirPath := commons.GetDir(targetFilePath)
 		_, err := os.Stat(targetDirPath)
@@ -164,6 +179,8 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 
 			return xerrors.Errorf("failed to stat dir %s: %w", targetDirPath, err)
 		}
+
+		inputPathMap[targetFilePath] = true
 
 		exist := false
 		targetEntry, err := os.Stat(targetFilePath)
@@ -248,12 +265,14 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 
 		logger.Debugf("downloading a collection %s to %s", sourcePath, targetPath)
 
-		entries, err := commons.ListIRODSDir(filesystem, sourceEntry.Path)
+		entries, err := filesystem.List(sourceEntry.Path)
 		if err != nil {
 			return xerrors.Errorf("failed to list dir %s: %w", sourceEntry.Path, err)
 		}
 
 		targetDir := targetPath
+		inputPathMap[targetDir] = true
+
 		if !noRoot {
 			// make target dir
 			targetDir = filepath.Join(targetPath, sourceEntry.Name)
@@ -266,11 +285,71 @@ func getOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 		for idx := range entries {
 			path := entries[idx].Path
 
-			err = getOne(parallelJobManager, path, targetDir, force, diff, noHash, false)
+			err = getOne(parallelJobManager, inputPathMap, path, targetDir, force, diff, noHash, false)
 			if err != nil {
 				return xerrors.Errorf("failed to perform get %s to %s: %w", path, targetDir, err)
 			}
 		}
 	}
+	return nil
+}
+
+func getDeleteExtra(inputPathMap map[string]bool, targetPath string) error {
+	targetPath = commons.MakeLocalPath(targetPath)
+
+	return getDeleteExtraInternal(inputPathMap, targetPath)
+}
+
+func getDeleteExtraInternal(inputPathMap map[string]bool, targetPath string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "getDeleteExtraInternal",
+	})
+
+	targetStat, err := os.Stat(targetPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return irodsclient_types.NewFileNotFoundError(targetPath)
+		}
+
+		return xerrors.Errorf("failed to stat %s: %w", targetPath, err)
+	}
+
+	if !targetStat.IsDir() {
+		// file
+		if _, ok := inputPathMap[targetPath]; !ok {
+			// extra file
+			logger.Debugf("removing an extra file %s", targetPath)
+			removeErr := os.Remove(targetPath)
+			if removeErr != nil {
+				return removeErr
+			}
+		}
+	} else {
+		// dir
+		if _, ok := inputPathMap[targetPath]; !ok {
+			// extra dir
+			logger.Debugf("removing an extra dir %s", targetPath)
+			removeErr := os.RemoveAll(targetPath)
+			if removeErr != nil {
+				return removeErr
+			}
+		} else {
+			// non extra dir
+			entries, err := os.ReadDir(targetPath)
+			if err != nil {
+				return xerrors.Errorf("failed to list dir %s: %w", targetPath, err)
+			}
+
+			for _, entryInDir := range entries {
+				newTargetPath := filepath.Join(targetPath, entryInDir.Name())
+				err = getDeleteExtraInternal(inputPathMap, newTargetPath)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
 	return nil
 }

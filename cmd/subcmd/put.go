@@ -6,7 +6,7 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/cyverse/go-irodsclient/fs"
+	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -37,6 +37,7 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	flag.SetRetryFlags(putCmd)
 	flag.SetDifferentialTransferFlags(putCmd, true)
 	flag.SetNoRootFlags(putCmd)
+	flag.SetSyncFlags(putCmd)
 
 	rootCmd.AddCommand(putCmd)
 }
@@ -69,6 +70,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	retryFlagValues := flag.GetRetryFlagValues()
 	differentialTransferFlagValues := flag.GetDifferentialTransferFlagValues()
 	noRootFlagValues := flag.GetNoRootFlagValues()
+	syncFlagValues := flag.GetSyncFlagValues()
 
 	maxConnectionNum := parallelTransferFlagValues.ThreadNumber + 2 // 2 for metadata op
 
@@ -119,8 +121,10 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	parallelJobManager := commons.NewParallelJobManager(filesystem, parallelTransferFlagValues.ThreadNumber, progressFlagValues.ShowProgress)
 	parallelJobManager.Start()
 
+	inputPathMap := map[string]bool{}
+
 	for _, sourcePath := range sourcePaths {
-		err = putOne(parallelJobManager, sourcePath, targetPath, forceFlagValues.Force, parallelTransferFlagValues.SingleTread, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash, noRootFlagValues.NoRoot)
+		err = putOne(parallelJobManager, inputPathMap, sourcePath, targetPath, forceFlagValues.Force, parallelTransferFlagValues.SingleTread, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash, noRootFlagValues.NoRoot)
 		if err != nil {
 			return xerrors.Errorf("failed to perform put %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -132,10 +136,20 @@ func processPutCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to perform parallel jobs: %w", err)
 	}
 
+	// delete extra
+	if syncFlagValues.Delete {
+		logger.Infof("deleting extra files and dirs under %s", targetPath)
+
+		err = putDeleteExtra(filesystem, inputPathMap, targetPath)
+		if err != nil {
+			return xerrors.Errorf("failed to delete extra files: %w", err)
+		}
+	}
+
 	return nil
 }
 
-func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, targetPath string, force bool, singleThreaded bool, diff bool, noHash bool, noRoot bool) error {
+func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, force bool, singleThreaded bool, diff bool, noHash bool, noRoot bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "putOne",
@@ -162,12 +176,14 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 		// file
 		targetFilePath := commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetPath)
 		targetDirPath := commons.GetDir(targetFilePath)
-		_, err := commons.StatIRODSPath(filesystem, targetDirPath)
+		_, err := filesystem.Stat(targetDirPath)
 		if err != nil {
 			return xerrors.Errorf("failed to stat dir %s: %w", targetDirPath, err)
 		}
 
-		fileExist := commons.ExistsIRODSFile(filesystem, targetFilePath)
+		inputPathMap[targetFilePath] = true
+
+		fileExist := filesystem.ExistsFile(targetFilePath)
 
 		putTask := func(job *commons.ParallelJob) error {
 			manager := job.GetManager()
@@ -197,7 +213,7 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 		}
 
 		if fileExist {
-			targetEntry, err := commons.StatIRODSPath(filesystem, targetFilePath)
+			targetEntry, err := filesystem.Stat(targetFilePath)
 			if err != nil {
 				return xerrors.Errorf("failed to stat %s: %w", targetFilePath, err)
 			}
@@ -241,7 +257,7 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 		logger.Debugf("scheduled a local file upload %s to %s", sourcePath, targetFilePath)
 	} else {
 		// dir
-		_, err := commons.StatIRODSPath(filesystem, targetPath)
+		_, err := filesystem.Stat(targetPath)
 		if err != nil {
 			return xerrors.Errorf("failed to stat dir %s: %w", targetPath, err)
 		}
@@ -254,6 +270,8 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 		}
 
 		targetDir := targetPath
+		inputPathMap[targetDir] = true
+
 		if !noRoot {
 			// make target dir
 			targetDir := path.Join(targetPath, filepath.Base(sourcePath))
@@ -265,7 +283,7 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 
 		for _, entryInDir := range entries {
 			newSourcePath := filepath.Join(sourcePath, entryInDir.Name())
-			err = putOne(parallelJobManager, newSourcePath, targetDir, force, singleThreaded, diff, noHash, false)
+			err = putOne(parallelJobManager, inputPathMap, newSourcePath, targetDir, force, singleThreaded, diff, noHash, false)
 			if err != nil {
 				return xerrors.Errorf("failed to perform put %s to %s: %w", newSourcePath, targetDir, err)
 			}
@@ -274,7 +292,7 @@ func putOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, t
 	return nil
 }
 
-func computeThreadsRequiredForPut(fs *fs.FileSystem, singleThreaded bool, size int64) int {
+func computeThreadsRequiredForPut(fs *irodsclient_fs.FileSystem, singleThreaded bool, size int64) int {
 	if singleThreaded {
 		return 1
 	}
@@ -284,4 +302,63 @@ func computeThreadsRequiredForPut(fs *fs.FileSystem, singleThreaded bool, size i
 	}
 
 	return 1
+}
+
+func putDeleteExtra(filesystem *irodsclient_fs.FileSystem, inputPathMap map[string]bool, targetPath string) error {
+	cwd := commons.GetCWD()
+	home := commons.GetHomeDir()
+	zone := commons.GetZone()
+	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+
+	return putDeleteExtraInternal(filesystem, inputPathMap, targetPath)
+}
+
+func putDeleteExtraInternal(filesystem *irodsclient_fs.FileSystem, inputPathMap map[string]bool, targetPath string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "putDeleteExtraInternal",
+	})
+
+	targetEntry, err := filesystem.Stat(targetPath)
+	if err != nil {
+		return xerrors.Errorf("failed to stat %s: %w", targetPath, err)
+	}
+
+	if targetEntry.Type == irodsclient_fs.FileEntry {
+		if _, ok := inputPathMap[targetPath]; !ok {
+			// extra file
+			logger.Debugf("removing an extra data object %s", targetPath)
+			removeErr := filesystem.RemoveFile(targetPath, true)
+			if removeErr != nil {
+				return removeErr
+			}
+		}
+	} else {
+		// dir
+		if _, ok := inputPathMap[targetPath]; !ok {
+			// extra dir
+			logger.Debugf("removing an extra collection %s", targetPath)
+			removeErr := filesystem.RemoveDir(targetPath, true, true)
+			if removeErr != nil {
+				return removeErr
+			}
+		} else {
+			// non extra dir
+			entries, err := filesystem.List(targetPath)
+			if err != nil {
+				return xerrors.Errorf("failed to list dir %s: %w", targetPath, err)
+			}
+
+			for idx := range entries {
+				newTargetPath := entries[idx].Path
+
+				err = putDeleteExtraInternal(filesystem, inputPathMap, newTargetPath)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
 }

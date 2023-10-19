@@ -112,7 +112,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	_, err = commons.StatIRODSPath(filesystem, targetPath)
+	_, err = filesystem.StatDir(targetPath)
 	if err != nil {
 		return xerrors.Errorf("failed to stat dir %s: %w", targetPath, err)
 	}
@@ -184,6 +184,8 @@ func processBputCommand(command *cobra.Command, args []string) error {
 
 	// delete extra
 	if syncFlagValues.Delete {
+		logger.Infof("deleting extra files and dirs under %s", targetPath)
+
 		err = bputDeleteExtra(bundleTransferManager, targetPath)
 		if err != nil {
 			return xerrors.Errorf("failed to delete extra files: %w", err)
@@ -243,24 +245,27 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string, ta
 }
 
 func bputDeleteExtra(bundleManager *commons.BundleTransferManager, targetPath string) error {
-	return nil
+	pathMap := bundleManager.GetInputPathMap()
+	filesystem := bundleManager.GetFilesystem()
+
+	return bputDeleteExtraInternal(filesystem, pathMap, targetPath)
 }
 
-func bputDeleteExtraInternal(filesystem *irodsclient_fs.FileSystem, bputSources map[string]bool, targetPath string) error {
+func bputDeleteExtraInternal(filesystem *irodsclient_fs.FileSystem, inputPathMap map[string]bool, targetPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "bputDeleteExtraInternal",
 	})
 
-	targetEntry, err := commons.StatIRODSPath(filesystem, targetPath)
+	targetEntry, err := filesystem.Stat(targetPath)
 	if err != nil {
 		return xerrors.Errorf("failed to stat %s: %w", targetPath, err)
 	}
 
 	if targetEntry.Type == irodsclient_fs.FileEntry {
-		if _, ok := bputSources[targetPath]; !ok {
+		if _, ok := inputPathMap[targetPath]; !ok {
 			// extra file
-			logger.Debugf("removing a data object %s as it's extra", targetPath)
+			logger.Debugf("removing an extra data object %s", targetPath)
 			removeErr := filesystem.RemoveFile(targetPath, true)
 			if removeErr != nil {
 				return removeErr
@@ -268,16 +273,16 @@ func bputDeleteExtraInternal(filesystem *irodsclient_fs.FileSystem, bputSources 
 		}
 	} else {
 		// dir
-		if _, ok := bputSources[targetPath]; !ok {
+		if _, ok := inputPathMap[targetPath]; !ok {
 			// extra dir
-			logger.Debugf("removing a collection %s as it's extra", targetPath)
+			logger.Debugf("removing an extra collection %s", targetPath)
 			removeErr := filesystem.RemoveDir(targetPath, true, true)
 			if removeErr != nil {
 				return removeErr
 			}
 		} else {
 			// non extra dir
-			entries, err := commons.ListIRODSDir(filesystem, targetPath)
+			entries, err := filesystem.List(targetPath)
 			if err != nil {
 				return xerrors.Errorf("failed to list dir %s: %w", targetPath, err)
 			}
@@ -285,7 +290,7 @@ func bputDeleteExtraInternal(filesystem *irodsclient_fs.FileSystem, bputSources 
 			for idx := range entries {
 				newTargetPath := entries[idx].Path
 
-				err = bputDeleteExtraInternal(filesystem, bputSources, newTargetPath)
+				err = bputDeleteExtraInternal(filesystem, inputPathMap, newTargetPath)
 				if err != nil {
 					return err
 				}

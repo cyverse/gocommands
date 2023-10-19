@@ -110,7 +110,7 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 
 	filesystem := parallelJobManager.GetFilesystem()
 
-	sourceEntry, err := commons.StatIRODSPath(filesystem, sourcePath)
+	sourceEntry, err := filesystem.Stat(sourcePath)
 	if err != nil {
 		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
@@ -119,12 +119,12 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 		// file
 		targetFilePath := commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetPath)
 		targetDirPath := commons.GetDir(targetFilePath)
-		_, err := commons.StatIRODSPath(filesystem, targetDirPath)
+		_, err := filesystem.Stat(targetDirPath)
 		if err != nil {
 			return xerrors.Errorf("failed to stat dir %s: %w", targetDirPath, err)
 		}
 
-		fileExist := commons.ExistsIRODSFile(filesystem, targetFilePath)
+		fileExist := filesystem.ExistsFile(targetFilePath)
 
 		copyTask := func(job *commons.ParallelJob) error {
 			manager := job.GetManager()
@@ -145,7 +145,7 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 		}
 
 		if fileExist {
-			targetEntry, err := commons.StatIRODSPath(filesystem, targetFilePath)
+			targetEntry, err := filesystem.Stat(targetFilePath)
 			if err != nil {
 				return xerrors.Errorf("failed to stat %s: %w", targetFilePath, err)
 			}
@@ -203,12 +203,12 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 
 		logger.Debugf("copying a collection %s to %s", sourcePath, targetPath)
 
-		entries, err := commons.ListIRODSDir(filesystem, sourceEntry.Path)
+		entries, err := filesystem.List(sourceEntry.Path)
 		if err != nil {
 			return xerrors.Errorf("failed to list dir %s: %w", sourceEntry.Path, err)
 		}
 
-		if !commons.ExistsIRODSDir(filesystem, targetPath) {
+		if !filesystem.ExistsDir(targetPath) {
 			// make target dir
 			err = filesystem.MakeDir(targetPath, true)
 			if err != nil {
@@ -224,7 +224,7 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 		} else {
 			// make a sub dir
 			targetDir := path.Join(targetPath, sourceEntry.Name)
-			if !commons.ExistsIRODSDir(filesystem, targetDir) {
+			if !filesystem.ExistsDir(targetDir) {
 				err = filesystem.MakeDir(targetDir, true)
 				if err != nil {
 					return xerrors.Errorf("failed to make dir %s: %w", targetPath, err)

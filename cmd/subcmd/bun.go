@@ -120,12 +120,12 @@ func extractOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, target
 	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	sourceEntry, err := commons.StatIRODSPath(filesystem, sourcePath)
+	sourceEntry, err := filesystem.Stat(sourcePath)
 	if err != nil {
 		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
 
-	targetEntry, err := commons.StatIRODSPath(filesystem, targetPath)
+	targetEntry, err := filesystem.Stat(targetPath)
 	if err != nil {
 		if !irodsclient_types.IsFileNotFoundError(err) {
 			return xerrors.Errorf("failed to stat %s: %w", targetPath, err)

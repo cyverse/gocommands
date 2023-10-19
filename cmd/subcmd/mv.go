@@ -76,7 +76,7 @@ func moveOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPat
 	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	sourceEntry, err := commons.StatIRODSPath(filesystem, sourcePath)
+	sourceEntry, err := filesystem.Stat(sourcePath)
 	if err != nil {
 		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
