@@ -169,7 +169,7 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[st
 			job.Progress(0, 1, false)
 
 			logger.Debugf("copying a data object %s to %s", sourcePath, targetFilePath)
-			err = fs.CopyFileToFile(sourcePath, targetFilePath)
+			err = fs.CopyFileToFile(sourcePath, targetFilePath, true)
 			if err != nil {
 				job.Progress(-1, 1, true)
 				return xerrors.Errorf("failed to copy %s to %s: %w", sourcePath, targetFilePath, err)
@@ -196,31 +196,14 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[st
 						}
 					}
 				}
-
-				// TODO: Check if we can overwrite without remove
-				logger.Debugf("deleting an existing data object %s", targetFilePath)
-				err = filesystem.RemoveFile(targetFilePath, true)
-				if err != nil {
-					return xerrors.Errorf("failed to remove %s: %w", targetFilePath, err)
-				}
-			} else if force {
-				logger.Debugf("deleting an existing data object %s", targetFilePath)
-				err = filesystem.RemoveFile(targetFilePath, true)
-				if err != nil {
-					return xerrors.Errorf("failed to remove %s: %w", targetFilePath, err)
-				}
 			} else {
-				// ask
-				overwrite := commons.InputYN(fmt.Sprintf("file %s already exists. Overwrite?", targetFilePath))
-				if overwrite {
-					logger.Debugf("deleting an existing data object %s", targetFilePath)
-					err = filesystem.RemoveFile(targetFilePath, true)
-					if err != nil {
-						return xerrors.Errorf("failed to remove %s: %w", targetFilePath, err)
+				if !force {
+					// ask
+					overwrite := commons.InputYN(fmt.Sprintf("file %s already exists. Overwrite?", targetFilePath))
+					if !overwrite {
+						fmt.Printf("skip copying a file %s. The file already exists!\n", targetFilePath)
+						return nil
 					}
-				} else {
-					fmt.Printf("skip copying a file %s. The file already exists!\n", targetFilePath)
-					return nil
 				}
 			}
 		}
