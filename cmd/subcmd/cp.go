@@ -2,9 +2,9 @@ package subcmd
 
 import (
 	"fmt"
-	"path"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/jedib0t/go-pretty/v6/progress"
@@ -29,13 +29,20 @@ func AddCpCommand(rootCmd *cobra.Command) {
 	flag.SetForceFlags(cpCmd, false)
 	flag.SetRecursiveFlags(cpCmd)
 	flag.SetProgressFlags(cpCmd)
-	flag.SetDifferentialTransferFlags(cpCmd, true)
 	flag.SetRetryFlags(cpCmd)
+	flag.SetDifferentialTransferFlags(cpCmd, true)
+	flag.SetNoRootFlags(cpCmd)
+	flag.SetSyncFlags(cpCmd)
 
 	rootCmd.AddCommand(cpCmd)
 }
 
 func processCpCommand(command *cobra.Command, args []string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "processCpCommand",
+	})
+
 	cont, err := flag.ProcessCommonFlags(command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
@@ -56,6 +63,8 @@ func processCpCommand(command *cobra.Command, args []string) error {
 	progressFlagValues := flag.GetProgressFlagValues()
 	retryFlagValues := flag.GetRetryFlagValues()
 	differentialTransferFlagValues := flag.GetDifferentialTransferFlagValues()
+	noRootFlagValues := flag.GetNoRootFlagValues()
+	syncFlagValues := flag.GetSyncFlagValues()
 
 	if retryFlagValues.RetryNumber > 0 && !retryFlagValues.RetryChild {
 		err = commons.RunWithRetry(retryFlagValues.RetryNumber, retryFlagValues.RetryIntervalSeconds)
@@ -77,13 +86,24 @@ func processCpCommand(command *cobra.Command, args []string) error {
 	targetPath := args[len(args)-1]
 	sourcePaths := args[:len(args)-1]
 
+	if noRootFlagValues.NoRoot && len(sourcePaths) > 1 {
+		return xerrors.Errorf("failed to copy multiple source collections without creating root directory")
+	}
+
 	parallelJobManager := commons.NewParallelJobManager(filesystem, commons.TransferTreadNumDefault, progressFlagValues.ShowProgress)
 	parallelJobManager.Start()
 
+	inputPathMap := map[string]bool{}
+
 	for _, sourcePath := range sourcePaths {
-		err = copyOne(parallelJobManager, sourcePath, targetPath, recursiveFlagValues.Recursive, forceFlagValues.Force, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash)
+		newTargetDirPath, err := makeCopyTargetDirPath(filesystem, sourcePath, targetPath, noRootFlagValues.NoRoot)
 		if err != nil {
-			return xerrors.Errorf("failed to perform cp %s to %s: %w", sourcePath, targetPath, err)
+			return xerrors.Errorf("failed to make new target path for copy %s to %s: %w", sourcePath, targetPath, err)
+		}
+
+		err = copyOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, recursiveFlagValues.Recursive, forceFlagValues.Force, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash)
+		if err != nil {
+			return xerrors.Errorf("failed to perform copy %s to %s: %w", sourcePath, targetPath, err)
 		}
 	}
 
@@ -93,10 +113,20 @@ func processCpCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to perform parallel job: %w", err)
 	}
 
+	// delete extra
+	if syncFlagValues.Delete {
+		logger.Infof("deleting extra files and dirs under %s", targetPath)
+
+		err = copyDeleteExtra(filesystem, inputPathMap, targetPath)
+		if err != nil {
+			return xerrors.Errorf("failed to delete extra files: %w", err)
+		}
+	}
+
 	return nil
 }
 
-func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, targetPath string, recurse bool, force bool, diff bool, noHash bool) error {
+func copyOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, recurse bool, force bool, diff bool, noHash bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "copyOne",
@@ -115,16 +145,22 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
 
+	inputPathMap[targetPath] = true
+
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
 		// file
 		targetFilePath := commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetPath)
-		targetDirPath := commons.GetDir(targetFilePath)
-		_, err := filesystem.Stat(targetDirPath)
-		if err != nil {
-			return xerrors.Errorf("failed to stat dir %s: %w", targetDirPath, err)
-		}
+		inputPathMap[targetFilePath] = true
 
-		fileExist := filesystem.ExistsFile(targetFilePath)
+		fileExist := false
+		targetEntry, err := filesystem.StatFile(targetFilePath)
+		if err != nil {
+			if !irodsclient_types.IsFileNotFoundError(err) {
+				return xerrors.Errorf("failed to stat %s: %w", targetFilePath, err)
+			}
+		} else {
+			fileExist = true
+		}
 
 		copyTask := func(job *commons.ParallelJob) error {
 			manager := job.GetManager()
@@ -145,11 +181,6 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 		}
 
 		if fileExist {
-			targetEntry, err := filesystem.Stat(targetFilePath)
-			if err != nil {
-				return xerrors.Errorf("failed to stat %s: %w", targetFilePath, err)
-			}
-
 			if diff {
 				if noHash {
 					if targetEntry.Size == sourceEntry.Size {
@@ -166,6 +197,7 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 					}
 				}
 
+				// TODO: Check if we can overwrite without remove
 				logger.Debugf("deleting an existing data object %s", targetFilePath)
 				err = filesystem.RemoveFile(targetFilePath, true)
 				if err != nil {
@@ -208,36 +240,129 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, sourcePath string, 
 			return xerrors.Errorf("failed to list dir %s: %w", sourceEntry.Path, err)
 		}
 
-		if !filesystem.ExistsDir(targetPath) {
-			// make target dir
-			err = filesystem.MakeDir(targetPath, true)
-			if err != nil {
-				return xerrors.Errorf("failed to make dir %s: %w", targetPath, err)
+		for _, entry := range entries {
+			targetDirPath := targetPath
+			if entry.Type == irodsclient_fs.DirectoryEntry {
+				// dir
+				targetDirPath = commons.MakeTargetIRODSFilePath(filesystem, entry.Path, targetPath)
+				err = filesystem.MakeDir(targetDirPath, true)
+				if err != nil {
+					return xerrors.Errorf("failed to make dir %s: %w", targetDirPath, err)
+				}
 			}
 
-			for _, entryInDir := range entries {
-				err = copyOne(parallelJobManager, entryInDir.Path, targetPath, recurse, force, diff, noHash)
+			inputPathMap[targetDirPath] = true
+
+			err = copyOne(parallelJobManager, inputPathMap, entry.Path, targetDirPath, recurse, force, diff, noHash)
+			if err != nil {
+				return xerrors.Errorf("failed to perform copy %s to %s: %w", entry.Path, targetPath, err)
+			}
+		}
+	}
+	return nil
+}
+
+func makeCopyTargetDirPath(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, noRoot bool) (string, error) {
+	cwd := commons.GetCWD()
+	home := commons.GetHomeDir()
+	zone := commons.GetZone()
+	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
+	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+
+	sourceEntry, err := filesystem.Stat(sourcePath)
+	if err != nil {
+		return "", xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
+	}
+
+	if sourceEntry.Type == irodsclient_fs.FileEntry {
+		// file
+		targetFilePath := commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetPath)
+		targetDirPath := commons.GetDir(targetFilePath)
+		_, err := filesystem.Stat(targetDirPath)
+		if err != nil {
+			return "", xerrors.Errorf("failed to stat dir %s: %w", targetDirPath, err)
+		}
+
+		return targetDirPath, nil
+	} else {
+		// dir
+		targetDirPath := targetPath
+
+		if filesystem.ExistsDir(targetDirPath) {
+			// already exist
+			if !noRoot {
+				targetDirPath = commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetDirPath)
+				err = filesystem.MakeDir(targetDirPath, true)
 				if err != nil {
-					return xerrors.Errorf("failed to perform copy %s to %s: %w", entryInDir.Path, targetPath, err)
+					return "", xerrors.Errorf("failed to make dir %s: %w", targetDirPath, err)
 				}
 			}
 		} else {
-			// make a sub dir
-			targetDir := path.Join(targetPath, sourceEntry.Name)
-			if !filesystem.ExistsDir(targetDir) {
-				err = filesystem.MakeDir(targetDir, true)
-				if err != nil {
-					return xerrors.Errorf("failed to make dir %s: %w", targetPath, err)
-				}
+			err = filesystem.MakeDir(targetDirPath, true)
+			if err != nil {
+				return "", xerrors.Errorf("failed to make dir %s: %w", targetDirPath, err)
+			}
+		}
+
+		return targetDirPath, nil
+	}
+}
+
+func copyDeleteExtra(filesystem *irodsclient_fs.FileSystem, inputPathMap map[string]bool, targetPath string) error {
+	cwd := commons.GetCWD()
+	home := commons.GetHomeDir()
+	zone := commons.GetZone()
+	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+
+	return copyDeleteExtraInternal(filesystem, inputPathMap, targetPath)
+}
+
+func copyDeleteExtraInternal(filesystem *irodsclient_fs.FileSystem, inputPathMap map[string]bool, targetPath string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "main",
+		"function": "copyDeleteExtraInternal",
+	})
+
+	targetEntry, err := filesystem.Stat(targetPath)
+	if err != nil {
+		return xerrors.Errorf("failed to stat %s: %w", targetPath, err)
+	}
+
+	if targetEntry.Type == irodsclient_fs.FileEntry {
+		if _, ok := inputPathMap[targetPath]; !ok {
+			// extra file
+			logger.Debugf("removing an extra data object %s", targetPath)
+			removeErr := filesystem.RemoveFile(targetPath, true)
+			if removeErr != nil {
+				return removeErr
+			}
+		}
+	} else {
+		// dir
+		if _, ok := inputPathMap[targetPath]; !ok {
+			// extra dir
+			logger.Debugf("removing an extra collection %s", targetPath)
+			removeErr := filesystem.RemoveDir(targetPath, true, true)
+			if removeErr != nil {
+				return removeErr
+			}
+		} else {
+			// non extra dir
+			entries, err := filesystem.List(targetPath)
+			if err != nil {
+				return xerrors.Errorf("failed to list dir %s: %w", targetPath, err)
 			}
 
-			for _, entryInDir := range entries {
-				err = copyOne(parallelJobManager, entryInDir.Path, targetDir, recurse, force, diff, noHash)
+			for idx := range entries {
+				newTargetPath := entries[idx].Path
+
+				err = copyDeleteExtraInternal(filesystem, inputPathMap, newTargetPath)
 				if err != nil {
-					return xerrors.Errorf("failed to perform copy %s to %s: %w", entryInDir.Path, targetDir, err)
+					return err
 				}
 			}
 		}
 	}
+
 	return nil
 }

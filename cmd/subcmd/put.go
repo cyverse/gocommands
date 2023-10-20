@@ -3,7 +3,6 @@ package subcmd
 import (
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -124,7 +123,12 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	inputPathMap := map[string]bool{}
 
 	for _, sourcePath := range sourcePaths {
-		err = putOne(parallelJobManager, inputPathMap, sourcePath, targetPath, forceFlagValues.Force, parallelTransferFlagValues.SingleTread, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash, noRootFlagValues.NoRoot)
+		newTargetDirPath, err := makePutTargetDirPath(filesystem, sourcePath, targetPath, noRootFlagValues.NoRoot)
+		if err != nil {
+			return xerrors.Errorf("failed to make new target path for put %s to %s: %w", sourcePath, targetPath, err)
+		}
+
+		err = putOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues.Force, parallelTransferFlagValues.SingleTread, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash)
 		if err != nil {
 			return xerrors.Errorf("failed to perform put %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -149,7 +153,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, force bool, singleThreaded bool, diff bool, noHash bool, noRoot bool) error {
+func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, force bool, singleThreaded bool, diff bool, noHash bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "putOne",
@@ -172,18 +176,22 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
 
+	inputPathMap[targetPath] = true
+
 	if !sourceStat.IsDir() {
 		// file
 		targetFilePath := commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetPath)
-		targetDirPath := commons.GetDir(targetFilePath)
-		_, err := filesystem.Stat(targetDirPath)
-		if err != nil {
-			return xerrors.Errorf("failed to stat dir %s: %w", targetDirPath, err)
-		}
-
 		inputPathMap[targetFilePath] = true
 
-		fileExist := filesystem.ExistsFile(targetFilePath)
+		fileExist := false
+		targetEntry, err := filesystem.StatFile(targetFilePath)
+		if err != nil {
+			if !irodsclient_types.IsFileNotFoundError(err) {
+				return xerrors.Errorf("failed to stat %s: %w", targetFilePath, err)
+			}
+		} else {
+			fileExist = true
+		}
 
 		putTask := func(job *commons.ParallelJob) error {
 			manager := job.GetManager()
@@ -213,11 +221,6 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		}
 
 		if fileExist {
-			targetEntry, err := filesystem.Stat(targetFilePath)
-			if err != nil {
-				return xerrors.Errorf("failed to stat %s: %w", targetFilePath, err)
-			}
-
 			if diff {
 				if noHash {
 					if targetEntry.Size == sourceStat.Size() {
@@ -256,12 +259,6 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		parallelJobManager.Schedule(sourcePath, putTask, threadsRequired, progress.UnitsBytes)
 		logger.Debugf("scheduled a local file upload %s to %s", sourcePath, targetFilePath)
 	} else {
-		// dir
-		_, err := filesystem.Stat(targetPath)
-		if err != nil {
-			return xerrors.Errorf("failed to stat dir %s: %w", targetPath, err)
-		}
-
 		logger.Debugf("uploading a local directory %s to %s", sourcePath, targetPath)
 
 		entries, err := os.ReadDir(sourcePath)
@@ -269,27 +266,75 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 			return xerrors.Errorf("failed to read dir %s: %w", sourcePath, err)
 		}
 
-		targetDir := targetPath
-		inputPathMap[targetDir] = true
-
-		if !noRoot {
-			// make target dir
-			targetDir := path.Join(targetPath, filepath.Base(sourcePath))
-			err = filesystem.MakeDir(targetDir, true)
-			if err != nil {
-				return xerrors.Errorf("failed to make dir %s: %w", targetDir, err)
+		for _, entry := range entries {
+			targetDirPath := targetPath
+			if entry.IsDir() {
+				// dir
+				targetDirPath = commons.MakeTargetIRODSFilePath(filesystem, entry.Name(), targetPath)
+				err = filesystem.MakeDir(targetDirPath, true)
+				if err != nil {
+					return xerrors.Errorf("failed to make dir %s: %w", targetDirPath, err)
+				}
 			}
-		}
 
-		for _, entryInDir := range entries {
-			newSourcePath := filepath.Join(sourcePath, entryInDir.Name())
-			err = putOne(parallelJobManager, inputPathMap, newSourcePath, targetDir, force, singleThreaded, diff, noHash, false)
+			inputPathMap[targetDirPath] = true
+
+			newSourcePath := filepath.Join(sourcePath, entry.Name())
+			err = putOne(parallelJobManager, inputPathMap, newSourcePath, targetDirPath, force, singleThreaded, diff, noHash)
 			if err != nil {
-				return xerrors.Errorf("failed to perform put %s to %s: %w", newSourcePath, targetDir, err)
+				return xerrors.Errorf("failed to perform put %s to %s: %w", newSourcePath, targetDirPath, err)
 			}
 		}
 	}
 	return nil
+}
+
+func makePutTargetDirPath(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, noRoot bool) (string, error) {
+	cwd := commons.GetCWD()
+	home := commons.GetHomeDir()
+	zone := commons.GetZone()
+	sourcePath = commons.MakeLocalPath(sourcePath)
+	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+
+	sourceStat, err := os.Stat(sourcePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", irodsclient_types.NewFileNotFoundError(sourcePath)
+		}
+
+		return "", xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
+	}
+
+	if !sourceStat.IsDir() {
+		// file
+		targetFilePath := commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetPath)
+		targetDirPath := commons.GetDir(targetFilePath)
+		_, err := filesystem.Stat(targetDirPath)
+		if err != nil {
+			return "", xerrors.Errorf("failed to stat dir %s: %w", targetDirPath, err)
+		}
+
+		return targetDirPath, nil
+	} else {
+		// dir
+		_, err := filesystem.Stat(targetPath)
+		if err != nil {
+			return "", xerrors.Errorf("failed to stat dir %s: %w", targetPath, err)
+		}
+
+		targetDirPath := targetPath
+
+		if !noRoot {
+			// make target dir
+			targetDirPath = commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetPath)
+			err = os.MkdirAll(targetDirPath, 0766)
+			if err != nil {
+				return "", xerrors.Errorf("failed to make dir %s: %w", targetDirPath, err)
+			}
+		}
+
+		return targetDirPath, nil
+	}
 }
 
 func computeThreadsRequiredForPut(fs *irodsclient_fs.FileSystem, singleThreaded bool, size int64) int {
@@ -325,6 +370,7 @@ func putDeleteExtraInternal(filesystem *irodsclient_fs.FileSystem, inputPathMap 
 	}
 
 	if targetEntry.Type == irodsclient_fs.FileEntry {
+		// file
 		if _, ok := inputPathMap[targetPath]; !ok {
 			// extra file
 			logger.Debugf("removing an extra data object %s", targetPath)

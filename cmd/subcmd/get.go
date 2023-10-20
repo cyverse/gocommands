@@ -3,7 +3,6 @@ package subcmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
@@ -123,7 +122,12 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	inputPathMap := map[string]bool{}
 
 	for _, sourcePath := range sourcePaths {
-		err = getOne(parallelJobManager, inputPathMap, sourcePath, targetPath, forceFlagValues.Force, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash, noRootFlagValues.NoRoot)
+		newTargetDirPath, err := makeGetTargetDirPath(filesystem, sourcePath, targetPath, noRootFlagValues.NoRoot)
+		if err != nil {
+			return xerrors.Errorf("failed to make new target path for get %s to %s: %w", sourcePath, targetPath, err)
+		}
+
+		err = getOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues.Force, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash)
 		if err != nil {
 			return xerrors.Errorf("failed to perform get %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -148,7 +152,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, force bool, diff bool, noHash bool, noRoot bool) error {
+func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, force bool, diff bool, noHash bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "getOne",
@@ -167,29 +171,21 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
 
+	inputPathMap[targetPath] = true
+
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
 		// file
 		targetFilePath := commons.MakeTargetLocalFilePath(sourcePath, targetPath)
-		targetDirPath := commons.GetDir(targetFilePath)
-		_, err := os.Stat(targetDirPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return irodsclient_types.NewFileNotFoundError(targetDirPath)
-			}
-
-			return xerrors.Errorf("failed to stat dir %s: %w", targetDirPath, err)
-		}
-
 		inputPathMap[targetFilePath] = true
 
-		exist := false
+		fileExist := false
 		targetEntry, err := os.Stat(targetFilePath)
 		if err != nil {
 			if !os.IsNotExist(err) {
 				return xerrors.Errorf("failed to stat %s: %w", targetFilePath, err)
 			}
 		} else {
-			exist = true
+			fileExist = true
 		}
 
 		getTask := func(job *commons.ParallelJob) error {
@@ -214,7 +210,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 			return nil
 		}
 
-		if exist {
+		if fileExist {
 			if diff {
 				if noHash {
 					if targetEntry.Size() == sourceEntry.Size {
@@ -254,15 +250,6 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		logger.Debugf("scheduled a data object download %s to %s", sourcePath, targetFilePath)
 	} else {
 		// dir
-		_, err := os.Stat(targetPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return irodsclient_types.NewFileNotFoundError(targetPath)
-			}
-
-			return xerrors.Errorf("failed to stat dir %s: %w", targetPath, err)
-		}
-
 		logger.Debugf("downloading a collection %s to %s", sourcePath, targetPath)
 
 		entries, err := filesystem.List(sourceEntry.Path)
@@ -270,28 +257,78 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 			return xerrors.Errorf("failed to list dir %s: %w", sourceEntry.Path, err)
 		}
 
-		targetDir := targetPath
-		inputPathMap[targetDir] = true
-
-		if !noRoot {
-			// make target dir
-			targetDir = filepath.Join(targetPath, sourceEntry.Name)
-			err = os.MkdirAll(targetDir, 0766)
-			if err != nil {
-				return xerrors.Errorf("failed to make dir %s: %w", targetDir, err)
+		for _, entry := range entries {
+			targetDirPath := targetPath
+			if entry.Type != irodsclient_fs.FileEntry {
+				// dir
+				targetDirPath = commons.MakeTargetLocalFilePath(entry.Path, targetPath)
+				err = os.MkdirAll(targetDirPath, 0766)
+				if err != nil {
+					return xerrors.Errorf("failed to make dir %s: %w", targetDirPath, err)
+				}
 			}
-		}
 
-		for idx := range entries {
-			path := entries[idx].Path
+			inputPathMap[targetDirPath] = true
 
-			err = getOne(parallelJobManager, inputPathMap, path, targetDir, force, diff, noHash, false)
+			err = getOne(parallelJobManager, inputPathMap, entry.Path, targetDirPath, force, diff, noHash)
 			if err != nil {
-				return xerrors.Errorf("failed to perform get %s to %s: %w", path, targetDir, err)
+				return xerrors.Errorf("failed to perform get %s to %s: %w", entry.Path, targetDirPath, err)
 			}
 		}
 	}
 	return nil
+}
+
+func makeGetTargetDirPath(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, noRoot bool) (string, error) {
+	cwd := commons.GetCWD()
+	home := commons.GetHomeDir()
+	zone := commons.GetZone()
+	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
+	targetPath = commons.MakeLocalPath(targetPath)
+
+	sourceEntry, err := filesystem.Stat(sourcePath)
+	if err != nil {
+		return "", xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
+	}
+
+	if sourceEntry.Type == irodsclient_fs.FileEntry {
+		// file
+		targetFilePath := commons.MakeTargetLocalFilePath(sourcePath, targetPath)
+		targetDirPath := commons.GetDir(targetFilePath)
+		_, err := os.Stat(targetDirPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return "", irodsclient_types.NewFileNotFoundError(targetDirPath)
+			}
+
+			return "", xerrors.Errorf("failed to stat dir %s: %w", targetDirPath, err)
+		}
+
+		return targetDirPath, nil
+	} else {
+		// dir
+		_, err := os.Stat(targetPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return "", irodsclient_types.NewFileNotFoundError(targetPath)
+			}
+
+			return "", xerrors.Errorf("failed to stat dir %s: %w", targetPath, err)
+		}
+
+		targetDirPath := targetPath
+
+		if !noRoot {
+			// make target dir
+			targetDirPath = commons.MakeTargetLocalFilePath(sourceEntry.Path, targetDirPath)
+			err = os.MkdirAll(targetDirPath, 0766)
+			if err != nil {
+				return "", xerrors.Errorf("failed to make dir %s: %w", targetDirPath, err)
+			}
+		}
+
+		return targetDirPath, nil
+	}
 }
 
 func getDeleteExtra(inputPathMap map[string]bool, targetPath string) error {
@@ -342,7 +379,7 @@ func getDeleteExtraInternal(inputPathMap map[string]bool, targetPath string) err
 			}
 
 			for _, entryInDir := range entries {
-				newTargetPath := filepath.Join(targetPath, entryInDir.Name())
+				newTargetPath := commons.MakeTargetLocalFilePath(entryInDir.Name(), targetPath)
 				err = getDeleteExtraInternal(inputPathMap, newTargetPath)
 				if err != nil {
 					return err

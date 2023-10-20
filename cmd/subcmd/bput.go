@@ -104,7 +104,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	}
 
 	if noRootFlagValues.NoRoot && len(sourcePaths) > 1 {
-		return xerrors.Errorf("failed to put multiple source dirs without creating root directory")
+		return xerrors.Errorf("failed to bput multiple source dirs without creating root directory")
 	}
 
 	cwd := commons.GetCWD()
@@ -170,7 +170,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	}
 
 	for _, sourcePath := range sourcePaths {
-		err = bputOne(bundleTransferManager, sourcePath, targetPath)
+		err = bputOne(bundleTransferManager, sourcePath)
 		if err != nil {
 			return xerrors.Errorf("failed to perform bput %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -195,7 +195,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string, targetPath string) error {
+func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "bputOne",
