@@ -205,9 +205,9 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 
 			logger.Debugf("uploading a file %s to %s", sourcePath, targetFilePath)
 			if singleThreaded {
-				err = fs.UploadFile(sourcePath, targetFilePath, "", true, callbackPut)
+				err = fs.UploadFile(sourcePath, targetFilePath, "", false, callbackPut)
 			} else {
-				err = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, true, callbackPut)
+				err = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, false, callbackPut)
 			}
 
 			if err != nil {
