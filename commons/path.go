@@ -81,6 +81,9 @@ func GetFileExtension(p string) string {
 }
 
 func GetBasename(p string) string {
+	p = strings.TrimRight(p, string(os.PathSeparator))
+	p = strings.TrimRight(p, "/")
+
 	idx1 := strings.LastIndex(p, string(os.PathSeparator))
 	idx2 := strings.LastIndex(p, "/")
 
