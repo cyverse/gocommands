@@ -327,7 +327,7 @@ func makePutTargetDirPath(filesystem *irodsclient_fs.FileSystem, sourcePath stri
 		if !noRoot {
 			// make target dir
 			targetDirPath = commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetPath)
-			err = os.MkdirAll(targetDirPath, 0766)
+			err = filesystem.MakeDir(targetDirPath, true)
 			if err != nil {
 				return "", xerrors.Errorf("failed to make dir %s: %w", targetDirPath, err)
 			}
