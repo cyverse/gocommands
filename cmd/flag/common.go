@@ -95,6 +95,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	}
 
 	logger.Debugf("use sessionID - %d", myCommonFlagValues.SessionID)
+	commons.SetSessionID(myCommonFlagValues.SessionID)
 
 	readConfig := false
 

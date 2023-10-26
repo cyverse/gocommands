@@ -91,6 +91,10 @@ func changeWorkingDir(fs *irodsclient_fs.FileSystem, collectionPath string) erro
 		return xerrors.Errorf("failed to get collection %s: %w", collectionPath, err)
 	}
 
-	commons.SetCWD(collectionPath)
+	err = commons.SetCWD(collectionPath)
+	if err != nil {
+		return xerrors.Errorf("failed to set current working collection %s: %w", collectionPath, err)
+	}
+
 	return nil
 }

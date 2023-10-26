@@ -27,14 +27,17 @@ var (
 	sessionID int
 )
 
+// GetEnvironmentManager returns environment manager
 func GetEnvironmentManager() *irodsclient_icommands.ICommandsEnvironmentManager {
 	return environmentManager
 }
 
+// GetConfig returns config
 func GetConfig() *Config {
 	return appConfig
 }
 
+// SetDefaultConfigIfEmpty sets default config if empty
 func SetDefaultConfigIfEmpty() {
 	if environmentManager == nil {
 		iCommandsEnvMgr, _ := irodsclient_icommands.CreateIcommandsEnvironmentManager()
@@ -47,6 +50,12 @@ func SetDefaultConfigIfEmpty() {
 	}
 }
 
+// SetSessionID sets session id
+func SetSessionID(id int) {
+	sessionID = id
+}
+
+// SyncAccount syncs irods account
 func SyncAccount() error {
 	newAccount, err := environmentManager.ToIRODSAccount()
 	if err != nil {
@@ -69,6 +78,7 @@ func SyncAccount() error {
 	return nil
 }
 
+// GetAccount returns irods account
 func GetAccount() *irodsclient_types.IRODSAccount {
 	return account
 }
@@ -87,6 +97,7 @@ func getCWD(env *irodsclient_icommands.ICommandsEnvironment) string {
 	return path.Clean(currentWorkingDir)
 }
 
+// GetCWD returns current working directory
 func GetCWD() string {
 	session := environmentManager.Session
 	sessionPath := getCWD(session)
@@ -105,22 +116,31 @@ func GetCWD() string {
 	return envPath
 }
 
+// GetZone returns zone
 func GetZone() string {
 	env := environmentManager.Environment
 	return env.Zone
 }
 
+// GetUsername returns username
 func GetUsername() string {
 	env := environmentManager.Environment
 	return env.Username
 }
 
+// GetHomeDir returns home dir
 func GetHomeDir() string {
 	env := environmentManager.Environment
 	return fmt.Sprintf("/%s/home/%s", env.Zone, env.Username)
 }
 
-func SetCWD(cwd string) {
+// SetCWD sets current workding directory
+func SetCWD(cwd string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "commons",
+		"function": "SetCWD",
+	})
+
 	env := environmentManager.Environment
 	session := environmentManager.Session
 	if !strings.HasPrefix(cwd, "/") {
@@ -129,7 +149,13 @@ func SetCWD(cwd string) {
 	}
 
 	session.CurrentWorkingDir = path.Clean(cwd)
-	environmentManager.SaveSession(sessionID)
+
+	logger.Debugf("save session to file - id %d", sessionID)
+	err := environmentManager.SaveSession(sessionID)
+	if err != nil {
+		return xerrors.Errorf("failed to save session: %w", err)
+	}
+	return nil
 }
 
 // InputMissingFields inputs missing fields
@@ -337,18 +363,24 @@ func isICommandsEnvDir(filePath string) bool {
 		return false
 	}
 
-	envFilePath := filepath.Join(filePath, "irods_environment.json")
-
-	stEnv, err := os.Stat(envFilePath)
+	entries, err := os.ReadDir(filePath)
 	if err != nil {
 		return false
 	}
 
-	if stEnv.IsDir() {
-		return false
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			if strings.HasPrefix(entry.Name(), "irods_environment.json.") {
+				return true
+			} else if entry.Name() == "irods_environment.json" {
+				return true
+			} else if entry.Name() == ".irodsA" {
+				return true
+			}
+		}
 	}
 
-	return true
+	return false
 }
 
 func isYAMLFile(filePath string) bool {
@@ -571,6 +603,48 @@ func LoadConfigFromEnv() error {
 	}
 
 	setConfigToICommandsEnvMgr(iCommandsEnvMgr, config)
+
+	if iCommandsEnvMgr.Environment.LogLevel > 0 {
+		logLevel := getLogrusLogLevel(iCommandsEnvMgr.Environment.LogLevel)
+		log.SetLevel(logLevel)
+	}
+
+	// read session from ~/.irods
+	configPath, err := ExpandHomeDir("~/.irods")
+	if err != nil {
+		return xerrors.Errorf("failed to expand home dir for %s: %w", "~/.irods", err)
+	}
+
+	configPath, err = filepath.Abs(configPath)
+	if err != nil {
+		return xerrors.Errorf("failed to compute absolute path for %s: %w", configPath, err)
+	}
+
+	logger.Debugf("reading config file/dir - %s", configPath)
+	// check if it is a file or a dir
+	_, err = os.Stat(configPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return xerrors.Errorf("failed to stat %s: %w", configPath, err)
+		}
+	}
+
+	configFilePath := configPath
+	if isICommandsEnvDir(configPath) {
+		configFilePath = filepath.Join(configPath, "irods_environment.json")
+	}
+
+	err = iCommandsEnvMgr.SetEnvironmentFilePath(configFilePath)
+	if err != nil {
+		return xerrors.Errorf("failed to set iCommands Environment file %s: %w", configFilePath, err)
+	}
+
+	err = iCommandsEnvMgr.Load(sessionID)
+	if err != nil {
+		return xerrors.Errorf("failed to read iCommands Environment: %w", err)
+	}
+
+	setICommandsEnvMgrToConfig(config, iCommandsEnvMgr)
 
 	if iCommandsEnvMgr.Environment.LogLevel > 0 {
 		logLevel := getLogrusLogLevel(iCommandsEnvMgr.Environment.LogLevel)

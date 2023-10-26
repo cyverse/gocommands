@@ -9,8 +9,8 @@ github.com/cpuguy83/go-md2man/v2 v2.0.2/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46t
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/creativeprojects/go-selfupdate v1.0.1 h1:5Un4MTv4puCR5GBgkDLC14J72fljGuMC60E63cFGq1o=
 github.com/creativeprojects/go-selfupdate v1.0.1/go.mod h1:nm7AWUJfrfYt/SB97NAcMhR0KEpPqlrVHXkWFti+ezw=
-github.com/cyverse/go-irodsclient v0.12.16 h1:V1NWXvWioaZ511ZFHDkj7MuRLrx5DZqhaeATjanhl+w=
-github.com/cyverse/go-irodsclient v0.12.16/go.mod h1:9douI0OllPASzv9wwlOwbpnfI8xw0/zFCaAA8D3gOjI=
+github.com/cyverse/go-irodsclient v0.12.17-0.20231026230840-0280081e7d07 h1:aek8ulcjIhmbpGygzFgMT4LIBlBHZz5H9F0Pzuxrv7c=
+github.com/cyverse/go-irodsclient v0.12.17-0.20231026230840-0280081e7d07/go.mod h1:9douI0OllPASzv9wwlOwbpnfI8xw0/zFCaAA8D3gOjI=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
