@@ -17,7 +17,7 @@ const (
 
 // GetIRODSFSClient returns a file system client
 func GetIRODSFSClient(account *irodsclient_types.IRODSAccount) (*irodsclient_fs.FileSystem, error) {
-	fsConfig := irodsclient_fs.NewFileSystemConfig(ClientProgramName, irodsclient_fs.ConnectionLifespanDefault,
+	fsConfig := irodsclient_fs.NewFileSystemConfig(ClientProgramName, irodsclient_fs.FileSystemConnectionErrorTimeoutDefault, irodsclient_fs.FileSystemConnectionInitNumberDefault, irodsclient_fs.FileSystemConnectionLifespanDefault,
 		filesystemTimeout, filesystemTimeout, irodsclient_fs.FileSystemConnectionMaxDefault, TcpBufferSizeDefault,
 		irodsclient_fs.FileSystemTimeoutDefault, irodsclient_fs.FileSystemTimeoutDefault, []irodsclient_fs.MetadataCacheTimeoutSetting{}, true, true)
 
@@ -34,7 +34,7 @@ func GetIRODSFSClientAdvanced(account *irodsclient_types.IRODSAccount, maxConnec
 		tcpBufferSize = TcpBufferSizeDefault
 	}
 
-	fsConfig := irodsclient_fs.NewFileSystemConfig(ClientProgramName, irodsclient_fs.ConnectionLifespanDefault,
+	fsConfig := irodsclient_fs.NewFileSystemConfig(ClientProgramName, irodsclient_fs.FileSystemConnectionErrorTimeoutDefault, irodsclient_fs.FileSystemConnectionInitNumberDefault, irodsclient_fs.FileSystemConnectionLifespanDefault,
 		filesystemTimeout, filesystemTimeout, maxConnection, tcpBufferSize,
 		irodsclient_fs.FileSystemTimeoutDefault, irodsclient_fs.FileSystemTimeoutDefault, []irodsclient_fs.MetadataCacheTimeoutSetting{}, true, true)
 

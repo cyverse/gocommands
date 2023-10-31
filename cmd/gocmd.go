@@ -112,6 +112,13 @@ func main() {
 			}
 		} else if irodsclient_types.IsConnectionError(err) {
 			fmt.Fprintf(os.Stderr, "Failed to establish a connection to iRODS server!\n")
+		} else if irodsclient_types.IsConnectionPoolFullError(err) {
+			var connectionPoolFullError *irodsclient_types.ConnectionPoolFullError
+			if errors.As(err, &connectionPoolFullError) {
+				fmt.Fprintf(os.Stderr, "Failed to establish a new connection to iRODS server as connection pool is full (occupied: %d, max: %d)!\n", connectionPoolFullError.Occupied, connectionPoolFullError.Max)
+			} else {
+				fmt.Fprintf(os.Stderr, "Failed to establish a new connection to iRODS server as connection pool is full!\n")
+			}
 		} else if irodsclient_types.IsAuthError(err) {
 			var authError *irodsclient_types.AuthError
 			if errors.As(err, &authError) {
@@ -133,10 +140,31 @@ func main() {
 			} else {
 				fmt.Fprintf(os.Stderr, "Dir not empty!\n")
 			}
+		} else if irodsclient_types.IsFileAlreadyExistError(err) {
+			var fileAlreadyExistError *irodsclient_types.FileAlreadyExistError
+			if errors.As(err, &fileAlreadyExistError) {
+				fmt.Fprintf(os.Stderr, "File or dir '%s' already exist!\n", fileAlreadyExistError.Path)
+			} else {
+				fmt.Fprintf(os.Stderr, "File or dir already exist!\n")
+			}
+		} else if irodsclient_types.IsTicketNotFoundError(err) {
+			var ticketNotFoundError *irodsclient_types.TicketNotFoundError
+			if errors.As(err, &ticketNotFoundError) {
+				fmt.Fprintf(os.Stderr, "Ticket '%s' not found!\n", ticketNotFoundError.Ticket)
+			} else {
+				fmt.Fprintf(os.Stderr, "Ticket not found!\n")
+			}
+		} else if irodsclient_types.IsUserNotFoundError(err) {
+			var userNotFoundError *irodsclient_types.UserNotFoundError
+			if errors.As(err, &userNotFoundError) {
+				fmt.Fprintf(os.Stderr, "User '%s' not found!\n", userNotFoundError.Name)
+			} else {
+				fmt.Fprintf(os.Stderr, "User not found!\n")
+			}
 		} else if irodsclient_types.IsIRODSError(err) {
 			var irodsError *irodsclient_types.IRODSError
 			if errors.As(err, &irodsError) {
-				fmt.Fprintf(os.Stderr, "iRODS Error: %s\n", irodsError.Error())
+				fmt.Fprintf(os.Stderr, "iRODS Error (code: '%d', message: '%s')\n", irodsError.Code, irodsError.Error())
 			} else {
 				fmt.Fprintf(os.Stderr, "iRODS Error!\n")
 			}
