@@ -173,7 +173,9 @@ func copySftpId(filesystem *irodsclient_fs.FileSystem, force bool, dryrun bool, 
 		}
 
 		existingAuthorizedKeysContent := sb.String()
-		authorizedKeysArray = strings.Split(existingAuthorizedKeysContent, "\n")
+		if len(existingAuthorizedKeysContent) > 0 {
+			authorizedKeysArray = strings.Split(existingAuthorizedKeysContent, "\n")
+		}
 	}
 
 	contentChanged := false
