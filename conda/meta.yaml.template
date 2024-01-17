@@ -1,44 +1,27 @@
+{% set name = "gocommands" %}
 {% set version = "$VERSION" %}
-{% set git_repo = "https://github.com/cyverse/gocommands" %}
 
 package:
-  name: {{ "gocommands" }}
+  name: {{ name|lower }}
   version: {{ version }}
 
 source:
-  url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-darwin-amd64.tar.gz  # [osx and x86_64]
-  md5: $RELEASE_BINARY_OSX_AMD64_MD5  # [osx and x86_64]
-  url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-darwin-arm64.tar.gz  # [arm64]
-  md5: $RELEASE_BINARY_OSX_ARM64_MD5  # [arm64]
-  url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-linux-386.tar.gz  # [linux32]
-  md5: $RELEASE_BINARY_LINUX_386_MD5  # [linux32]
-  url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-linux-amd64.tar.gz  # [linux64]
-  md5: $RELEASE_BINARY_LINUX_AMD64_MD5  # [linux64]
-  url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-linux-arm.tar.gz  # [linux and (armv7l or arm6l)]
-  md5: $RELEASE_BINARY_LINUX_ARM_MD5  # [linux and (armv7l or arm6l)]
-  url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-linux-arm64.tar.gz  # [aarch64]
-  md5: $RELEASE_BINARY_LINUX_ARM64_MD5  # [aarch64]
-  url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-windows-386.zip  # [win32]
-  md5: $RELEASE_BINARY_WINDOWS_386_MD5  # [win32]
-  url: https://github.com/cyverse/gocommands/releases/download/v{{ version }}/gocmd-v{{ version }}-windows-amd64.zip  # [win64]
-  md5: $RELEASE_BINARY_WINDOWS_AMD64_MD5  # [win64]
+  git_rev: v{{ version }}
+  git_url: 'https://github.com/cyverse/gocommands'
 
 build:
   number: 0
-  overlinking_ignore_patterns:
-    - "bin/*"
-  # Our package contains only a single binary already compiled
   binary_relocation: False
+
+requirements:
+  build:
+    - {{ compiler('go') }}
 
 test:
   commands:
-    # We don't want to run tests when the target platform is not the same as the build platform
-    # because gocmd is a binary that can run on a specific platform
-    - gocmd --version  # [build_platform == target_platform and not win64 and not win32]
-    - gocmd.exe --version  # [build_platform == target_platform and (win64 or win32)]
 
 about:
-  home: {{ git_repo }}
+  home: 'https://github.com/cyverse/gocommands'
   summary: 'A protable command-line toolkit for iRODS'
   description: |
     gocommands is a portable command-line toolkit for iRODS data management service. 

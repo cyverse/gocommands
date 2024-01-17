@@ -12,7 +12,7 @@ GOPATH=$(shell go env GOPATH)
 .PHONY: build
 build:
 	mkdir -p bin
-	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/gocmd ./cmd/*.go
+	CGO_ENABLED=0 go build -ldflags=${LDFLAGS} -o bin/gocmd ./cmd/gocmd.go
 
 .PHONY: version
 version:
