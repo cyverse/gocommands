@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/creativeprojects/go-selfupdate v1.0.1
-	github.com/cyverse/go-irodsclient v0.12.18
+	github.com/cyverse/go-irodsclient v0.12.20
 	github.com/dustin/go-humanize v1.0.1
 	github.com/gliderlabs/ssh v0.3.5
 	github.com/jedib0t/go-pretty/v6 v6.3.1
@@ -15,7 +15,7 @@ require (
 	github.com/stretchr/testify v1.8.2
 	golang.org/x/term v0.8.0
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2
-	gopkg.in/yaml.v2 v2.4.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -47,5 +47,4 @@ require (
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

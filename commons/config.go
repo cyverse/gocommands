@@ -5,7 +5,7 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/kelseyhightower/envconfig"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 const (
