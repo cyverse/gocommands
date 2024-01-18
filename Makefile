@@ -18,7 +18,6 @@ build:
 version:
 	./tools/update-pkginfo.sh conda/meta.yaml.template conda/meta.yaml
 	./tools/update-pkginfo.sh homebrew/gocommands.rb.template homebrew/gocommands.rb
-	cp LICENSE conda/LICENSE
 	./tools/create-version.sh VERSION.txt
 
 
