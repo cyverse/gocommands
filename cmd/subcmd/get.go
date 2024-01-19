@@ -5,6 +5,7 @@ import (
 	"os"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -199,7 +200,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 			job.Progress(0, sourceEntry.Size, false)
 
 			logger.Debugf("downloading a data object %s to %s", sourcePath, targetFilePath)
-			err := fs.DownloadFileParallel(sourcePath, "", targetFilePath, 0, callbackGet)
+			err := fs.DownloadFileParallelResumable(sourcePath, "", targetFilePath, 0, callbackGet)
 			if err != nil {
 				job.Progress(-1, sourceEntry.Size, true)
 				return xerrors.Errorf("failed to download %s to %s: %w", sourcePath, targetFilePath, err)
@@ -211,12 +212,26 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		}
 
 		if fileExist {
-			if diff {
+			// check transfer status file
+			trxStatusFilePath := irodsclient_irodsfs.GetDataObjectTransferStatusFilePath(targetFilePath)
+			trxStatusFileExist := false
+			_, err = os.Stat(trxStatusFilePath)
+			if err == nil {
+				trxStatusFileExist = true
+			}
+
+			if trxStatusFileExist {
+				// incomplete file - resume downloading
+			} else if diff {
+				// trx status not exist
 				if noHash {
 					if targetEntry.Size() == sourceEntry.Size {
 						fmt.Printf("skip downloading a data object %s. The file already exists!\n", targetFilePath)
 						return nil
 					}
+
+					// delete file to not write to existing file
+					os.Remove(targetFilePath)
 				} else {
 					if targetEntry.Size() == sourceEntry.Size {
 						if len(sourceEntry.CheckSum) > 0 {
@@ -232,6 +247,9 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 							}
 						}
 					}
+
+					// delete file to not write to existing file
+					os.Remove(targetFilePath)
 				}
 			} else {
 				if !force {
@@ -242,6 +260,9 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 						return nil
 					}
 				}
+
+				// delete file to not write to existing file
+				os.Remove(targetFilePath)
 			}
 		}
 
