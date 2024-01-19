@@ -1,23 +1,4 @@
 # Gocommands Conda Packaging
-This directory contains files for conda packaging
+Please refer following github repo.
 
-## Build
-Activate conda build environment
-```
-conda activate conda-build-env
-```
-
-Run at package root.
-```
-conda build .
-```
-
-Deactivate conda build environment
-```
-conda deactivate
-``` 
-
-## Install
-```
-conda install -c iychoi gocommands
-```
+https://github.com/cyverse/gocommands-conda-forge-recipes 
