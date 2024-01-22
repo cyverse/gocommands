@@ -222,6 +222,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 
 			if trxStatusFileExist {
 				// incomplete file - resume downloading
+				fmt.Printf("resume downloading a data object %s\n", targetFilePath)
 			} else if diff {
 				// trx status not exist
 				if noHash {
