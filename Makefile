@@ -19,4 +19,7 @@ version:
 	./tools/update-pkginfo.sh homebrew/gocommands.rb.template homebrew/gocommands.rb
 	./tools/create-version.sh VERSION.txt
 
-
+.PHONY: thirdparty_licenses
+thirdparty_licenses:
+	go-licenses report ./cmd --template thirdparty_license_template
+	
