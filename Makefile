@@ -21,5 +21,5 @@ version:
 
 .PHONY: thirdparty_licenses
 thirdparty_licenses:
-	go-licenses report ./cmd --template thirdparty_license_template
+	go-licenses report ./cmd --template thirdparty_licenses.template
 	
