@@ -2,7 +2,9 @@
 iRODS Command-line Tools written in Go
 
 
-## Download pre-built binary
+## Install
+
+### Download pre-built binary
 Please download binary file (bundled with `tar` or `zip`) at ["https://github.com/cyverse/gocommands/releases"]("https://github.com/cyverse/gocommands/releases").
 Be sure to download a binary for your target system architecture.
 
@@ -41,6 +43,21 @@ For Windows-amd64 (using windows PowerShell):
 curl -o gocmdv.txt https://raw.githubusercontent.com/cyverse/gocommands/main/VERSION.txt ; $env:GOCMD_VER = (Get-Content gocmdv.txt)
 curl -o gocmd.zip https://github.com/cyverse/gocommands/releases/download/$env:GOCMD_VER/gocmd-$env:GOCMD_VER-windows-amd64.zip ; tar zxvf gocmd.zip ; del gocmd.zip ; del gocmdv.txt
 ```
+
+### Install via Conda (Conda-forge)
+`Gocommands` can be installed via `conda` if you are using Linux or Mac OS. Unfortunately, Windows system is not yet supported. Please follow instructions below to install.
+
+Add `conda-forge` channel to `conda`. This is required because `Gocommands` is added to `conda-forge` channel.
+```
+conda config --add channels conda-forge
+conda config --set channel_priority strict
+```
+
+Install `Gocommands` with `conda`.
+```
+conda install gocommands
+```
+
 
 ## How to use
 
