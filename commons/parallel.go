@@ -143,6 +143,7 @@ func (manager *ParallelJobManager) Wait() error {
 func (manager *ParallelJobManager) startProgress() {
 	if manager.showProgress {
 		manager.progressWriter = GetProgressWriter()
+		messageWidth := getProgressMessageWidth()
 
 		go manager.progressWriter.Render()
 
@@ -154,8 +155,10 @@ func (manager *ParallelJobManager) startProgress() {
 			var tracker *progress.Tracker
 			if t, ok := manager.progressTrackers[name]; !ok {
 				// created a new tracker if not exists
+				msg := GetShortPathMessage(name, messageWidth)
+
 				tracker = &progress.Tracker{
-					Message: name,
+					Message: msg,
 					Total:   total,
 					Units:   progressUnit,
 				}

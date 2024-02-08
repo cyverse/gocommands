@@ -1,6 +1,7 @@
 package commons
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -57,4 +58,22 @@ func GetProgressWriter() progress.Writer {
 	progressWriter.Style().Visibility.TrackerOverall = false
 
 	return progressWriter
+}
+
+func GetShortPathMessage(name string, messageLen int) string {
+	msg := name
+	if messageLen < len(name) {
+		shortname := name[len(name)-messageLen+4:]
+
+		idx := FirstDelimeterIndex(shortname)
+		if idx > 0 {
+			shortname = shortname[idx:]
+		} else {
+			shortname = fmt.Sprintf("/%s", GetBasename(name))
+		}
+
+		msg = fmt.Sprintf("...%s", shortname)
+	}
+
+	return msg
 }

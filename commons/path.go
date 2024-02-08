@@ -97,6 +97,32 @@ func GetBasename(p string) string {
 	return p[idx2+1:]
 }
 
+func FirstDelimeterIndex(p string) int {
+	idx1 := strings.Index(p, string(os.PathSeparator))
+	idx2 := strings.Index(p, "/")
+
+	if idx1 < 0 && idx2 < 0 {
+		return idx1
+	}
+
+	if idx1 <= idx2 {
+		return idx1
+	}
+
+	return idx2
+}
+
+func LastDelimeterIndex(p string) int {
+	idx1 := strings.LastIndex(p, string(os.PathSeparator))
+	idx2 := strings.LastIndex(p, "/")
+
+	if idx1 >= idx2 {
+		return idx1
+	}
+
+	return idx2
+}
+
 func GetDir(p string) string {
 	idx1 := strings.LastIndex(p, string(os.PathSeparator))
 	idx2 := strings.LastIndex(p, "/")
