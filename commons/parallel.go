@@ -2,7 +2,6 @@ package commons
 
 import (
 	"sync"
-	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/jedib0t/go-pretty/v6/progress"
@@ -143,21 +142,7 @@ func (manager *ParallelJobManager) Wait() error {
 
 func (manager *ParallelJobManager) startProgress() {
 	if manager.showProgress {
-		manager.progressWriter = progress.NewWriter()
-		manager.progressWriter.SetAutoStop(false)
-		manager.progressWriter.SetTrackerLength(25)
-		manager.progressWriter.SetMessageWidth(50)
-		manager.progressWriter.SetStyle(progress.StyleDefault)
-		manager.progressWriter.SetTrackerPosition(progress.PositionRight)
-		manager.progressWriter.SetUpdateFrequency(time.Millisecond * 100)
-		manager.progressWriter.Style().Colors = progress.StyleColorsExample
-		manager.progressWriter.Style().Options.PercentFormat = "%4.1f%%"
-		manager.progressWriter.Style().Visibility.ETA = true
-		manager.progressWriter.Style().Visibility.Percentage = true
-		manager.progressWriter.Style().Visibility.Time = true
-		manager.progressWriter.Style().Visibility.Value = true
-		manager.progressWriter.Style().Visibility.ETAOverall = false
-		manager.progressWriter.Style().Visibility.TrackerOverall = false
+		manager.progressWriter = GetProgressWriter()
 
 		go manager.progressWriter.Render()
 
