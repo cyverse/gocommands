@@ -29,7 +29,7 @@ func getTerminalWidth() int {
 func getProgressMessageWidth() int {
 	twidth := getTerminalWidth()
 
-	messageWidth := twidth - progressTrackerLength - 30
+	messageWidth := twidth - progressTrackerLength - 50
 	if messageWidth <= 0 {
 		messageWidth = progressMessageLengthMin
 	}
