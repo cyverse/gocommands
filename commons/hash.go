@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/base64"
 	"encoding/hex"
 	"hash"
 	"hash/adler32"
@@ -39,21 +40,21 @@ func HashLocalFile(sourcePath string, hashAlg string) (string, error) {
 			return "", xerrors.Errorf("failed to hash local file %s with alg %s: %w", sourcePath, hashAlg, err)
 		}
 
-		return hex.EncodeToString(hash), nil
+		return base64.StdEncoding.EncodeToString(hash), nil
 	case strings.ToLower(string(types.ChecksumAlgorithmSHA256)):
 		hash, err := hashLocalFile(sourcePath, sha256.New())
 		if err != nil {
 			return "", xerrors.Errorf("failed to hash local file %s with alg %s: %w", sourcePath, hashAlg, err)
 		}
 
-		return hex.EncodeToString(hash), nil
+		return base64.StdEncoding.EncodeToString(hash), nil
 	case strings.ToLower(string(types.ChecksumAlgorithmSHA512)):
 		hash, err := hashLocalFile(sourcePath, sha512.New())
 		if err != nil {
 			return "", xerrors.Errorf("failed to hash local file %s with alg %s: %w", sourcePath, hashAlg, err)
 		}
 
-		return hex.EncodeToString(hash), nil
+		return base64.StdEncoding.EncodeToString(hash), nil
 	default:
 		return "", xerrors.Errorf("unknown hash algorithm %s", hashAlg)
 	}
