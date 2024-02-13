@@ -55,6 +55,11 @@ func SetSessionID(id int) {
 	sessionID = id
 }
 
+// GetSessionID returns session id
+func GetSessionID() int {
+	return sessionID
+}
+
 // SyncAccount syncs irods account
 func SyncAccount() error {
 	newAccount, err := environmentManager.ToIRODSAccount()

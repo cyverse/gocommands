@@ -11,7 +11,6 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/jedib0t/go-pretty/v6/progress"
-	"github.com/rs/xid"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
 )
@@ -20,14 +19,14 @@ import (
 const (
 	MaxBundleFileNumDefault  int   = 50
 	MaxBundleFileSizeDefault int64 = 2 * 1024 * 1024 * 1024 // 2GB
-	MinBundleFileNumDefault  int   = 1                      // it seems untar recreates dir and changes collection ID, causing getting collection by ID fail
+	MinBundleFileNumDefault  int   = 1
 )
 
 const (
-	BundleTaskNameRemove  string = "Remove Old Files"
-	BundleTaskNameTar     string = "TAR"
-	BundleTaskNameUpload  string = "Upload"
-	BundleTaskNameExtract string = "Extract"
+	BundleTaskNameRemoveFilesAndMakeDirs string = "Cleaning & making dirs"
+	BundleTaskNameTar                    string = "Bundling"
+	BundleTaskNameUpload                 string = "Uploading"
+	BundleTaskNameExtract                string = "Extracting"
 )
 
 type BundleEntry struct {
@@ -49,20 +48,48 @@ type Bundle struct {
 	lastErrorTaskName string
 }
 
-func newBundle(manager *BundleTransferManager, index int64) *Bundle {
-	return &Bundle{
+func newBundle(manager *BundleTransferManager) (*Bundle, error) {
+	bundle := &Bundle{
 		manager:           manager,
-		index:             index,
+		index:             manager.getNextBundleIndex(),
 		entries:           []*BundleEntry{},
 		size:              0,
-		localBundlePath:   manager.getLocalBundleFilePath(index),
-		irodsBundlePath:   manager.getIrodsBundleFilePath(index),
+		localBundlePath:   "",
+		irodsBundlePath:   "",
 		lastError:         nil,
 		lastErrorTaskName: "",
 	}
+
+	err := bundle.updateBundlePath()
+	if err != nil {
+		return nil, err
+	}
+
+	return bundle, nil
 }
 
-func (bundle *Bundle) addFile(localPath string, size int64) error {
+func (bundle *Bundle) GetEntries() []*BundleEntry {
+	return bundle.entries
+}
+
+func (bundle *Bundle) GetBundleFilename() (string, error) {
+	entryStrs := []string{}
+
+	entryStrs = append(entryStrs, "empty_bundle")
+
+	for _, entry := range bundle.entries {
+		entryStrs = append(entryStrs, entry.LocalPath)
+	}
+
+	hash, err := HashStrings(entryStrs, string(types.ChecksumAlgorithmMD5))
+	if err != nil {
+		return "", err
+	}
+
+	return GetBundleFilename(hash), nil
+}
+
+func (bundle *Bundle) AddFile(localPath string, size int64) error {
 	irodsPath, err := bundle.manager.getTargetPath(localPath)
 	if err != nil {
 		return xerrors.Errorf("failed to get target path for %s: %w", localPath, err)
@@ -78,10 +105,15 @@ func (bundle *Bundle) addFile(localPath string, size int64) error {
 	bundle.entries = append(bundle.entries, e)
 	bundle.size += size
 
+	err = bundle.updateBundlePath()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func (bundle *Bundle) addDir(localPath string) error {
+func (bundle *Bundle) AddDir(localPath string) error {
 	irodsPath, err := bundle.manager.getTargetPath(localPath)
 	if err != nil {
 		return xerrors.Errorf("failed to get target path for %s: %w", localPath, err)
@@ -95,6 +127,23 @@ func (bundle *Bundle) addDir(localPath string) error {
 	}
 
 	bundle.entries = append(bundle.entries, e)
+
+	err = bundle.updateBundlePath()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (bundle *Bundle) updateBundlePath() error {
+	filename, err := bundle.GetBundleFilename()
+	if err != nil {
+		return xerrors.Errorf("failed to get bundle filename: %w", err)
+	}
+
+	bundle.localBundlePath = filepath.Join(bundle.manager.localTempDirPath, filename)
+	bundle.irodsBundlePath = filepath.Join(bundle.manager.irodsTempDirPath, filename)
 	return nil
 }
 
@@ -106,12 +155,7 @@ func (bundle *Bundle) requireTar() bool {
 	return len(bundle.entries) >= MinBundleFileNumDefault
 }
 
-func (bundle *Bundle) GetEntries() []*BundleEntry {
-	return bundle.entries
-}
-
 type BundleTransferManager struct {
-	id                      string
 	filesystem              *irodsclient_fs.FileSystem
 	irodsDestPath           string
 	currentBundle           *Bundle
@@ -126,7 +170,6 @@ type BundleTransferManager struct {
 	uploadThreadNum         int
 	localTempDirPath        string
 	irodsTempDirPath        string
-	makeIrodsTempDirPath    bool
 	differentFilesOnly      bool
 	noHashForComparison     bool
 	noBulkRegistration      bool
@@ -144,7 +187,6 @@ type BundleTransferManager struct {
 // NewBundleTransferManager creates a new BundleTransferManager
 func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, singleThreaded bool, uploadThreadNum int, localTempDirPath string, irodsTempDirPath string, diff bool, noHash bool, noBulkReg bool, showProgress bool) *BundleTransferManager {
 	manager := &BundleTransferManager{
-		id:                      xid.New().String(),
 		filesystem:              fs,
 		irodsDestPath:           irodsDestPath,
 		currentBundle:           nil,
@@ -159,7 +201,6 @@ func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath strin
 		uploadThreadNum:         uploadThreadNum,
 		localTempDirPath:        localTempDirPath,
 		irodsTempDirPath:        irodsTempDirPath,
-		makeIrodsTempDirPath:    false,
 		differentFilesOnly:      diff,
 		noHashForComparison:     noHash,
 		noBulkRegistration:      noBulkReg,
@@ -190,18 +231,6 @@ func (manager *BundleTransferManager) getNextBundleIndex() int64 {
 	idx := manager.nextBundleIndex
 	manager.nextBundleIndex++
 	return idx
-}
-
-func (manager *BundleTransferManager) getBundleFileName(index int64) string {
-	return GetBundleFileName(manager.id, index)
-}
-
-func (manager *BundleTransferManager) getLocalBundleFilePath(index int64) string {
-	return filepath.Join(manager.localTempDirPath, manager.getBundleFileName(index))
-}
-
-func (manager *BundleTransferManager) getIrodsBundleFilePath(index int64) string {
-	return path.Join(manager.irodsTempDirPath, manager.getBundleFileName(index))
 }
 
 func (manager *BundleTransferManager) progress(name string, processed int64, total int64, progressUnit progress.Units, errored bool) {
@@ -251,7 +280,12 @@ func (manager *BundleTransferManager) Schedule(source string, dir bool, size int
 
 	if manager.currentBundle == nil {
 		// add new
-		manager.currentBundle = newBundle(manager, manager.getNextBundleIndex())
+		bundle, err := newBundle(manager)
+		if err != nil {
+			return xerrors.Errorf("failed to create a new bundle for %s: %w", source, err)
+		}
+
+		manager.currentBundle = bundle
 		logger.Debugf("assigned a new bundle %d", manager.currentBundle.index)
 	}
 
@@ -322,12 +356,12 @@ func (manager *BundleTransferManager) Schedule(source string, dir bool, size int
 	}
 
 	if dir {
-		manager.currentBundle.addDir(source)
+		manager.currentBundle.AddDir(source)
 		logger.Debugf("> scheduled a local file bundle-upload %s", source)
 		return nil
 	}
 
-	manager.currentBundle.addFile(source, size)
+	manager.currentBundle.AddFile(source, size)
 	logger.Debugf("> scheduled a local file bundle-upload %s", source)
 	return nil
 }
@@ -386,8 +420,16 @@ func (manager *BundleTransferManager) CleanUpBundles() {
 
 	logger.Debugf("clearing bundle files in %s", manager.irodsTempDirPath)
 
-	if manager.makeIrodsTempDirPath {
-		// remove all files in it and the dir
+	// if the staging dir is not in target path
+	entries, err := manager.filesystem.List(manager.irodsTempDirPath)
+	if err != nil {
+		logger.WithError(err).Warnf("failed to listing staging dir %s", manager.irodsTempDirPath)
+		return
+	}
+
+	if len(entries) == 0 {
+		// empty
+		// remove the dir
 		err := manager.filesystem.RemoveDir(manager.irodsTempDirPath, true, true)
 		if err != nil {
 			logger.WithError(err).Warnf("failed to remove staging dir %s", manager.irodsTempDirPath)
@@ -396,25 +438,40 @@ func (manager *BundleTransferManager) CleanUpBundles() {
 		return
 	}
 
+	// has some files in it yet
+	// ask
+	deleted := 0
+	for _, entry := range entries {
+		del := InputYN(fmt.Sprintf("removing old bundle file  %s found. Delete?", entry.Path))
+		if del {
+			logger.Debugf("deleting old bundle file %s", entry)
+
+			removeErr := os.Remove(entry.Path)
+			if removeErr != nil {
+				logger.WithError(removeErr).Warnf("failed to remove old bundle file %s", entry.Path)
+			}
+
+			deleted++
+		}
+	}
+
+	// check again
 	// if the staging dir is not in target path
-	entries, err := manager.filesystem.List(manager.irodsTempDirPath)
+	entries, err = manager.filesystem.List(manager.irodsTempDirPath)
 	if err != nil {
 		logger.WithError(err).Warnf("failed to listing staging dir %s", manager.irodsTempDirPath)
 		return
 	}
 
-	for _, entry := range entries {
-		if entry.Type == irodsclient_fs.FileEntry {
-			if ok, managerID, _ := GetBundleFileNameParts(entry.Name); ok {
-				if managerID == manager.id {
-					err := manager.filesystem.RemoveFile(entry.Path, true)
-					if err != nil {
-						logger.WithError(err).Warnf("failed to remove bundle file %s", entry.Path)
-						return
-					}
-				}
-			}
+	if len(entries) == 0 {
+		// empty
+		// remove the dir
+		err := manager.filesystem.RemoveDir(manager.irodsTempDirPath, true, true)
+		if err != nil {
+			logger.WithError(err).Warnf("failed to remove staging dir %s", manager.irodsTempDirPath)
+			return
 		}
+		return
 	}
 }
 
@@ -490,22 +547,22 @@ func (manager *BundleTransferManager) Start() {
 	})
 
 	processBundleTarChan := make(chan *Bundle, 1)
-	processBundleRemoveFilesChan := make(chan *Bundle, 5)
+	processBundleRemoveFilesAndMakeDirsChan := make(chan *Bundle, 5)
 	processBundleUploadChan := make(chan *Bundle, 5)
 	processBundleExtractChan1 := make(chan *Bundle, 5)
 	processBundleExtractChan2 := make(chan *Bundle, 5)
 
 	manager.startProgress()
 
-	// bundle --> tar --> upload   --> extract
-	//        --> remove ------------>
+	// bundle --> tar --> upload                   --> extract
+	//        --> remove old files & make dirs ------>
 
 	go func() {
 		logger.Debug("start input thread")
 		defer logger.Debug("exit input thread")
 
 		defer close(processBundleTarChan)
-		defer close(processBundleRemoveFilesChan)
+		defer close(processBundleRemoveFilesAndMakeDirsChan)
 
 		if !manager.filesystem.ExistsDir(manager.irodsDestPath) {
 			err := manager.filesystem.MakeDir(manager.irodsDestPath, true)
@@ -521,7 +578,6 @@ func (manager *BundleTransferManager) Start() {
 		}
 
 		if !manager.filesystem.ExistsDir(manager.irodsTempDirPath) {
-			manager.makeIrodsTempDirPath = true
 			err := manager.filesystem.MakeDir(manager.irodsTempDirPath, true)
 			if err != nil {
 				// mark error
@@ -537,7 +593,7 @@ func (manager *BundleTransferManager) Start() {
 		for bundle := range manager.pendingBundles {
 			// send to tar and remove
 			processBundleTarChan <- bundle
-			processBundleRemoveFilesChan <- bundle
+			processBundleRemoveFilesAndMakeDirsChan <- bundle
 			// don't stop here
 		}
 	}()
@@ -630,14 +686,14 @@ func (manager *BundleTransferManager) Start() {
 		close(processBundleExtractChan1)
 	}()
 
-	// process bundle - remove files
+	// process bundle - remove stale files and create new dirs
 	go func() {
-		logger.Debug("start stale file remove thread")
-		defer logger.Debug("exit stale file remove thread")
+		logger.Debug("start stale file remove and dir create thread")
+		defer logger.Debug("exit stale file remove and dir create thread")
 
 		defer close(processBundleExtractChan2)
 
-		for bundle := range processBundleRemoveFilesChan {
+		for bundle := range processBundleRemoveFilesAndMakeDirsChan {
 			cont := true
 
 			manager.mutex.RLock()
@@ -647,7 +703,7 @@ func (manager *BundleTransferManager) Start() {
 			manager.mutex.RUnlock()
 
 			if cont && len(bundle.entries) > 0 {
-				err := manager.processBundleRemoveFiles(bundle)
+				err := manager.processBundleRemoveFilesAndMakeDirs(bundle)
 				if err != nil {
 					// mark error
 					manager.mutex.Lock()
@@ -655,7 +711,7 @@ func (manager *BundleTransferManager) Start() {
 					manager.mutex.Unlock()
 
 					bundle.lastError = err
-					bundle.lastErrorTaskName = BundleTaskNameRemove
+					bundle.lastErrorTaskName = BundleTaskNameRemoveFilesAndMakeDirs
 
 					logger.Error(err)
 					// don't stop here
@@ -796,17 +852,17 @@ func (manager *BundleTransferManager) Start() {
 	}()
 }
 
-func (manager *BundleTransferManager) processBundleRemoveFiles(bundle *Bundle) error {
+func (manager *BundleTransferManager) processBundleRemoveFilesAndMakeDirs(bundle *Bundle) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "commons",
 		"struct":   "BundleTransferManager",
-		"function": "processBundleRemoveFiles",
+		"function": "processBundleRemoveFilesAndMakeDirs",
 	})
 
 	// remove files in the bundle if they exist in iRODS
-	logger.Debugf("deleting exising data objects in the bundle %d", bundle.index)
+	logger.Debugf("deleting exising data objects and creating new collections in the bundle %d", bundle.index)
 
-	progressName := manager.getProgressName(bundle, BundleTaskNameRemove)
+	progressName := manager.getProgressName(bundle, BundleTaskNameRemoveFilesAndMakeDirs)
 
 	totalFileNum := int64(len(bundle.entries))
 	processedFiles := int64(0)
@@ -815,19 +871,11 @@ func (manager *BundleTransferManager) processBundleRemoveFiles(bundle *Bundle) e
 		manager.progress(progressName, 0, totalFileNum, progress.UnitsDefault, false)
 	}
 
-	if !bundle.requireTar() {
-		// no tar, we can overwrite it. so pass this step
-		if manager.showProgress {
-			manager.progress(progressName, totalFileNum, totalFileNum, progress.UnitsDefault, false)
-		}
-
-		logger.Debugf("skip - deleting exising data objects in the bundle %d, we will overwrite them", bundle.index)
-		return nil
-	}
-
 	for _, file := range bundle.entries {
 		if !file.Dir {
+			// new entry is file, but having dir in irods
 			if manager.filesystem.ExistsDir(file.IRODSPath) {
+				logger.Debugf("deleting exising collection %s", file.IRODSPath)
 				err := manager.filesystem.RemoveDir(file.IRODSPath, true, true)
 				if err != nil {
 					if manager.showProgress {
@@ -839,6 +887,7 @@ func (manager *BundleTransferManager) processBundleRemoveFiles(bundle *Bundle) e
 				}
 			}
 		} else {
+			// new entry is dir, but having file in irods
 			if manager.filesystem.ExistsFile(file.IRODSPath) {
 				logger.Debugf("deleting exising data object %s", file.IRODSPath)
 
@@ -1099,7 +1148,7 @@ func CleanUpOldLocalBundles(localTempDirPath string, force bool) {
 	bundleEntries := []string{}
 	for _, entry := range entries {
 		// filter only bundle files
-		if ok, _, _ := GetBundleFileNameParts(entry.Name()); ok {
+		if GetFileExtension(entry.Name()) == ".tar" {
 			fullPath := filepath.Join(localTempDirPath, entry.Name())
 			bundleEntries = append(bundleEntries, fullPath)
 		}
@@ -1120,21 +1169,19 @@ func CleanUpOldLocalBundles(localTempDirPath string, force bool) {
 		return
 	}
 
-	// ask
-	deleteAll := InputYN(fmt.Sprintf("removing %d old local bundle files found in local temp dir %s. Delete all?", len(bundleEntries), localTempDirPath))
-	if !deleteAll {
-		fmt.Printf("skip deleting %d old local bundles in %s\n", len(bundleEntries), localTempDirPath)
-		return
-	}
-
 	deletedCount := 0
 	for _, entry := range bundleEntries {
-		logger.Debugf("deleting old local bundle %s", entry)
-		removeErr := os.Remove(entry)
-		if removeErr != nil {
-			logger.WithError(removeErr).Warnf("failed to remove old local bundle %s", entry)
-		} else {
-			deletedCount++
+		// ask
+		del := InputYN(fmt.Sprintf("removing old local bundle file  %s found. Delete?", entry))
+		if del {
+			logger.Debugf("deleting old local bundle %s", entry)
+
+			removeErr := os.Remove(entry)
+			if removeErr != nil {
+				logger.WithError(removeErr).Warnf("failed to remove old local bundle %s", entry)
+			} else {
+				deletedCount++
+			}
 		}
 	}
 
@@ -1161,25 +1208,19 @@ func CleanUpOldIRODSBundles(fs *irodsclient_fs.FileSystem, irodsTempDirPath stri
 		return
 	}
 
-	bundleEntries := []string{}
+	deletedCount := 0
 	for _, entry := range entries {
 		// filter only bundle files
 		if entry.Type == irodsclient_fs.FileEntry {
-			if ok, _, _ := GetBundleFileNameParts(entry.Name); ok {
-				fullPath := path.Join(irodsTempDirPath, entry.Name)
-				bundleEntries = append(bundleEntries, fullPath)
+			if IsBundleFilename(entry.Name) {
+				logger.Debugf("deleting old irods bundle %s", entry)
+				removeErr := fs.RemoveFile(entry.Path, force)
+				if removeErr != nil {
+					logger.WithError(removeErr).Warnf("failed to remove old irods bundle %s", entry)
+				} else {
+					deletedCount++
+				}
 			}
-		}
-	}
-
-	deletedCount := 0
-	for _, entry := range bundleEntries {
-		logger.Debugf("deleting old irods bundle %s", entry)
-		removeErr := fs.RemoveFile(entry, force)
-		if removeErr != nil {
-			logger.WithError(removeErr).Warnf("failed to remove old irods bundle %s", entry)
-		} else {
-			deletedCount++
 		}
 	}
 

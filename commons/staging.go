@@ -11,6 +11,17 @@ import (
 	"golang.org/x/xerrors"
 )
 
+func GetBundleFilename(hash string) string {
+	return fmt.Sprintf("bundle_%s.tar", hash)
+}
+
+func IsBundleFilename(p string) bool {
+	if strings.HasPrefix(p, "bundle_") && strings.HasPrefix(p, ".tar") {
+		return true
+	}
+	return false
+}
+
 func ValidateStagingDir(fs *irodsclient_fs.FileSystem, targetPath string, stagingPath string) (bool, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "commons",
@@ -83,25 +94,6 @@ func CheckSafeStagingDir(stagingPath string) error {
 	}
 
 	return nil
-}
-
-func GetBundleFileName(managerID string, bundleIndex int64) string {
-	return fmt.Sprintf("bundle_%s_%d.tar", managerID, bundleIndex)
-}
-
-func GetBundleFileNameParts(name string) (bool, string, string) {
-	if !strings.HasSuffix(name, ".tar") {
-		return false, "", ""
-	}
-
-	name = name[:len(name)-4]
-
-	parts := strings.Split(name, "_")
-	if len(parts) != 3 {
-		return false, "", ""
-	}
-
-	return true, parts[1], parts[2]
 }
 
 func GetDefaultStagingDir(targetPath string) string {

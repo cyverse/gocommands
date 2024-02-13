@@ -18,6 +18,48 @@ import (
 	"github.com/cyverse/go-irodsclient/irods/types"
 )
 
+func HashStrings(strs []string, hashAlg string) (string, error) {
+	switch strings.ToLower(hashAlg) {
+	case strings.ToLower(string(types.ChecksumAlgorithmMD5)):
+		hash, err := hashStrings(strs, md5.New())
+		if err != nil {
+			return "", xerrors.Errorf("failed to hash with alg %s: %w", hashAlg, err)
+		}
+
+		return hex.EncodeToString(hash), nil
+	case strings.ToLower(string(types.ChecksumAlgorithmADLER32)):
+		hash, err := hashStrings(strs, adler32.New())
+		if err != nil {
+			return "", xerrors.Errorf("failed to hash with alg %s: %w", hashAlg, err)
+		}
+
+		return hex.EncodeToString(hash), nil
+	case strings.ToLower(string(types.ChecksumAlgorithmSHA1)):
+		hash, err := hashStrings(strs, sha1.New())
+		if err != nil {
+			return "", xerrors.Errorf("failed to hash with alg %s: %w", hashAlg, err)
+		}
+
+		return base64.StdEncoding.EncodeToString(hash), nil
+	case strings.ToLower(string(types.ChecksumAlgorithmSHA256)):
+		hash, err := hashStrings(strs, sha256.New())
+		if err != nil {
+			return "", xerrors.Errorf("failed to hash with alg %s: %w", hashAlg, err)
+		}
+
+		return base64.StdEncoding.EncodeToString(hash), nil
+	case strings.ToLower(string(types.ChecksumAlgorithmSHA512)):
+		hash, err := hashStrings(strs, sha512.New())
+		if err != nil {
+			return "", xerrors.Errorf("failed to hash with alg %s: %w", hashAlg, err)
+		}
+
+		return base64.StdEncoding.EncodeToString(hash), nil
+	default:
+		return "", xerrors.Errorf("unknown hash algorithm %s", hashAlg)
+	}
+}
+
 func HashLocalFile(sourcePath string, hashAlg string) (string, error) {
 	switch strings.ToLower(hashAlg) {
 	case strings.ToLower(string(types.ChecksumAlgorithmMD5)):
@@ -58,6 +100,18 @@ func HashLocalFile(sourcePath string, hashAlg string) (string, error) {
 	default:
 		return "", xerrors.Errorf("unknown hash algorithm %s", hashAlg)
 	}
+}
+
+func hashStrings(strs []string, hashAlg hash.Hash) ([]byte, error) {
+	for _, str := range strs {
+		_, err := hashAlg.Write([]byte(str))
+		if err != nil {
+			return nil, xerrors.Errorf("failed to write: %w", err)
+		}
+	}
+
+	sumBytes := hashAlg.Sum(nil)
+	return sumBytes, nil
 }
 
 func hashLocalFile(sourcePath string, hashAlg hash.Hash) ([]byte, error) {
