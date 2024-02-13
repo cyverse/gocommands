@@ -444,7 +444,7 @@ func (manager *BundleTransferManager) CleanUpBundles() {
 	for _, entry := range entries {
 		del := InputYN(fmt.Sprintf("removing old bundle file  %s found. Delete?", entry.Path))
 		if del {
-			logger.Debugf("deleting old bundle file %s", entry)
+			logger.Debugf("deleting old bundle file %s", entry.Path)
 
 			removeErr := os.Remove(entry.Path)
 			if removeErr != nil {
@@ -477,8 +477,8 @@ func (manager *BundleTransferManager) CleanUpBundles() {
 
 func (manager *BundleTransferManager) startProgress() {
 	if manager.showProgress {
-		manager.progressWriter = GetProgressWriter()
-		messageWidth := getProgressMessageWidth()
+		manager.progressWriter = GetProgressWriter(false)
+		messageWidth := getProgressMessageWidth(false)
 
 		go manager.progressWriter.Render()
 

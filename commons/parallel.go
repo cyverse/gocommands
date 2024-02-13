@@ -142,8 +142,8 @@ func (manager *ParallelJobManager) Wait() error {
 
 func (manager *ParallelJobManager) startProgress() {
 	if manager.showProgress {
-		manager.progressWriter = GetProgressWriter()
-		messageWidth := getProgressMessageWidth()
+		manager.progressWriter = GetProgressWriter(true)
+		messageWidth := getProgressMessageWidth(true)
 
 		go manager.progressWriter.Render()
 

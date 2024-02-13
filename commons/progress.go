@@ -14,6 +14,7 @@ type ProgressTrackerCallback func(name string, processed int64, total int64, uni
 const (
 	progressTrackerLength        int = 20
 	progressMessageLengthMin     int = 20
+	progressMessageLengthDefault int = 40
 	progressTerminalWidthDefault int = 80
 )
 
@@ -26,22 +27,26 @@ func getTerminalWidth() int {
 	return width
 }
 
-func getProgressMessageWidth() int {
-	twidth := getTerminalWidth()
+func getProgressMessageWidth(displayPath bool) int {
+	if displayPath {
+		twidth := getTerminalWidth()
 
-	messageWidth := twidth - progressTrackerLength - 50
-	if messageWidth <= 0 {
-		messageWidth = progressMessageLengthMin
+		messageWidth := twidth - progressTrackerLength - 50
+		if messageWidth <= 0 {
+			messageWidth = progressMessageLengthMin
+		}
+
+		return messageWidth
+	} else {
+		return progressMessageLengthDefault
 	}
-
-	return messageWidth
 }
 
-func GetProgressWriter() progress.Writer {
+func GetProgressWriter(displayPath bool) progress.Writer {
 	progressWriter := progress.NewWriter()
 	progressWriter.SetAutoStop(false)
 	progressWriter.SetTrackerLength(progressTrackerLength)
-	progressWriter.SetMessageWidth(getProgressMessageWidth())
+	progressWriter.SetMessageWidth(getProgressMessageWidth(displayPath))
 	progressWriter.SetStyle(progress.StyleDefault)
 	progressWriter.SetTrackerPosition(progress.PositionRight)
 	progressWriter.SetUpdateFrequency(time.Millisecond * 100)
