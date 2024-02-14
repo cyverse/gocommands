@@ -9,7 +9,7 @@ import (
 	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
-	"github.com/cyverse/go-irodsclient/irods/types"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
@@ -19,7 +19,7 @@ import (
 const (
 	MaxBundleFileNumDefault  int   = 50
 	MaxBundleFileSizeDefault int64 = 2 * 1024 * 1024 * 1024 // 2GB
-	MinBundleFileNumDefault  int   = 1
+	MinBundleFileNumDefault  int   = 3
 )
 
 const (
@@ -81,7 +81,7 @@ func (bundle *Bundle) GetBundleFilename() (string, error) {
 		entryStrs = append(entryStrs, entry.LocalPath)
 	}
 
-	hash, err := HashStrings(entryStrs, string(types.ChecksumAlgorithmMD5))
+	hash, err := HashStrings(entryStrs, string(irodsclient_types.ChecksumAlgorithmMD5))
 	if err != nil {
 		return "", err
 	}
@@ -871,34 +871,45 @@ func (manager *BundleTransferManager) processBundleRemoveFilesAndMakeDirs(bundle
 		manager.progress(progressName, 0, totalFileNum, progress.UnitsDefault, false)
 	}
 
-	for _, file := range bundle.entries {
-		if !file.Dir {
-			// new entry is file, but having dir in irods
-			if manager.filesystem.ExistsDir(file.IRODSPath) {
-				logger.Debugf("deleting exising collection %s", file.IRODSPath)
-				err := manager.filesystem.RemoveDir(file.IRODSPath, true, true)
-				if err != nil {
-					if manager.showProgress {
-						manager.progress(progressName, processedFiles, totalFileNum, progress.UnitsDefault, true)
-					}
-
-					logger.Error(err)
-					return xerrors.Errorf("failed to delete existing collection %s", file.IRODSPath)
+	for _, bundleEntry := range bundle.entries {
+		entry, err := manager.filesystem.Stat(bundleEntry.IRODSPath)
+		if err != nil {
+			if !irodsclient_types.IsFileNotFoundError(err) {
+				if manager.showProgress {
+					manager.progress(progressName, processedFiles, totalFileNum, progress.UnitsDefault, true)
 				}
-			}
-		} else {
-			// new entry is dir, but having file in irods
-			if manager.filesystem.ExistsFile(file.IRODSPath) {
-				logger.Debugf("deleting exising data object %s", file.IRODSPath)
 
-				err := manager.filesystem.RemoveFile(file.IRODSPath, true)
+				logger.Error(err)
+				return xerrors.Errorf("failed to stat data object or collection %s", bundleEntry.IRODSPath)
+			}
+		}
+
+		if entry != nil {
+			if entry.IsDir() {
+				if !bundleEntry.Dir {
+					logger.Debugf("deleting exising collection %s", bundleEntry.IRODSPath)
+					err := manager.filesystem.RemoveDir(bundleEntry.IRODSPath, true, true)
+					if err != nil {
+						if manager.showProgress {
+							manager.progress(progressName, processedFiles, totalFileNum, progress.UnitsDefault, true)
+						}
+
+						logger.Error(err)
+						return xerrors.Errorf("failed to delete existing collection %s", bundleEntry.IRODSPath)
+					}
+				}
+			} else {
+				// file
+				logger.Debugf("deleting exising data object %s", bundleEntry.IRODSPath)
+
+				err := manager.filesystem.RemoveFile(bundleEntry.IRODSPath, true)
 				if err != nil {
 					if manager.showProgress {
 						manager.progress(progressName, processedFiles, totalFileNum, progress.UnitsDefault, true)
 					}
 
 					logger.Error(err)
-					return xerrors.Errorf("failed to delete existing data object %s", file.IRODSPath)
+					return xerrors.Errorf("failed to delete existing data object %s", bundleEntry.IRODSPath)
 				}
 			}
 		}
@@ -986,94 +997,131 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 			}
 		}
 
-		var err error
-		if manager.singleThreaded {
-			err = manager.filesystem.UploadFile(bundle.localBundlePath, bundle.irodsBundlePath, "", false, callback)
-		} else {
-			err = manager.filesystem.UploadFileParallel(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false, callback)
+		haveExistingBundle := false
+
+		bundleEntry, err := manager.filesystem.StatFile(bundle.irodsBundlePath)
+		if err != nil {
+			if !irodsclient_types.IsFileNotFoundError(err) {
+				if manager.showProgress {
+					manager.progress(progressName, -1, totalFileSize, progress.UnitsBytes, true)
+				}
+
+				return xerrors.Errorf("failed to stat existing bundle %s: %w", bundle.irodsBundlePath, err)
+			}
 		}
 
-		if err != nil {
-			if manager.showProgress {
-				manager.progress(progressName, -1, totalFileSize, progress.UnitsBytes, true)
+		if bundleEntry != nil {
+			localBundleStat, err := os.Stat(bundle.localBundlePath)
+			if err != nil {
+				if os.IsNotExist(err) {
+					return irodsclient_types.NewFileNotFoundError(bundle.localBundlePath)
+				}
+
+				return xerrors.Errorf("failed to stat %s: %w", bundle.localBundlePath, err)
 			}
 
-			return xerrors.Errorf("failed to upload bundle %d to %s: %w", bundle.index, bundle.irodsBundlePath, err)
+			if bundleEntry.Size == localBundleStat.Size() {
+				// same file exist
+				haveExistingBundle = true
+			}
+		}
+
+		if !haveExistingBundle {
+			logger.Debugf("uploading bundle %d to %s", bundle.index, bundle.irodsBundlePath)
+
+			if manager.singleThreaded {
+				err = manager.filesystem.UploadFile(bundle.localBundlePath, bundle.irodsBundlePath, "", false, callback)
+			} else {
+				err = manager.filesystem.UploadFileParallel(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false, callback)
+			}
+
+			if err != nil {
+				if manager.showProgress {
+					manager.progress(progressName, -1, totalFileSize, progress.UnitsBytes, true)
+				}
+
+				return xerrors.Errorf("failed to upload bundle %d to %s: %w", bundle.index, bundle.irodsBundlePath, err)
+			}
+
+			logger.Debugf("uploaded bundle %d to %s", bundle.index, bundle.irodsBundlePath)
+		} else {
+			logger.Debugf("skip uploading bundle %d to %s, file already exists", bundle.index, bundle.irodsBundlePath)
 		}
 
 		// remove local bundle file
 		os.Remove(bundle.localBundlePath)
-	} else {
-		fileUploadProgress := make([]int64, len(bundle.entries))
-		fileUploadProgressMutex := sync.Mutex{}
+		return nil
+	}
 
+	fileUploadProgress := make([]int64, len(bundle.entries))
+	fileUploadProgressMutex := sync.Mutex{}
+
+	if manager.showProgress {
+		manager.progress(progressName, 0, totalFileSize, progress.UnitsBytes, false)
+	}
+
+	for fileIdx, file := range bundle.entries {
+		var callbackFileUpload func(processed int64, total int64)
 		if manager.showProgress {
-			manager.progress(progressName, 0, totalFileSize, progress.UnitsBytes, false)
+			callbackFileUpload = func(processed int64, total int64) {
+				fileUploadProgressMutex.Lock()
+				defer fileUploadProgressMutex.Unlock()
+
+				fileUploadProgress[fileIdx] = processed
+
+				progressSum := int64(0)
+				for _, progress := range fileUploadProgress {
+					progressSum += progress
+				}
+
+				manager.progress(progressName, progressSum, totalFileSize, progress.UnitsBytes, false)
+			}
 		}
 
-		for fileIdx, file := range bundle.entries {
-			var callbackFileUpload func(processed int64, total int64)
-			if manager.showProgress {
-				callbackFileUpload = func(processed int64, total int64) {
-					fileUploadProgressMutex.Lock()
-					defer fileUploadProgressMutex.Unlock()
-
-					fileUploadProgress[fileIdx] = processed
-
-					progressSum := int64(0)
-					for _, progress := range fileUploadProgress {
-						progressSum += progress
-					}
-
-					manager.progress(progressName, progressSum, totalFileSize, progress.UnitsBytes, false)
+		if !manager.filesystem.ExistsDir(path.Dir(file.IRODSPath)) {
+			// if parent dir does not exist, create
+			err := manager.filesystem.MakeDir(path.Dir(file.IRODSPath), true)
+			if err != nil {
+				if manager.showProgress {
+					manager.progress(progressName, -1, totalFileSize, progress.UnitsBytes, true)
 				}
+
+				return xerrors.Errorf("failed to create a dir %s to upload file %s in bundle %d to %s: %w", path.Dir(file.IRODSPath), file.LocalPath, bundle.index, file.IRODSPath, err)
+			}
+		}
+
+		var err error
+		if file.Dir {
+			err = manager.filesystem.MakeDir(file.IRODSPath, true)
+			if err != nil {
+				if manager.showProgress {
+					manager.progress(progressName, -1, totalFileSize, progress.UnitsBytes, true)
+				}
+
+				return xerrors.Errorf("failed to upload dir %s in bundle %d to %s: %w", file.LocalPath, bundle.index, file.IRODSPath, err)
 			}
 
-			if !manager.filesystem.ExistsDir(path.Dir(file.IRODSPath)) {
-				// if parent dir does not exist, create
-				err := manager.filesystem.MakeDir(path.Dir(file.IRODSPath), true)
-				if err != nil {
-					if manager.showProgress {
-						manager.progress(progressName, -1, totalFileSize, progress.UnitsBytes, true)
-					}
-
-					return xerrors.Errorf("failed to create a dir %s to upload file %s in bundle %d to %s: %w", path.Dir(file.IRODSPath), file.LocalPath, bundle.index, file.IRODSPath, err)
-				}
-			}
-
-			var err error
-			if file.Dir {
-				err = manager.filesystem.MakeDir(file.IRODSPath, true)
-				if err != nil {
-					if manager.showProgress {
-						manager.progress(progressName, -1, totalFileSize, progress.UnitsBytes, true)
-					}
-
-					return xerrors.Errorf("failed to upload dir %s in bundle %d to %s: %w", file.LocalPath, bundle.index, file.IRODSPath, err)
-				}
-
-				logger.Debugf("uploaded dir %s in bundle %d to %s", file.LocalPath, bundle.index, file.IRODSPath)
+			logger.Debugf("uploaded dir %s in bundle %d to %s", file.LocalPath, bundle.index, file.IRODSPath)
+		} else {
+			if manager.singleThreaded {
+				err = manager.filesystem.UploadFile(file.LocalPath, file.IRODSPath, "", false, callbackFileUpload)
 			} else {
-				if manager.singleThreaded {
-					err = manager.filesystem.UploadFile(file.LocalPath, file.IRODSPath, "", false, callbackFileUpload)
-				} else {
-					err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, callbackFileUpload)
-				}
-
-				if err != nil {
-					if manager.showProgress {
-						manager.progress(progressName, -1, totalFileSize, progress.UnitsBytes, true)
-					}
-
-					return xerrors.Errorf("failed to upload file %s in bundle %d to %s: %w", file.LocalPath, bundle.index, file.IRODSPath, err)
-				}
-
-				logger.Debugf("uploaded file %s in bundle %d to %s", file.LocalPath, bundle.index, file.IRODSPath)
+				err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, callbackFileUpload)
 			}
+
+			if err != nil {
+				if manager.showProgress {
+					manager.progress(progressName, -1, totalFileSize, progress.UnitsBytes, true)
+				}
+
+				return xerrors.Errorf("failed to upload file %s in bundle %d to %s: %w", file.LocalPath, bundle.index, file.IRODSPath, err)
+			}
+
+			logger.Debugf("uploaded file %s in bundle %d to %s", file.LocalPath, bundle.index, file.IRODSPath)
 		}
 	}
 
-	logger.Debugf("uploaded bundle %d to %s", bundle.index, bundle.irodsBundlePath)
+	logger.Debugf("uploaded files in bundle %d to %s", bundle.index, bundle.irodsBundlePath)
 	return nil
 }
 
@@ -1104,7 +1152,7 @@ func (manager *BundleTransferManager) processBundleExtract(bundle *Bundle) error
 		return nil
 	}
 
-	err := manager.filesystem.ExtractStructFile(bundle.irodsBundlePath, manager.irodsDestPath, "", types.TAR_FILE_DT, true, !manager.noBulkRegistration)
+	err := manager.filesystem.ExtractStructFile(bundle.irodsBundlePath, manager.irodsDestPath, "", irodsclient_types.TAR_FILE_DT, true, !manager.noBulkRegistration)
 	if err != nil {
 		if manager.showProgress {
 			manager.progress(progressName, -1, totalFileNum, progress.UnitsDefault, true)
