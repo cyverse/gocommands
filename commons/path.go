@@ -105,6 +105,14 @@ func FirstDelimeterIndex(p string) int {
 		return idx1
 	}
 
+	if idx1 < 0 {
+		return idx2
+	}
+
+	if idx2 < 0 {
+		return idx1
+	}
+
 	if idx1 <= idx2 {
 		return idx1
 	}
