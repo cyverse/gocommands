@@ -17,11 +17,8 @@ import (
 	"golang.org/x/xerrors"
 )
 
-/*
-A struct containing a replica and its data object. Used so that we can easily sort
-
-	replicas by either replica properties or data object properties.
-*/
+// FlatReplica is a struct containing a replica and its data object. Used so that we can easily sort
+// replicas by either replica properties or data object properties.
 type FlatReplica struct {
 	Replica    *irodsclient_types.IRODSReplica
 	DataObject *irodsclient_types.IRODSDataObject

@@ -25,7 +25,7 @@ func SetListFlags(command *cobra.Command) {
 	command.Flags().BoolVarP(&listFlagValues.veryLongFormatInput, "verylong", "L", false, "Display in a very long format")
 	command.Flags().BoolVarP(&listFlagValues.HumanReadableSizes, "human_readable", "H", false, "Display sizes in human-readable format")
 	command.Flags().BoolVar(&listFlagValues.SortReverse, "reverse_sort", false, "Sort in reverse order")
-	command.Flags().StringVarP(&listFlagValues.sortOrderInput, "sort", "name", "S", "Sort on name, size, time or ext")
+	command.Flags().StringVarP(&listFlagValues.sortOrderInput, "sort", "S", "name", "Sort on name, size, time or ext")
 }
 
 func GetListFlagValues() *ListFlagValues {
