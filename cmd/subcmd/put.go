@@ -153,6 +153,15 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
+func markInputPathMap(inputPathMap map[string]bool, p string) {
+	dirs := commons.GetParentIRODSDirs(p)
+	for _, dir := range dirs {
+		inputPathMap[dir] = true
+	}
+
+	inputPathMap[p] = true
+}
+
 func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, force bool, singleThreaded bool, diff bool, noHash bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
@@ -176,12 +185,10 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
 
-	inputPathMap[targetPath] = true
-
 	if !sourceStat.IsDir() {
 		// file
 		targetFilePath := commons.MakeTargetIRODSFilePath(filesystem, sourcePath, targetPath)
-		inputPathMap[targetFilePath] = true
+		markInputPathMap(inputPathMap, targetFilePath)
 
 		fileExist := false
 		targetEntry, err := filesystem.StatFile(targetFilePath)
@@ -277,7 +284,7 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 				}
 			}
 
-			inputPathMap[targetDirPath] = true
+			markInputPathMap(inputPathMap, targetDirPath)
 
 			newSourcePath := filepath.Join(sourcePath, entry.Name())
 			err = putOne(parallelJobManager, inputPathMap, newSourcePath, targetDirPath, force, singleThreaded, diff, noHash)

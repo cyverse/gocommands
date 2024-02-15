@@ -97,6 +97,32 @@ func GetBasename(p string) string {
 	return p[idx2+1:]
 }
 
+// GetParentDirs returns all parent dirs
+func GetParentIRODSDirs(p string) []string {
+	parents := []string{}
+
+	if p == "/" {
+		return parents
+	}
+
+	curPath := p
+	for len(curPath) > 0 && curPath != "/" {
+		curDir := path.Dir(curPath)
+		if len(curDir) > 0 {
+			parents = append(parents, curDir)
+		}
+
+		curPath = curDir
+	}
+
+	// sort
+	sort.Slice(parents, func(i int, j int) bool {
+		return len(parents[i]) < len(parents[j])
+	})
+
+	return parents
+}
+
 func FirstDelimeterIndex(p string) int {
 	idx1 := strings.Index(p, string(os.PathSeparator))
 	idx2 := strings.Index(p, "/")
