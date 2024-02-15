@@ -3,7 +3,9 @@ package subcmd
 import (
 	"fmt"
 	"path"
+	"path/filepath"
 	"sort"
+	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
@@ -15,6 +17,14 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
 )
+
+/* A struct containing a replica and its data object. Used so that we can easily sort
+   replicas by either replica properties or data object properties.
+*/
+type FlatReplica struct {
+	Replica    *irodsclient_types.IRODSReplica
+	DataObject *irodsclient_types.IRODSDataObject
+}
 
 var lsCmd = &cobra.Command{
 	Use:     "ls [collection1] [collection2] ...",
@@ -58,6 +68,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 
 	ticketAccessFlagValues := flag.GetTicketAccessFlagValues()
 	listFlagValues := flag.GetListFlagValues()
+	sortOrderConfig := flag.GetSortOrderConfig()
 
 	appConfig := commons.GetConfig()
 	syncAccount := false
@@ -90,7 +101,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	}
 
 	for _, sourcePath := range sourcePaths {
-		err = listOne(filesystem, sourcePath, listFlagValues.Format, listFlagValues.HumanReadableSizes)
+		err = listOne(filesystem, sourcePath, listFlagValues.Format, listFlagValues.HumanReadableSizes, *sortOrderConfig)
 		if err != nil {
 			return xerrors.Errorf("failed to perform ls %s: %w", sourcePath, err)
 		}
@@ -99,7 +110,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, format flag.ListFormat, humanReadableSizes bool) error {
+func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, format flag.ListFormat, humanReadableSizes bool, sortOrderConfig flag.SortOrderConfig) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
@@ -129,8 +140,8 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, format flag.ListF
 			return xerrors.Errorf("failed to list data-objects in %s: %w", sourcePath, err)
 		}
 
-		printDataObjects(objs, format, humanReadableSizes)
-		printCollections(colls)
+		printDataObjects(objs, format, humanReadableSizes, sortOrderConfig)
+		printCollections(colls, sortOrderConfig)
 		return nil
 	}
 
@@ -147,51 +158,221 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, format flag.ListF
 		return xerrors.Errorf("failed to get data-object %s: %w", sourcePath, err)
 	}
 
-	printDataObject(entry, format, humanReadableSizes)
+	if format == flag.ListFormatNormal {
+		printDataObjectShort(entry)
+	} else {
+		entries := []*irodsclient_types.IRODSDataObject{entry}
+		replicas := flattenReplicas(entries)
+		sort.SliceStable(replicas, getFlatReplicaSortFunction(replicas, sortOrderConfig))
+		printReplicas(replicas, format, humanReadableSizes)
+	}
+
 	return nil
 }
 
-func printDataObjects(entries []*irodsclient_types.IRODSDataObject, format flag.ListFormat, humanReadableSizes bool) {
-	// sort by name
-	sort.SliceStable(entries, func(i int, j int) bool {
-		return entries[i].Name < entries[j].Name
-	})
+func flattenReplicas(objects []*irodsclient_types.IRODSDataObject) []*FlatReplica {
+	var result []*FlatReplica
+	for _, object := range objects {
+		for _, replica := range object.Replicas {
+			flatReplica := FlatReplica{DataObject: object, Replica: replica}
+			result = append(result, &flatReplica)
+		}
+	}
+	return result
+}
 
-	for _, entry := range entries {
-		printDataObject(entry, format, humanReadableSizes)
+func getFlatReplicaSortFunction(entries []*FlatReplica, sortOrderConfig flag.SortOrderConfig) func(i int, j int) bool {
+	if sortOrderConfig.ReverseSort {
+		switch sortOrderConfig.SortOrder {
+		case flag.SortOrderName:
+			return func(i int, j int) bool { return entries[i].DataObject.Name > entries[j].DataObject.Name }
+		case flag.SortOrderExt:
+			return func(i int, j int) bool {
+				return (filepath.Ext(entries[i].DataObject.Name) > filepath.Ext(entries[j].DataObject.Name)) ||
+					(filepath.Ext(entries[i].DataObject.Name) == filepath.Ext(entries[j].DataObject.Name) &&
+						entries[i].DataObject.Name < entries[j].DataObject.Name)
+			}
+		case flag.SortOrderTime:
+			return func(i int, j int) bool {
+				return (entries[i].Replica.ModifyTime.After(entries[j].Replica.ModifyTime)) ||
+					(entries[i].Replica.ModifyTime.Equal(entries[j].Replica.ModifyTime) &&
+						entries[i].DataObject.Name < entries[j].DataObject.Name)
+			}
+		case flag.SortOrderSize:
+			return func(i int, j int) bool {
+				return (entries[i].DataObject.Size > entries[j].DataObject.Size) ||
+					(entries[i].DataObject.Size == entries[j].DataObject.Size &&
+						entries[i].DataObject.Name < entries[j].DataObject.Name)
+			}
+		}
+	} else {
+		switch sortOrderConfig.SortOrder {
+		case flag.SortOrderName:
+			return func(i int, j int) bool { return entries[i].DataObject.Name < entries[j].DataObject.Name }
+		case flag.SortOrderExt:
+			return func(i int, j int) bool {
+				return (filepath.Ext(entries[i].DataObject.Name) < filepath.Ext(entries[j].DataObject.Name)) ||
+					(filepath.Ext(entries[i].DataObject.Name) == filepath.Ext(entries[j].DataObject.Name) &&
+						entries[i].DataObject.Name < entries[j].DataObject.Name)
+			}
+		case flag.SortOrderTime:
+			return func(i int, j int) bool {
+				return (entries[i].Replica.ModifyTime.Before(entries[j].Replica.ModifyTime)) ||
+					(entries[i].Replica.ModifyTime.Equal(entries[j].Replica.ModifyTime) &&
+						entries[i].DataObject.Name < entries[j].DataObject.Name)
+			}
+		case flag.SortOrderSize:
+			return func(i int, j int) bool {
+				return (entries[i].DataObject.Size < entries[j].DataObject.Size) ||
+					(entries[i].DataObject.Size == entries[j].DataObject.Size &&
+						entries[i].DataObject.Name < entries[j].DataObject.Name)
+			}
+		}
+	}
+	return func(i int, j int) bool { return entries[i].DataObject.Name < entries[j].DataObject.Name }
+}
+
+func printDataObjects(entries []*irodsclient_types.IRODSDataObject, format flag.ListFormat, humanReadableSizes bool, sortOrderConfig flag.SortOrderConfig) {
+	if format == flag.ListFormatNormal {
+		sort.SliceStable(entries, getDataObjectSortFunction(entries, sortOrderConfig))
+		for _, entry := range entries {
+			printDataObjectShort(entry)
+		}
+	} else {
+		replicas := flattenReplicas(entries)
+		sort.SliceStable(replicas, getFlatReplicaSortFunction(replicas, sortOrderConfig))
+		printReplicas(replicas, format, humanReadableSizes)
+
 	}
 }
 
-func printDataObject(entry *irodsclient_types.IRODSDataObject, format flag.ListFormat, humanReadableSizes bool) {
-	size := fmt.Sprintf("%v", entry.Size)
-	if humanReadableSizes {
-		size = humanize.Bytes(uint64(entry.Size))
+func getDataObjectSortFunction(entries []*irodsclient_types.IRODSDataObject, sortOrderConfig flag.SortOrderConfig) func(i int, j int) bool {
+	if sortOrderConfig.ReverseSort {
+		switch sortOrderConfig.SortOrder {
+		case flag.SortOrderName:
+			return func(i int, j int) bool { return entries[i].Name > entries[j].Name }
+		case flag.SortOrderExt:
+			return func(i int, j int) bool {
+				return (filepath.Ext(entries[i].Name) > filepath.Ext(entries[j].Name)) ||
+					(filepath.Ext(entries[i].Name) == filepath.Ext(entries[j].Name) &&
+						entries[i].Name < entries[j].Name)
+			}
+		case flag.SortOrderTime:
+			return func(i int, j int) bool {
+				return (getDataObjectModifyTime(entries[i]).After(getDataObjectModifyTime(entries[j]))) ||
+					(getDataObjectModifyTime(entries[i]).Equal(getDataObjectModifyTime(entries[j])) &&
+						entries[i].Name < entries[j].Name)
+			}
+		case flag.SortOrderSize:
+			return func(i int, j int) bool {
+				return (entries[i].Size > entries[j].Size) ||
+					(entries[i].Size == entries[j].Size &&
+						entries[i].Name < entries[j].Name)
+			}
+		}
+	} else {
+		switch sortOrderConfig.SortOrder {
+		case flag.SortOrderName:
+			return func(i int, j int) bool { return entries[i].Name < entries[j].Name }
+		case flag.SortOrderExt:
+			return func(i int, j int) bool {
+				return (filepath.Ext(entries[i].Name) < filepath.Ext(entries[j].Name)) ||
+					(filepath.Ext(entries[i].Name) == filepath.Ext(entries[j].Name) &&
+						entries[i].Name < entries[j].Name)
+			}
+		case flag.SortOrderTime:
+			return func(i int, j int) bool {
+				return (getDataObjectModifyTime(entries[i]).Before(getDataObjectModifyTime(entries[j]))) ||
+					(getDataObjectModifyTime(entries[i]).Equal(getDataObjectModifyTime(entries[j])) &&
+						entries[i].Name < entries[j].Name)
+			}
+		case flag.SortOrderSize:
+			return func(i int, j int) bool {
+				return (entries[i].Size < entries[j].Size) ||
+					(entries[i].Size == entries[j].Size &&
+						entries[i].Name < entries[j].Name)
+			}
+		}
 	}
+	return func(i int, j int) bool { return entries[i].Name < entries[j].Name }
+}
+
+func getDataObjectModifyTime(object *irodsclient_types.IRODSDataObject) time.Time {
+	// ModifyTime of data object is considered to be ModifyTime of replica modified most recently
+	maxTime := object.Replicas[0].ModifyTime
+	for _, t := range object.Replicas[1:] {
+		if t.ModifyTime.After(maxTime) {
+			maxTime = t.ModifyTime
+		}
+	}
+	return maxTime
+}
+
+func printDataObjectShort(entry *irodsclient_types.IRODSDataObject) {
+	fmt.Printf("  %s\n", entry.Name)
+}
+
+func printReplicas(flatReplicas []*FlatReplica, format flag.ListFormat, humanReadableSizes bool) {
+	for _, flatReplica := range flatReplicas {
+		printReplica(*flatReplica, format, humanReadableSizes)
+	}
+}
+
+func printReplica(flatReplica FlatReplica, format flag.ListFormat, humanReadableSizes bool) {
+	size := fmt.Sprintf("%v", flatReplica.DataObject.Size)
+	if humanReadableSizes {
+		size = humanize.Bytes(uint64(flatReplica.DataObject.Size))
+	}
+
 	switch format {
 	case flag.ListFormatLong:
-		for _, replica := range entry.Replicas {
-			modTime := commons.MakeDateTimeString(replica.ModifyTime)
-			fmt.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, size, modTime, getStatusMark(replica.Status), entry.Name)
-		}
+		modTime := commons.MakeDateTimeString(flatReplica.Replica.ModifyTime)
+		fmt.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
+			size, modTime, getStatusMark(flatReplica.Replica.Status), flatReplica.DataObject.Name)
 	case flag.ListFormatVeryLong:
-		for _, replica := range entry.Replicas {
-			modTime := commons.MakeDateTimeString(replica.ModifyTime)
-			fmt.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", replica.Owner, replica.Number, replica.ResourceHierarchy, size, modTime, getStatusMark(replica.Status), entry.Name)
-			fmt.Printf("    %s\t%s\n", replica.Checksum.OriginalChecksum, replica.Path)
-		}
-	default:
-		fmt.Printf("  %s\n", entry.Name)
+		modTime := commons.MakeDateTimeString(flatReplica.Replica.ModifyTime)
+		fmt.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
+			size, modTime, getStatusMark(flatReplica.Replica.Status), flatReplica.DataObject.Name)
+		fmt.Printf("    %s\t%s\n", flatReplica.Replica.Checksum.OriginalChecksum, flatReplica.Replica.Path)
+	}
+
+}
+
+func printCollections(entries []*irodsclient_types.IRODSCollection, sortOrderConfig flag.SortOrderConfig) {
+	sort.SliceStable(entries, getCollectionSortFunction(entries, sortOrderConfig))
+	for _, entry := range entries {
+		fmt.Printf("  C- %s\n", entry.Path)
 	}
 }
 
-func printCollections(entries []*irodsclient_types.IRODSCollection) {
-	// sort by name
-	sort.SliceStable(entries, func(i int, j int) bool {
-		return entries[i].Name < entries[j].Name
-	})
+func getCollectionSortFunction(entries []*irodsclient_types.IRODSCollection, sortOrderConfig flag.SortOrderConfig) func(i int, j int) bool {
+	if sortOrderConfig.ReverseSort {
+		switch sortOrderConfig.SortOrder {
+		case flag.SortOrderName:
+			return func(i int, j int) bool { return entries[i].Name > entries[j].Name }
+		case flag.SortOrderTime:
+			return func(i int, j int) bool {
+				return (entries[i].ModifyTime.After(entries[j].ModifyTime)) ||
+					(entries[i].ModifyTime.Equal(entries[j].ModifyTime) &&
+						entries[i].Name < entries[j].Name)
+			}
+		// Cannot sort collections by size or extension, so use default sort by name
+		default:
+			return func(i int, j int) bool { return entries[i].Name < entries[j].Name }
+		}
+	} else {
+		switch sortOrderConfig.SortOrder {
+		case flag.SortOrderTime:
+			return func(i int, j int) bool {
+				return (entries[i].ModifyTime.Before(entries[j].ModifyTime)) ||
+					(entries[i].ModifyTime.Equal(entries[j].ModifyTime) &&
+						entries[i].Name < entries[j].Name)
 
-	for _, entry := range entries {
-		fmt.Printf("  C- %s\n", entry.Path)
+			}
+			// Cannot sort collections by size or extension, so use default sort by name
+		default:
+			return func(i int, j int) bool { return entries[i].Name < entries[j].Name }
+		}
 	}
 }
 
