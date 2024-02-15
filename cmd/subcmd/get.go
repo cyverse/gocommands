@@ -172,12 +172,10 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
 
-	inputPathMap[targetPath] = true
-
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
 		// file
 		targetFilePath := commons.MakeTargetLocalFilePath(sourcePath, targetPath)
-		inputPathMap[targetFilePath] = true
+		commons.MarkPathMap(inputPathMap, targetFilePath)
 
 		fileExist := false
 		targetEntry, err := os.Stat(targetFilePath)
@@ -290,7 +288,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 				}
 			}
 
-			inputPathMap[targetDirPath] = true
+			commons.MarkPathMap(inputPathMap, targetDirPath)
 
 			err = getOne(parallelJobManager, inputPathMap, entry.Path, targetDirPath, force, diff, noHash)
 			if err != nil {

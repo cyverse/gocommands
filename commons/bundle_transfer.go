@@ -295,7 +295,7 @@ func (manager *BundleTransferManager) Schedule(source string, dir bool, size int
 		return xerrors.Errorf("failed to get target path for %s: %w", source, err)
 	}
 
-	manager.inputPathMap[targePath] = true
+	MarkPathMap(manager.inputPathMap, targePath)
 
 	if manager.differentFilesOnly {
 		logger.Debugf("checking if target %s for source %s exists", targePath, source)

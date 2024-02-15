@@ -312,3 +312,12 @@ func ExistFile(p string) bool {
 	}
 	return false
 }
+
+func MarkPathMap(pathMap map[string]bool, p string) {
+	dirs := GetParentIRODSDirs(p)
+	for _, dir := range dirs {
+		pathMap[dir] = true
+	}
+
+	pathMap[p] = true
+}
