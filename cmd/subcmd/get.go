@@ -3,6 +3,7 @@ package subcmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
@@ -37,6 +38,7 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	flag.SetDifferentialTransferFlags(getCmd, true)
 	flag.SetNoRootFlags(getCmd)
 	flag.SetSyncFlags(getCmd)
+	flag.SetEncryptionFlags(getCmd)
 
 	rootCmd.AddCommand(getCmd)
 }
@@ -70,6 +72,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	differentialTransferFlagValues := flag.GetDifferentialTransferFlagValues()
 	noRootFlagValues := flag.GetNoRootFlagValues()
 	syncFlagValues := flag.GetSyncFlagValues()
+	encryptFlagValues := flag.GetEncryptFlagValues()
 
 	maxConnectionNum := parallelTransferFlagValues.ThreadNumber + 2 // 2 for metadata op
 
@@ -128,7 +131,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 			return xerrors.Errorf("failed to make new target path for get %s to %s: %w", sourcePath, targetPath, err)
 		}
 
-		err = getOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues.Force, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash)
+		err = getOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, differentialTransferFlagValues, encryptFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform get %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -153,7 +156,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, force bool, diff bool, noHash bool) error {
+func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, encryptionFlagValues *flag.EncryptionFlagValues) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "getOne",
@@ -175,7 +178,23 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
 		// file
 		targetFilePath := commons.MakeTargetLocalFilePath(sourcePath, targetPath)
-		commons.MarkPathMap(inputPathMap, targetFilePath)
+		decryptedTargetFilePath := targetFilePath
+
+		// decrypt first if necessary
+		if encryptionFlagValues.Encryption {
+			targetFilePath = filepath.Join(encryptionFlagValues.TempPath, sourceEntry.Name)
+
+			newFilename, err := commons.DecryptFilenameWithPassword(sourceEntry.Name, encryptionFlagValues.Password)
+			if err != nil {
+				return xerrors.Errorf("failed to decrypt %s: %w", targetFilePath, err)
+			}
+
+			decryptedTargetFilePath = commons.MakeTargetLocalFilePath(newFilename, targetPath)
+
+			logger.Debugf("downloading a decrypted file to %s", decryptedTargetFilePath)
+		}
+
+		commons.MarkPathMap(inputPathMap, decryptedTargetFilePath)
 
 		fileExist := false
 		targetEntry, err := os.Stat(targetFilePath)
@@ -206,6 +225,17 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 
 			logger.Debugf("downloaded a data object %s to %s", sourcePath, targetFilePath)
 			job.Progress(sourceEntry.Size, sourceEntry.Size, false)
+
+			if encryptionFlagValues.Encryption {
+				logger.Debugf("decrypt a data object %s to %s", targetFilePath, decryptedTargetFilePath)
+				err = commons.PgpDecryptFileWithPassword(targetFilePath, decryptedTargetFilePath, encryptionFlagValues.Password)
+				if err != nil {
+					return xerrors.Errorf("failed to decrypt %s: %w", targetFilePath, err)
+				}
+
+				logger.Debugf("removing a temp file %s", targetFilePath)
+				os.Remove(targetFilePath)
+			}
 			return nil
 		}
 
@@ -221,9 +251,9 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 			if trxStatusFileExist {
 				// incomplete file - resume downloading
 				fmt.Printf("resume downloading a data object %s\n", targetFilePath)
-			} else if diff {
+			} else if differentialTransferFlagValues.DifferentialTransfer {
 				// trx status not exist
-				if noHash {
+				if differentialTransferFlagValues.NoHash {
 					if targetEntry.Size() == sourceEntry.Size {
 						fmt.Printf("skip downloading a data object %s. The file already exists!\n", targetFilePath)
 						return nil
@@ -251,7 +281,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 					os.Remove(targetFilePath)
 				}
 			} else {
-				if !force {
+				if !forceFlagValues.Force {
 					// ask
 					overwrite := commons.InputYN(fmt.Sprintf("file %s already exists. Overwrite?", targetFilePath))
 					if !overwrite {
@@ -290,7 +320,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 
 			commons.MarkPathMap(inputPathMap, targetDirPath)
 
-			err = getOne(parallelJobManager, inputPathMap, entry.Path, targetDirPath, force, diff, noHash)
+			err = getOne(parallelJobManager, inputPathMap, entry.Path, targetDirPath, forceFlagValues, differentialTransferFlagValues, encryptionFlagValues)
 			if err != nil {
 				return xerrors.Errorf("failed to perform get %s to %s: %w", entry.Path, targetDirPath, err)
 			}

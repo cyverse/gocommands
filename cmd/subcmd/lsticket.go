@@ -58,13 +58,13 @@ func processLsticketCommand(command *cobra.Command, args []string) error {
 	defer filesystem.Release()
 
 	if len(args) == 0 {
-		err = listTicket(filesystem, listFlagValues.Format)
+		err = listTicket(filesystem, listFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform list ticket: %w", err)
 		}
 	} else {
 		for _, ticketName := range args {
-			err = getTicket(filesystem, ticketName, listFlagValues.Format)
+			err = getTicket(filesystem, ticketName, listFlagValues)
 			if err != nil {
 				return xerrors.Errorf("failed to perform get ticket %s: %w", ticketName, err)
 			}
@@ -74,7 +74,7 @@ func processLsticketCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func listTicket(fs *irodsclient_fs.FileSystem, format flag.ListFormat) error {
+func listTicket(fs *irodsclient_fs.FileSystem, listFlagValues *flag.ListFlagValues) error {
 	tickets, err := fs.ListTickets()
 	if err != nil {
 		return xerrors.Errorf("failed to list tickets: %w", err)
@@ -84,7 +84,7 @@ func listTicket(fs *irodsclient_fs.FileSystem, format flag.ListFormat) error {
 		fmt.Printf("Found no tickets\n")
 	} else {
 		for _, ticket := range tickets {
-			err = printTicket(fs, ticket, format)
+			err = printTicket(fs, ticket, listFlagValues)
 			if err != nil {
 				return err
 			}
@@ -94,7 +94,7 @@ func listTicket(fs *irodsclient_fs.FileSystem, format flag.ListFormat) error {
 	return nil
 }
 
-func getTicket(fs *irodsclient_fs.FileSystem, ticketName string, format flag.ListFormat) error {
+func getTicket(fs *irodsclient_fs.FileSystem, ticketName string, listFlagValues *flag.ListFlagValues) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "getTicket",
@@ -107,7 +107,7 @@ func getTicket(fs *irodsclient_fs.FileSystem, ticketName string, format flag.Lis
 		return xerrors.Errorf("failed to get ticket %s: %w", ticketName, err)
 	}
 
-	err = printTicket(fs, ticket, format)
+	err = printTicket(fs, ticket, listFlagValues)
 	if err != nil {
 		return err
 	}
@@ -115,9 +115,9 @@ func getTicket(fs *irodsclient_fs.FileSystem, ticketName string, format flag.Lis
 	return nil
 }
 
-func printTicket(fs *irodsclient_fs.FileSystem, ticket *types.IRODSTicket, format flag.ListFormat) error {
-	switch format {
-	case flag.ListFormatLong, flag.ListFormatVeryLong:
+func printTicket(fs *irodsclient_fs.FileSystem, ticket *types.IRODSTicket, listFlagValues *flag.ListFlagValues) error {
+	switch listFlagValues.Format {
+	case commons.ListFormatLong, commons.ListFormatVeryLong:
 		restrictions, err := fs.GetTicketRestrictions(ticket.ID)
 		if err != nil {
 			return xerrors.Errorf("failed to get ticket restrictions %s: %w", ticket.Name, err)

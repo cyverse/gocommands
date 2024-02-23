@@ -101,7 +101,7 @@ func processCpCommand(command *cobra.Command, args []string) error {
 			return xerrors.Errorf("failed to make new target path for copy %s to %s: %w", sourcePath, targetPath, err)
 		}
 
-		err = copyOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, recursiveFlagValues.Recursive, forceFlagValues.Force, differentialTransferFlagValues.DifferentialTransfer, differentialTransferFlagValues.NoHash)
+		err = copyOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, recursiveFlagValues, forceFlagValues, differentialTransferFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform copy %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -126,7 +126,7 @@ func processCpCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func copyOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, recurse bool, force bool, diff bool, noHash bool) error {
+func copyOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, recursiveFlagValues *flag.RecursiveFlagValues, forceFlagValues *flag.ForceFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "copyOne",
@@ -179,8 +179,8 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[st
 		}
 
 		if fileExist {
-			if diff {
-				if noHash {
+			if differentialTransferFlagValues.DifferentialTransfer {
+				if differentialTransferFlagValues.NoHash {
 					if targetEntry.Size == sourceEntry.Size {
 						fmt.Printf("skip copying a file %s. The file already exists!\n", targetFilePath)
 						return nil
@@ -195,7 +195,7 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[st
 					}
 				}
 			} else {
-				if !force {
+				if !forceFlagValues.Force {
 					// ask
 					overwrite := commons.InputYN(fmt.Sprintf("file %s already exists. Overwrite?", targetFilePath))
 					if !overwrite {
@@ -210,7 +210,7 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[st
 		logger.Debugf("scheduled a data object copy %s to %s", sourcePath, targetFilePath)
 	} else {
 		// dir
-		if !recurse {
+		if !recursiveFlagValues.Recursive {
 			return xerrors.Errorf("cannot copy a collection, turn on 'recurse' option")
 		}
 
@@ -234,7 +234,7 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[st
 
 			commons.MarkPathMap(inputPathMap, targetDirPath)
 
-			err = copyOne(parallelJobManager, inputPathMap, entry.Path, targetDirPath, recurse, force, diff, noHash)
+			err = copyOne(parallelJobManager, inputPathMap, entry.Path, targetDirPath, recursiveFlagValues, forceFlagValues, differentialTransferFlagValues)
 			if err != nil {
 				return xerrors.Errorf("failed to perform copy %s to %s: %w", entry.Path, targetPath, err)
 			}
