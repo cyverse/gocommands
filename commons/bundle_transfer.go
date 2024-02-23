@@ -1196,7 +1196,7 @@ func CleanUpOldLocalBundles(localTempDirPath string, force bool) {
 	bundleEntries := []string{}
 	for _, entry := range entries {
 		// filter only bundle files
-		if GetFileExtension(entry.Name()) == ".tar" {
+		if IsBundleFilename(entry.Name()) {
 			fullPath := filepath.Join(localTempDirPath, entry.Name())
 			bundleEntries = append(bundleEntries, fullPath)
 		}
@@ -1261,10 +1261,10 @@ func CleanUpOldIRODSBundles(fs *irodsclient_fs.FileSystem, irodsTempDirPath stri
 		// filter only bundle files
 		if entry.Type == irodsclient_fs.FileEntry {
 			if IsBundleFilename(entry.Name) {
-				logger.Debugf("deleting old irods bundle %s", entry)
+				logger.Debugf("deleting old irods bundle %s", entry.Path)
 				removeErr := fs.RemoveFile(entry.Path, force)
 				if removeErr != nil {
-					logger.WithError(removeErr).Warnf("failed to remove old irods bundle %s", entry)
+					logger.WithError(removeErr).Warnf("failed to remove old irods bundle %s", entry.Path)
 				} else {
 					deletedCount++
 				}
