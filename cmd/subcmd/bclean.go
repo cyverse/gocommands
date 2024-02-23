@@ -74,13 +74,13 @@ func processBcleanCommand(command *cobra.Command, args []string) error {
 	}
 
 	for _, targetPath := range args {
-		bcleanOne(filesystem, targetPath, forceFlagValues.Force)
+		bcleanOne(filesystem, targetPath, forceFlagValues)
 	}
 
 	return nil
 }
 
-func bcleanOne(fs *irodsclient_fs.FileSystem, targetPath string, force bool) {
+func bcleanOne(fs *irodsclient_fs.FileSystem, targetPath string, forceFlagValues *flag.ForceFlagValues) {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "bcleanOne",
@@ -94,12 +94,12 @@ func bcleanOne(fs *irodsclient_fs.FileSystem, targetPath string, force bool) {
 	if commons.IsStagingDirInTargetPath(targetPath) {
 		// target is staging dir
 		logger.Debugf("clearing irods target dir %s", targetPath)
-		commons.CleanUpOldIRODSBundles(fs, targetPath, true, force)
+		commons.CleanUpOldIRODSBundles(fs, targetPath, true, forceFlagValues.Force)
 		return
 	}
 
 	stagingDirPath := commons.GetDefaultStagingDirInTargetPath(targetPath)
 	logger.Debugf("clearing irods target dir %s", stagingDirPath)
 
-	commons.CleanUpOldIRODSBundles(fs, stagingDirPath, true, force)
+	commons.CleanUpOldIRODSBundles(fs, stagingDirPath, true, forceFlagValues.Force)
 }

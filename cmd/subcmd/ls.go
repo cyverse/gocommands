@@ -90,7 +90,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	}
 
 	for _, sourcePath := range sourcePaths {
-		err = listOne(filesystem, sourcePath, listFlagValues.Format, listFlagValues.HumanReadableSizes)
+		err = listOne(filesystem, sourcePath, listFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform ls %s: %w", sourcePath, err)
 		}
@@ -99,7 +99,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, format flag.ListFormat, humanReadableSizes bool) error {
+func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, listFlagValues *flag.ListFlagValues) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
@@ -129,7 +129,7 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, format flag.ListF
 			return xerrors.Errorf("failed to list data-objects in %s: %w", sourcePath, err)
 		}
 
-		printDataObjects(objs, format, humanReadableSizes)
+		printDataObjects(objs, listFlagValues.Format, listFlagValues.HumanReadableSizes)
 		printCollections(colls)
 		return nil
 	}
@@ -147,7 +147,7 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, format flag.ListF
 		return xerrors.Errorf("failed to get data-object %s: %w", sourcePath, err)
 	}
 
-	printDataObject(entry, format, humanReadableSizes)
+	printDataObject(entry, listFlagValues.Format, listFlagValues.HumanReadableSizes)
 	return nil
 }
 

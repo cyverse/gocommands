@@ -56,7 +56,7 @@ func processMkdirCommand(command *cobra.Command, args []string) error {
 	defer filesystem.Release()
 
 	for _, targetPath := range args {
-		err = makeOne(filesystem, targetPath, parentsFlagValues.MakeParents)
+		err = makeOne(filesystem, targetPath, parentsFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform mkdir %s: %w", targetPath, err)
 		}
@@ -64,7 +64,7 @@ func processMkdirCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func makeOne(fs *irodsclient_fs.FileSystem, targetPath string, parent bool) error {
+func makeOne(fs *irodsclient_fs.FileSystem, targetPath string, parentsFlagValues *flag.ParentsFlagValues) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "makeOne",
@@ -83,7 +83,7 @@ func makeOne(fs *irodsclient_fs.FileSystem, targetPath string, parent bool) erro
 
 	logger.Debugf("making a collection %s", targetPath)
 
-	err = irodsclient_irodsfs.CreateCollection(connection, targetPath, parent)
+	err = irodsclient_irodsfs.CreateCollection(connection, targetPath, parentsFlagValues.MakeParents)
 	if err != nil {
 		return xerrors.Errorf("failed to create collection %s: %w", targetPath, err)
 	}

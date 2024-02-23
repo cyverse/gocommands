@@ -57,7 +57,7 @@ func processRmCommand(command *cobra.Command, args []string) error {
 	defer filesystem.Release()
 
 	for _, sourcePath := range args {
-		err = removeOne(filesystem, sourcePath, forceFlagValues.Force, recursiveFlagValues.Recursive)
+		err = removeOne(filesystem, sourcePath, forceFlagValues, recursiveFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform rm %s: %w", sourcePath, err)
 		}
@@ -65,7 +65,7 @@ func processRmCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func removeOne(filesystem *irodsclient_fs.FileSystem, targetPath string, force bool, recurse bool) error {
+func removeOne(filesystem *irodsclient_fs.FileSystem, targetPath string, forceFlagValues *flag.ForceFlagValues, recursiveFlagValues *flag.RecursiveFlagValues) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "removeOne",
@@ -84,18 +84,18 @@ func removeOne(filesystem *irodsclient_fs.FileSystem, targetPath string, force b
 	if targetEntry.Type == irodsclient_fs.FileEntry {
 		// file
 		logger.Debugf("removing a data object %s", targetPath)
-		err = filesystem.RemoveFile(targetPath, force)
+		err = filesystem.RemoveFile(targetPath, forceFlagValues.Force)
 		if err != nil {
 			return xerrors.Errorf("failed to remove %s: %w", targetPath, err)
 		}
 	} else {
 		// dir
-		if !recurse {
+		if !recursiveFlagValues.Recursive {
 			return xerrors.Errorf("cannot remove a collection, recurse is not set")
 		}
 
 		logger.Debugf("removing a collection %s", targetPath)
-		err = filesystem.RemoveDir(targetPath, recurse, force)
+		err = filesystem.RemoveDir(targetPath, recursiveFlagValues.Recursive, forceFlagValues.Force)
 		if err != nil {
 			return xerrors.Errorf("failed to remove dir %s: %w", targetPath, err)
 		}

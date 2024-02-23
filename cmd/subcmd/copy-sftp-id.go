@@ -84,7 +84,7 @@ func processCopySftpIdCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to find SSH identity files")
 	}
 
-	err = copySftpId(filesystem, forceFlagValues.Force, dryRunFlagValues.DryRun, identityFiles)
+	err = copySftpId(filesystem, forceFlagValues, dryRunFlagValues, identityFiles)
 	if err != nil {
 		return xerrors.Errorf("failed to perform copy-sftp-id: %w", err)
 	}
@@ -120,7 +120,7 @@ func scanSSHIdentityFiles() ([]string, error) {
 	return identityFiles, nil
 }
 
-func copySftpId(filesystem *irodsclient_fs.FileSystem, force bool, dryrun bool, identityFiles []string) error {
+func copySftpId(filesystem *irodsclient_fs.FileSystem, forceFlagValues *flag.ForceFlagValues, dryRunFlagValues *flag.DryRunFlagValues, identityFiles []string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "copySftpId",
@@ -134,7 +134,7 @@ func copySftpId(filesystem *irodsclient_fs.FileSystem, force bool, dryrun bool, 
 
 	if !filesystem.ExistsDir(irodsSshPath) {
 		logger.Debugf("SSH directory %s does not exist on iRODS for user %s, creating one", irodsSshPath, account.ClientUser)
-		if !dryrun {
+		if !dryRunFlagValues.DryRun {
 			// create ssh dir
 			err := filesystem.MakeDir(irodsSshPath, true)
 			if err != nil {
@@ -195,7 +195,7 @@ func copySftpId(filesystem *irodsclient_fs.FileSystem, force bool, dryrun bool, 
 			return xerrors.Errorf("failed to parse a SSH public key %s for user %s: %w", identityFile, account.ClientUser, err)
 		}
 
-		if force {
+		if forceFlagValues.Force {
 			// append forcefully
 			authorizedKeysArray = append(authorizedKeysArray, string(identityFileContent))
 			contentChanged = true
@@ -234,7 +234,7 @@ func copySftpId(filesystem *irodsclient_fs.FileSystem, force bool, dryrun bool, 
 	}
 
 	// upload
-	if !dryrun {
+	if !dryRunFlagValues.DryRun {
 		if !contentChanged {
 			logger.Debugf("skipping writing authorized_keys %s on iRODS for user %s, nothing changed", authorizedKeyPath, account.ClientUser)
 		} else {

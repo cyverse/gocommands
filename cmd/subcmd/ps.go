@@ -59,7 +59,7 @@ func processPsCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
-	err = listProcesses(filesystem, processFilterFlagValues.Address, processFilterFlagValues.Zone, processFilterFlagValues.GroupBy)
+	err = listProcesses(filesystem, processFilterFlagValues)
 	if err != nil {
 		return xerrors.Errorf("failed to perform list processes addr %s, zone %s : %w", processFilterFlagValues.Address, processFilterFlagValues.Zone, err)
 	}
@@ -67,7 +67,7 @@ func processPsCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func listProcesses(fs *irodsclient_fs.FileSystem, address string, zone string, groupby flag.ProcessGroupBy) error {
+func listProcesses(fs *irodsclient_fs.FileSystem, processFilterFlagValues *flag.ProcessFilterFlagValues) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "listProcesses",
@@ -79,17 +79,17 @@ func listProcesses(fs *irodsclient_fs.FileSystem, address string, zone string, g
 	}
 	defer fs.ReturnMetadataConnection(connection)
 
-	logger.Debugf("listing processes - addr: %s, zone: %s", address, zone)
+	logger.Debugf("listing processes - addr: %s, zone: %s", processFilterFlagValues.Address, processFilterFlagValues.Zone)
 
-	processes, err := irodsclient_irodsfs.StatProcess(connection, address, zone)
+	processes, err := irodsclient_irodsfs.StatProcess(connection, processFilterFlagValues.Address, processFilterFlagValues.Zone)
 	if err != nil {
-		return xerrors.Errorf("failed to stat process addr %s, zone %s: %w", address, zone, err)
+		return xerrors.Errorf("failed to stat process addr %s, zone %s: %w", processFilterFlagValues.Address, processFilterFlagValues.Zone, err)
 	}
 
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 
-	switch groupby {
+	switch processFilterFlagValues.GroupBy {
 	case flag.ProcessGroupByNone:
 		t.AppendHeader(table.Row{
 			"Process ID",
