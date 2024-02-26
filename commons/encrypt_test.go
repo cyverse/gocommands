@@ -9,11 +9,11 @@ import (
 )
 
 func TestPGP(t *testing.T) {
-	t.Run("test EncryptFileWithPassword", testEncryptFileWithPassword)
+	t.Run("test EncryptFileWithPassword", testEncryptFilePGP)
 	t.Run("test EncryptFilenameWithPassword", testEncryptFilenameWithPassword)
 }
 
-func testEncryptFileWithPassword(t *testing.T) {
+func testEncryptFilePGP(t *testing.T) {
 	testval := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" // 62
 	fileSize := 10 * 1024 * 1024                                                // 10MB
 
@@ -40,13 +40,16 @@ func testEncryptFileWithPassword(t *testing.T) {
 	err = f.Close()
 	assert.NoError(t, err)
 
+	password := "test_password"
 	encFilePath := testFilePath + ".enc"
 	decFilePath := testFilePath + ".dec"
 
-	err = PgpEncryptFileWithPassword(testFilePath, encFilePath, "test_password")
+	encryptManager := NewEncryptionManager(EncryptionModePGP, false, password)
+
+	err = encryptManager.EncryptFile(testFilePath, encFilePath)
 	assert.NoError(t, err)
 
-	err = PgpDecryptFileWithPassword(encFilePath, decFilePath, "test_password")
+	err = encryptManager.DecryptFile(encFilePath, decFilePath)
 	assert.NoError(t, err)
 
 	// compare
@@ -73,12 +76,16 @@ func testEncryptFilenameWithPassword(t *testing.T) {
 
 	t.Logf("Filename: %s", filename)
 
-	encFilename, err := EncryptFilenameWithPassword(filename, "test_password")
+	password := "test_password"
+
+	encryptManager := NewEncryptionManager(EncryptionModePGP, false, password)
+
+	encFilename, err := encryptManager.EncryptFilename(filename)
 	assert.NoError(t, err)
 
 	t.Logf("Encrypted filename: %s", encFilename)
 
-	decFilename, err := DecryptFilenameWithPassword(encFilename, "test_password")
+	decFilename, err := encryptManager.DecryptFilename(encFilename)
 	assert.NoError(t, err)
 
 	t.Logf("Decrypted filename: %s", decFilename)

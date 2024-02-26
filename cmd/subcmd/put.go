@@ -182,13 +182,14 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		// file
 		// encrypt first if necessary
 		if encryptionFlagValues.Encryption {
-			newFilename, err := commons.EncryptFilenameWithPassword(sourceStat.Name(), encryptionFlagValues.Password)
+			encryptManager := commons.NewEncryptionManager(encryptionFlagValues.Mode, encryptionFlagValues.EncryptFilename, encryptionFlagValues.Password)
+			newFilename, err := encryptManager.EncryptFilename(sourceStat.Name())
 			if err != nil {
 				return xerrors.Errorf("failed to encrypt %s: %w", sourcePath, err)
 			}
 
 			encryptedSourcePath := filepath.Join(encryptionFlagValues.TempPath, newFilename)
-			err = commons.PgpEncryptFileWithPassword(sourcePath, encryptedSourcePath, encryptionFlagValues.Password)
+			err = encryptManager.EncryptFile(sourcePath, encryptedSourcePath)
 			if err != nil {
 				return xerrors.Errorf("failed to encrypt %s: %w", sourcePath, err)
 			}

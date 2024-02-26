@@ -181,10 +181,12 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		decryptedTargetFilePath := targetFilePath
 
 		// decrypt first if necessary
+		encryptManager := commons.NewEncryptionManager(encryptionFlagValues.Mode, encryptionFlagValues.EncryptFilename, encryptionFlagValues.Password)
+
 		if encryptionFlagValues.Encryption {
 			targetFilePath = filepath.Join(encryptionFlagValues.TempPath, sourceEntry.Name)
 
-			newFilename, err := commons.DecryptFilenameWithPassword(sourceEntry.Name, encryptionFlagValues.Password)
+			newFilename, err := encryptManager.DecryptFilename(sourceEntry.Name)
 			if err != nil {
 				return xerrors.Errorf("failed to decrypt %s: %w", targetFilePath, err)
 			}
@@ -228,7 +230,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 
 			if encryptionFlagValues.Encryption {
 				logger.Debugf("decrypt a data object %s to %s", targetFilePath, decryptedTargetFilePath)
-				err = commons.PgpDecryptFileWithPassword(targetFilePath, decryptedTargetFilePath, encryptionFlagValues.Password)
+				err = encryptManager.DecryptFile(targetFilePath, decryptedTargetFilePath)
 				if err != nil {
 					return xerrors.Errorf("failed to decrypt %s: %w", targetFilePath, err)
 				}
