@@ -2,6 +2,7 @@ package subcmd
 
 import (
 	"fmt"
+	"sort"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/go-irodsclient/irods/types"
@@ -74,6 +75,47 @@ func processLsticketCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
+func getTicketSortFunction(tickets []*types.IRODSTicket, sortOrder commons.ListSortOrder, sortReverse bool) func(i int, j int) bool {
+	if sortReverse {
+		switch sortOrder {
+		case commons.ListSortOrderName:
+			return func(i int, j int) bool {
+				return tickets[i].Name > tickets[j].Name
+			}
+		case commons.ListSortOrderTime:
+			return func(i int, j int) bool {
+				return (tickets[i].ExpirationTime.After(tickets[j].ExpirationTime)) ||
+					(tickets[i].ExpirationTime.Equal(tickets[j].ExpirationTime) &&
+						tickets[i].Name < tickets[j].Name)
+			}
+		// Cannot sort tickets by size or extension, so use default sort by name
+		default:
+			return func(i int, j int) bool {
+				return tickets[i].Name < tickets[j].Name
+			}
+		}
+	}
+
+	switch sortOrder {
+	case commons.ListSortOrderName:
+		return func(i int, j int) bool {
+			return tickets[i].Name < tickets[j].Name
+		}
+	case commons.ListSortOrderTime:
+		return func(i int, j int) bool {
+			return (tickets[i].ExpirationTime.Before(tickets[j].ExpirationTime)) ||
+				(tickets[i].ExpirationTime.Equal(tickets[j].ExpirationTime) &&
+					tickets[i].Name < tickets[j].Name)
+
+		}
+		// Cannot sort tickets by size or extension, so use default sort by name
+	default:
+		return func(i int, j int) bool {
+			return tickets[i].Name < tickets[j].Name
+		}
+	}
+}
+
 func listTicket(fs *irodsclient_fs.FileSystem, listFlagValues *flag.ListFlagValues) error {
 	tickets, err := fs.ListTickets()
 	if err != nil {
@@ -83,11 +125,9 @@ func listTicket(fs *irodsclient_fs.FileSystem, listFlagValues *flag.ListFlagValu
 	if len(tickets) == 0 {
 		fmt.Printf("Found no tickets\n")
 	} else {
-		for _, ticket := range tickets {
-			err = printTicket(fs, ticket, listFlagValues)
-			if err != nil {
-				return err
-			}
+		err = printTickets(fs, tickets, listFlagValues)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -107,7 +147,8 @@ func getTicket(fs *irodsclient_fs.FileSystem, ticketName string, listFlagValues 
 		return xerrors.Errorf("failed to get ticket %s: %w", ticketName, err)
 	}
 
-	err = printTicket(fs, ticket, listFlagValues)
+	tickets := []*types.IRODSTicket{ticket}
+	err = printTickets(fs, tickets, listFlagValues)
 	if err != nil {
 		return err
 	}
@@ -115,17 +156,21 @@ func getTicket(fs *irodsclient_fs.FileSystem, ticketName string, listFlagValues 
 	return nil
 }
 
-func printTicket(fs *irodsclient_fs.FileSystem, ticket *types.IRODSTicket, listFlagValues *flag.ListFlagValues) error {
-	switch listFlagValues.Format {
-	case commons.ListFormatLong, commons.ListFormatVeryLong:
-		restrictions, err := fs.GetTicketRestrictions(ticket.ID)
-		if err != nil {
-			return xerrors.Errorf("failed to get ticket restrictions %s: %w", ticket.Name, err)
-		}
+func printTickets(fs *irodsclient_fs.FileSystem, tickets []*types.IRODSTicket, listFlagValues *flag.ListFlagValues) error {
+	sort.SliceStable(tickets, getTicketSortFunction(tickets, listFlagValues.SortOrder, listFlagValues.SortReverse))
 
-		printTicketInternal(ticket, restrictions)
-	default:
-		printTicketInternal(ticket, nil)
+	for _, ticket := range tickets {
+		switch listFlagValues.Format {
+		case commons.ListFormatLong, commons.ListFormatVeryLong:
+			restrictions, err := fs.GetTicketRestrictions(ticket.ID)
+			if err != nil {
+				return xerrors.Errorf("failed to get ticket restrictions %s: %w", ticket.Name, err)
+			}
+
+			printTicketInternal(ticket, restrictions)
+		default:
+			printTicketInternal(ticket, nil)
+		}
 	}
 
 	return nil

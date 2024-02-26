@@ -137,8 +137,8 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, listFlagValues *f
 			return xerrors.Errorf("failed to list data-objects in %s: %w", sourcePath, err)
 		}
 
-		printDataObjects(objs, listFlagValues.Format, listFlagValues.HumanReadableSizes, listFlagValues.SortOrder, listFlagValues.SortReverse)
-		printCollections(colls, listFlagValues.SortOrder, listFlagValues.SortReverse)
+		printDataObjects(objs, listFlagValues)
+		printCollections(colls, listFlagValues)
 		return nil
 	}
 
@@ -156,7 +156,7 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, listFlagValues *f
 	}
 
 	entries := []*irodsclient_types.IRODSDataObject{entry}
-	printDataObjects(entries, listFlagValues.Format, listFlagValues.HumanReadableSizes, listFlagValues.SortOrder, listFlagValues.SortReverse)
+	printDataObjects(entries, listFlagValues)
 	return nil
 }
 
@@ -233,16 +233,16 @@ func getFlatReplicaSortFunction(entries []*FlatReplica, sortOrder commons.ListSo
 	}
 }
 
-func printDataObjects(entries []*irodsclient_types.IRODSDataObject, format commons.ListFormat, humanReadableSizes bool, sortOrder commons.ListSortOrder, sortReverse bool) {
-	if format == commons.ListFormatNormal {
-		sort.SliceStable(entries, getDataObjectSortFunction(entries, sortOrder, sortReverse))
+func printDataObjects(entries []*irodsclient_types.IRODSDataObject, listFlagValues *flag.ListFlagValues) {
+	if listFlagValues.Format == commons.ListFormatNormal {
+		sort.SliceStable(entries, getDataObjectSortFunction(entries, listFlagValues.SortOrder, listFlagValues.SortReverse))
 		for _, entry := range entries {
 			printDataObjectShort(entry)
 		}
 	} else {
 		replicas := flattenReplicas(entries)
-		sort.SliceStable(replicas, getFlatReplicaSortFunction(replicas, sortOrder, sortReverse))
-		printReplicas(replicas, format, humanReadableSizes)
+		sort.SliceStable(replicas, getFlatReplicaSortFunction(replicas, listFlagValues.SortOrder, listFlagValues.SortReverse))
+		printReplicas(replicas, listFlagValues)
 	}
 }
 
@@ -323,18 +323,18 @@ func printDataObjectShort(entry *irodsclient_types.IRODSDataObject) {
 	fmt.Printf("  %s\n", entry.Name)
 }
 
-func printReplicas(flatReplicas []*FlatReplica, format commons.ListFormat, humanReadableSizes bool) {
+func printReplicas(flatReplicas []*FlatReplica, listFlagValues *flag.ListFlagValues) {
 	for _, flatReplica := range flatReplicas {
-		printReplica(*flatReplica, format, humanReadableSizes)
+		printReplica(*flatReplica, listFlagValues)
 	}
 }
 
-func printReplica(flatReplica FlatReplica, format commons.ListFormat, humanReadableSizes bool) {
+func printReplica(flatReplica FlatReplica, listFlagValues *flag.ListFlagValues) {
 	size := fmt.Sprintf("%v", flatReplica.DataObject.Size)
-	if humanReadableSizes {
+	if listFlagValues.HumanReadableSizes {
 		size = humanize.Bytes(uint64(flatReplica.DataObject.Size))
 	}
-	switch format {
+	switch listFlagValues.Format {
 	case commons.ListFormatNormal:
 		fmt.Printf("  %d\t%s\n", flatReplica.Replica.Number, flatReplica.DataObject.Name)
 	case commons.ListFormatLong:
@@ -351,8 +351,8 @@ func printReplica(flatReplica FlatReplica, format commons.ListFormat, humanReada
 	}
 }
 
-func printCollections(entries []*irodsclient_types.IRODSCollection, sortOrder commons.ListSortOrder, sortReverse bool) {
-	sort.SliceStable(entries, getCollectionSortFunction(entries, sortOrder, sortReverse))
+func printCollections(entries []*irodsclient_types.IRODSCollection, listFlagValues *flag.ListFlagValues) {
+	sort.SliceStable(entries, getCollectionSortFunction(entries, listFlagValues.SortOrder, listFlagValues.SortReverse))
 	for _, entry := range entries {
 		fmt.Printf("  C- %s\n", entry.Path)
 	}
