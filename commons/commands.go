@@ -48,6 +48,16 @@ func SetDefaultConfigIfEmpty() {
 		appConfig = GetDefaultConfig()
 		setConfigToICommandsEnvMgr(environmentManager, appConfig)
 	}
+
+	if environmentManager.Environment.LogLevel > 0 {
+		logLevel := getLogrusLogLevel(environmentManager.Environment.LogLevel)
+		log.SetLevel(logLevel)
+	}
+
+	environmentManager.Load(sessionID)
+	setICommandsEnvMgrToConfig(appConfig, environmentManager)
+
+	SyncAccount()
 }
 
 // SetSessionID sets session id
@@ -422,6 +432,72 @@ func setConfigToICommandsEnvMgr(envManager *irodsclient_icommands.ICommandsEnvir
 	envManager.Password = config.Password
 }
 
+func overwriteConfigToICommandsEnvMgr(envManager *irodsclient_icommands.ICommandsEnvironmentManager, config *Config) {
+	if len(config.CurrentWorkingDir) > 0 {
+		envManager.Environment.CurrentWorkingDir = config.CurrentWorkingDir
+	}
+
+	if len(config.Host) > 0 {
+		envManager.Environment.Host = config.Host
+	}
+
+	if config.Port > 0 {
+		envManager.Environment.Port = config.Port
+	}
+
+	if len(config.Username) > 0 {
+		envManager.Environment.Username = config.Username
+	}
+
+	if len(config.Zone) > 0 {
+		envManager.Environment.Zone = config.Zone
+	}
+
+	if len(config.DefaultResource) > 0 {
+		envManager.Environment.DefaultResource = config.DefaultResource
+	}
+
+	if config.LogLevel > 0 {
+		envManager.Environment.LogLevel = config.LogLevel
+	}
+
+	if len(config.AuthenticationScheme) > 0 {
+		envManager.Environment.AuthenticationScheme = config.AuthenticationScheme
+	}
+
+	if len(config.ClientServerNegotiation) > 0 {
+		envManager.Environment.ClientServerNegotiation = config.ClientServerNegotiation
+	}
+
+	if len(config.ClientServerPolicy) > 0 {
+		envManager.Environment.ClientServerPolicy = config.ClientServerPolicy
+	}
+
+	if len(config.SSLCACertificateFile) > 0 {
+		envManager.Environment.SSLCACertificateFile = config.SSLCACertificateFile
+	}
+
+	if config.EncryptionKeySize > 0 {
+		envManager.Environment.EncryptionKeySize = config.EncryptionKeySize
+	}
+
+	if len(config.EncryptionAlgorithm) > 0 {
+		envManager.Environment.EncryptionAlgorithm = config.EncryptionAlgorithm
+	}
+
+	if config.EncryptionSaltSize > 0 {
+		envManager.Environment.EncryptionSaltSize = config.EncryptionSaltSize
+	}
+
+	if config.EncryptionNumHashRounds > 0 {
+		envManager.Environment.EncryptionNumHashRounds = config.EncryptionNumHashRounds
+	}
+
+	if len(config.Password) > 0 {
+		envManager.Password = config.Password
+	}
+}
+
 func setICommandsEnvMgrToConfig(config *Config, envManager *irodsclient_icommands.ICommandsEnvironmentManager) {
 	config.CurrentWorkingDir = envManager.Environment.CurrentWorkingDir
 	config.Host = envManager.Environment.Host
@@ -523,7 +599,8 @@ func LoadConfigFromFile(configPath string) error {
 			return xerrors.Errorf("failed to read file %s: %w", configPath, err)
 		}
 
-		config, err := NewConfigFromYAML(yjBytes)
+		defaultConfig := GetDefaultConfig()
+		config, err := NewConfigFromYAML(defaultConfig, yjBytes)
 		if err != nil {
 			return xerrors.Errorf("failed to read config from YAML: %w", err)
 		}
@@ -589,80 +666,31 @@ func LoadConfigFromFile(configPath string) error {
 	return nil
 }
 
-func LoadConfigFromEnv() error {
+// LoadAndOverwriteConfigFromEnv loads config from env and overwrites to existing env
+func LoadAndOverwriteConfigFromEnv() error {
 	logger := log.WithFields(log.Fields{
 		"package":  "commons",
-		"function": "LoadConfigFromEnv",
+		"function": "LoadAndOverwriteConfigFromEnv",
 	})
 
 	logger.Debug("reading config from environment variables")
 
-	iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
+	emptyConfig := &Config{}
+	config, err := NewConfigFromENV(emptyConfig)
 	if err != nil {
 		return xerrors.Errorf("failed to get new iCommands Environment: %w", err)
 	}
 
-	config, err := NewConfigFromENV()
-	if err != nil {
-		return xerrors.Errorf("failed to get new iCommands Environment: %w", err)
-	}
+	overwriteConfigToICommandsEnvMgr(environmentManager, config)
 
-	setConfigToICommandsEnvMgr(iCommandsEnvMgr, config)
-
-	if iCommandsEnvMgr.Environment.LogLevel > 0 {
-		logLevel := getLogrusLogLevel(iCommandsEnvMgr.Environment.LogLevel)
+	if environmentManager.Environment.LogLevel > 0 {
+		logLevel := getLogrusLogLevel(environmentManager.Environment.LogLevel)
 		log.SetLevel(logLevel)
 	}
 
-	// read session from ~/.irods
-	configPath, err := ExpandHomeDir("~/.irods")
-	if err != nil {
-		return xerrors.Errorf("failed to expand home dir for %s: %w", "~/.irods", err)
-	}
+	setICommandsEnvMgrToConfig(appConfig, environmentManager)
 
-	configPath, err = filepath.Abs(configPath)
-	if err != nil {
-		return xerrors.Errorf("failed to compute absolute path for %s: %w", configPath, err)
-	}
-
-	logger.Debugf("reading config file/dir - %s", configPath)
-	// check if it is a file or a dir
-	_, err = os.Stat(configPath)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return xerrors.Errorf("failed to stat %s: %w", configPath, err)
-		}
-	}
-
-	configFilePath := configPath
-	if isICommandsEnvDir(configPath) {
-		configFilePath = filepath.Join(configPath, "irods_environment.json")
-	}
-
-	err = iCommandsEnvMgr.SetEnvironmentFilePath(configFilePath)
-	if err != nil {
-		return xerrors.Errorf("failed to set iCommands Environment file %s: %w", configFilePath, err)
-	}
-
-	err = iCommandsEnvMgr.Load(sessionID)
-	if err != nil {
-		return xerrors.Errorf("failed to read iCommands Environment: %w", err)
-	}
-
-	setICommandsEnvMgrToConfig(config, iCommandsEnvMgr)
-
-	if iCommandsEnvMgr.Environment.LogLevel > 0 {
-		logLevel := getLogrusLogLevel(iCommandsEnvMgr.Environment.LogLevel)
-		log.SetLevel(logLevel)
-	}
-
-	environmentManager = iCommandsEnvMgr
-	appConfig = config
-
-	err = SyncAccount()
-	if err != nil {
-		return xerrors.Errorf("failed to get iCommands Environment: %w", err)
-	}
+	SyncAccount()
 
 	return nil
 }

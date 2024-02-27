@@ -55,9 +55,7 @@ func GetDefaultConfig() *Config {
 }
 
 // NewConfigFromYAML creates Config from YAML
-func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
-	config := GetDefaultConfig()
-
+func NewConfigFromYAML(config *Config, yamlBytes []byte) (*Config, error) {
 	err := yaml.Unmarshal(yamlBytes, config)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to unmarshal YAML: %w", err)
@@ -67,9 +65,7 @@ func NewConfigFromYAML(yamlBytes []byte) (*Config, error) {
 }
 
 // NewConfigFromENV creates Config from Environmental variables
-func NewConfigFromENV() (*Config, error) {
-	config := GetDefaultConfig()
-
+func NewConfigFromENV(config *Config) (*Config, error) {
 	err := envconfig.Process("", config)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to read config from environmental variables: %w", err)

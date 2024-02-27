@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -11,13 +13,23 @@ import (
 	"strings"
 
 	"github.com/jxskiss/base62"
+
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/packet"
 	"golang.org/x/xerrors"
 )
 
+// For WinSCP encryption
+// https://winscp.net/eng/docs/file_encryption
+
 const (
-	PgpEncryptedFileExt string = ".pgp.enc"
+	PgpEncryptedFileExtension    string = ".pgp.enc"
+	WinSCPEncryptedFileExtension string = ".aesctr.enc"
+
+	aesIV      string = "4e2f34041d564ed8"
+	aesPadding string = "671ff9e1f816451b"
+
+	winscpSaltLen int = 16
 )
 
 // EncryptionMode determines encryption mode
@@ -112,13 +124,65 @@ func (manager *EncryptionManager) DecryptFile(source string, target string) erro
 }
 
 func (manager *EncryptionManager) encryptFilenameWinSCP(filename string) (string, error) {
-	//TODO: Implement this
-	return filename, nil
+	// generate salt
+	salt := make([]byte, winscpSaltLen)
+	_, err := rand.Read(salt)
+	if err != nil {
+		return "", xerrors.Errorf("failed to generate salt: %w", err)
+	}
+
+	// convert to utf8
+	utf8Filename := strings.ToValidUTF8(filename, "_")
+
+	// encrypt with aes 256 ctr
+	encryptedFilename, err := manager.encryptAES256CTR([]byte(utf8Filename), salt)
+	if err != nil {
+		return "", xerrors.Errorf("failed to encrypt filename: %w", err)
+	}
+
+	// add salt in front
+	concatenatedFilename := make([]byte, len(salt)+len(encryptedFilename))
+	copy(concatenatedFilename, salt)
+	copy(concatenatedFilename[len(salt):], encryptedFilename)
+
+	// base64 encode
+	b64EncodedFilename := base64.StdEncoding.EncodeToString(concatenatedFilename)
+	// replace / to _
+	b64EncodedFilename = strings.ReplaceAll(b64EncodedFilename, "/", "_")
+	// trim trailing =
+	b64EncodedFilename = strings.TrimRight(b64EncodedFilename, "=")
+
+	newFilename := fmt.Sprintf("%s%s", b64EncodedFilename, WinSCPEncryptedFileExtension)
+
+	return newFilename, nil
 }
 
 func (manager *EncryptionManager) decryptFilenameWinSCP(filename string) (string, error) {
-	//TODO: Implement this
-	return filename, nil
+	// trim file ext
+	filename = strings.TrimSuffix(filename, WinSCPEncryptedFileExtension)
+
+	// replace _ to /
+	filename = strings.ReplaceAll(filename, "_", "/")
+	// base64 decode
+	concatenatedFilename, err := base64.StdEncoding.DecodeString(string(filename))
+	if err != nil {
+		return "", xerrors.Errorf("failed to base64 decode filename: %w", err)
+	}
+
+	if len(concatenatedFilename) < winscpSaltLen {
+		return "", xerrors.Errorf("failed to extract salt from filename")
+	}
+
+	salt := concatenatedFilename[:winscpSaltLen]
+	encryptedFilename := concatenatedFilename[winscpSaltLen:]
+
+	// decrypt with aes 256 ctr
+	decryptedFilename, err := manager.decryptAES256CTR(encryptedFilename, salt)
+	if err != nil {
+		return "", xerrors.Errorf("failed to decrypt filename: %w", err)
+	}
+
+	return string(decryptedFilename), nil
 }
 
 func (manager *EncryptionManager) encryptFilenamePGP(filename string) (string, error) {
@@ -126,13 +190,13 @@ func (manager *EncryptionManager) encryptFilenamePGP(filename string) (string, e
 		return filename, nil
 	}
 
-	encryptedFilename, err := manager.encryptAES([]byte(filename))
+	encryptedFilename, err := manager.encryptAESCBC([]byte(filename))
 	if err != nil {
-		xerrors.Errorf("failed to encrypt filename: %w", err)
+		return "", xerrors.Errorf("failed to encrypt filename: %w", err)
 	}
 
-	b64EncodedFilename := base62.EncodeToString(encryptedFilename)
-	newFilename := fmt.Sprintf("%s%s", b64EncodedFilename, PgpEncryptedFileExt)
+	b62EncodedFilename := base62.EncodeToString(encryptedFilename)
+	newFilename := fmt.Sprintf("%s%s", b62EncodedFilename, PgpEncryptedFileExtension)
 
 	return newFilename, nil
 }
@@ -143,16 +207,16 @@ func (manager *EncryptionManager) decryptFilenamePGP(filename string) (string, e
 	}
 
 	// trim file ext
-	filename = strings.TrimSuffix(filename, PgpEncryptedFileExt)
+	filename = strings.TrimSuffix(filename, PgpEncryptedFileExtension)
 
 	encryptedFilename, err := base62.DecodeString(string(filename))
 	if err != nil {
-		xerrors.Errorf("failed to base62 decode filename: %w", err)
+		return "", xerrors.Errorf("failed to base62 decode filename: %w", err)
 	}
 
-	decryptedFilename, err := manager.decryptAES(encryptedFilename)
+	decryptedFilename, err := manager.decryptAESCBC(encryptedFilename)
 	if err != nil {
-		xerrors.Errorf("failed to decrypt filename: %w", err)
+		return "", xerrors.Errorf("failed to decrypt filename: %w", err)
 	}
 
 	return string(decryptedFilename), nil
@@ -255,7 +319,7 @@ func (manager *EncryptionManager) padPkcs7(data []byte, blocksize int) []byte {
 	return pb
 }
 
-func (manager *EncryptionManager) decryptAES(data []byte) ([]byte, error) {
+func (manager *EncryptionManager) decryptAESCBC(data []byte) ([]byte, error) {
 	key := manager.padAesKey(manager.password)
 	block, err := aes.NewCipher([]byte(key))
 	if err != nil {
@@ -271,7 +335,49 @@ func (manager *EncryptionManager) decryptAES(data []byte) ([]byte, error) {
 	return dest[:contentLength], nil
 }
 
-func (manager *EncryptionManager) encryptAES(data []byte) ([]byte, error) {
+func (manager *EncryptionManager) encryptAESCBC(data []byte) ([]byte, error) {
+	key := manager.padAesKey(manager.password)
+	block, err := aes.NewCipher([]byte(key))
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create AES cipher: %w", err)
+	}
+
+	encrypter := cipher.NewCBCEncrypter(block, []byte(aesIV))
+
+	contentLength := uint32(len(data))
+	padData := manager.padPkcs7(data, block.BlockSize())
+
+	dest := make([]byte, len(padData)+4)
+
+	// add size header
+	binary.LittleEndian.PutUint32(dest, contentLength)
+	encrypter.CryptBlocks(dest[4:], padData)
+
+	return dest, nil
+}
+
+func (manager *EncryptionManager) encryptAES256CTR(data []byte, salt []byte) ([]byte, error) {
+	key := manager.padAesKey(manager.password)
+	block, err := aes.NewCipher([]byte(key))
+	if err != nil {
+		return nil, xerrors.Errorf("failed to create AES cipher: %w", err)
+	}
+
+	encrypter := cipher.NewCBCEncrypter(block, []byte(aesIV))
+
+	contentLength := uint32(len(data))
+	padData := manager.padPkcs7(data, block.BlockSize())
+
+	dest := make([]byte, len(padData)+4)
+
+	// add size header
+	binary.LittleEndian.PutUint32(dest, contentLength)
+	encrypter.CryptBlocks(dest[4:], padData)
+
+	return dest, nil
+}
+
+func (manager *EncryptionManager) decryptAES256CTR(data []byte, salt []byte) ([]byte, error) {
 	key := manager.padAesKey(manager.password)
 	block, err := aes.NewCipher([]byte(key))
 	if err != nil {

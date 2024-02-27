@@ -12,7 +12,6 @@ import (
 
 type CommonFlagValues struct {
 	ConfigFilePath  string
-	ReadEnvironment bool
 	ShowVersion     bool
 	ShowHelp        bool
 	DebugMode       bool
@@ -34,7 +33,6 @@ var (
 
 func SetCommonFlags(command *cobra.Command) {
 	command.Flags().StringVarP(&commonFlagValues.ConfigFilePath, "config", "c", "", "Set config file or dir (default \"$HOME/.irods\")")
-	command.Flags().BoolVarP(&commonFlagValues.ReadEnvironment, "envconfig", "e", false, "Read config from environmental variables")
 	command.Flags().BoolVarP(&commonFlagValues.ShowVersion, "version", "v", false, "Print version")
 	command.Flags().BoolVarP(&commonFlagValues.ShowHelp, "help", "h", false, "Print help")
 	command.Flags().BoolVarP(&commonFlagValues.DebugMode, "debug", "d", false, "Enable debug mode")
@@ -46,8 +44,6 @@ func SetCommonFlags(command *cobra.Command) {
 	command.MarkFlagsMutuallyExclusive("log_level", "version")
 	command.MarkFlagsMutuallyExclusive("resource", "version")
 	command.MarkFlagsMutuallyExclusive("session", "version")
-
-	command.MarkFlagsMutuallyExclusive("config", "envconfig")
 }
 
 func GetCommonFlagValues(command *cobra.Command) *CommonFlagValues {
@@ -98,27 +94,17 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	commons.SetSessionID(myCommonFlagValues.SessionID)
 
 	readConfig := false
-
 	if len(myCommonFlagValues.ConfigFilePath) > 0 {
+		// user defined config file
 		err := commons.LoadConfigFromFile(myCommonFlagValues.ConfigFilePath)
 		if err != nil {
 			return false, xerrors.Errorf("failed to load config from file %s: %w", myCommonFlagValues.ConfigFilePath, err) // stop here
 		}
 
 		readConfig = true
-	}
-
-	if myCommonFlagValues.ReadEnvironment {
-		err := commons.LoadConfigFromEnv()
-		if err != nil {
-			return false, xerrors.Errorf("failed to load config from environment: %w", err) // stop here
-		}
-
-		readConfig = true
-	}
-
-	// read env config
-	if !readConfig {
+	} else {
+		// read config path from env
+		// then read config
 		if irodsEnvironmentFileEnvVal, ok := os.LookupEnv(IRODSEnvironmentFileEnvKey); ok {
 			if len(irodsEnvironmentFileEnvVal) > 0 {
 				err := commons.LoadConfigFromFile(irodsEnvironmentFileEnvVal)
@@ -129,19 +115,29 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 				readConfig = true
 			}
 		}
-	}
 
-	// default config
-	if !readConfig {
-		// auto detect
-		err := commons.LoadConfigFromFile("~/.irods")
-		if err != nil {
-			logger.Debug(err)
-			// ignore error
+		// read config from default icommands config path
+		if !readConfig {
+			// auto detect
+			err := commons.LoadConfigFromFile("~/.irods")
+			if err != nil {
+				logger.Debug(err)
+				// ignore error
+			} else {
+				readConfig = true
+			}
 		}
 	}
 
-	commons.SetDefaultConfigIfEmpty()
+	// set default config
+	if !readConfig {
+		commons.SetDefaultConfigIfEmpty()
+	}
+
+	err := commons.LoadAndOverwriteConfigFromEnv()
+	if err != nil {
+		return false, xerrors.Errorf("failed to load config from environment: %w", err) // stop here
+	}
 
 	// re-configure level
 	if myCommonFlagValues.DebugMode {
