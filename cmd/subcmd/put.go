@@ -182,6 +182,8 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		// file
 		// encrypt first if necessary
 		if encryptionFlagValues.Encryption {
+			logger.Debugf("encrypting file %s", sourcePath)
+
 			encryptManager := commons.NewEncryptionManager(encryptionFlagValues.Mode, encryptionFlagValues.EncryptFilename, []byte(encryptionFlagValues.Key))
 			newFilename, err := encryptManager.EncryptFilename(sourceStat.Name())
 			if err != nil {

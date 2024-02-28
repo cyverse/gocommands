@@ -38,7 +38,7 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	flag.SetDifferentialTransferFlags(getCmd, true)
 	flag.SetNoRootFlags(getCmd)
 	flag.SetSyncFlags(getCmd)
-	flag.SetEncryptionFlags(getCmd)
+	flag.SetDecryptionFlags(getCmd)
 
 	rootCmd.AddCommand(getCmd)
 }

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -26,10 +25,8 @@ const (
 	PgpEncryptedFileExtension    string = ".pgp.enc"
 	WinSCPEncryptedFileExtension string = ".aesctr.enc"
 
-	//aesIV      string = "4e2f34041d564ed8"
-	//aesPadding string = "671ff9e1f816451b"
-
-	aesSaltLen int = 16
+	aesSaltLen int    = 16
+	pgpSalt    string = "4e2f34041d564ed8"
 )
 
 // EncryptionMode determines encryption mode
@@ -214,11 +211,9 @@ func (manager *EncryptionManager) encryptFilenamePGP(filename string) (string, e
 	}
 
 	// generate salt
+	// we should use static salt to keep the same file name
 	salt := make([]byte, aesSaltLen)
-	_, err := rand.Read(salt)
-	if err != nil {
-		return "", xerrors.Errorf("failed to generate salt: %w", err)
-	}
+	copy(salt, []byte(pgpSalt))
 
 	encryptedFilename, err := manager.encryptAESCBC([]byte(filename), salt)
 	if err != nil {
