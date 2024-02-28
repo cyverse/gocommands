@@ -71,7 +71,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	differentialTransferFlagValues := flag.GetDifferentialTransferFlagValues()
 	noRootFlagValues := flag.GetNoRootFlagValues()
 	syncFlagValues := flag.GetSyncFlagValues()
-	encryptFlagValues := flag.GetEncryptFlagValues()
+	encryptionFlagValues := flag.GetEncryptionFlagValues()
 
 	maxConnectionNum := parallelTransferFlagValues.ThreadNumber + 2 // 2 for metadata op
 
@@ -130,7 +130,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 			return xerrors.Errorf("failed to make new target path for put %s to %s: %w", sourcePath, targetPath, err)
 		}
 
-		err = putOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, encryptFlagValues)
+		err = putOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, encryptionFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform put %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -182,7 +182,7 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		// file
 		// encrypt first if necessary
 		if encryptionFlagValues.Encryption {
-			encryptManager := commons.NewEncryptionManager(encryptionFlagValues.Mode, encryptionFlagValues.EncryptFilename, []byte(encryptionFlagValues.Password))
+			encryptManager := commons.NewEncryptionManager(encryptionFlagValues.Mode, encryptionFlagValues.EncryptFilename, []byte(encryptionFlagValues.Key))
 			newFilename, err := encryptManager.EncryptFilename(sourceStat.Name())
 			if err != nil {
 				return xerrors.Errorf("failed to encrypt %s: %w", sourcePath, err)

@@ -56,18 +56,31 @@ func GetEncryptionMode(mode string) EncryptionMode {
 	}
 }
 
+// DetectEncryptionMode detects encryption mode and filename encryption
+func DetectEncryptionMode(p string) (EncryptionMode, bool) {
+	if strings.HasSuffix(p, PgpEncryptedFileExtension) {
+		// pgp
+		return EncryptionModePGP, true
+	} else if strings.HasSuffix(p, WinSCPEncryptedFileExtension) {
+		// winscp
+		return EncryptionModeWinSCP, true
+	} else {
+		return EncryptionModePGP, false
+	}
+}
+
 type EncryptionManager struct {
 	mode            EncryptionMode
 	encryptFilename bool
-	password        []byte
+	key             []byte
 }
 
 // NewEncryptionManager creates a new EncryptionManager
-func NewEncryptionManager(mode EncryptionMode, encryptFilename bool, password []byte) *EncryptionManager {
+func NewEncryptionManager(mode EncryptionMode, encryptFilename bool, key []byte) *EncryptionManager {
 	manager := &EncryptionManager{
 		mode:            mode,
 		encryptFilename: encryptFilename,
-		password:        password,
+		key:             key,
 	}
 
 	return manager
@@ -281,7 +294,7 @@ func (manager *EncryptionManager) encryptFilePGP(source string, target string) e
 		DefaultCipher: packet.CipherAES256,
 	}
 
-	writeHandle, err := openpgp.SymmetricallyEncrypt(targetFileHandle, []byte(manager.password), nil, encryptionConfig)
+	writeHandle, err := openpgp.SymmetricallyEncrypt(targetFileHandle, []byte(manager.key), nil, encryptionConfig)
 	if err != nil {
 		return xerrors.Errorf("failed to create a encrypt writer for %s: %w", target, err)
 	}
@@ -321,7 +334,7 @@ func (manager *EncryptionManager) decryptFilePGP(source string, target string) e
 			return nil, xerrors.New("decryption failed")
 		}
 		failed = true
-		return []byte(manager.password), nil
+		return []byte(manager.key), nil
 	}
 
 	messageDetail, err := openpgp.ReadMessage(sourceFileHandle, nil, prompt, encryptionConfig)
@@ -346,7 +359,7 @@ func (manager *EncryptionManager) padPkcs7(data []byte, blocksize int) []byte {
 }
 
 func (manager *EncryptionManager) encryptAESCBC(data []byte, salt []byte) ([]byte, error) {
-	key := manager.padPkcs7(manager.password, 16)
+	key := manager.padPkcs7(manager.key, 16)
 	block, err := aes.NewCipher([]byte(key))
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create AES cipher: %w", err)
@@ -367,7 +380,7 @@ func (manager *EncryptionManager) encryptAESCBC(data []byte, salt []byte) ([]byt
 }
 
 func (manager *EncryptionManager) decryptAESCBC(data []byte, salt []byte) ([]byte, error) {
-	key := manager.padPkcs7(manager.password, 16)
+	key := manager.padPkcs7(manager.key, 16)
 	block, err := aes.NewCipher([]byte(key))
 	if err != nil {
 		return nil, xerrors.Errorf("failed to create AES cipher: %w", err)
@@ -384,7 +397,7 @@ func (manager *EncryptionManager) decryptAESCBC(data []byte, salt []byte) ([]byt
 
 func (manager *EncryptionManager) encryptAESCTR(data []byte, salt []byte) ([]byte, error) {
 	/*
-		key := manager.padPkcs7(manager.password, 16)
+		key := manager.padPkcs7(manager.key, 16)
 
 		block, err := aes.NewCipher([]byte(key))
 		if err != nil {
@@ -407,7 +420,7 @@ func (manager *EncryptionManager) encryptAESCTR(data []byte, salt []byte) ([]byt
 
 func (manager *EncryptionManager) decryptAESCTR(data []byte, salt []byte) ([]byte, error) {
 	/*
-		key := manager.padPkcs7(manager.password, 16)
+		key := manager.padPkcs7(manager.key, 16)
 
 		block, err := aes.NewCipher([]byte(key))
 		if err != nil {

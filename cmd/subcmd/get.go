@@ -72,7 +72,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	differentialTransferFlagValues := flag.GetDifferentialTransferFlagValues()
 	noRootFlagValues := flag.GetNoRootFlagValues()
 	syncFlagValues := flag.GetSyncFlagValues()
-	encryptFlagValues := flag.GetEncryptFlagValues()
+	decryptionFlagValues := flag.GetDecryptionFlagValues()
 
 	maxConnectionNum := parallelTransferFlagValues.ThreadNumber + 2 // 2 for metadata op
 
@@ -131,7 +131,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 			return xerrors.Errorf("failed to make new target path for get %s to %s: %w", sourcePath, targetPath, err)
 		}
 
-		err = getOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, differentialTransferFlagValues, encryptFlagValues)
+		err = getOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, differentialTransferFlagValues, decryptionFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform get %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -156,7 +156,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, encryptionFlagValues *flag.EncryptionFlagValues) error {
+func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, decryptionFlagValues *flag.DecryptionFlagValues) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "getOne",
@@ -181,10 +181,12 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		decryptedTargetFilePath := targetFilePath
 
 		// decrypt first if necessary
-		encryptManager := commons.NewEncryptionManager(encryptionFlagValues.Mode, encryptionFlagValues.EncryptFilename, []byte(encryptionFlagValues.Password))
+		encryptionMode, encryptFilename := commons.DetectEncryptionMode(sourceEntry.Name)
 
-		if encryptionFlagValues.Encryption {
-			targetFilePath = filepath.Join(encryptionFlagValues.TempPath, sourceEntry.Name)
+		encryptManager := commons.NewEncryptionManager(encryptionMode, encryptFilename, []byte(decryptionFlagValues.Key))
+
+		if decryptionFlagValues.Decryption {
+			targetFilePath = filepath.Join(decryptionFlagValues.TempPath, sourceEntry.Name)
 
 			newFilename, err := encryptManager.DecryptFilename(sourceEntry.Name)
 			if err != nil {
@@ -228,7 +230,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 			logger.Debugf("downloaded a data object %s to %s", sourcePath, targetFilePath)
 			job.Progress(sourceEntry.Size, sourceEntry.Size, false)
 
-			if encryptionFlagValues.Encryption {
+			if decryptionFlagValues.Decryption {
 				logger.Debugf("decrypt a data object %s to %s", targetFilePath, decryptedTargetFilePath)
 				err = encryptManager.DecryptFile(targetFilePath, decryptedTargetFilePath)
 				if err != nil {
@@ -322,7 +324,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 
 			commons.MarkPathMap(inputPathMap, targetDirPath)
 
-			err = getOne(parallelJobManager, inputPathMap, entry.Path, targetDirPath, forceFlagValues, differentialTransferFlagValues, encryptionFlagValues)
+			err = getOne(parallelJobManager, inputPathMap, entry.Path, targetDirPath, forceFlagValues, differentialTransferFlagValues, decryptionFlagValues)
 			if err != nil {
 				return xerrors.Errorf("failed to perform get %s to %s: %w", entry.Path, targetDirPath, err)
 			}
