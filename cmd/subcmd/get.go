@@ -181,7 +181,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		decryptedTargetFilePath := targetFilePath
 
 		// decrypt first if necessary
-		encryptManager := commons.NewEncryptionManager(encryptionFlagValues.Mode, encryptionFlagValues.EncryptFilename, encryptionFlagValues.Password)
+		encryptManager := commons.NewEncryptionManager(encryptionFlagValues.Mode, encryptionFlagValues.EncryptFilename, []byte(encryptionFlagValues.Password))
 
 		if encryptionFlagValues.Encryption {
 			targetFilePath = filepath.Join(encryptionFlagValues.TempPath, sourceEntry.Name)

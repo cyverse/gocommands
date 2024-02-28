@@ -1,6 +1,7 @@
 package commons
 
 import (
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,8 +10,10 @@ import (
 )
 
 func TestPGP(t *testing.T) {
-	t.Run("test EncryptFileWithPassword", testEncryptFilePGP)
-	t.Run("test EncryptFilenameWithPassword", testEncryptFilenameWithPassword)
+	t.Run("test EncryptFilePGP", testEncryptFilePGP)
+	t.Run("test EncryptFilenamePGP", testEncryptFilenamePGP)
+	//t.Run("test DecryptFilenameWinSCP", testDecryptFilenameWinSCP)
+	//t.Run("test EncryptFilenameWinSCP", testEncryptFilenameWinSCP)
 }
 
 func testEncryptFilePGP(t *testing.T) {
@@ -44,7 +47,7 @@ func testEncryptFilePGP(t *testing.T) {
 	encFilePath := testFilePath + ".enc"
 	decFilePath := testFilePath + ".dec"
 
-	encryptManager := NewEncryptionManager(EncryptionModePGP, false, password)
+	encryptManager := NewEncryptionManager(EncryptionModePGP, false, []byte(password))
 
 	err = encryptManager.EncryptFile(testFilePath, encFilePath)
 	assert.NoError(t, err)
@@ -71,14 +74,57 @@ func testEncryptFilePGP(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func testEncryptFilenameWithPassword(t *testing.T) {
+func testEncryptFilenamePGP(t *testing.T) {
 	filename := "test_large_file.bin"
 
 	t.Logf("Filename: %s", filename)
 
 	password := "test_password"
 
-	encryptManager := NewEncryptionManager(EncryptionModePGP, false, password)
+	encryptManager := NewEncryptionManager(EncryptionModePGP, false, []byte(password))
+
+	encFilename, err := encryptManager.EncryptFilename(filename)
+	assert.NoError(t, err)
+
+	t.Logf("Encrypted filename: %s", encFilename)
+
+	decFilename, err := encryptManager.DecryptFilename(encFilename)
+	assert.NoError(t, err)
+
+	t.Logf("Decrypted filename: %s", decFilename)
+
+	// compare
+	assert.Equal(t, filename, decFilename)
+}
+
+func testDecryptFilenameWinSCP(t *testing.T) {
+	filename := "fVten7j3mxzA0LVfDcLSkycYrFHQqEU.aesctr.enc"
+
+	t.Logf("Filename: %s", filename)
+
+	password := "4444444444444444444444444444444444444444444444444444444444444444"
+	passwordBytes, err := hex.DecodeString(password)
+	assert.NoError(t, err)
+	assert.Equal(t, len(passwordBytes), 32)
+
+	encryptManager := NewEncryptionManager(EncryptionModeWinSCP, true, passwordBytes)
+
+	decFilename, err := encryptManager.decryptFilenameWinSCP(filename)
+	assert.NoError(t, err)
+
+	t.Logf("Decrypted filename: %s", decFilename)
+
+	assert.Equal(t, "LICENSE", decFilename)
+}
+
+func testEncryptFilenameWinSCP(t *testing.T) {
+	filename := "LICENSE"
+
+	t.Logf("Filename: %s", filename)
+
+	password := "4444444444444444444444444444444444444444444444444444444444444444"
+
+	encryptManager := NewEncryptionManager(EncryptionModeWinSCP, true, []byte(password))
 
 	encFilename, err := encryptManager.EncryptFilename(filename)
 	assert.NoError(t, err)
