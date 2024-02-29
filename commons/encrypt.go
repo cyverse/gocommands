@@ -27,8 +27,9 @@ const (
 	PgpEncryptedFileExtension    string = ".pgp.enc"
 	WinSCPEncryptedFileExtension string = ".aesctr.enc"
 
-	aesSaltLen int    = 16
-	pgpSalt    string = "4e2f34041d564ed8"
+	aesSaltLen         int    = 16
+	pgpSalt            string = "4e2f34041d564ed8"
+	winScpAesCtrHeader string = "aesctr.........."
 )
 
 // EncryptionMode determines encryption mode
@@ -250,11 +251,105 @@ func (manager *EncryptionManager) decryptFilenamePGP(filename string) (string, e
 }
 
 func (manager *EncryptionManager) encryptFileWinSCP(source string, target string) error {
-	return xerrors.Errorf("not implemented")
+	sourceFileHandle, err := os.Open(source)
+	if err != nil {
+		return xerrors.Errorf("failed to open file %s: %w", source, err)
+	}
+
+	defer sourceFileHandle.Close()
+
+	targetFileHandle, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	if err != nil {
+		return xerrors.Errorf("failed to create file %s: %w", target, err)
+	}
+
+	defer targetFileHandle.Close()
+
+	stat, err := sourceFileHandle.Stat()
+	if err != nil {
+		return xerrors.Errorf("failed to stat file %s: %w", source, err)
+	}
+
+	if stat.Size() == 0 {
+		// empty file
+		return nil
+	}
+
+	// write header
+	_, err = targetFileHandle.Write([]byte(winScpAesCtrHeader))
+	if err != nil {
+		return xerrors.Errorf("failed to write header: %w", err)
+	}
+
+	// generate salt
+	// we should use static salt to keep the same file name
+	salt := make([]byte, aesSaltLen)
+	_, err = rand.Read(salt)
+	// Note that err == nil only if we read len(b) bytes.
+	if err != nil {
+		return xerrors.Errorf("failed to read random data: %w", err)
+	}
+
+	// write salt
+	_, err = targetFileHandle.Write(salt)
+	if err != nil {
+		return xerrors.Errorf("failed to write salt: %w", err)
+	}
+
+	err = manager.encryptAESCTRReaderWriter(sourceFileHandle, targetFileHandle, salt)
+	if err != nil {
+		return xerrors.Errorf("failed to encrypt file content: %w", err)
+	}
+
+	return nil
 }
 
 func (manager *EncryptionManager) decryptFileWinSCP(source string, target string) error {
-	return xerrors.Errorf("not implemented")
+	sourceFileHandle, err := os.Open(source)
+	if err != nil {
+		return xerrors.Errorf("failed to open file %s: %w", source, err)
+	}
+
+	defer sourceFileHandle.Close()
+
+	targetFileHandle, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	if err != nil {
+		return xerrors.Errorf("failed to create file %s: %w", target, err)
+	}
+
+	defer targetFileHandle.Close()
+
+	header := make([]byte, 16)
+
+	readLen, err := sourceFileHandle.Read(header)
+	if err == io.EOF && readLen == 0 {
+		return nil
+	}
+
+	if err != nil {
+		return xerrors.Errorf("failed to read AES CTR header: %w", err)
+	}
+
+	if !bytes.Equal(header, []byte(winScpAesCtrHeader)) {
+		return xerrors.Errorf("failed to read AES CTR header")
+	}
+
+	salt := make([]byte, aesSaltLen)
+	readLen, err = sourceFileHandle.Read(salt)
+	if err != nil {
+		return xerrors.Errorf("failed to read salt: %w", err)
+	}
+
+	if readLen != aesSaltLen {
+		return xerrors.Errorf("failed to read salt, read len %d: %w", readLen, err)
+	}
+
+	err = manager.decryptAESCTRReaderWriter(sourceFileHandle, targetFileHandle, salt)
+	if err != nil {
+		return xerrors.Errorf("failed to decrypt file content: %w", err)
+	}
+
+	return nil
 }
 
 func (manager *EncryptionManager) encryptFilePGP(source string, target string) error {
@@ -382,34 +477,89 @@ func (manager *EncryptionManager) decryptAESCBC(data []byte, salt []byte) ([]byt
 }
 
 func (manager *EncryptionManager) encryptAESCTR(data []byte, salt []byte) ([]byte, error) {
-	fmt.Printf("len %d\n", len(manager.key))
-	key := manager.padPkcs7(manager.key, 32)
-	fmt.Printf("len %d\n", len(key))
+	reader := bytes.NewReader(data)
+	writerBuffer := &bytes.Buffer{}
 
-	block, err := aes.NewCipher([]byte(key))
+	err := manager.encryptAESCTRReaderWriter(reader, writerBuffer, salt)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to create AES cipher: %w", err)
+		return nil, err
 	}
 
-	encrypter := cipher.NewCTR(block, salt)
-
-	dest := make([]byte, len(data))
-	encrypter.XORKeyStream(dest, data)
-
-	return dest, nil
+	return writerBuffer.Bytes(), nil
 }
 
 func (manager *EncryptionManager) decryptAESCTR(data []byte, salt []byte) ([]byte, error) {
+	reader := bytes.NewReader(data)
+	writerBuffer := &bytes.Buffer{}
+
+	err := manager.decryptAESCTRReaderWriter(reader, writerBuffer, salt)
+	if err != nil {
+		return nil, err
+	}
+
+	return writerBuffer.Bytes(), nil
+}
+
+func (manager *EncryptionManager) encryptAESCTRReaderWriter(reader io.Reader, writer io.Writer, salt []byte) error {
 	key := manager.padPkcs7(manager.key, 32)
 	block, err := aes.NewCipher([]byte(key))
 	if err != nil {
-		return nil, xerrors.Errorf("failed to create AES cipher: %w", err)
+		return xerrors.Errorf("failed to create AES cipher: %w", err)
 	}
 
 	decrypter := cipher.NewCTR(block, salt)
 
-	dest := make([]byte, len(data))
-	decrypter.XORKeyStream(dest, data)
+	buf := make([]byte, block.BlockSize())
+	destBuf := make([]byte, block.BlockSize())
+	for {
+		readLen, err := reader.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
 
-	return dest, nil
+		decrypter.XORKeyStream(destBuf, buf[:readLen])
+		writeLen, err := writer.Write(destBuf[:readLen])
+		if err != nil {
+			return err
+		}
+
+		if writeLen != readLen {
+			return xerrors.Errorf("failed to write")
+		}
+	}
+}
+
+func (manager *EncryptionManager) decryptAESCTRReaderWriter(reader io.Reader, writer io.Writer, salt []byte) error {
+	key := manager.padPkcs7(manager.key, 32)
+	block, err := aes.NewCipher([]byte(key))
+	if err != nil {
+		return xerrors.Errorf("failed to create AES cipher: %w", err)
+	}
+
+	decrypter := cipher.NewCTR(block, salt)
+
+	buf := make([]byte, block.BlockSize())
+	destBuf := make([]byte, block.BlockSize())
+	for {
+		readLen, err := reader.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+
+		decrypter.XORKeyStream(destBuf, buf[:readLen])
+		writeLen, err := writer.Write(destBuf[:readLen])
+		if err != nil {
+			return err
+		}
+
+		if writeLen != readLen {
+			return xerrors.Errorf("failed to write")
+		}
+	}
 }

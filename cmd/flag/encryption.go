@@ -29,8 +29,8 @@ var (
 
 func SetEncryptionFlags(command *cobra.Command) {
 	command.Flags().BoolVar(&encryptionFlagValues.Encryption, "encrypt", false, "Encrypt files")
-	command.Flags().StringVar(&encryptionFlagValues.modeInput, "encrypt_mode", "pgp", "Encryption mode (pgp only for now)")
-	command.Flags().BoolVar(&encryptionFlagValues.EncryptFilename, "encrypt_filename", false, "Encrypt filename (only for pgp)")
+	command.Flags().StringVar(&encryptionFlagValues.modeInput, "encrypt_mode", "winscp", "Encryption mode (winscp or pgp)")
+	command.Flags().BoolVar(&encryptionFlagValues.EncryptFilename, "encrypt_filename", false, "Encrypt filename (disabled for for pgp by default)")
 	command.Flags().StringVar(&encryptionFlagValues.Key, "encrypt_key", "", "Encryption key")
 	command.Flags().StringVar(&encryptionFlagValues.TempPath, "encrypt_temp", os.TempDir(), "Specify temp directory path for encrypting files")
 }
