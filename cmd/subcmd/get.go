@@ -108,6 +108,11 @@ func processGetCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
+	// set default key for decryption
+	if len(decryptionFlagValues.Key) == 0 {
+		decryptionFlagValues.Key = account.Password
+	}
+
 	targetPath := "./"
 	sourcePaths := args[:]
 
@@ -182,6 +187,11 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 
 		// decrypt first if necessary
 		encryptionMode, encryptFilename := commons.DetectEncryptionMode(sourceEntry.Name)
+		if encryptionMode == commons.EncryptionModeUnknown {
+			// filename doesn't have .pgp.enc
+			encryptionMode = commons.EncryptionModePGP
+			encryptFilename = false
+		}
 
 		encryptManager := commons.NewEncryptionManager(encryptionMode, encryptFilename, []byte(decryptionFlagValues.Key))
 

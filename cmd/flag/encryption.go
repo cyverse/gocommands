@@ -47,9 +47,21 @@ func GetEncryptionFlagValues() *EncryptionFlagValues {
 		encryptionFlagValues.EncryptFilename = true
 	}
 
+	if encryptionFlagValues.EncryptFilename {
+		encryptionFlagValues.Encryption = true
+	}
+
+	if len(encryptionFlagValues.Key) > 0 {
+		encryptionFlagValues.Encryption = true
+	}
+
 	return &encryptionFlagValues
 }
 
 func GetDecryptionFlagValues() *DecryptionFlagValues {
+	if len(decryptionFlagValues.Key) > 0 {
+		decryptionFlagValues.Decryption = true
+	}
+
 	return &decryptionFlagValues
 }

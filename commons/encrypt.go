@@ -65,7 +65,7 @@ func DetectEncryptionMode(p string) (EncryptionMode, bool) {
 		// winscp
 		return EncryptionModeWinSCP, true
 	} else {
-		return EncryptionModePGP, false
+		return EncryptionModeUnknown, false
 	}
 }
 
@@ -190,7 +190,21 @@ func (manager *EncryptionManager) decryptFilenameWinSCP(filename string) (string
 		return "", xerrors.Errorf("failed to decrypt filename: %w", err)
 	}
 
+	if !manager.isCorrectFilename(decryptedFilename) {
+		return "", xerrors.Errorf("failed to decrypt filename with wrong key")
+	}
+
 	return string(decryptedFilename), nil
+}
+
+func (manager *EncryptionManager) isCorrectFilename(filename []byte) bool {
+	for _, c := range filename {
+		if c < 32 || c >= 126 {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (manager *EncryptionManager) encryptFilenamePGP(filename string) (string, error) {

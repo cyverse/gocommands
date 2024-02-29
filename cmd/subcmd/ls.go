@@ -39,6 +39,7 @@ func AddLsCommand(rootCmd *cobra.Command) {
 
 	flag.SetListFlags(lsCmd)
 	flag.SetTicketAccessFlags(lsCmd)
+	flag.SetDecryptionFlags(lsCmd)
 
 	rootCmd.AddCommand(lsCmd)
 }
@@ -66,6 +67,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 
 	ticketAccessFlagValues := flag.GetTicketAccessFlagValues()
 	listFlagValues := flag.GetListFlagValues()
+	decryptionFlagValues := flag.GetDecryptionFlagValues()
 
 	appConfig := commons.GetConfig()
 	syncAccount := false
@@ -91,6 +93,11 @@ func processLsCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
+	// set default key for decryption
+	if len(decryptionFlagValues.Key) == 0 {
+		decryptionFlagValues.Key = account.Password
+	}
+
 	sourcePaths := args[:]
 
 	if len(args) == 0 {
@@ -98,7 +105,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	}
 
 	for _, sourcePath := range sourcePaths {
-		err = listOne(filesystem, sourcePath, listFlagValues)
+		err = listOne(filesystem, sourcePath, listFlagValues, decryptionFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform ls %s: %w", sourcePath, err)
 		}
@@ -107,7 +114,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, listFlagValues *flag.ListFlagValues) error {
+func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, listFlagValues *flag.ListFlagValues, decryptionFlagValues *flag.DecryptionFlagValues) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
@@ -137,7 +144,7 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, listFlagValues *f
 			return xerrors.Errorf("failed to list data-objects in %s: %w", sourcePath, err)
 		}
 
-		printDataObjects(objs, listFlagValues)
+		printDataObjects(objs, listFlagValues, decryptionFlagValues)
 		printCollections(colls, listFlagValues)
 		return nil
 	}
@@ -156,7 +163,7 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, listFlagValues *f
 	}
 
 	entries := []*irodsclient_types.IRODSDataObject{entry}
-	printDataObjects(entries, listFlagValues)
+	printDataObjects(entries, listFlagValues, decryptionFlagValues)
 	return nil
 }
 
@@ -233,16 +240,16 @@ func getFlatReplicaSortFunction(entries []*FlatReplica, sortOrder commons.ListSo
 	}
 }
 
-func printDataObjects(entries []*irodsclient_types.IRODSDataObject, listFlagValues *flag.ListFlagValues) {
+func printDataObjects(entries []*irodsclient_types.IRODSDataObject, listFlagValues *flag.ListFlagValues, decryptionFlagValues *flag.DecryptionFlagValues) {
 	if listFlagValues.Format == commons.ListFormatNormal {
 		sort.SliceStable(entries, getDataObjectSortFunction(entries, listFlagValues.SortOrder, listFlagValues.SortReverse))
 		for _, entry := range entries {
-			printDataObjectShort(entry)
+			printDataObjectShort(entry, decryptionFlagValues)
 		}
 	} else {
 		replicas := flattenReplicas(entries)
 		sort.SliceStable(replicas, getFlatReplicaSortFunction(replicas, listFlagValues.SortOrder, listFlagValues.SortReverse))
-		printReplicas(replicas, listFlagValues)
+		printReplicas(replicas, listFlagValues, decryptionFlagValues)
 	}
 }
 
@@ -319,35 +326,68 @@ func getDataObjectModifyTime(object *irodsclient_types.IRODSDataObject) time.Tim
 	return maxTime
 }
 
-func printDataObjectShort(entry *irodsclient_types.IRODSDataObject) {
-	fmt.Printf("  %s\n", entry.Name)
+func printDataObjectShort(entry *irodsclient_types.IRODSDataObject, decryptionFlagValues *flag.DecryptionFlagValues) {
+	newName := entry.Name
+
+	if decryptionFlagValues.Decryption {
+		// need to decrypted
+		encryptionMode, encryptFilename := commons.DetectEncryptionMode(newName)
+		if encryptFilename {
+			encryptManager := commons.NewEncryptionManager(encryptionMode, encryptFilename, []byte(decryptionFlagValues.Key))
+			decryptedFilename, err := encryptManager.DecryptFilename(newName)
+			if err != nil {
+				newName = fmt.Sprintf("%s\tdecryption_failed", newName)
+			} else {
+				newName = fmt.Sprintf("%s\tencrypted\t%s", decryptedFilename, newName)
+			}
+		}
+	}
+
+	fmt.Printf("  %s\n", newName)
 }
 
-func printReplicas(flatReplicas []*FlatReplica, listFlagValues *flag.ListFlagValues) {
+func printReplicas(flatReplicas []*FlatReplica, listFlagValues *flag.ListFlagValues, decryptionFlagValues *flag.DecryptionFlagValues) {
 	for _, flatReplica := range flatReplicas {
-		printReplica(*flatReplica, listFlagValues)
+		printReplica(*flatReplica, listFlagValues, decryptionFlagValues)
 	}
 }
 
-func printReplica(flatReplica FlatReplica, listFlagValues *flag.ListFlagValues) {
+func printReplica(flatReplica FlatReplica, listFlagValues *flag.ListFlagValues, decryptionFlagValues *flag.DecryptionFlagValues) {
+	newName := flatReplica.DataObject.Name
+
+	if decryptionFlagValues.Decryption {
+		// need to decrypted
+		encryptionMode, encryptFilename := commons.DetectEncryptionMode(newName)
+		if encryptFilename {
+			encryptManager := commons.NewEncryptionManager(encryptionMode, encryptFilename, []byte(decryptionFlagValues.Key))
+			decryptedFilename, err := encryptManager.DecryptFilename(newName)
+			if err != nil {
+				newName = fmt.Sprintf("%s\tdecryption_failed", newName)
+			} else {
+				newName = fmt.Sprintf("%s\tencrypted\t%s", decryptedFilename, newName)
+			}
+		}
+	}
+
 	size := fmt.Sprintf("%v", flatReplica.DataObject.Size)
 	if listFlagValues.HumanReadableSizes {
 		size = humanize.Bytes(uint64(flatReplica.DataObject.Size))
 	}
+
 	switch listFlagValues.Format {
 	case commons.ListFormatNormal:
-		fmt.Printf("  %d\t%s\n", flatReplica.Replica.Number, flatReplica.DataObject.Name)
+		fmt.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
 	case commons.ListFormatLong:
 		modTime := commons.MakeDateTimeString(flatReplica.Replica.ModifyTime)
 		fmt.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
-			size, modTime, getStatusMark(flatReplica.Replica.Status), flatReplica.DataObject.Name)
+			size, modTime, getStatusMark(flatReplica.Replica.Status), newName)
 	case commons.ListFormatVeryLong:
 		modTime := commons.MakeDateTimeString(flatReplica.Replica.ModifyTime)
 		fmt.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
-			size, modTime, getStatusMark(flatReplica.Replica.Status), flatReplica.DataObject.Name)
+			size, modTime, getStatusMark(flatReplica.Replica.Status), newName)
 		fmt.Printf("    %s\t%s\n", flatReplica.Replica.Checksum.OriginalChecksum, flatReplica.Replica.Path)
 	default:
-		fmt.Printf("  %d\t%s\n", flatReplica.Replica.Number, flatReplica.DataObject.Name)
+		fmt.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
 	}
 }
 

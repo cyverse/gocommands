@@ -107,6 +107,11 @@ func processPutCommand(command *cobra.Command, args []string) error {
 
 	defer filesystem.Release()
 
+	// set default key for encryption
+	if len(encryptionFlagValues.Key) == 0 {
+		encryptionFlagValues.Key = account.Password
+	}
+
 	targetPath := "./"
 	sourcePaths := args[:]
 
