@@ -98,37 +98,27 @@ func GetAccount() *irodsclient_types.IRODSAccount {
 	return account
 }
 
-func getCWD(env *irodsclient_icommands.ICommandsEnvironment) string {
-	currentWorkingDir := env.CurrentWorkingDir
-	if len(currentWorkingDir) == 0 {
-		return ""
-	}
-
-	if !strings.HasPrefix(currentWorkingDir, "/") {
-		// relative path from home
-		currentWorkingDir = fmt.Sprintf("/%s/home/%s/%s", env.Zone, env.Username, currentWorkingDir)
-	}
-
-	return path.Clean(currentWorkingDir)
-}
-
 // GetCWD returns current working directory
 func GetCWD() string {
 	session := environmentManager.Session
-	sessionPath := getCWD(session)
+	cwd := session.CurrentWorkingDir
 
-	if len(sessionPath) > 0 {
-		return sessionPath
+	if len(cwd) == 0 {
+		env := environmentManager.Environment
+		cwd = env.CurrentWorkingDir
 	}
 
-	env := environmentManager.Environment
-	envPath := getCWD(env)
+	if len(cwd) > 0 {
+		if !strings.HasPrefix(cwd, "/") {
+			// relative path from home
+			currentWorkingDir := path.Join(GetHomeDir(), cwd)
+			return path.Clean(currentWorkingDir)
+		}
 
-	if len(envPath) == 0 {
-		// set new
-		return fmt.Sprintf("/%s/home/%s", env.Zone, env.Username)
+		return path.Clean(cwd)
 	}
-	return envPath
+
+	return GetHomeDir()
 }
 
 // GetZone returns zone
@@ -146,6 +136,10 @@ func GetUsername() string {
 // GetHomeDir returns home dir
 func GetHomeDir() string {
 	env := environmentManager.Environment
+	if len(env.Home) > 0 {
+		return env.Home
+	}
+
 	return fmt.Sprintf("/%s/home/%s", env.Zone, env.Username)
 }
 
@@ -156,11 +150,10 @@ func SetCWD(cwd string) error {
 		"function": "SetCWD",
 	})
 
-	env := environmentManager.Environment
 	session := environmentManager.Session
 	if !strings.HasPrefix(cwd, "/") {
 		// relative path from home
-		cwd = fmt.Sprintf("/%s/home/%s/%s", env.Zone, env.Username, cwd)
+		cwd = path.Join(GetHomeDir(), cwd)
 	}
 
 	session.CurrentWorkingDir = path.Clean(cwd)
