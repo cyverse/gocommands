@@ -38,6 +38,7 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	flag.SetNoRootFlags(putCmd)
 	flag.SetSyncFlags(putCmd)
 	flag.SetEncryptionFlags(putCmd)
+	flag.SetPostTransferFlagValues(putCmd)
 
 	rootCmd.AddCommand(putCmd)
 }
@@ -72,6 +73,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	noRootFlagValues := flag.GetNoRootFlagValues()
 	syncFlagValues := flag.GetSyncFlagValues()
 	encryptionFlagValues := flag.GetEncryptionFlagValues()
+	postTransferFlagValues := flag.GetPostTransferFlagValues()
 
 	maxConnectionNum := parallelTransferFlagValues.ThreadNumber + 2 // 2 for metadata op
 
@@ -135,7 +137,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 			return xerrors.Errorf("failed to make new target path for put %s to %s: %w", sourcePath, targetPath, err)
 		}
 
-		err = putOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, encryptionFlagValues)
+		err = putOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, encryptionFlagValues, postTransferFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform put %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -160,7 +162,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, parallelTransferFlagValues *flag.ParallelTransferFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, encryptionFlagValues *flag.EncryptionFlagValues) error {
+func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, parallelTransferFlagValues *flag.ParallelTransferFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, encryptionFlagValues *flag.EncryptionFlagValues, postTransferFlagValues *flag.PostTransferFlagValues) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "putOne",
@@ -182,6 +184,8 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 
 		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
+
+	originalSourcePath := sourcePath
 
 	if !sourceStat.IsDir() {
 		// file
@@ -252,6 +256,12 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 				logger.Debugf("removing a temp file %s", sourcePath)
 				os.Remove(sourcePath)
 			}
+
+			if postTransferFlagValues.DeleteOnSuccess {
+				logger.Debugf("removing source file %s", originalSourcePath)
+				os.Remove(originalSourcePath)
+			}
+
 			return nil
 		}
 
@@ -315,7 +325,7 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 			commons.MarkPathMap(inputPathMap, targetDirPath)
 
 			newSourcePath := filepath.Join(sourcePath, entry.Name())
-			err = putOne(parallelJobManager, inputPathMap, newSourcePath, targetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, encryptionFlagValues)
+			err = putOne(parallelJobManager, inputPathMap, newSourcePath, targetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, encryptionFlagValues, postTransferFlagValues)
 			if err != nil {
 				return xerrors.Errorf("failed to perform put %s to %s: %w", newSourcePath, targetDirPath, err)
 			}

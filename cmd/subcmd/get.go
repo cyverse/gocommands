@@ -39,6 +39,7 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	flag.SetNoRootFlags(getCmd)
 	flag.SetSyncFlags(getCmd)
 	flag.SetDecryptionFlags(getCmd)
+	flag.SetPostTransferFlagValues(getCmd)
 
 	rootCmd.AddCommand(getCmd)
 }
@@ -73,6 +74,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	noRootFlagValues := flag.GetNoRootFlagValues()
 	syncFlagValues := flag.GetSyncFlagValues()
 	decryptionFlagValues := flag.GetDecryptionFlagValues()
+	postTransferFlagValues := flag.GetPostTransferFlagValues()
 
 	maxConnectionNum := parallelTransferFlagValues.ThreadNumber + 2 // 2 for metadata op
 
@@ -136,7 +138,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 			return xerrors.Errorf("failed to make new target path for get %s to %s: %w", sourcePath, targetPath, err)
 		}
 
-		err = getOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, differentialTransferFlagValues, decryptionFlagValues)
+		err = getOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, differentialTransferFlagValues, decryptionFlagValues, postTransferFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform get %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -161,7 +163,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, decryptionFlagValues *flag.DecryptionFlagValues) error {
+func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, decryptionFlagValues *flag.DecryptionFlagValues, postTransferFlagValues *flag.PostTransferFlagValues) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "getOne",
@@ -179,6 +181,8 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 	if err != nil {
 		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
+
+	originalSourcePath := sourcePath
 
 	if sourceEntry.Type == irodsclient_fs.FileEntry {
 		// file
@@ -250,6 +254,12 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 				logger.Debugf("removing a temp file %s", targetFilePath)
 				os.Remove(targetFilePath)
 			}
+
+			if postTransferFlagValues.DeleteOnSuccess {
+				logger.Debugf("removing source file %s", originalSourcePath)
+				filesystem.RemoveFile(originalSourcePath, true)
+			}
+
 			return nil
 		}
 
@@ -334,7 +344,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 
 			commons.MarkPathMap(inputPathMap, targetDirPath)
 
-			err = getOne(parallelJobManager, inputPathMap, entry.Path, targetDirPath, forceFlagValues, differentialTransferFlagValues, decryptionFlagValues)
+			err = getOne(parallelJobManager, inputPathMap, entry.Path, targetDirPath, forceFlagValues, differentialTransferFlagValues, decryptionFlagValues, postTransferFlagValues)
 			if err != nil {
 				return xerrors.Errorf("failed to perform get %s to %s: %w", entry.Path, targetDirPath, err)
 			}
