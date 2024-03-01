@@ -2,7 +2,7 @@
 iRODS Command-line Tools written in Go
 
 
-## Install
+## Installation
 
 ### Download pre-built binary
 Please download binary file (bundled with `tar` or `zip`) at ["https://github.com/cyverse/gocommands/releases"]("https://github.com/cyverse/gocommands/releases").
@@ -59,7 +59,7 @@ conda install gocommands
 ```
 
 
-## How to use
+## Configuration
 
 ### Using the iCommands configuration
 `Gocommands` understands the iCommands' configuration files, `~/.irods/irods_environment.json`.
@@ -82,7 +82,7 @@ gocmd ls
 ```
 
 
-### Using an external configuration file 
+### Using an external configuration file (YAML)
 `Gocommands` can read configuration from an `YAML` file.
 
 Create `config.yaml` file using an editor and type in followings.
@@ -102,7 +102,7 @@ gocmd -c config.yaml ls
 Some of field values, such as `irods_user_password` can be omitted if you don't want to put it in clear text. `Gocommands` will ask you to type the missing field values in runtime.
 
 ### Using environmental variables 
-`Gocommands` can read configuration from environmental variables.
+`Gocommands` can read configuration from environmental variables. Environmental variables have the highest priority, so configuration values will be overwritten if environmental variables are set.
 
 Set environmental variables
 ```bash
@@ -113,12 +113,61 @@ export IRODS_ZONE_NAME="iplant"
 export IRODS_USER_PASSWORD="your password"
 ```
 
-Then run `Gocommands` with `-e` flag.
+Then run `Gocommands`.
 ```bash
-gocmd -e ls
+gocmd ls
 ```
 
 Some of field values, such as `IRODS_USER_PASSWORD` can be omitted if you don't want to put it in clear text. `Gocommands` will ask you to type the missing field values in runtime.
+
+
+## Encryption
+
+`Gocommands` provides file encryption feature to store cofidential data on iRODS. The encryption encrypts filename and content with a strong encryption algorithm (AES256-ctl) before uploading files to iRODS. Also, it can decrypts filename and content after downloading enrypted files from iRODS.
+The encryption algorithm `Gocommands` supports is fully compatible with that of `WinSCP`.
+
+`put`, `get`, and `ls` supports file encryption.
+
+### Uploading
+
+To upload a file with encryption, use `--encrypt` and `--encrypt_key` flags. To encrypt data using iRODS user password, you can omit `--encrypt_key` flag.
+```bash
+gocmd put --encrypt file1.txt
+```
+
+To specify an encryption key different from your iRODS user password, give it with `--encryption_key` flag.
+```bash
+gocmd put --encrypt --encrypt_key my_encryption_key file1.txt
+```
+
+After uploading the file, you will see that the file will have a new encrypted filename with `.aesctr.enc` extension.
+
+### Downloading
+
+To download an encrypted file, use `--decrypt` and `--decrypt_key` flags. To decrypt data using iRODS user password, you can omit `--decrypt_key` flag.
+```bash
+gocmd get --decrypt XXXXXXXXXXXXXXXXXXXXXXXXX.aesctr.enc
+```
+
+To specify a decryption key different from your iRODS user password, give it with `--decryption_key` flag.
+Note that the decryption key is the same as encryption key as it uses a symetric encryption algorithm (AES).
+```bash
+gocmd get --decrypt --decryption_key my_encryption_key XXXXXXXXXXXXXXXXXXXXXXXXX.aesctr.enc
+```
+
+### Directory listing
+
+When listing a directory, you can also use `--decrypt` and `--decrypt_key` flags to display original filenames. To decrypt data using iRODS user password, you can omit `--decrypt_key` flag.
+```bash
+gocmd ls --decrypt dir1
+```
+
+To specify a decryption key different from your iRODS user password, give it with `--decryption_key` flag.
+Note that the decryption key is the same as encryption key as it uses a symetric encryption algorithm (AES).
+```bash
+gocmd ls --decrypt --decryption_key my_encryption_key dir1
+```
+
 
 ## Troubleshooting
 
