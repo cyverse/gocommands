@@ -43,10 +43,6 @@ func SetDecryptionFlags(command *cobra.Command) {
 
 func GetEncryptionFlagValues() *EncryptionFlagValues {
 	encryptionFlagValues.Mode = commons.GetEncryptionMode(encryptionFlagValues.modeInput)
-	if encryptionFlagValues.Mode == commons.EncryptionModeWinSCP {
-		encryptionFlagValues.EncryptFilename = true
-	}
-
 	if encryptionFlagValues.EncryptFilename {
 		encryptionFlagValues.Encryption = true
 	}
