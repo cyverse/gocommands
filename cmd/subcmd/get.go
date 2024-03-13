@@ -138,7 +138,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 			return xerrors.Errorf("failed to make new target path for get %s to %s: %w", sourcePath, targetPath, err)
 		}
 
-		err = getOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, differentialTransferFlagValues, decryptionFlagValues, postTransferFlagValues)
+		err = getOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, decryptionFlagValues, postTransferFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform get %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -163,7 +163,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, decryptionFlagValues *flag.DecryptionFlagValues, postTransferFlagValues *flag.PostTransferFlagValues) error {
+func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, parallelTransferFlagValues *flag.ParallelTransferFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, decryptionFlagValues *flag.DecryptionFlagValues, postTransferFlagValues *flag.PostTransferFlagValues) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "main",
 		"function": "getOne",
@@ -235,10 +235,19 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 			job.Progress(0, sourceEntry.Size, false)
 
 			logger.Debugf("downloading a data object %s to %s", sourcePath, targetFilePath)
-			err := fs.DownloadFileParallelResumable(sourcePath, "", targetFilePath, 0, callbackGet)
-			if err != nil {
+
+			var downloadErr error
+			if parallelTransferFlagValues.SingleTread || parallelTransferFlagValues.ThreadNumber == 1 {
+				downloadErr = fs.DownloadFileResumable(sourcePath, "", targetFilePath, callbackGet)
+			} else if parallelTransferFlagValues.RedirectToResource {
+				downloadErr = fs.DownloadFileRedirectToResource(sourcePath, "", targetFilePath, callbackGet)
+			} else {
+				downloadErr = fs.DownloadFileParallelResumable(sourcePath, "", targetFilePath, 0, callbackGet)
+			}
+
+			if downloadErr != nil {
 				job.Progress(-1, sourceEntry.Size, true)
-				return xerrors.Errorf("failed to download %s to %s: %w", sourcePath, targetFilePath, err)
+				return xerrors.Errorf("failed to download %s to %s: %w", sourcePath, targetFilePath, downloadErr)
 			}
 
 			logger.Debugf("downloaded a data object %s to %s", sourcePath, targetFilePath)
@@ -344,7 +353,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 
 			commons.MarkPathMap(inputPathMap, targetDirPath)
 
-			err = getOne(parallelJobManager, inputPathMap, entry.Path, targetDirPath, forceFlagValues, differentialTransferFlagValues, decryptionFlagValues, postTransferFlagValues)
+			err = getOne(parallelJobManager, inputPathMap, entry.Path, targetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, decryptionFlagValues, postTransferFlagValues)
 			if err != nil {
 				return xerrors.Errorf("failed to perform get %s to %s: %w", entry.Path, targetDirPath, err)
 			}

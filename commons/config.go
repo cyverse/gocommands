@@ -65,7 +65,8 @@ func NewConfigFromYAML(config *Config, yamlBytes []byte) (*Config, error) {
 }
 
 // NewConfigFromENV creates Config from Environmental variables
-func NewConfigFromENV(config *Config) (*Config, error) {
+func NewConfigFromENV() (*Config, error) {
+	config := &Config{}
 	err := envconfig.Process("", config)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to read config from environmental variables: %w", err)

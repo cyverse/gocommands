@@ -238,15 +238,19 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 			job.Progress(0, sourceStat.Size(), false)
 
 			logger.Debugf("uploading a file %s to %s", sourcePath, targetFilePath)
-			if parallelTransferFlagValues.SingleTread {
-				err = fs.UploadFile(sourcePath, targetFilePath, "", false, callbackPut)
+
+			var uploadError error
+			if parallelTransferFlagValues.SingleTread || parallelTransferFlagValues.ThreadNumber == 1 {
+				uploadError = fs.UploadFile(sourcePath, targetFilePath, "", false, callbackPut)
+			} else if parallelTransferFlagValues.RedirectToResource {
+				uploadError = fs.UploadFileParallelRedirectToResource(sourcePath, targetFilePath, "", false, callbackPut)
 			} else {
-				err = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, false, callbackPut)
+				uploadError = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, false, callbackPut)
 			}
 
-			if err != nil {
+			if uploadError != nil {
 				job.Progress(-1, sourceStat.Size(), true)
-				return xerrors.Errorf("failed to upload %s to %s: %w", sourcePath, targetFilePath, err)
+				return xerrors.Errorf("failed to upload %s to %s: %w", sourcePath, targetFilePath, uploadError)
 			}
 
 			logger.Debugf("uploaded a file %s to %s", sourcePath, targetFilePath)

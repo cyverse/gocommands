@@ -668,8 +668,7 @@ func LoadAndOverwriteConfigFromEnv() error {
 
 	logger.Debug("reading config from environment variables")
 
-	emptyConfig := &Config{}
-	config, err := NewConfigFromENV(emptyConfig)
+	config, err := NewConfigFromENV()
 	if err != nil {
 		return xerrors.Errorf("failed to get new iCommands Environment: %w", err)
 	}
@@ -683,7 +682,11 @@ func LoadAndOverwriteConfigFromEnv() error {
 
 	setICommandsEnvMgrToConfig(appConfig, environmentManager)
 
+	fmt.Printf("appConfig: %v\n", appConfig)
+
 	SyncAccount()
+
+	fmt.Printf("account: %v\n", GetAccount())
 
 	return nil
 }
