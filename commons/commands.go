@@ -9,9 +9,9 @@ import (
 	"strings"
 	"syscall"
 
+	irodsclient_icommands "github.com/cyverse/go-irodsclient/icommands"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/go-irodsclient/irods/util"
-	irodsclient_icommands "github.com/cyverse/go-irodsclient/utils/icommands"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/term"
 	"golang.org/x/xerrors"

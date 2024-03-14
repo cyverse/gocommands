@@ -385,7 +385,7 @@ func printReplica(flatReplica FlatReplica, listFlagValues *flag.ListFlagValues, 
 		modTime := commons.MakeDateTimeString(flatReplica.Replica.ModifyTime)
 		fmt.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
 			size, modTime, getStatusMark(flatReplica.Replica.Status), newName)
-		fmt.Printf("    %s\t%s\n", flatReplica.Replica.Checksum.OriginalChecksum, flatReplica.Replica.Path)
+		fmt.Printf("    %s\t%s\n", flatReplica.Replica.Checksum.IRODSChecksumString, flatReplica.Replica.Path)
 	default:
 		fmt.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
 	}

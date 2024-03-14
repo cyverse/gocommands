@@ -67,9 +67,8 @@ func processInitCommand(command *cobra.Command, args []string) error {
 	defer conn.Disconnect()
 
 	if account.AuthenticationScheme == irodsclient_types.AuthSchemePAM {
-		// set pam password
-		environmentManager.Password = conn.GetGeneratedPasswordForPAMAuth()
-		environmentManager.IsPasswordPamToken = true
+		// set pam token
+		environmentManager.PamToken = conn.GetPAMToken()
 	}
 
 	if updated {

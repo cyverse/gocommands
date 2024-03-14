@@ -1,6 +1,8 @@
 package commons
 
 import (
+	"bytes"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path"
@@ -10,6 +12,7 @@ import (
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
@@ -81,12 +84,14 @@ func (bundle *Bundle) GetBundleFilename() (string, error) {
 		entryStrs = append(entryStrs, entry.LocalPath)
 	}
 
-	hash, err := HashStrings(entryStrs, string(irodsclient_types.ChecksumAlgorithmMD5))
+	hash, err := irodsclient_util.HashStrings(entryStrs, string(irodsclient_types.ChecksumAlgorithmMD5))
 	if err != nil {
 		return "", err
 	}
 
-	return GetBundleFilename(hash), nil
+	hexhash := hex.EncodeToString(hash)
+
+	return GetBundleFilename(hexhash), nil
 }
 
 func (bundle *Bundle) AddFile(localPath string, size int64) error {
@@ -330,12 +335,12 @@ func (manager *BundleTransferManager) Schedule(source string, dir bool, size int
 					if targetEntry.Size == size {
 						if len(targetEntry.CheckSum) > 0 {
 							// compare hash
-							hash, err := HashLocalFile(source, targetEntry.CheckSumAlgorithm)
+							hash, err := irodsclient_util.HashLocalFile(source, string(targetEntry.CheckSumAlgorithm))
 							if err != nil {
 								return xerrors.Errorf("failed to get hash %s: %w", source, err)
 							}
 
-							if hash == targetEntry.CheckSum {
+							if bytes.Equal(hash, targetEntry.CheckSum) {
 								fmt.Printf("skip adding a file %s to the bundle. The file with the same hash already exists!\n", source)
 								logger.Debugf("skip adding a file %s to the bundle. The file with the same hash already exists!", source)
 								return nil

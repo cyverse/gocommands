@@ -1,6 +1,7 @@
 package subcmd
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -280,12 +281,12 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 					if targetEntry.Size == sourceStat.Size() {
 						if len(targetEntry.CheckSum) > 0 {
 							// compare hash
-							hash, err := commons.HashLocalFile(sourcePath, targetEntry.CheckSumAlgorithm)
+							hash, err := irodsclient_util.HashLocalFile(sourcePath, string(targetEntry.CheckSumAlgorithm))
 							if err != nil {
 								return xerrors.Errorf("failed to get hash for %s: %w", sourcePath, err)
 							}
 
-							if hash == targetEntry.CheckSum {
+							if bytes.Equal(hash, targetEntry.CheckSum) {
 								fmt.Printf("skip uploading a file %s. The file with the same hash already exists!\n", targetFilePath)
 								return nil
 							}

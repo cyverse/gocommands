@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -114,10 +116,10 @@ func testEncryptFilePGP(t *testing.T) {
 	assert.NoError(t, err)
 
 	// compare
-	sourceHash, err := HashLocalFile(testFilePath, "SHA-256")
+	sourceHash, err := irodsclient_util.HashLocalFile(testFilePath, "SHA-256")
 	assert.NoError(t, err)
 
-	decHash, err := HashLocalFile(decFilePath, "SHA-256")
+	decHash, err := irodsclient_util.HashLocalFile(decFilePath, "SHA-256")
 	assert.NoError(t, err)
 
 	assert.Equal(t, sourceHash, decHash)
@@ -176,10 +178,10 @@ func testEncryptFileWinSCP(t *testing.T) {
 	assert.NoError(t, err)
 
 	// compare
-	sourceHash, err := HashLocalFile(testFilePath, "SHA-256")
+	sourceHash, err := irodsclient_util.HashLocalFile(testFilePath, "SHA-256")
 	assert.NoError(t, err)
 
-	decHash, err := HashLocalFile(decFilePath, "SHA-256")
+	decHash, err := irodsclient_util.HashLocalFile(decFilePath, "SHA-256")
 	assert.NoError(t, err)
 
 	assert.Equal(t, sourceHash, decHash)

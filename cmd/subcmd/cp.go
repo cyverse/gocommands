@@ -1,6 +1,7 @@
 package subcmd
 
 import (
+	"bytes"
 	"fmt"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -188,7 +189,7 @@ func copyOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[st
 				} else {
 					if targetEntry.Size == sourceEntry.Size {
 						// compare hash
-						if len(sourceEntry.CheckSum) > 0 && sourceEntry.CheckSum == targetEntry.CheckSum {
+						if len(sourceEntry.CheckSum) > 0 && bytes.Equal(sourceEntry.CheckSum, targetEntry.CheckSum) {
 							fmt.Printf("skip copying a file %s. The file with the same hash already exists!\n", targetFilePath)
 							return nil
 						}
