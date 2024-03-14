@@ -70,7 +70,6 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	decryptionFlagValues := flag.GetDecryptionFlagValues()
 
 	appConfig := commons.GetConfig()
-	fmt.Printf("app config: %v\n", appConfig)
 
 	syncAccount := false
 	if len(ticketAccessFlagValues.Name) > 0 {
@@ -88,8 +87,6 @@ func processLsCommand(command *cobra.Command, args []string) error {
 
 	// Create a file system
 	account := commons.GetAccount()
-	fmt.Printf("account: %v\n", account)
-
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)

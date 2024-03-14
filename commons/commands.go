@@ -682,11 +682,7 @@ func LoadAndOverwriteConfigFromEnv() error {
 
 	setICommandsEnvMgrToConfig(appConfig, environmentManager)
 
-	fmt.Printf("appConfig: %v\n", appConfig)
-
 	SyncAccount()
-
-	fmt.Printf("account: %v\n", GetAccount())
 
 	return nil
 }

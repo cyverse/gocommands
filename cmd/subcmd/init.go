@@ -25,6 +25,7 @@ var initCmd = &cobra.Command{
 func AddInitCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(initCmd)
+	flag.SetInitFlags(initCmd)
 
 	rootCmd.AddCommand(initCmd)
 }
@@ -39,6 +40,8 @@ func processInitCommand(command *cobra.Command, args []string) error {
 		return nil
 	}
 
+	initFlagValues := flag.GetInitFlagValues()
+
 	environmentManager := commons.GetEnvironmentManager()
 
 	// handle local flags
@@ -51,6 +54,9 @@ func processInitCommand(command *cobra.Command, args []string) error {
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS account info from iCommands Environment: %w", err)
 	}
+
+	// update PAM TTL
+	account.PamTTL = initFlagValues.PamTTL
 
 	// test connect
 	conn, err := commons.GetIRODSConnection(account)
