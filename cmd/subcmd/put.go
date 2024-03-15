@@ -240,18 +240,39 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 
 			logger.Debugf("uploading a file %s to %s", sourcePath, targetFilePath)
 
-			var uploadError error
+			var uploadErr error
+
+			// determine how to download
+
 			if parallelTransferFlagValues.SingleTread || parallelTransferFlagValues.ThreadNumber == 1 {
-				uploadError = fs.UploadFile(sourcePath, targetFilePath, "", false, callbackPut)
+				uploadErr = fs.UploadFile(sourcePath, targetFilePath, "", false, callbackPut)
 			} else if parallelTransferFlagValues.RedirectToResource {
-				uploadError = fs.UploadFileParallelRedirectToResource(sourcePath, targetFilePath, "", false, callbackPut)
+				uploadErr = fs.UploadFileParallelRedirectToResource(sourcePath, targetFilePath, "", false, callbackPut)
+			} else if parallelTransferFlagValues.Icat {
+				uploadErr = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, false, callbackPut)
 			} else {
-				uploadError = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, false, callbackPut)
+				// auto
+				if sourceStat.Size() >= commons.RedirectToResourceMinSize {
+					// redirect-to-resource
+					uploadErr = fs.UploadFileParallelRedirectToResource(sourcePath, targetFilePath, "", false, callbackPut)
+				} else {
+					if filesystem.SupportParallelUpload() {
+						uploadErr = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, false, callbackPut)
+					} else {
+						if sourceStat.Size() >= commons.ParallelUploadMinSize {
+							// does not support parall upload via iCAT
+							// redirect-to-resource
+							uploadErr = fs.UploadFileParallelRedirectToResource(sourcePath, targetFilePath, "", false, callbackPut)
+						} else {
+							uploadErr = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, false, callbackPut)
+						}
+					}
+				}
 			}
 
-			if uploadError != nil {
+			if uploadErr != nil {
 				job.Progress(-1, sourceStat.Size(), true)
-				return xerrors.Errorf("failed to upload %s to %s: %w", sourcePath, targetFilePath, uploadError)
+				return xerrors.Errorf("failed to upload %s to %s: %w", sourcePath, targetFilePath, uploadErr)
 			}
 
 			logger.Debugf("uploaded a file %s to %s", sourcePath, targetFilePath)
