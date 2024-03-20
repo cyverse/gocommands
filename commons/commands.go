@@ -217,7 +217,8 @@ func InputMissingFields() (bool, error) {
 	}
 
 	password := environmentManager.Password
-	if len(password) == 0 && env.Username != "anonymous" {
+	pamToken := environmentManager.PamToken
+	if len(password) == 0 && len(pamToken) == 0 && env.Username != "anonymous" {
 		fmt.Print("iRODS Password: ")
 		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 		if err != nil {
