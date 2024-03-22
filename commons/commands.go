@@ -418,6 +418,7 @@ func setConfigToICommandsEnvMgr(envManager *irodsclient_icommands.ICommandsEnvir
 	envManager.Environment.ClientServerNegotiation = config.ClientServerNegotiation
 	envManager.Environment.ClientServerPolicy = config.ClientServerPolicy
 	envManager.Environment.SSLCACertificateFile = config.SSLCACertificateFile
+	envManager.Environment.SSLCACertificatePath = config.SSLCACertificatePath
 	envManager.Environment.EncryptionKeySize = config.EncryptionKeySize
 	envManager.Environment.EncryptionAlgorithm = config.EncryptionAlgorithm
 	envManager.Environment.EncryptionSaltSize = config.EncryptionSaltSize
@@ -471,6 +472,10 @@ func overwriteConfigToICommandsEnvMgr(envManager *irodsclient_icommands.ICommand
 		envManager.Environment.SSLCACertificateFile = config.SSLCACertificateFile
 	}
 
+	if len(config.SSLCACertificatePath) > 0 {
+		envManager.Environment.SSLCACertificatePath = config.SSLCACertificatePath
+	}
+
 	if config.EncryptionKeySize > 0 {
 		envManager.Environment.EncryptionKeySize = config.EncryptionKeySize
 	}
@@ -504,6 +509,7 @@ func setICommandsEnvMgrToConfig(config *Config, envManager *irodsclient_icommand
 	config.ClientServerNegotiation = envManager.Environment.ClientServerNegotiation
 	config.ClientServerPolicy = envManager.Environment.ClientServerPolicy
 	config.SSLCACertificateFile = envManager.Environment.SSLCACertificateFile
+	config.SSLCACertificatePath = envManager.Environment.SSLCACertificatePath
 	config.EncryptionKeySize = envManager.Environment.EncryptionKeySize
 	config.EncryptionAlgorithm = envManager.Environment.EncryptionAlgorithm
 	config.EncryptionSaltSize = envManager.Environment.EncryptionSaltSize
@@ -776,6 +782,10 @@ func PrintEnvironment() error {
 		{
 			"iRODS SSL CA Certification File",
 			envMgr.Environment.SSLCACertificateFile,
+		},
+		{
+			"iRODS SSL CA Certification Path",
+			envMgr.Environment.SSLCACertificatePath,
 		},
 		{
 			"iRODS SSL Encryption Key Size",

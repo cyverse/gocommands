@@ -34,6 +34,7 @@ type Config struct {
 	ClientServerNegotiation string `yaml:"irods_client_server_negotiation,omitempty" envconfig:"IRODS_CLIENT_SERVER_NEGOTIATION"`
 	ClientServerPolicy      string `yaml:"irods_client_server_policy,omitempty" envconfig:"IRODS_CLIENT_SERVER_POLICY"`
 	SSLCACertificateFile    string `yaml:"irods_ssl_ca_certificate_file,omitempty" envconfig:"IRODS_SSL_CA_CERTIFICATE_FILE"`
+	SSLCACertificatePath    string `yaml:"irods_ssl_ca_certificate_path,omitempty" envconfig:"IRODS_SSL_CA_CERTIFICATE_PATH"`
 	EncryptionKeySize       int    `yaml:"irods_encryption_key_size,omitempty" envconfig:"IRODS_ENCRYPTION_KEY_SIZE"`
 	EncryptionAlgorithm     string `yaml:"irods_encryption_algorithm,omitempty" envconfig:"IRODS_ENCRYPTION_ALGORITHM"`
 	EncryptionSaltSize      int    `yaml:"irods_encryption_salt_size,omitempty" envconfig:"IRODS_ENCRYPTION_SALT_SIZE"`
@@ -47,6 +48,7 @@ func GetDefaultConfig() *Config {
 		ClientServerNegotiation: "",
 		ClientServerPolicy:      ClientServerPolicyDefault,
 		SSLCACertificateFile:    "",
+		SSLCACertificatePath:    "",
 		EncryptionKeySize:       EncryptionKeySizeDefault,
 		EncryptionAlgorithm:     EncryptionAlgorithmDefault,
 		EncryptionSaltSize:      SaltSizeDefault,
