@@ -362,8 +362,8 @@ func ReinputFields() (bool, error) {
 	return updated, nil
 }
 
-func isICommandsEnvDir(filePath string) bool {
-	st, err := os.Stat(filePath)
+func isICommandsEnvDir(dirPath string) bool {
+	st, err := os.Stat(dirPath)
 	if err != nil {
 		return false
 	}
@@ -372,7 +372,7 @@ func isICommandsEnvDir(filePath string) bool {
 		return false
 	}
 
-	entries, err := os.ReadDir(filePath)
+	entries, err := os.ReadDir(dirPath)
 	if err != nil {
 		return false
 	}
