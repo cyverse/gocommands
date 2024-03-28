@@ -24,7 +24,7 @@ var svrinfoCmd = &cobra.Command{
 
 func AddSvrinfoCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(svrinfoCmd)
+	flag.SetCommonFlags(svrinfoCmd, true)
 
 	rootCmd.AddCommand(svrinfoCmd)
 }
@@ -64,7 +64,7 @@ func processSvrinfoCommand(command *cobra.Command, args []string) error {
 
 func displayVersion(account *types.IRODSAccount, fs *irodsclient_fs.FileSystem) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "displayVersion",
 	})
 

@@ -18,7 +18,7 @@ var envCmd = &cobra.Command{
 
 func AddEnvCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(envCmd)
+	flag.SetCommonFlags(envCmd, true)
 
 	rootCmd.AddCommand(envCmd)
 }

@@ -20,7 +20,7 @@ var rmdirCmd = &cobra.Command{
 
 func AddRmdirCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(rmdirCmd)
+	flag.SetCommonFlags(rmdirCmd, false)
 
 	rootCmd.AddCommand(rmdirCmd)
 }
@@ -61,7 +61,7 @@ func processRmdirCommand(command *cobra.Command, args []string) error {
 
 func removeDirOne(filesystem *irodsclient_fs.FileSystem, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "removeDirOne",
 	})
 

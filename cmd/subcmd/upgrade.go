@@ -20,7 +20,7 @@ var upgradeCmd = &cobra.Command{
 
 func AddUpgradeCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(upgradeCmd)
+	flag.SetCommonFlags(upgradeCmd, true)
 
 	flag.SetCheckVersionFlags(upgradeCmd)
 

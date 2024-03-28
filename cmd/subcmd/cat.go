@@ -23,7 +23,7 @@ var catCmd = &cobra.Command{
 
 func AddCatCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(catCmd)
+	flag.SetCommonFlags(catCmd, false)
 
 	flag.SetTicketAccessFlags(catCmd)
 
@@ -32,7 +32,7 @@ func AddCatCommand(rootCmd *cobra.Command) {
 
 func processCatCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "processCatCommand",
 	})
 
@@ -88,7 +88,7 @@ func processCatCommand(command *cobra.Command, args []string) error {
 
 func catOne(filesystem *irodsclient_fs.FileSystem, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "catOne",
 	})
 

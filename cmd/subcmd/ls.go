@@ -35,7 +35,7 @@ var lsCmd = &cobra.Command{
 
 func AddLsCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(lsCmd)
+	flag.SetCommonFlags(lsCmd, false)
 
 	flag.SetListFlags(lsCmd)
 	flag.SetTicketAccessFlags(lsCmd)
@@ -46,7 +46,7 @@ func AddLsCommand(rootCmd *cobra.Command) {
 
 func processLsCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "processLsCommand",
 	})
 

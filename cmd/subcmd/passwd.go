@@ -25,7 +25,7 @@ var passwdCmd = &cobra.Command{
 
 func AddPasswdCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(passwdCmd)
+	flag.SetCommonFlags(passwdCmd, true)
 
 	rootCmd.AddCommand(passwdCmd)
 }
@@ -62,7 +62,7 @@ func processPasswdCommand(command *cobra.Command, args []string) error {
 
 func changePassword(fs *irodsclient_fs.FileSystem) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "changePassword",
 	})
 

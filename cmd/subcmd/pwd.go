@@ -20,7 +20,7 @@ var pwdCmd = &cobra.Command{
 
 func AddPwdCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(pwdCmd)
+	flag.SetCommonFlags(pwdCmd, true)
 
 	rootCmd.AddCommand(pwdCmd)
 }

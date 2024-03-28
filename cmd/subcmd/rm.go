@@ -20,7 +20,7 @@ var rmCmd = &cobra.Command{
 
 func AddRmCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(rmCmd)
+	flag.SetCommonFlags(rmCmd, false)
 
 	flag.SetForceFlags(rmCmd, false)
 	flag.SetRecursiveFlags(rmCmd)
@@ -67,7 +67,7 @@ func processRmCommand(command *cobra.Command, args []string) error {
 
 func removeOne(filesystem *irodsclient_fs.FileSystem, targetPath string, forceFlagValues *flag.ForceFlagValues, recursiveFlagValues *flag.RecursiveFlagValues) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "removeOne",
 	})
 

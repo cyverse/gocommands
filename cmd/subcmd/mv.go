@@ -20,7 +20,7 @@ var mvCmd = &cobra.Command{
 
 func AddMvCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(mvCmd)
+	flag.SetCommonFlags(mvCmd, false)
 
 	rootCmd.AddCommand(mvCmd)
 }
@@ -66,7 +66,7 @@ func processMvCommand(command *cobra.Command, args []string) error {
 
 func moveOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "moveOne",
 	})
 

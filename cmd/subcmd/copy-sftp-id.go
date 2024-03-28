@@ -28,7 +28,7 @@ var copySftpIdCmd = &cobra.Command{
 
 func AddCopySftpIdCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(copySftpIdCmd)
+	flag.SetCommonFlags(copySftpIdCmd, false)
 
 	flag.SetForceFlags(copySftpIdCmd, false)
 	flag.SetDryRunFlags(copySftpIdCmd)
@@ -122,7 +122,7 @@ func scanSSHIdentityFiles() ([]string, error) {
 
 func copySftpId(filesystem *irodsclient_fs.FileSystem, forceFlagValues *flag.ForceFlagValues, dryRunFlagValues *flag.DryRunFlagValues, identityFiles []string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "copySftpId",
 	})
 

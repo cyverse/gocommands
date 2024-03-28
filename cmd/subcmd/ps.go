@@ -25,7 +25,7 @@ var psCmd = &cobra.Command{
 
 func AddPsCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(psCmd)
+	flag.SetCommonFlags(psCmd, true)
 
 	flag.SetProcessFilterFlags(psCmd)
 
@@ -69,7 +69,7 @@ func processPsCommand(command *cobra.Command, args []string) error {
 
 func listProcesses(fs *irodsclient_fs.FileSystem, processFilterFlagValues *flag.ProcessFilterFlagValues) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "listProcesses",
 	})
 

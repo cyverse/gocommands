@@ -24,7 +24,7 @@ var initCmd = &cobra.Command{
 
 func AddInitCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(initCmd)
+	flag.SetCommonFlags(initCmd, false)
 	flag.SetInitFlags(initCmd)
 
 	rootCmd.AddCommand(initCmd)

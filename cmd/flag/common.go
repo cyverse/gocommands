@@ -31,18 +31,25 @@ var (
 	commonFlagValues CommonFlagValues
 )
 
-func SetCommonFlags(command *cobra.Command) {
+func SetCommonFlags(command *cobra.Command, noResource bool) {
 	command.Flags().StringVarP(&commonFlagValues.ConfigFilePath, "config", "c", "", "Set config file or dir (default \"$HOME/.irods\")")
 	command.Flags().BoolVarP(&commonFlagValues.ShowVersion, "version", "v", false, "Print version")
 	command.Flags().BoolVarP(&commonFlagValues.ShowHelp, "help", "h", false, "Print help")
 	command.Flags().BoolVarP(&commonFlagValues.DebugMode, "debug", "d", false, "Enable debug mode")
 	command.Flags().StringVar(&commonFlagValues.logLevelInput, "log_level", "", "Set log level")
 	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Set session ID")
-	command.Flags().StringVarP(&commonFlagValues.Resource, "resource", "R", "", "Set resource server")
+
+	if !noResource {
+		command.Flags().StringVarP(&commonFlagValues.Resource, "resource", "R", "", "Set resource server")
+	}
 
 	command.MarkFlagsMutuallyExclusive("debug", "version")
 	command.MarkFlagsMutuallyExclusive("log_level", "version")
-	command.MarkFlagsMutuallyExclusive("resource", "version")
+
+	if !noResource {
+		command.MarkFlagsMutuallyExclusive("resource", "version")
+	}
+
 	command.MarkFlagsMutuallyExclusive("session", "version")
 }
 

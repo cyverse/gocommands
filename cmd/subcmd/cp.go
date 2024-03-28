@@ -25,7 +25,7 @@ var cpCmd = &cobra.Command{
 
 func AddCpCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(cpCmd)
+	flag.SetCommonFlags(cpCmd, false)
 
 	flag.SetForceFlags(cpCmd, false)
 	flag.SetRecursiveFlags(cpCmd)
@@ -40,7 +40,7 @@ func AddCpCommand(rootCmd *cobra.Command) {
 
 func processCpCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "processCpCommand",
 	})
 
@@ -129,7 +129,7 @@ func processCpCommand(command *cobra.Command, args []string) error {
 
 func copyOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, recursiveFlagValues *flag.RecursiveFlagValues, forceFlagValues *flag.ForceFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "copyOne",
 	})
 
@@ -301,7 +301,7 @@ func copyDeleteExtra(filesystem *irodsclient_fs.FileSystem, inputPathMap map[str
 
 func copyDeleteExtraInternal(filesystem *irodsclient_fs.FileSystem, inputPathMap map[string]bool, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "copyDeleteExtraInternal",
 	})
 

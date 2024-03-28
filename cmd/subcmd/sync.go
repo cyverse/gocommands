@@ -22,7 +22,7 @@ var syncCmd = &cobra.Command{
 
 func AddSyncCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(syncCmd)
+	flag.SetCommonFlags(syncCmd, false)
 
 	flag.SetBundleTempFlags(syncCmd)
 	flag.SetBundleClearFlags(syncCmd)
@@ -115,7 +115,7 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 
 func syncFromLocalToIRODS(command *cobra.Command) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "syncFromLocalToIRODS",
 	})
 
@@ -157,7 +157,7 @@ func syncFromLocalToIRODS(command *cobra.Command) error {
 
 func syncFromIRODSToIRODS(command *cobra.Command, sourcePaths []string, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "syncFromIRODSToIRODS",
 	})
 
@@ -199,7 +199,7 @@ func syncFromIRODSToIRODS(command *cobra.Command, sourcePaths []string, targetPa
 
 func syncFromIRODSToLocal(command *cobra.Command, sourcePaths []string, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "syncFromIRODSToLocal",
 	})
 

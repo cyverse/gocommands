@@ -28,7 +28,7 @@ var putCmd = &cobra.Command{
 
 func AddPutCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(putCmd)
+	flag.SetCommonFlags(putCmd, false)
 
 	flag.SetForceFlags(putCmd, false)
 	flag.SetTicketAccessFlags(putCmd)
@@ -46,7 +46,7 @@ func AddPutCommand(rootCmd *cobra.Command) {
 
 func processPutCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "processPutCommand",
 	})
 
@@ -165,7 +165,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 
 func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, parallelTransferFlagValues *flag.ParallelTransferFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, encryptionFlagValues *flag.EncryptionFlagValues, postTransferFlagValues *flag.PostTransferFlagValues) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "putOne",
 	})
 
@@ -431,7 +431,7 @@ func putDeleteExtra(filesystem *irodsclient_fs.FileSystem, inputPathMap map[stri
 
 func putDeleteExtraInternal(filesystem *irodsclient_fs.FileSystem, inputPathMap map[string]bool, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "putDeleteExtraInternal",
 	})
 

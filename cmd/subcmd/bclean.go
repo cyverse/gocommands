@@ -19,7 +19,7 @@ var bcleanCmd = &cobra.Command{
 
 func AddBcleanCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(bcleanCmd)
+	flag.SetCommonFlags(bcleanCmd, false)
 
 	// attach bundle temp flags
 	flag.SetBundleTempFlags(bcleanCmd)
@@ -30,7 +30,7 @@ func AddBcleanCommand(rootCmd *cobra.Command) {
 
 func processBcleanCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "processBcleanCommand",
 	})
 
@@ -82,7 +82,7 @@ func processBcleanCommand(command *cobra.Command, args []string) error {
 
 func bcleanOne(fs *irodsclient_fs.FileSystem, targetPath string, forceFlagValues *flag.ForceFlagValues) {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "bcleanOne",
 	})
 

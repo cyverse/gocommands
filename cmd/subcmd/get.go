@@ -29,7 +29,7 @@ var getCmd = &cobra.Command{
 
 func AddGetCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(getCmd)
+	flag.SetCommonFlags(getCmd, false)
 
 	flag.SetForceFlags(getCmd, false)
 	flag.SetTicketAccessFlags(getCmd)
@@ -47,7 +47,7 @@ func AddGetCommand(rootCmd *cobra.Command) {
 
 func processGetCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "processGetCommand",
 	})
 
@@ -166,7 +166,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 
 func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, parallelTransferFlagValues *flag.ParallelTransferFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, decryptionFlagValues *flag.DecryptionFlagValues, postTransferFlagValues *flag.PostTransferFlagValues) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "getOne",
 	})
 
@@ -434,7 +434,7 @@ func getDeleteExtra(inputPathMap map[string]bool, targetPath string) error {
 
 func getDeleteExtraInternal(inputPathMap map[string]bool, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "getDeleteExtraInternal",
 	})
 

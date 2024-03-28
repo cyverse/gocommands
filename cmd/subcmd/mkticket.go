@@ -21,7 +21,7 @@ var mkticketCmd = &cobra.Command{
 
 func AddMkticketCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(mkticketCmd)
+	flag.SetCommonFlags(mkticketCmd, true)
 
 	flag.SetTicketFlags(mkticketCmd)
 
@@ -64,7 +64,7 @@ func processMkticketCommand(command *cobra.Command, args []string) error {
 
 func makeTicket(fs *irodsclient_fs.FileSystem, ticketName string, ticketType types.TicketType, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "makeTicket",
 	})
 

@@ -24,7 +24,7 @@ var lsticketCmd = &cobra.Command{
 
 func AddLsticketCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(lsticketCmd)
+	flag.SetCommonFlags(lsticketCmd, true)
 
 	flag.SetListFlags(lsticketCmd)
 
@@ -136,7 +136,7 @@ func listTicket(fs *irodsclient_fs.FileSystem, listFlagValues *flag.ListFlagValu
 
 func getTicket(fs *irodsclient_fs.FileSystem, ticketName string, listFlagValues *flag.ListFlagValues) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "getTicket",
 	})
 

@@ -21,7 +21,7 @@ var cdCmd = &cobra.Command{
 
 func AddCdCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(cdCmd)
+	flag.SetCommonFlags(cdCmd, true)
 
 	rootCmd.AddCommand(cdCmd)
 }
@@ -69,7 +69,7 @@ func processCdCommand(command *cobra.Command, args []string) error {
 
 func changeWorkingDir(fs *irodsclient_fs.FileSystem, collectionPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "changeWorkingDir",
 	})
 

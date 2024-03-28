@@ -24,7 +24,7 @@ var bputCmd = &cobra.Command{
 
 func AddBputCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(bputCmd)
+	flag.SetCommonFlags(bputCmd, false)
 
 	flag.SetBundleTempFlags(bputCmd)
 	flag.SetBundleClearFlags(bputCmd)
@@ -42,7 +42,7 @@ func AddBputCommand(rootCmd *cobra.Command) {
 
 func processBputCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "processBputCommand",
 	})
 
@@ -197,7 +197,7 @@ func processBputCommand(command *cobra.Command, args []string) error {
 
 func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "bputOne",
 	})
 
@@ -253,7 +253,7 @@ func bputDeleteExtra(bundleManager *commons.BundleTransferManager, targetPath st
 
 func bputDeleteExtraInternal(filesystem *irodsclient_fs.FileSystem, inputPathMap map[string]bool, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "bputDeleteExtraInternal",
 	})
 

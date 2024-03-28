@@ -21,7 +21,7 @@ var mkdirCmd = &cobra.Command{
 
 func AddMkdirCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(mkdirCmd)
+	flag.SetCommonFlags(mkdirCmd, false)
 
 	flag.SetParentsFlags(mkdirCmd)
 
@@ -66,7 +66,7 @@ func processMkdirCommand(command *cobra.Command, args []string) error {
 
 func makeOne(fs *irodsclient_fs.FileSystem, targetPath string, parentsFlagValues *flag.ParentsFlagValues) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "makeOne",
 	})
 

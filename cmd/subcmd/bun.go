@@ -23,7 +23,7 @@ var bunCmd = &cobra.Command{
 
 func AddBunCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(bunCmd)
+	flag.SetCommonFlags(bunCmd, false)
 
 	flag.SetForceFlags(bunCmd, false)
 	flag.SetBundleFlags(bunCmd)
@@ -110,7 +110,7 @@ func getDataType(irodsPath string, dataType string) (irodsclient_types.DataType,
 
 func extractOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, bundleFlagValues *flag.BundleFlagValues, forceFlagValues *flag.ForceFlagValues) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "extractOne",
 	})
 

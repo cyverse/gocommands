@@ -67,7 +67,7 @@ func main() {
 	})
 
 	// attach common flags
-	flag.SetCommonFlags(rootCmd)
+	flag.SetCommonFlags(rootCmd, true)
 
 	// add sub commands
 	subcmd.AddInitCommand(rootCmd)
@@ -89,6 +89,8 @@ func main() {
 	subcmd.AddBputCommand(rootCmd)
 	subcmd.AddSvrinfoCommand(rootCmd)
 	subcmd.AddPsCommand(rootCmd)
+	subcmd.AddLsmetaCommand(rootCmd)
+	subcmd.AddAddmetaCommand(rootCmd)
 	subcmd.AddCopySftpIdCommand(rootCmd)
 	subcmd.AddLsticketCommand(rootCmd)
 	subcmd.AddRmticketCommand(rootCmd)

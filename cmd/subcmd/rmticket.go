@@ -20,7 +20,7 @@ var rmticketCmd = &cobra.Command{
 
 func AddRmticketCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(rmticketCmd)
+	flag.SetCommonFlags(rmticketCmd, true)
 
 	rootCmd.AddCommand(rmticketCmd)
 }
@@ -61,7 +61,7 @@ func processRmticketCommand(command *cobra.Command, args []string) error {
 
 func removeTicket(fs *irodsclient_fs.FileSystem, ticketName string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
+		"package":  "subcmd",
 		"function": "removeTicket",
 	})
 
