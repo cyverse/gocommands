@@ -53,7 +53,7 @@ func processRmticketCommand(command *cobra.Command, args []string) error {
 	for _, ticketName := range args {
 		err = removeTicket(filesystem, ticketName)
 		if err != nil {
-			return xerrors.Errorf("failed to perform remove ticket %s: %w", ticketName, err)
+			return err
 		}
 	}
 	return nil
