@@ -261,6 +261,10 @@ func (manager *EncryptionManager) decryptFilenamePGP(filename string) (string, e
 		return "", xerrors.Errorf("failed to decrypt filename: %w", err)
 	}
 
+	if !manager.isCorrectFilename(decryptedFilename) {
+		return "", xerrors.Errorf("failed to decrypt filename with wrong key")
+	}
+
 	return string(decryptedFilename), nil
 }
 
