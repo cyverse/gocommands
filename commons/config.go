@@ -77,6 +77,16 @@ func NewConfigFromENV() (*Config, error) {
 	return config, nil
 }
 
+// GetDefaultIRODSConfigPath returns default config path
+func GetDefaultIRODSConfigPath() string {
+	irodsConfigPath, err := ExpandHomeDir("~/.irods")
+	if err != nil {
+		return ""
+	}
+
+	return irodsConfigPath
+}
+
 type ConfigTypeIn struct {
 	Host     string `yaml:"irods_host,omitempty"`
 	Port     int    `yaml:"irods_port,omitempty"`

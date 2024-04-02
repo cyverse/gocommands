@@ -32,7 +32,7 @@ var (
 )
 
 func SetCommonFlags(command *cobra.Command, noResource bool) {
-	command.Flags().StringVarP(&commonFlagValues.ConfigFilePath, "config", "c", "", "Set config file or dir (default \"$HOME/.irods\")")
+	command.Flags().StringVarP(&commonFlagValues.ConfigFilePath, "config", "c", "", fmt.Sprintf("Set config file or dir (default \"%s\")", commons.GetDefaultIRODSConfigPath()))
 	command.Flags().BoolVarP(&commonFlagValues.ShowVersion, "version", "v", false, "Print version")
 	command.Flags().BoolVarP(&commonFlagValues.ShowHelp, "help", "h", false, "Print help")
 	command.Flags().BoolVarP(&commonFlagValues.DebugMode, "debug", "d", false, "Enable debug mode")

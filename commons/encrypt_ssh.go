@@ -9,6 +9,33 @@ import (
 	"golang.org/x/xerrors"
 )
 
+// GetDefaultPublicKeyPath returns default public key path, if public key does not exist, return private key path.
+func GetDefaultPublicKeyPath() string {
+	pubkeyPath, err := ExpandHomeDir("~/.ssh/id_rsa.pub")
+	if err != nil {
+		return ""
+	}
+
+	st, err := os.Stat(pubkeyPath)
+	if err == nil && !st.IsDir() {
+		return pubkeyPath
+	}
+
+	// not exist
+	// use private key
+	return GetDefaultPrivateKeyPath()
+}
+
+// GetDefaultPrivateKeyPath returns default private key path
+func GetDefaultPrivateKeyPath() string {
+	privkeyPath, err := ExpandHomeDir("~/.ssh/id_rsa")
+	if err != nil {
+		return ""
+	}
+
+	return privkeyPath
+}
+
 func DecodePrivateKey(privatekeyPath string) (*rsa.PrivateKey, error) {
 	pemBytes, err := os.ReadFile(privatekeyPath)
 	if err != nil {
