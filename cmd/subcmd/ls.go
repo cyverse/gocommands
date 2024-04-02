@@ -126,10 +126,23 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, listFlagValues *f
 	}
 	defer fs.ReturnMetadataConnection(connection)
 
+	decryptionFlagValuesCopy := decryptionFlagValues
+
 	collection, err := irodsclient_irodsfs.GetCollection(connection, sourcePath)
 	if err != nil {
 		if !irodsclient_types.IsFileNotFoundError(err) {
 			return xerrors.Errorf("failed to get collection %s: %w", sourcePath, err)
+		}
+	}
+
+	// load encryption config from meta
+	if !decryptionFlagValues.IgnoreMeta {
+		encryptionConfig := commons.GetEncryptionConfigFromMeta(fs, sourcePath)
+		if encryptionConfig.Required {
+			decryptionFlagValuesCopyPtr := *decryptionFlagValues
+
+			decryptionFlagValuesCopy = &decryptionFlagValuesCopyPtr
+			decryptionFlagValuesCopy.Decryption = encryptionConfig.Required
 		}
 	}
 
@@ -144,7 +157,7 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, listFlagValues *f
 			return xerrors.Errorf("failed to list data-objects in %s: %w", sourcePath, err)
 		}
 
-		printDataObjects(objs, listFlagValues, decryptionFlagValues)
+		printDataObjects(objs, listFlagValues, decryptionFlagValuesCopy)
 		printCollections(colls, listFlagValues)
 		return nil
 	}
@@ -163,7 +176,7 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, listFlagValues *f
 	}
 
 	entries := []*irodsclient_types.IRODSDataObject{entry}
-	printDataObjects(entries, listFlagValues, decryptionFlagValues)
+	printDataObjects(entries, listFlagValues, decryptionFlagValuesCopy)
 	return nil
 }
 

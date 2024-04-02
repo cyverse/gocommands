@@ -139,7 +139,21 @@ func processGetCommand(command *cobra.Command, args []string) error {
 			return xerrors.Errorf("failed to make new target path for get %s to %s: %w", sourcePath, targetPath, err)
 		}
 
-		err = getOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, decryptionFlagValues, postTransferFlagValues)
+		// load encryption config from meta
+		decryptionFlagValuesCopy := decryptionFlagValues
+
+		if !decryptionFlagValues.IgnoreMeta {
+			encryptionConfig := commons.GetEncryptionConfigFromMeta(filesystem, newTargetDirPath)
+
+			if encryptionConfig.Required {
+				decryptionFlagValuesCopyPtr := *decryptionFlagValues
+
+				decryptionFlagValuesCopy = &decryptionFlagValuesCopyPtr
+				decryptionFlagValuesCopy.Decryption = encryptionConfig.Required
+			}
+		}
+
+		err = getOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, decryptionFlagValuesCopy, postTransferFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform get %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -360,6 +374,8 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		}
 
 		for _, entry := range entries {
+			decryptionFlagValuesCopy := decryptionFlagValues
+
 			targetDirPath := targetPath
 			if entry.Type != irodsclient_fs.FileEntry {
 				// dir
@@ -370,9 +386,20 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 				}
 			}
 
+			// load encryption config from meta
+			if !decryptionFlagValues.IgnoreMeta {
+				encryptionConfig := commons.GetEncryptionConfigFromMeta(filesystem, targetDirPath)
+				if encryptionConfig.Required {
+					decryptionFlagValuesCopyPtr := *decryptionFlagValues
+
+					decryptionFlagValuesCopy = &decryptionFlagValuesCopyPtr
+					decryptionFlagValuesCopy.Decryption = encryptionConfig.Required
+				}
+			}
+
 			commons.MarkPathMap(inputPathMap, targetDirPath)
 
-			err = getOne(parallelJobManager, inputPathMap, entry.Path, targetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, decryptionFlagValues, postTransferFlagValues)
+			err = getOne(parallelJobManager, inputPathMap, entry.Path, targetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, decryptionFlagValuesCopy, postTransferFlagValues)
 			if err != nil {
 				return xerrors.Errorf("failed to perform get %s to %s: %w", entry.Path, targetDirPath, err)
 			}

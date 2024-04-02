@@ -138,7 +138,23 @@ func processPutCommand(command *cobra.Command, args []string) error {
 			return xerrors.Errorf("failed to make new target path for put %s to %s: %w", sourcePath, targetPath, err)
 		}
 
-		err = putOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, encryptionFlagValues, postTransferFlagValues)
+		// load encryption config from meta
+		encryptionFlagValuesCopy := encryptionFlagValues
+
+		if !encryptionFlagValues.IgnoreMeta {
+			encryptionConfig := commons.GetEncryptionConfigFromMeta(filesystem, newTargetDirPath)
+			if encryptionConfig.Required {
+				encryptionFlagValuesCopyPtr := *encryptionFlagValues
+
+				encryptionFlagValuesCopy = &encryptionFlagValuesCopyPtr
+				encryptionFlagValuesCopy.Encryption = encryptionConfig.Required
+				if encryptionConfig.Mode != commons.EncryptionModeUnknown {
+					encryptionFlagValuesCopy.Mode = encryptionConfig.Mode
+				}
+			}
+		}
+
+		err = putOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, encryptionFlagValuesCopy, postTransferFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform put %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -351,20 +367,40 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		}
 
 		for _, entry := range entries {
+			encryptionFlagValuesCopy := encryptionFlagValues
+
 			targetDirPath := targetPath
 			if entry.IsDir() {
 				// dir
 				targetDirPath = commons.MakeTargetIRODSFilePath(filesystem, entry.Name(), targetPath)
-				err = filesystem.MakeDir(targetDirPath, true)
-				if err != nil {
-					return xerrors.Errorf("failed to make dir %s: %w", targetDirPath, err)
+
+				if !filesystem.ExistsDir(targetDirPath) {
+					// not exist
+					err = filesystem.MakeDir(targetDirPath, true)
+					if err != nil {
+						return xerrors.Errorf("failed to make dir %s: %w", targetDirPath, err)
+					}
+				} else {
+					// load encryption config from meta
+					if !encryptionFlagValues.IgnoreMeta {
+						encryptionConfig := commons.GetEncryptionConfigFromMeta(filesystem, targetDirPath)
+						if encryptionConfig.Required {
+							encryptionFlagValuesCopyPtr := *encryptionFlagValues
+
+							encryptionFlagValuesCopy = &encryptionFlagValuesCopyPtr
+							encryptionFlagValuesCopy.Encryption = encryptionConfig.Required
+							if encryptionConfig.Mode != commons.EncryptionModeUnknown {
+								encryptionFlagValuesCopy.Mode = encryptionConfig.Mode
+							}
+						}
+					}
 				}
 			}
 
 			commons.MarkPathMap(inputPathMap, targetDirPath)
 
 			newSourcePath := filepath.Join(sourcePath, entry.Name())
-			err = putOne(parallelJobManager, inputPathMap, newSourcePath, targetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, encryptionFlagValues, postTransferFlagValues)
+			err = putOne(parallelJobManager, inputPathMap, newSourcePath, targetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, encryptionFlagValuesCopy, postTransferFlagValues)
 			if err != nil {
 				return xerrors.Errorf("failed to perform put %s to %s: %w", newSourcePath, targetDirPath, err)
 			}
