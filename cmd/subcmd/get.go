@@ -171,7 +171,7 @@ func getEncryptionManagerForDecrypt(mode commons.EncryptionMode, decryptionFlagV
 	case commons.EncryptionModeWinSCP, commons.EncryptionModePGP:
 		manager.SetKey([]byte(decryptionFlagValues.Key))
 	case commons.EncryptionModeSSH:
-		manager.SetPublicKey(decryptionFlagValues.PrivateKeyPath)
+		manager.SetPublicPrivateKey(decryptionFlagValues.PrivateKeyPath)
 	}
 
 	return manager

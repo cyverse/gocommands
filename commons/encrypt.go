@@ -62,10 +62,9 @@ func IsCorrectFilename(filename []byte) bool {
 }
 
 type EncryptionManager struct {
-	mode           EncryptionMode
-	key            []byte
-	privateKeyPath string
-	publicKeyPath  string
+	mode                 EncryptionMode
+	key                  []byte
+	publicprivateKeyPath string
 }
 
 // NewEncryptionManager creates a new EncryptionManager
@@ -82,36 +81,27 @@ func (manager *EncryptionManager) SetKey(key []byte) {
 	manager.key = key
 }
 
-// SetPrivateKey sets private key
-func (manager *EncryptionManager) SetPrivateKey(privateKeyPath string) {
-	manager.privateKeyPath = privateKeyPath
-}
-
-// SetPublicKey sets public key
-func (manager *EncryptionManager) SetPublicKey(publicKeyPath string) {
-	manager.publicKeyPath = publicKeyPath
+// SetPublicPrivateKey sets public or private key automatically
+func (manager *EncryptionManager) SetPublicPrivateKey(keyPath string) {
+	manager.publicprivateKeyPath = keyPath
 }
 
 func (manager *EncryptionManager) getPublicKey() (*rsa.PublicKey, error) {
-	if len(manager.publicKeyPath) > 0 {
-		return DecodePublicKey(manager.publicKeyPath)
-	}
-
-	if len(manager.privateKeyPath) > 0 {
-		priv, err := DecodePrivateKey(manager.privateKeyPath)
+	if len(manager.publicprivateKeyPath) > 0 {
+		pub, err := DecodePublicKey(manager.publicprivateKeyPath)
 		if err != nil {
 			return nil, err
 		}
 
-		return &priv.PublicKey, nil
+		return pub, nil
 	}
 
 	return nil, xerrors.Errorf("failed to load public key, public or private key path is not given")
 }
 
 func (manager *EncryptionManager) getPrivateKey() (*rsa.PrivateKey, error) {
-	if len(manager.privateKeyPath) > 0 {
-		priv, err := DecodePrivateKey(manager.privateKeyPath)
+	if len(manager.publicprivateKeyPath) > 0 {
+		priv, err := DecodePrivateKey(manager.publicprivateKeyPath)
 		if err != nil {
 			return nil, err
 		}
@@ -150,7 +140,7 @@ func (manager *EncryptionManager) DecryptFilename(filename string) (string, erro
 	case EncryptionModePGP:
 		return DecryptFilenamePGP(filename), nil
 	case EncryptionModeSSH:
-		// load publickey
+		// load privatekey
 		privateKey, err := manager.getPrivateKey()
 		if err != nil {
 			return "", err

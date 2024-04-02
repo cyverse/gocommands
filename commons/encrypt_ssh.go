@@ -6,6 +6,7 @@ import (
 	"encoding/pem"
 	"os"
 
+	"golang.org/x/crypto/ssh"
 	"golang.org/x/xerrors"
 )
 
@@ -36,13 +37,16 @@ func GetDefaultPrivateKeyPath() string {
 	return privkeyPath
 }
 
-func DecodePrivateKey(privatekeyPath string) (*rsa.PrivateKey, error) {
-	pemBytes, err := os.ReadFile(privatekeyPath)
+// DecodePublicPrivateKey decodes public or private key
+func DecodePublicPrivateKey(keyPath string) (interface{}, error) {
+	pemBytes, err := os.ReadFile(keyPath)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to read private key file %s: %w", privatekeyPath, err)
+		return nil, xerrors.Errorf("failed to read public/private key file %s: %w", keyPath, err)
 	}
 
 	var pemBlock *pem.Block
+	isPrivateKey := false
+	isPublicKey := false
 
 	for {
 		pemBlock, pemBytes = pem.Decode(pemBytes)
@@ -52,50 +56,79 @@ func DecodePrivateKey(privatekeyPath string) (*rsa.PrivateKey, error) {
 
 		if pemBlock.Type == "RSA PRIVATE KEY" {
 			// found
+			isPrivateKey = true
+			break
+		} else if pemBlock.Type == "RSA PUBLIC KEY" {
+			isPublicKey = true
 			break
 		}
 	}
 
-	if pemBlock == nil {
-		return nil, xerrors.Errorf("private key is not found in key file %s: %w", privatekeyPath, err)
+	if pemBlock != nil {
+		if isPrivateKey {
+			privateKey, err := x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
+			if err != nil {
+				return nil, xerrors.Errorf("failed to parse PKCS1 private key: %w", err)
+			}
+
+			return privateKey, nil
+		}
+
+		if isPublicKey {
+			publicKey, err := x509.ParsePKCS1PublicKey(pemBlock.Bytes)
+			if err != nil {
+				return nil, xerrors.Errorf("failed to parse PKCS1 public key: %w", err)
+			}
+
+			return publicKey, nil
+		}
 	}
 
-	privateKey, err := x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
+	publicKey, _, _, _, err := ssh.ParseAuthorizedKey(pemBytes)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to parse PKCS1 private key: %w", err)
+		return nil, xerrors.Errorf("failed to parse public key file %s: %w", keyPath, err)
 	}
 
-	return privateKey, nil
+	parsedCryptoKey, ok := publicKey.(ssh.CryptoPublicKey)
+	if !ok {
+		return nil, xerrors.Errorf("failed to get crypto public key: %w", err)
+	}
+
+	pubCrypto := parsedCryptoKey.CryptoPublicKey()
+	pubKey, ok := pubCrypto.(*rsa.PublicKey)
+	if !ok {
+		return nil, xerrors.Errorf("failed to get RSA public key: %w", err)
+	}
+
+	return pubKey, nil
+}
+
+func DecodePrivateKey(privatekeyPath string) (*rsa.PrivateKey, error) {
+	key, err := DecodePublicPrivateKey(privatekeyPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if privKey, ok := key.(*rsa.PrivateKey); ok {
+		return privKey, nil
+	}
+
+	return nil, xerrors.Errorf("failed to get private key")
 }
 
 func DecodePublicKey(publickeyPath string) (*rsa.PublicKey, error) {
-	pemBytes, err := os.ReadFile(publickeyPath)
+	key, err := DecodePublicPrivateKey(publickeyPath)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to read public key file %s: %w", publickeyPath, err)
+		return nil, err
 	}
 
-	var pemBlock *pem.Block
-
-	for {
-		pemBlock, pemBytes = pem.Decode(pemBytes)
-		if pemBlock == nil {
-			break
-		}
-
-		if pemBlock.Type == "RSA PUBLIC KEY" {
-			// found
-			break
-		}
+	if pubKey, ok := key.(*rsa.PublicKey); ok {
+		return pubKey, nil
 	}
 
-	if pemBlock == nil {
-		return nil, xerrors.Errorf("public key is not found in key file %s: %w", publickeyPath, err)
+	if privKey, ok := key.(*rsa.PrivateKey); ok {
+		return &privKey.PublicKey, nil
 	}
 
-	publicKey, err := x509.ParsePKCS1PublicKey(pemBlock.Bytes)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to parse PKCS1 public key: %w", err)
-	}
-
-	return publicKey, nil
+	return nil, xerrors.Errorf("failed to get public key")
 }

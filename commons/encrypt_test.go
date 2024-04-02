@@ -126,7 +126,7 @@ func testEncryptFilenameSSH(t *testing.T) {
 	assert.NoError(t, err)
 
 	encryptManager := NewEncryptionManager(EncryptionModeSSH)
-	encryptManager.SetPrivateKey(keypath)
+	encryptManager.SetPublicPrivateKey(keypath)
 
 	encFilename, err := encryptManager.EncryptFilename(filename)
 	assert.NoError(t, err)
@@ -238,7 +238,7 @@ func testEncryptFileSSH(t *testing.T) {
 	assert.NoError(t, err)
 
 	encryptManager := NewEncryptionManager(EncryptionModeSSH)
-	encryptManager.SetPrivateKey(keypath)
+	encryptManager.SetPublicPrivateKey(keypath)
 
 	err = encryptManager.EncryptFile(filepath, encFilePath)
 	assert.NoError(t, err)

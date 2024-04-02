@@ -327,6 +327,11 @@ func getDataObjectModifyTime(object *irodsclient_types.IRODSDataObject) time.Tim
 }
 
 func printDataObjectShort(entry *irodsclient_types.IRODSDataObject, decryptionFlagValues *flag.DecryptionFlagValues) {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"function": "printDataObjectShort",
+	})
+
 	newName := entry.Name
 
 	if decryptionFlagValues.Decryption {
@@ -336,9 +341,10 @@ func printDataObjectShort(entry *irodsclient_types.IRODSDataObject, decryptionFl
 			encryptManager := getEncryptionManagerForDecrypt(encryptionMode, decryptionFlagValues)
 			decryptedFilename, err := encryptManager.DecryptFilename(newName)
 			if err != nil {
-				newName = fmt.Sprintf("%s\tdecryption_failed", newName)
+				logger.Debugf("%+v", err)
+				newName = fmt.Sprintf("%s\t(decryption_failed)", newName)
 			} else {
-				newName = fmt.Sprintf("%s\tencrypted\t%s", decryptedFilename, newName)
+				newName = fmt.Sprintf("%s\t(encrypted: %s)", newName, decryptedFilename)
 			}
 		}
 	}
@@ -353,6 +359,11 @@ func printReplicas(flatReplicas []*FlatReplica, listFlagValues *flag.ListFlagVal
 }
 
 func printReplica(flatReplica FlatReplica, listFlagValues *flag.ListFlagValues, decryptionFlagValues *flag.DecryptionFlagValues) {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"function": "printReplica",
+	})
+
 	newName := flatReplica.DataObject.Name
 
 	if decryptionFlagValues.Decryption {
@@ -362,9 +373,10 @@ func printReplica(flatReplica FlatReplica, listFlagValues *flag.ListFlagValues, 
 			encryptManager := getEncryptionManagerForDecrypt(encryptionMode, decryptionFlagValues)
 			decryptedFilename, err := encryptManager.DecryptFilename(newName)
 			if err != nil {
+				logger.Debugf("%+v", err)
 				newName = fmt.Sprintf("%s\tdecryption_failed", newName)
 			} else {
-				newName = fmt.Sprintf("%s\tencrypted\t%s", decryptedFilename, newName)
+				newName = fmt.Sprintf("%s\t(encrypted: %s", newName, decryptedFilename)
 			}
 		}
 	}
