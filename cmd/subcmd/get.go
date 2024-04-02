@@ -164,6 +164,19 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
+func getEncryptionManagerForDecrypt(mode commons.EncryptionMode, decryptionFlagValues *flag.DecryptionFlagValues) *commons.EncryptionManager {
+	manager := commons.NewEncryptionManager(mode)
+
+	switch mode {
+	case commons.EncryptionModeWinSCP, commons.EncryptionModePGP:
+		manager.SetKey([]byte(decryptionFlagValues.Key))
+	case commons.EncryptionModeSSH:
+		manager.SetPublicKey(decryptionFlagValues.PrivateKeyPath)
+	}
+
+	return manager
+}
+
 func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, parallelTransferFlagValues *flag.ParallelTransferFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, decryptionFlagValues *flag.DecryptionFlagValues, postTransferFlagValues *flag.PostTransferFlagValues) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
@@ -191,16 +204,10 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		decryptedTargetFilePath := targetFilePath
 
 		// decrypt first if necessary
-		encryptionMode, encryptFilename := commons.DetectEncryptionMode(sourceEntry.Name)
-		if encryptionMode == commons.EncryptionModeUnknown {
-			// filename doesn't have .pgp.enc
-			encryptionMode = commons.EncryptionModePGP
-			encryptFilename = false
-		}
+		encryptionMode := commons.DetectEncryptionMode(sourceEntry.Name)
+		encryptManager := getEncryptionManagerForDecrypt(encryptionMode, decryptionFlagValues)
 
-		encryptManager := commons.NewEncryptionManager(encryptionMode, encryptFilename, []byte(decryptionFlagValues.Key))
-
-		if decryptionFlagValues.Decryption {
+		if decryptionFlagValues.Decryption && encryptionMode != commons.EncryptionModeUnknown {
 			targetFilePath = filepath.Join(decryptionFlagValues.TempPath, sourceEntry.Name)
 
 			newFilename, err := encryptManager.DecryptFilename(sourceEntry.Name)
@@ -265,7 +272,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 			logger.Debugf("downloaded a data object %s to %s", sourcePath, targetFilePath)
 			job.Progress(sourceEntry.Size, sourceEntry.Size, false)
 
-			if decryptionFlagValues.Decryption {
+			if decryptionFlagValues.Decryption && encryptionMode != commons.EncryptionModeUnknown {
 				logger.Debugf("decrypt a data object %s to %s", targetFilePath, decryptedTargetFilePath)
 				err = encryptManager.DecryptFile(targetFilePath, decryptedTargetFilePath)
 				if err != nil {

@@ -331,9 +331,9 @@ func printDataObjectShort(entry *irodsclient_types.IRODSDataObject, decryptionFl
 
 	if decryptionFlagValues.Decryption {
 		// need to decrypted
-		encryptionMode, encryptFilename := commons.DetectEncryptionMode(newName)
-		if encryptFilename {
-			encryptManager := commons.NewEncryptionManager(encryptionMode, encryptFilename, []byte(decryptionFlagValues.Key))
+		encryptionMode := commons.DetectEncryptionMode(newName)
+		if encryptionMode != commons.EncryptionModeUnknown {
+			encryptManager := getEncryptionManagerForDecrypt(encryptionMode, decryptionFlagValues)
 			decryptedFilename, err := encryptManager.DecryptFilename(newName)
 			if err != nil {
 				newName = fmt.Sprintf("%s\tdecryption_failed", newName)
@@ -357,9 +357,9 @@ func printReplica(flatReplica FlatReplica, listFlagValues *flag.ListFlagValues, 
 
 	if decryptionFlagValues.Decryption {
 		// need to decrypted
-		encryptionMode, encryptFilename := commons.DetectEncryptionMode(newName)
-		if encryptFilename {
-			encryptManager := commons.NewEncryptionManager(encryptionMode, encryptFilename, []byte(decryptionFlagValues.Key))
+		encryptionMode := commons.DetectEncryptionMode(newName)
+		if encryptionMode != commons.EncryptionModeUnknown {
+			encryptManager := getEncryptionManagerForDecrypt(encryptionMode, decryptionFlagValues)
 			decryptedFilename, err := encryptManager.DecryptFilename(newName)
 			if err != nil {
 				newName = fmt.Sprintf("%s\tdecryption_failed", newName)

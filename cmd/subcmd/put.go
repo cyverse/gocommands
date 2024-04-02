@@ -163,6 +163,19 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
+func getEncryptionManagerForEncrypt(encryptionFlagValues *flag.EncryptionFlagValues) *commons.EncryptionManager {
+	manager := commons.NewEncryptionManager(encryptionFlagValues.Mode)
+
+	switch encryptionFlagValues.Mode {
+	case commons.EncryptionModeWinSCP, commons.EncryptionModePGP:
+		manager.SetKey([]byte(encryptionFlagValues.Key))
+	case commons.EncryptionModeSSH:
+		manager.SetPublicKey(encryptionFlagValues.PrivateKeyPath)
+	}
+
+	return manager
+}
+
 func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, parallelTransferFlagValues *flag.ParallelTransferFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, encryptionFlagValues *flag.EncryptionFlagValues, postTransferFlagValues *flag.PostTransferFlagValues) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
@@ -194,7 +207,7 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		if encryptionFlagValues.Encryption {
 			logger.Debugf("encrypting file %s", sourcePath)
 
-			encryptManager := commons.NewEncryptionManager(encryptionFlagValues.Mode, encryptionFlagValues.EncryptFilename, []byte(encryptionFlagValues.Key))
+			encryptManager := getEncryptionManagerForEncrypt(encryptionFlagValues)
 			newFilename, err := encryptManager.EncryptFilename(sourceStat.Name())
 			if err != nil {
 				return xerrors.Errorf("failed to encrypt %s: %w", sourcePath, err)
