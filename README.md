@@ -123,49 +123,47 @@ Some of field values, such as `IRODS_USER_PASSWORD` can be omitted if you don't 
 
 ## Encryption
 
-`Gocommands` provides file encryption feature to store cofidential data on iRODS. The encryption encrypts filename and content with a strong encryption algorithm (AES256-ctl) before uploading files to iRODS. Also, it can decrypts filename and content after downloading enrypted files from iRODS.
-The encryption algorithm `Gocommands` supports is fully compatible with that of `WinSCP`.
+`Gocommands` provides file encryption feature to store cofidential data on iRODS. The encryption encrypts filename and content with a strong encryption algorithm (AES256-CTL) before uploading files to iRODS. Also, it can decrypts filename and content after downloading enrypted files from iRODS.
+By default, `Gocommands` uses RSA + AES256-CTL algorithm for encryption with your SSH public key (`$HOME/.ssh/id_rsa.pub`) and private key (`$HOME/.ssh/id_rsa`).
 
 `put`, `get`, and `ls` supports file encryption.
 
 ### Uploading
 
-To upload a file with encryption, use `--encrypt` and `--encrypt_key` flags. To encrypt data using iRODS user password, you can omit `--encrypt_key` flag.
+To upload a file with encryption, use `--encrypt` flags. 
 ```bash
 gocmd put --encrypt file1.txt
 ```
 
-To specify an encryption key different from your iRODS user password, give it with `--encryption_key` flag.
+To specify a SSH public key file, use `--encrypt_pub_key` flag.
 ```bash
-gocmd put --encrypt --encrypt_key my_encryption_key file1.txt
+gocmd put --encrypt --encrypt_pub_key id_rsa.pub file1.txt
 ```
 
-After uploading the file, you will see that the file will have a new encrypted filename with `.aesctr.enc` extension.
+After uploading the file, you will see that the file will have a new encrypted filename with `.rsaaesctr.enc` extension.
 
 ### Downloading
 
-To download an encrypted file, use `--decrypt` and `--decrypt_key` flags. To decrypt data using iRODS user password, you can omit `--decrypt_key` flag.
+To download an encrypted file, use `--decrypt` flag.
 ```bash
-gocmd get --decrypt XXXXXXXXXXXXXXXXXXXXXXXXX.aesctr.enc
+gocmd get --decrypt XXXXXXXXXXXXXXXXXXXXXXXXX.rsaaesctr.enc
 ```
 
-To specify a decryption key different from your iRODS user password, give it with `--decryption_key` flag.
-Note that the decryption key is the same as encryption key as it uses a symetric encryption algorithm (AES).
+To specify a SSH private key file, use `--decrypt_priv_key` flag.
 ```bash
-gocmd get --decrypt --decryption_key my_encryption_key XXXXXXXXXXXXXXXXXXXXXXXXX.aesctr.enc
+gocmd get --decrypt --decrypt_priv_key id_rsa XXXXXXXXXXXXXXXXXXXXXXXXX.rsaaesctr.enc
 ```
 
 ### Directory listing
 
-When listing a directory, you can also use `--decrypt` and `--decrypt_key` flags to display original filenames. To decrypt data using iRODS user password, you can omit `--decrypt_key` flag.
+When listing a directory, use `--decrypt` flag to display original filenames.
 ```bash
 gocmd ls --decrypt dir1
 ```
 
-To specify a decryption key different from your iRODS user password, give it with `--decryption_key` flag.
-Note that the decryption key is the same as encryption key as it uses a symetric encryption algorithm (AES).
+To specify a SSH private key file, use `--decrypt_priv_key` flag.
 ```bash
-gocmd ls --decrypt --decryption_key my_encryption_key dir1
+gocmd ls --decrypt --decrypt_priv_key id_rsa my_encryption_key dir1
 ```
 
 
