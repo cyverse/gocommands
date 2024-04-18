@@ -123,7 +123,7 @@ func listTicket(fs *irodsclient_fs.FileSystem, listFlagValues *flag.ListFlagValu
 	}
 
 	if len(tickets) == 0 {
-		fmt.Printf("Found no tickets\n")
+		commons.Printf("Found no tickets\n")
 	} else {
 		err = printTickets(fs, tickets, listFlagValues)
 		if err != nil {

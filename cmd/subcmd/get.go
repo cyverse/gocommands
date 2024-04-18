@@ -316,12 +316,14 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 
 			if trxStatusFileExist {
 				// incomplete file - resume downloading
-				fmt.Printf("resume downloading a data object %s\n", targetFilePath)
+				commons.Printf("resume downloading a data object %s\n", targetFilePath)
+				logger.Debugf("resume downloading a data object %s", targetFilePath)
 			} else if differentialTransferFlagValues.DifferentialTransfer {
 				// trx status not exist
 				if differentialTransferFlagValues.NoHash {
 					if targetEntry.Size() == sourceEntry.Size {
-						fmt.Printf("skip downloading a data object %s. The file already exists!\n", targetFilePath)
+						commons.Printf("skip downloading a data object %s. The file already exists!\n", targetFilePath)
+						logger.Debugf("skip downloading a data object %s. The file already exists!", targetFilePath)
 						return nil
 					}
 
@@ -337,7 +339,8 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 							}
 
 							if bytes.Equal(sourceEntry.CheckSum, hash) {
-								fmt.Printf("skip downloading a data object %s. The file with the same hash already exists!\n", targetFilePath)
+								commons.Printf("skip downloading a data object %s. The file with the same hash already exists!\n", targetFilePath)
+								logger.Debugf("skip downloading a data object %s. The file with the same hash already exists!", targetFilePath)
 								return nil
 							}
 						}
@@ -351,7 +354,8 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 					// ask
 					overwrite := commons.InputYN(fmt.Sprintf("file %s already exists. Overwrite?", targetFilePath))
 					if !overwrite {
-						fmt.Printf("skip downloading a data object %s. The file already exists!\n", targetFilePath)
+						commons.Printf("skip downloading a data object %s. The file already exists!\n", targetFilePath)
+						logger.Debugf("skip downloading a data object %s. The file already exists!", targetFilePath)
 						return nil
 					}
 				}

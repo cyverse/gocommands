@@ -1,8 +1,6 @@
 package subcmd
 
 import (
-	"fmt"
-
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/spf13/cobra"
@@ -78,7 +76,7 @@ func processInitCommand(command *cobra.Command, args []string) error {
 			return xerrors.Errorf("failed to save iCommands Environment: %w", err)
 		}
 	} else {
-		fmt.Println("gocommands is already configured for following account:")
+		commons.Println("gocommands is already configured for following account:")
 		err := commons.PrintAccount()
 		if err != nil {
 			return xerrors.Errorf("failed to print account info: %w", err)

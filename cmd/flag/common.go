@@ -15,6 +15,7 @@ type CommonFlagValues struct {
 	ShowVersion     bool
 	ShowHelp        bool
 	DebugMode       bool
+	Quiet           bool
 	logLevelInput   string
 	LogLevel        log.Level
 	LogLevelUpdated bool
@@ -36,6 +37,7 @@ func SetCommonFlags(command *cobra.Command, noResource bool) {
 	command.Flags().BoolVarP(&commonFlagValues.ShowVersion, "version", "v", false, "Print version")
 	command.Flags().BoolVarP(&commonFlagValues.ShowHelp, "help", "h", false, "Print help")
 	command.Flags().BoolVarP(&commonFlagValues.DebugMode, "debug", "d", false, "Enable debug mode")
+	command.Flags().BoolVarP(&commonFlagValues.Quiet, "quiet", "q", false, "Suppress usual output messages")
 	command.Flags().StringVar(&commonFlagValues.logLevelInput, "log_level", "", "Set log level")
 	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Set session ID")
 
@@ -43,8 +45,9 @@ func SetCommonFlags(command *cobra.Command, noResource bool) {
 		command.Flags().StringVarP(&commonFlagValues.Resource, "resource", "R", "", "Set resource server")
 	}
 
-	command.MarkFlagsMutuallyExclusive("debug", "version")
+	command.MarkFlagsMutuallyExclusive("quiet", "version")
 	command.MarkFlagsMutuallyExclusive("log_level", "version")
+	command.MarkFlagsMutuallyExclusive("debug", "quiet", "log_level")
 
 	if !noResource {
 		command.MarkFlagsMutuallyExclusive("resource", "version")
@@ -70,6 +73,20 @@ func GetCommonFlagValues(command *cobra.Command) *CommonFlagValues {
 	return &commonFlagValues
 }
 
+func setLogLevel(command *cobra.Command) {
+	myCommonFlagValues := GetCommonFlagValues(command)
+
+	if myCommonFlagValues.Quiet {
+		log.SetLevel(log.FatalLevel)
+	} else if myCommonFlagValues.DebugMode {
+		log.SetLevel(log.DebugLevel)
+	} else {
+		if myCommonFlagValues.LogLevelUpdated {
+			log.SetLevel(myCommonFlagValues.LogLevel)
+		}
+	}
+}
+
 func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "flag",
@@ -79,13 +96,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	myCommonFlagValues := GetCommonFlagValues(command)
 	retryFlagValues := GetRetryFlagValues()
 
-	if myCommonFlagValues.DebugMode {
-		log.SetLevel(log.DebugLevel)
-	} else {
-		if myCommonFlagValues.LogLevelUpdated {
-			log.SetLevel(myCommonFlagValues.LogLevel)
-		}
-	}
+	setLogLevel(command)
 
 	if myCommonFlagValues.ShowHelp {
 		command.Usage()
@@ -141,19 +152,16 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		commons.SetDefaultConfigIfEmpty()
 	}
 
+	// re-configure level
+	setLogLevel(command)
+
 	err := commons.LoadAndOverwriteConfigFromEnv()
 	if err != nil {
 		return false, xerrors.Errorf("failed to load config from environment: %w", err) // stop here
 	}
 
 	// re-configure level
-	if myCommonFlagValues.DebugMode {
-		log.SetLevel(log.DebugLevel)
-	} else {
-		if myCommonFlagValues.LogLevelUpdated {
-			log.SetLevel(myCommonFlagValues.LogLevel)
-		}
-	}
+	setLogLevel(command)
 
 	if retryFlagValues.RetryChild {
 		// read from stdin

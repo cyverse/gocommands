@@ -309,7 +309,7 @@ func (manager *BundleTransferManager) Schedule(source string, dir bool, size int
 			// handle dir
 			exist := manager.filesystem.ExistsDir(targePath)
 			if exist {
-				fmt.Printf("skip adding a dir %s to the bundle. The dir already exists!\n", source)
+				Printf("skip adding a dir %s to the bundle. The dir already exists!\n", source)
 				logger.Debugf("skip adding a dir %s to the bundle. The dir already exists!", source)
 				return nil
 			}
@@ -325,7 +325,7 @@ func (manager *BundleTransferManager) Schedule(source string, dir bool, size int
 
 				if manager.noHashForComparison {
 					if targetEntry.Size == size {
-						fmt.Printf("skip adding a file %s to the bundle. The file already exists!\n", source)
+						Printf("skip adding a file %s to the bundle. The file already exists!\n", source)
 						logger.Debugf("skip adding a file %s to the bundle. The file already exists!", source)
 						return nil
 					}
@@ -341,7 +341,7 @@ func (manager *BundleTransferManager) Schedule(source string, dir bool, size int
 							}
 
 							if bytes.Equal(hash, targetEntry.CheckSum) {
-								fmt.Printf("skip adding a file %s to the bundle. The file with the same hash already exists!\n", source)
+								Printf("skip adding a file %s to the bundle. The file with the same hash already exists!\n", source)
 								logger.Debugf("skip adding a file %s to the bundle. The file with the same hash already exists!", source)
 								return nil
 							}
@@ -1272,7 +1272,8 @@ func CleanUpOldLocalBundles(localTempDirPath string, force bool) {
 		}
 	}
 
-	fmt.Printf("deleted %d old local bundles in %s\n", deletedCount, localTempDirPath)
+	Printf("deleted %d old local bundles in %s\n", deletedCount, localTempDirPath)
+	logger.Debugf("deleted %d old local bundles in %s", deletedCount, localTempDirPath)
 }
 
 func CleanUpOldIRODSBundles(fs *irodsclient_fs.FileSystem, irodsTempDirPath string, removeDir bool, force bool) {
@@ -1311,7 +1312,8 @@ func CleanUpOldIRODSBundles(fs *irodsclient_fs.FileSystem, irodsTempDirPath stri
 		}
 	}
 
-	fmt.Printf("deleted %d old irods bundles in %s\n", deletedCount, irodsTempDirPath)
+	Printf("deleted %d old irods bundles in %s\n", deletedCount, irodsTempDirPath)
+	logger.Debugf("deleted %d old irods bundles in %s", deletedCount, irodsTempDirPath)
 
 	if removeDir {
 		if IsStagingDirInTargetPath(irodsTempDirPath) {

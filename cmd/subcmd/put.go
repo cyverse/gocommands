@@ -324,7 +324,8 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 			if differentialTransferFlagValues.DifferentialTransfer {
 				if differentialTransferFlagValues.NoHash {
 					if targetEntry.Size == sourceStat.Size() {
-						fmt.Printf("skip uploading a file %s. The file already exists!\n", targetFilePath)
+						commons.Printf("skip uploading a file %s. The file already exists!\n", targetFilePath)
+						logger.Debugf("skip uploading a file %s. The file already exists!", targetFilePath)
 						return nil
 					}
 				} else {
@@ -337,7 +338,8 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 							}
 
 							if bytes.Equal(hash, targetEntry.CheckSum) {
-								fmt.Printf("skip uploading a file %s. The file with the same hash already exists!\n", targetFilePath)
+								commons.Printf("skip uploading a file %s. The file with the same hash already exists!\n", targetFilePath)
+								logger.Debugf("skip uploading a file %s. The file with the same hash already exists!", targetFilePath)
 								return nil
 							}
 						}
@@ -348,7 +350,8 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 					// ask
 					overwrite := commons.InputYN(fmt.Sprintf("file %s already exists. Overwrite?", targetFilePath))
 					if !overwrite {
-						fmt.Printf("skip uploading a file %s. The data object already exists!\n", targetFilePath)
+						commons.Printf("skip uploading a file %s. The data object already exists!\n", targetFilePath)
+						logger.Debugf("skip uploading a file %s. The data object already exists!", targetFilePath)
 						return nil
 					}
 				}

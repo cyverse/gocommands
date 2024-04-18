@@ -94,7 +94,7 @@ func listMetaForPath(fs *irodsclient_fs.FileSystem, targetPath string, listFlagV
 	}
 
 	if len(metas) == 0 {
-		fmt.Printf("Found no metadata\n")
+		commons.Printf("Found no metadata\n")
 	} else {
 		err = printMetas(metas, listFlagValues)
 		if err != nil {
@@ -112,7 +112,7 @@ func listMetaForUser(fs *irodsclient_fs.FileSystem, username string, listFlagVal
 	}
 
 	if len(metas) == 0 {
-		fmt.Printf("Found no metadata\n")
+		commons.Printf("Found no metadata\n")
 	} else {
 		err = printMetas(metas, listFlagValues)
 		if err != nil {
@@ -130,7 +130,7 @@ func listMetaForResource(fs *irodsclient_fs.FileSystem, resource string, listFla
 	}
 
 	if len(metas) == 0 {
-		fmt.Printf("Found no metadata\n")
+		commons.Printf("Found no metadata\n")
 	} else {
 		err = printMetas(metas, listFlagValues)
 		if err != nil {
