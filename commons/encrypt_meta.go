@@ -26,14 +26,14 @@ func GetEncryptionConfigFromMeta(filesystem *irodsclient_fs.FileSystem, targetPa
 
 	for _, meta := range metas {
 		switch strings.ToLower(meta.Name) {
-		case "encryption.required", "gocommands.encryption.required":
+		case "encryption.required", "gocommands.encryption.required", "encryption::required", "gocommands::encryption::required":
 			bv, err := strconv.ParseBool(meta.Value)
 			if err != nil {
 				bv = false
 			}
 
 			config.Required = bv
-		case "encryption.mode", "gocommands.encryption.mode":
+		case "encryption.mode", "gocommands.encryption.mode", "encryption::mode", "gocommands::encryption::mode":
 			config.Mode = GetEncryptionMode(meta.Value)
 		}
 	}
