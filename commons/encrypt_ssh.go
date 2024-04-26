@@ -2,9 +2,9 @@ package commons
 
 import (
 	"crypto/rsa"
-	"crypto/x509"
 	"encoding/pem"
 	"os"
+	"strings"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/xerrors"
@@ -44,46 +44,34 @@ func DecodePublicPrivateKey(keyPath string) (interface{}, error) {
 		return nil, xerrors.Errorf("failed to read public/private key file %s: %w", keyPath, err)
 	}
 
-	var pemBlock *pem.Block
-	isPrivateKey := false
-	isPublicKey := false
-
-	for {
-		pemBlock, pemBytes = pem.Decode(pemBytes)
-		if pemBlock == nil {
-			break
+	// is pem?
+	block, _ := pem.Decode(pemBytes)
+	if block != nil {
+		if strings.Contains(block.Headers["Proc-Type"], "ENCRYPTED") {
+			return nil, xerrors.Errorf("PEM blocks are encrypted")
 		}
 
-		if pemBlock.Type == "RSA PRIVATE KEY" {
-			// found
-			isPrivateKey = true
-			break
-		} else if pemBlock.Type == "RSA PUBLIC KEY" {
-			isPublicKey = true
-			break
-		}
-	}
-
-	if pemBlock != nil {
-		if isPrivateKey {
-			privateKey, err := x509.ParsePKCS1PrivateKey(pemBlock.Bytes)
+		switch block.Type {
+		case "RSA PRIVATE KEY", "PRIVATE KEY", "EC PRIVATE KEY", "DSA PRIVATE KEY", "OPENSSH PRIVATE KEY":
+			privateKey, err := ssh.ParseRawPrivateKey(pemBytes)
 			if err != nil {
-				return nil, xerrors.Errorf("failed to parse PKCS1 private key: %w", err)
+				return nil, xerrors.Errorf("failed to parse private key file %s: %w", keyPath, err)
 			}
 
 			return privateKey, nil
-		}
-
-		if isPublicKey {
-			publicKey, err := x509.ParsePKCS1PublicKey(pemBlock.Bytes)
+		case "RSA PUBLIC KEY", "PUBLIC KEY", "EC PUBLIC KEY", "DSA PUBLIC KEY", "OPENSSH PUBLIC KEY":
+			publicKey, err := ssh.ParsePublicKey(pemBytes)
 			if err != nil {
-				return nil, xerrors.Errorf("failed to parse PKCS1 public key: %w", err)
+				return nil, xerrors.Errorf("failed to parse public key file %s: %w", keyPath, err)
 			}
 
 			return publicKey, nil
+		default:
+			return nil, xerrors.Errorf("failed to parse public/private key file %s: %w", keyPath, err)
 		}
 	}
 
+	// authorized key
 	publicKey, _, _, _, err := ssh.ParseAuthorizedKey(pemBytes)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to parse public key file %s: %w", keyPath, err)
