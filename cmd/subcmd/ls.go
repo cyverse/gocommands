@@ -120,29 +120,35 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, listFlagValues *f
 	zone := commons.GetZone()
 	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 
+	sourceEntry, err := fs.Stat(sourcePath)
+	if err != nil {
+		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
+	}
+
+	// load encryption config from meta
+	if !decryptionFlagValues.IgnoreMeta {
+		sourceDir := sourcePath
+		if !sourceEntry.IsDir() {
+			sourceDir = commons.GetDir(sourcePath)
+		}
+
+		encryptionConfig := commons.GetEncryptionConfigFromMeta(fs, sourceDir)
+
+		if encryptionConfig.Required {
+			decryptionFlagValues.Decryption = encryptionConfig.Required
+		}
+	}
+
 	connection, err := fs.GetMetadataConnection()
 	if err != nil {
 		return xerrors.Errorf("failed to get connection: %w", err)
 	}
 	defer fs.ReturnMetadataConnection(connection)
 
-	decryptionFlagValuesCopy := decryptionFlagValues
-
 	collection, err := irodsclient_irodsfs.GetCollection(connection, sourcePath)
 	if err != nil {
 		if !irodsclient_types.IsFileNotFoundError(err) {
 			return xerrors.Errorf("failed to get collection %s: %w", sourcePath, err)
-		}
-	}
-
-	// load encryption config from meta
-	if !decryptionFlagValues.IgnoreMeta {
-		encryptionConfig := commons.GetEncryptionConfigFromMeta(fs, sourcePath)
-		if encryptionConfig.Required {
-			decryptionFlagValuesCopyPtr := *decryptionFlagValues
-
-			decryptionFlagValuesCopy = &decryptionFlagValuesCopyPtr
-			decryptionFlagValuesCopy.Decryption = encryptionConfig.Required
 		}
 	}
 
@@ -157,7 +163,7 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, listFlagValues *f
 			return xerrors.Errorf("failed to list data-objects in %s: %w", sourcePath, err)
 		}
 
-		printDataObjects(objs, listFlagValues, decryptionFlagValuesCopy)
+		printDataObjects(objs, listFlagValues, decryptionFlagValues)
 		printCollections(colls, listFlagValues)
 		return nil
 	}
@@ -176,7 +182,7 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, listFlagValues *f
 	}
 
 	entries := []*irodsclient_types.IRODSDataObject{entry}
-	printDataObjects(entries, listFlagValues, decryptionFlagValuesCopy)
+	printDataObjects(entries, listFlagValues, decryptionFlagValues)
 	return nil
 }
 

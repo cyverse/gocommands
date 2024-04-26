@@ -139,21 +139,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 			return xerrors.Errorf("failed to make new target path for get %s to %s: %w", sourcePath, targetPath, err)
 		}
 
-		// load encryption config from meta
-		decryptionFlagValuesCopy := decryptionFlagValues
-
-		if !decryptionFlagValues.IgnoreMeta {
-			encryptionConfig := commons.GetEncryptionConfigFromMeta(filesystem, newTargetDirPath)
-
-			if encryptionConfig.Required {
-				decryptionFlagValuesCopyPtr := *decryptionFlagValues
-
-				decryptionFlagValuesCopy = &decryptionFlagValuesCopyPtr
-				decryptionFlagValuesCopy.Decryption = encryptionConfig.Required
-			}
-		}
-
-		err = getOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, decryptionFlagValuesCopy, postTransferFlagValues)
+		err = getOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, decryptionFlagValues, postTransferFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform get %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -208,6 +194,20 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 	sourceEntry, err := filesystem.Stat(sourcePath)
 	if err != nil {
 		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
+	}
+
+	// load encryption config from meta
+	if !decryptionFlagValues.IgnoreMeta {
+		sourceDir := sourcePath
+		if !sourceEntry.IsDir() {
+			sourceDir = commons.GetDir(sourcePath)
+		}
+
+		encryptionConfig := commons.GetEncryptionConfigFromMeta(filesystem, sourceDir)
+
+		if encryptionConfig.Required {
+			decryptionFlagValues.Decryption = encryptionConfig.Required
+		}
 	}
 
 	originalSourcePath := sourcePath
@@ -387,17 +387,6 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 				err = os.MkdirAll(targetDirPath, 0766)
 				if err != nil {
 					return xerrors.Errorf("failed to make dir %s: %w", targetDirPath, err)
-				}
-			}
-
-			// load encryption config from meta
-			if !decryptionFlagValues.IgnoreMeta {
-				encryptionConfig := commons.GetEncryptionConfigFromMeta(filesystem, targetDirPath)
-				if encryptionConfig.Required {
-					decryptionFlagValuesCopyPtr := *decryptionFlagValues
-
-					decryptionFlagValuesCopy = &decryptionFlagValuesCopyPtr
-					decryptionFlagValuesCopy.Decryption = encryptionConfig.Required
 				}
 			}
 

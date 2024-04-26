@@ -138,23 +138,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 			return xerrors.Errorf("failed to make new target path for put %s to %s: %w", sourcePath, targetPath, err)
 		}
 
-		// load encryption config from meta
-		encryptionFlagValuesCopy := encryptionFlagValues
-
-		if !encryptionFlagValues.IgnoreMeta {
-			encryptionConfig := commons.GetEncryptionConfigFromMeta(filesystem, newTargetDirPath)
-			if encryptionConfig.Required {
-				encryptionFlagValuesCopyPtr := *encryptionFlagValues
-
-				encryptionFlagValuesCopy = &encryptionFlagValuesCopyPtr
-				encryptionFlagValuesCopy.Encryption = encryptionConfig.Required
-				if encryptionConfig.Mode != commons.EncryptionModeUnknown {
-					encryptionFlagValuesCopy.Mode = encryptionConfig.Mode
-				}
-			}
-		}
-
-		err = putOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, encryptionFlagValuesCopy, postTransferFlagValues)
+		err = putOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, encryptionFlagValues, postTransferFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform put %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -213,6 +197,32 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		}
 
 		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
+	}
+
+	// load encryption config from meta
+	if !encryptionFlagValues.IgnoreMeta {
+		targetDir := targetPath
+		targetEntry, err := filesystem.Stat(targetPath)
+		if err != nil {
+			if irodsclient_types.IsFileNotFoundError(err) {
+				// target path is file name
+				targetDir = commons.GetDir(targetPath)
+			} else {
+				return xerrors.Errorf("failed to stat %s: %w", targetPath, err)
+			}
+		} else {
+			if !targetEntry.IsDir() {
+				targetDir = commons.GetDir(targetPath)
+			}
+		}
+
+		encryptionConfig := commons.GetEncryptionConfigFromMeta(filesystem, targetDir)
+		if encryptionConfig.Required {
+			encryptionFlagValues.Encryption = encryptionConfig.Required
+			if encryptionConfig.Mode != commons.EncryptionModeUnknown {
+				encryptionFlagValues.Mode = encryptionConfig.Mode
+			}
+		}
 	}
 
 	originalSourcePath := sourcePath
@@ -382,20 +392,6 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 					err = filesystem.MakeDir(targetDirPath, true)
 					if err != nil {
 						return xerrors.Errorf("failed to make dir %s: %w", targetDirPath, err)
-					}
-				} else {
-					// load encryption config from meta
-					if !encryptionFlagValues.IgnoreMeta {
-						encryptionConfig := commons.GetEncryptionConfigFromMeta(filesystem, targetDirPath)
-						if encryptionConfig.Required {
-							encryptionFlagValuesCopyPtr := *encryptionFlagValues
-
-							encryptionFlagValuesCopy = &encryptionFlagValuesCopyPtr
-							encryptionFlagValuesCopy.Encryption = encryptionConfig.Required
-							if encryptionConfig.Mode != commons.EncryptionModeUnknown {
-								encryptionFlagValuesCopy.Mode = encryptionConfig.Mode
-							}
-						}
 					}
 				}
 			}
