@@ -78,7 +78,13 @@ func removeOne(filesystem *irodsclient_fs.FileSystem, targetPath string, forceFl
 
 	targetEntry, err := filesystem.Stat(targetPath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %s: %w", targetPath, err)
+		//return xerrors.Errorf("failed to stat %s: %w", targetPath, err)
+		logger.Debugf("failed to find a data object %s, but trying to remove", targetPath)
+		err = filesystem.RemoveFile(targetPath, forceFlagValues.Force)
+		if err != nil {
+			return xerrors.Errorf("failed to remove %s: %w", targetPath, err)
+		}
+		return nil
 	}
 
 	if targetEntry.Type == irodsclient_fs.FileEntry {
