@@ -67,7 +67,7 @@ func processLsCommand(command *cobra.Command, args []string) error {
 
 	ticketAccessFlagValues := flag.GetTicketAccessFlagValues()
 	listFlagValues := flag.GetListFlagValues()
-	decryptionFlagValues := flag.GetDecryptionFlagValues()
+	decryptionFlagValues := flag.GetDecryptionFlagValues(command)
 
 	appConfig := commons.GetConfig()
 
@@ -126,7 +126,7 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, listFlagValues *f
 	}
 
 	// load encryption config from meta
-	if !decryptionFlagValues.IgnoreMeta {
+	if !decryptionFlagValues.NoDecryption && !decryptionFlagValues.IgnoreMeta {
 		sourceDir := sourcePath
 		if !sourceEntry.IsDir() {
 			sourceDir = commons.GetDir(sourcePath)

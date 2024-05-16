@@ -73,7 +73,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	differentialTransferFlagValues := flag.GetDifferentialTransferFlagValues()
 	noRootFlagValues := flag.GetNoRootFlagValues()
 	syncFlagValues := flag.GetSyncFlagValues()
-	encryptionFlagValues := flag.GetEncryptionFlagValues()
+	encryptionFlagValues := flag.GetEncryptionFlagValues(command)
 	postTransferFlagValues := flag.GetPostTransferFlagValues()
 
 	maxConnectionNum := parallelTransferFlagValues.ThreadNumber + 2 // 2 for metadata op
@@ -200,7 +200,7 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 	}
 
 	// load encryption config from meta
-	if !encryptionFlagValues.IgnoreMeta {
+	if !encryptionFlagValues.NoEncryption && !encryptionFlagValues.IgnoreMeta {
 		targetDir := targetPath
 		targetEntry, err := filesystem.Stat(targetPath)
 		if err != nil {

@@ -74,7 +74,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	differentialTransferFlagValues := flag.GetDifferentialTransferFlagValues()
 	noRootFlagValues := flag.GetNoRootFlagValues()
 	syncFlagValues := flag.GetSyncFlagValues()
-	decryptionFlagValues := flag.GetDecryptionFlagValues()
+	decryptionFlagValues := flag.GetDecryptionFlagValues(command)
 	postTransferFlagValues := flag.GetPostTransferFlagValues()
 
 	maxConnectionNum := parallelTransferFlagValues.ThreadNumber + 2 // 2 for metadata op
@@ -197,7 +197,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 	}
 
 	// load encryption config from meta
-	if !decryptionFlagValues.IgnoreMeta {
+	if !decryptionFlagValues.NoDecryption && !decryptionFlagValues.IgnoreMeta {
 		sourceDir := sourcePath
 		if !sourceEntry.IsDir() {
 			sourceDir = commons.GetDir(sourcePath)
