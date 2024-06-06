@@ -1042,14 +1042,14 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 			if manager.singleThreaded || manager.uploadThreadNum == 1 {
 				err = manager.filesystem.UploadFile(bundle.localBundlePath, bundle.irodsBundlePath, "", false, callback)
 			} else if manager.redirectToResource {
-				err = manager.filesystem.UploadFileParallelRedirectToResource(bundle.localBundlePath, bundle.irodsBundlePath, "", false, callback)
+				err = manager.filesystem.UploadFileParallelRedirectToResource(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false, callback)
 			} else if manager.useIcat {
 				err = manager.filesystem.UploadFileParallel(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false, callback)
 			} else {
 				// auto
 				if bundle.size >= RedirectToResourceMinSize {
 					// redirect-to-resource
-					err = manager.filesystem.UploadFileParallelRedirectToResource(bundle.localBundlePath, bundle.irodsBundlePath, "", false, callback)
+					err = manager.filesystem.UploadFileParallelRedirectToResource(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false, callback)
 				} else {
 					if manager.filesystem.SupportParallelUpload() {
 						err = manager.filesystem.UploadFileParallel(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false, callback)
@@ -1057,7 +1057,7 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 						if bundle.size >= ParallelUploadMinSize {
 							// does not support parall upload via iCAT
 							// redirect-to-resource
-							err = manager.filesystem.UploadFileParallelRedirectToResource(bundle.localBundlePath, bundle.irodsBundlePath, "", false, callback)
+							err = manager.filesystem.UploadFileParallelRedirectToResource(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false, callback)
 						} else {
 							err = manager.filesystem.UploadFileParallel(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false, callback)
 						}
@@ -1137,14 +1137,14 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 			if manager.singleThreaded || manager.uploadThreadNum == 1 {
 				err = manager.filesystem.UploadFile(file.LocalPath, file.IRODSPath, "", false, callbackFileUpload)
 			} else if manager.redirectToResource {
-				err = manager.filesystem.UploadFileParallelRedirectToResource(file.LocalPath, file.IRODSPath, "", false, callbackFileUpload)
+				err = manager.filesystem.UploadFileParallelRedirectToResource(file.LocalPath, file.IRODSPath, "", 0, false, callbackFileUpload)
 			} else if manager.useIcat {
 				err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, callbackFileUpload)
 			} else {
 				// auto
 				if bundle.size >= RedirectToResourceMinSize {
 					// redirect-to-resource
-					err = manager.filesystem.UploadFileParallelRedirectToResource(file.LocalPath, file.IRODSPath, "", false, callbackFileUpload)
+					err = manager.filesystem.UploadFileParallelRedirectToResource(file.LocalPath, file.IRODSPath, "", 0, false, callbackFileUpload)
 				} else {
 					if manager.filesystem.SupportParallelUpload() {
 						err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, callbackFileUpload)
@@ -1152,7 +1152,7 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 						if bundle.size >= ParallelUploadMinSize {
 							// does not support parall upload via iCAT
 							// redirect-to-resource
-							err = manager.filesystem.UploadFileParallelRedirectToResource(file.LocalPath, file.IRODSPath, "", false, callbackFileUpload)
+							err = manager.filesystem.UploadFileParallelRedirectToResource(file.LocalPath, file.IRODSPath, "", 0, false, callbackFileUpload)
 						} else {
 							err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, callbackFileUpload)
 						}

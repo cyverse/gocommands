@@ -265,14 +265,14 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 			if parallelTransferFlagValues.SingleTread || parallelTransferFlagValues.ThreadNumber == 1 {
 				downloadErr = fs.DownloadFileResumable(sourcePath, "", targetFilePath, callbackGet)
 			} else if parallelTransferFlagValues.RedirectToResource {
-				downloadErr = fs.DownloadFileRedirectToResource(sourcePath, "", targetFilePath, callbackGet)
+				downloadErr = fs.DownloadFileRedirectToResource(sourcePath, "", targetFilePath, 0, callbackGet)
 			} else if parallelTransferFlagValues.Icat {
 				downloadErr = fs.DownloadFileParallelResumable(sourcePath, "", targetFilePath, 0, callbackGet)
 			} else {
 				// auto
 				if sourceEntry.Size >= commons.RedirectToResourceMinSize {
 					// redirect-to-resource
-					downloadErr = fs.DownloadFileRedirectToResource(sourcePath, "", targetFilePath, callbackGet)
+					downloadErr = fs.DownloadFileRedirectToResource(sourcePath, "", targetFilePath, 0, callbackGet)
 				} else {
 					downloadErr = fs.DownloadFileParallelResumable(sourcePath, "", targetFilePath, 0, callbackGet)
 				}

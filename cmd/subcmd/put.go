@@ -286,14 +286,14 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 			if parallelTransferFlagValues.SingleTread || parallelTransferFlagValues.ThreadNumber == 1 {
 				uploadErr = fs.UploadFile(sourcePath, targetFilePath, "", false, callbackPut)
 			} else if parallelTransferFlagValues.RedirectToResource {
-				uploadErr = fs.UploadFileParallelRedirectToResource(sourcePath, targetFilePath, "", false, callbackPut)
+				uploadErr = fs.UploadFileParallelRedirectToResource(sourcePath, targetFilePath, "", 0, false, callbackPut)
 			} else if parallelTransferFlagValues.Icat {
 				uploadErr = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, false, callbackPut)
 			} else {
 				// auto
 				if sourceStat.Size() >= commons.RedirectToResourceMinSize {
 					// redirect-to-resource
-					uploadErr = fs.UploadFileParallelRedirectToResource(sourcePath, targetFilePath, "", false, callbackPut)
+					uploadErr = fs.UploadFileParallelRedirectToResource(sourcePath, targetFilePath, "", 0, false, callbackPut)
 				} else {
 					if filesystem.SupportParallelUpload() {
 						uploadErr = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, false, callbackPut)
@@ -301,7 +301,7 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 						if sourceStat.Size() >= commons.ParallelUploadMinSize {
 							// does not support parall upload via iCAT
 							// redirect-to-resource
-							uploadErr = fs.UploadFileParallelRedirectToResource(sourcePath, targetFilePath, "", false, callbackPut)
+							uploadErr = fs.UploadFileParallelRedirectToResource(sourcePath, targetFilePath, "", 0, false, callbackPut)
 						} else {
 							uploadErr = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, false, callbackPut)
 						}
