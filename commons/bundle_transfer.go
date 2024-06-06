@@ -173,6 +173,8 @@ type BundleTransferManager struct {
 	maxBundleFileSize       int64
 	singleThreaded          bool
 	uploadThreadNum         int
+	redirectToResource      bool
+	useIcat                 bool
 	localTempDirPath        string
 	irodsTempDirPath        string
 	differentFilesOnly      bool
@@ -190,7 +192,7 @@ type BundleTransferManager struct {
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
-func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, singleThreaded bool, uploadThreadNum int, localTempDirPath string, irodsTempDirPath string, diff bool, noHash bool, noBulkReg bool, showProgress bool) *BundleTransferManager {
+func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, singleThreaded bool, uploadThreadNum int, redirectToResource bool, useIcat bool, localTempDirPath string, irodsTempDirPath string, diff bool, noHash bool, noBulkReg bool, showProgress bool) *BundleTransferManager {
 	manager := &BundleTransferManager{
 		filesystem:              fs,
 		irodsDestPath:           irodsDestPath,
@@ -204,6 +206,8 @@ func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath strin
 		maxBundleFileSize:       maxBundleFileSize,
 		singleThreaded:          singleThreaded,
 		uploadThreadNum:         uploadThreadNum,
+		redirectToResource:      redirectToResource,
+		useIcat:                 useIcat,
 		localTempDirPath:        localTempDirPath,
 		irodsTempDirPath:        irodsTempDirPath,
 		differentFilesOnly:      diff,
@@ -1037,6 +1041,10 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 			// determine how to download
 			if manager.singleThreaded || manager.uploadThreadNum == 1 {
 				err = manager.filesystem.UploadFile(bundle.localBundlePath, bundle.irodsBundlePath, "", false, callback)
+			} else if manager.redirectToResource {
+				err = manager.filesystem.UploadFileParallelRedirectToResource(bundle.localBundlePath, bundle.irodsBundlePath, "", false, callback)
+			} else if manager.useIcat {
+				err = manager.filesystem.UploadFileParallel(bundle.localBundlePath, bundle.irodsBundlePath, "", 0, false, callback)
 			} else {
 				// auto
 				if bundle.size >= RedirectToResourceMinSize {
@@ -1128,6 +1136,10 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 			// determine how to download
 			if manager.singleThreaded || manager.uploadThreadNum == 1 {
 				err = manager.filesystem.UploadFile(file.LocalPath, file.IRODSPath, "", false, callbackFileUpload)
+			} else if manager.redirectToResource {
+				err = manager.filesystem.UploadFileParallelRedirectToResource(file.LocalPath, file.IRODSPath, "", false, callbackFileUpload)
+			} else if manager.useIcat {
+				err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, callbackFileUpload)
 			} else {
 				// auto
 				if bundle.size >= RedirectToResourceMinSize {
