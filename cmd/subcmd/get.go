@@ -37,6 +37,7 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	flag.SetProgressFlags(getCmd)
 	flag.SetRetryFlags(getCmd)
 	flag.SetDifferentialTransferFlags(getCmd, true)
+	flag.SetChecksumFlags(getCmd, false)
 	flag.SetNoRootFlags(getCmd)
 	flag.SetSyncFlags(getCmd)
 	flag.SetDecryptionFlags(getCmd)
@@ -72,6 +73,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	progressFlagValues := flag.GetProgressFlagValues()
 	retryFlagValues := flag.GetRetryFlagValues()
 	differentialTransferFlagValues := flag.GetDifferentialTransferFlagValues()
+	checksumFlagValues := flag.GetChecksumFlagValues()
 	noRootFlagValues := flag.GetNoRootFlagValues()
 	syncFlagValues := flag.GetSyncFlagValues()
 	decryptionFlagValues := flag.GetDecryptionFlagValues(command)
@@ -139,7 +141,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 			return xerrors.Errorf("failed to make new target path for get %s to %s: %w", sourcePath, targetPath, err)
 		}
 
-		err = getOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, decryptionFlagValues, postTransferFlagValues)
+		err = getOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, checksumFlagValues, decryptionFlagValues, postTransferFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform get %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -177,7 +179,7 @@ func getEncryptionManagerForDecrypt(mode commons.EncryptionMode, decryptionFlagV
 	return manager
 }
 
-func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, parallelTransferFlagValues *flag.ParallelTransferFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, decryptionFlagValues *flag.DecryptionFlagValues, postTransferFlagValues *flag.PostTransferFlagValues) error {
+func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, parallelTransferFlagValues *flag.ParallelTransferFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, checksumFlagValues *flag.ChecksumFlagValues, decryptionFlagValues *flag.DecryptionFlagValues, postTransferFlagValues *flag.PostTransferFlagValues) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"function": "getOne",
@@ -263,18 +265,18 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 			// determine how to download
 
 			if parallelTransferFlagValues.SingleTread || parallelTransferFlagValues.ThreadNumber == 1 {
-				downloadErr = fs.DownloadFileResumable(sourcePath, "", targetFilePath, callbackGet)
+				downloadErr = fs.DownloadFileResumable(sourcePath, "", targetFilePath, checksumFlagValues.VerifyChecksum, callbackGet)
 			} else if parallelTransferFlagValues.RedirectToResource {
-				downloadErr = fs.DownloadFileRedirectToResource(sourcePath, "", targetFilePath, 0, callbackGet)
+				downloadErr = fs.DownloadFileRedirectToResource(sourcePath, "", targetFilePath, 0, checksumFlagValues.VerifyChecksum, callbackGet)
 			} else if parallelTransferFlagValues.Icat {
-				downloadErr = fs.DownloadFileParallelResumable(sourcePath, "", targetFilePath, 0, callbackGet)
+				downloadErr = fs.DownloadFileParallelResumable(sourcePath, "", targetFilePath, 0, checksumFlagValues.VerifyChecksum, callbackGet)
 			} else {
 				// auto
 				if sourceEntry.Size >= commons.RedirectToResourceMinSize {
 					// redirect-to-resource
-					downloadErr = fs.DownloadFileRedirectToResource(sourcePath, "", targetFilePath, 0, callbackGet)
+					downloadErr = fs.DownloadFileRedirectToResource(sourcePath, "", targetFilePath, 0, checksumFlagValues.VerifyChecksum, callbackGet)
 				} else {
-					downloadErr = fs.DownloadFileParallelResumable(sourcePath, "", targetFilePath, 0, callbackGet)
+					downloadErr = fs.DownloadFileParallelResumable(sourcePath, "", targetFilePath, 0, checksumFlagValues.VerifyChecksum, callbackGet)
 				}
 			}
 
@@ -392,7 +394,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 
 			commons.MarkPathMap(inputPathMap, targetDirPath)
 
-			err = getOne(parallelJobManager, inputPathMap, entry.Path, targetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, decryptionFlagValuesCopy, postTransferFlagValues)
+			err = getOne(parallelJobManager, inputPathMap, entry.Path, targetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, checksumFlagValues, decryptionFlagValuesCopy, postTransferFlagValues)
 			if err != nil {
 				return xerrors.Errorf("failed to perform get %s to %s: %w", entry.Path, targetDirPath, err)
 			}

@@ -36,6 +36,7 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	flag.SetProgressFlags(putCmd)
 	flag.SetRetryFlags(putCmd)
 	flag.SetDifferentialTransferFlags(putCmd, true)
+	flag.SetChecksumFlags(putCmd, true)
 	flag.SetNoRootFlags(putCmd)
 	flag.SetSyncFlags(putCmd)
 	flag.SetEncryptionFlags(putCmd)
@@ -71,6 +72,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 	progressFlagValues := flag.GetProgressFlagValues()
 	retryFlagValues := flag.GetRetryFlagValues()
 	differentialTransferFlagValues := flag.GetDifferentialTransferFlagValues()
+	checksumFlagValues := flag.GetChecksumFlagValues()
 	noRootFlagValues := flag.GetNoRootFlagValues()
 	syncFlagValues := flag.GetSyncFlagValues()
 	encryptionFlagValues := flag.GetEncryptionFlagValues(command)
@@ -138,7 +140,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 			return xerrors.Errorf("failed to make new target path for put %s to %s: %w", sourcePath, targetPath, err)
 		}
 
-		err = putOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, encryptionFlagValues, postTransferFlagValues)
+		err = putOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, checksumFlagValues, encryptionFlagValues, postTransferFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform put %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -176,7 +178,7 @@ func getEncryptionManagerForEncrypt(encryptionFlagValues *flag.EncryptionFlagVal
 	return manager
 }
 
-func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, parallelTransferFlagValues *flag.ParallelTransferFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, encryptionFlagValues *flag.EncryptionFlagValues, postTransferFlagValues *flag.PostTransferFlagValues) error {
+func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, parallelTransferFlagValues *flag.ParallelTransferFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, checksumFlagValues *flag.ChecksumFlagValues, encryptionFlagValues *flag.EncryptionFlagValues, postTransferFlagValues *flag.PostTransferFlagValues) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"function": "putOne",
@@ -284,26 +286,26 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 			// determine how to download
 
 			if parallelTransferFlagValues.SingleTread || parallelTransferFlagValues.ThreadNumber == 1 {
-				uploadErr = fs.UploadFile(sourcePath, targetFilePath, "", false, callbackPut)
+				uploadErr = fs.UploadFile(sourcePath, targetFilePath, "", false, checksumFlagValues.CalculateChecksum, checksumFlagValues.VerifyChecksum, callbackPut)
 			} else if parallelTransferFlagValues.RedirectToResource {
-				uploadErr = fs.UploadFileParallelRedirectToResource(sourcePath, targetFilePath, "", 0, false, callbackPut)
+				uploadErr = fs.UploadFileParallelRedirectToResource(sourcePath, targetFilePath, "", 0, false, checksumFlagValues.CalculateChecksum, checksumFlagValues.VerifyChecksum, callbackPut)
 			} else if parallelTransferFlagValues.Icat {
-				uploadErr = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, false, callbackPut)
+				uploadErr = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, false, checksumFlagValues.CalculateChecksum, checksumFlagValues.VerifyChecksum, callbackPut)
 			} else {
 				// auto
 				if sourceStat.Size() >= commons.RedirectToResourceMinSize {
 					// redirect-to-resource
-					uploadErr = fs.UploadFileParallelRedirectToResource(sourcePath, targetFilePath, "", 0, false, callbackPut)
+					uploadErr = fs.UploadFileParallelRedirectToResource(sourcePath, targetFilePath, "", 0, false, checksumFlagValues.CalculateChecksum, checksumFlagValues.VerifyChecksum, callbackPut)
 				} else {
 					if filesystem.SupportParallelUpload() {
-						uploadErr = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, false, callbackPut)
+						uploadErr = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, false, checksumFlagValues.CalculateChecksum, checksumFlagValues.VerifyChecksum, callbackPut)
 					} else {
 						if sourceStat.Size() >= commons.ParallelUploadMinSize {
 							// does not support parall upload via iCAT
 							// redirect-to-resource
-							uploadErr = fs.UploadFileParallelRedirectToResource(sourcePath, targetFilePath, "", 0, false, callbackPut)
+							uploadErr = fs.UploadFileParallelRedirectToResource(sourcePath, targetFilePath, "", 0, false, checksumFlagValues.CalculateChecksum, checksumFlagValues.VerifyChecksum, callbackPut)
 						} else {
-							uploadErr = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, false, callbackPut)
+							uploadErr = fs.UploadFileParallel(sourcePath, targetFilePath, "", 0, false, checksumFlagValues.CalculateChecksum, checksumFlagValues.VerifyChecksum, callbackPut)
 						}
 					}
 				}
@@ -399,7 +401,7 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 			commons.MarkPathMap(inputPathMap, targetDirPath)
 
 			newSourcePath := filepath.Join(sourcePath, entry.Name())
-			err = putOne(parallelJobManager, inputPathMap, newSourcePath, targetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, encryptionFlagValuesCopy, postTransferFlagValues)
+			err = putOne(parallelJobManager, inputPathMap, newSourcePath, targetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, checksumFlagValues, encryptionFlagValuesCopy, postTransferFlagValues)
 			if err != nil {
 				return xerrors.Errorf("failed to perform put %s to %s: %w", newSourcePath, targetDirPath, err)
 			}

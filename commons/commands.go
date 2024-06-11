@@ -85,6 +85,10 @@ func SyncAccount() error {
 		newAccount.DefaultResource = appConfig.DefaultResource
 	}
 
+	if len(appConfig.DefaultHashScheme) > 0 {
+		newAccount.DefaultHashScheme = appConfig.DefaultHashScheme
+	}
+
 	if len(appConfig.Ticket) > 0 {
 		newAccount.Ticket = appConfig.Ticket
 	}
@@ -413,6 +417,7 @@ func setConfigToICommandsEnvMgr(envManager *irodsclient_icommands.ICommandsEnvir
 	envManager.Environment.Username = config.Username
 	envManager.Environment.Zone = config.Zone
 	envManager.Environment.DefaultResource = config.DefaultResource
+	envManager.Environment.DefaultHashScheme = config.DefaultHashScheme
 	envManager.Environment.LogLevel = config.LogLevel
 	envManager.Environment.AuthenticationScheme = config.AuthenticationScheme
 	envManager.Environment.ClientServerNegotiation = config.ClientServerNegotiation
@@ -450,6 +455,10 @@ func overwriteConfigToICommandsEnvMgr(envManager *irodsclient_icommands.ICommand
 
 	if len(config.DefaultResource) > 0 {
 		envManager.Environment.DefaultResource = config.DefaultResource
+	}
+
+	if len(config.DefaultHashScheme) > 0 {
+		envManager.Environment.DefaultHashScheme = config.DefaultHashScheme
 	}
 
 	if config.LogLevel > 0 {
@@ -504,6 +513,7 @@ func setICommandsEnvMgrToConfig(config *Config, envManager *irodsclient_icommand
 	config.Username = envManager.Environment.Username
 	config.Zone = envManager.Environment.Zone
 	config.DefaultResource = envManager.Environment.DefaultResource
+	config.DefaultHashScheme = envManager.Environment.DefaultHashScheme
 	config.LogLevel = envManager.Environment.LogLevel
 	config.AuthenticationScheme = envManager.Environment.AuthenticationScheme
 	config.ClientServerNegotiation = envManager.Environment.ClientServerNegotiation
@@ -766,6 +776,10 @@ func PrintEnvironment() error {
 		{
 			"iRODS Default Resource",
 			envMgr.Environment.DefaultResource,
+		},
+		{
+			"iRODS Default Hash Scheme",
+			envMgr.Environment.DefaultHashScheme,
 		},
 		{
 			"iRODS Authentication Scheme",

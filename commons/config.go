@@ -11,6 +11,7 @@ import (
 const (
 	PortDefault int = 1247
 
+	HashSchemeDefault           string = irodsclient_types.HashSchemeDefault
 	AuthenticationSchemeDefault string = string(irodsclient_types.AuthSchemeNative)
 	ClientServerPolicyDefault   string = string(irodsclient_types.CSNegotiationRequireTCP)
 	EncryptionKeySizeDefault    int    = 32
@@ -27,6 +28,7 @@ type Config struct {
 	ClientUsername          string `yaml:"irods_client_user_name,omitempty" envconfig:"IRODS_CLIENT_USER_NAME"`
 	Zone                    string `yaml:"irods_zone_name,omitempty" envconfig:"IRODS_ZONE_NAME"`
 	DefaultResource         string `yaml:"irods_default_resource,omitempty" envconfig:"IRODS_DEFAULT_RESOURCE"`
+	DefaultHashScheme       string `yaml:"irods_default_hash_scheme,omitempty" envconfig:"IRODS_DEFAULT_HASH_SCHEME"`
 	LogLevel                int    `yaml:"irods_log_level,omitempty" envconfig:"IRODS_LOG_LEVEL"`
 	Password                string `yaml:"irods_user_password,omitempty" envconfig:"IRODS_USER_PASSWORD"`
 	Ticket                  string `yaml:"irods_ticket,omitempty" envconfig:"IRODS_TICKET"`
@@ -45,6 +47,7 @@ func GetDefaultConfig() *Config {
 	return &Config{
 		Port:                    PortDefault,
 		AuthenticationScheme:    AuthenticationSchemeDefault,
+		DefaultHashScheme:       HashSchemeDefault,
 		ClientServerNegotiation: "",
 		ClientServerPolicy:      ClientServerPolicyDefault,
 		SSLCACertificateFile:    "",
