@@ -47,6 +47,7 @@ type ParallelJobManager struct {
 	pendingJobs             chan *ParallelJob
 	maxThreads              int
 	showProgress            bool
+	showFullPath            bool
 	progressWriter          progress.Writer
 	progressTrackers        map[string]*progress.Tracker
 	progressTrackerCallback ProgressTrackerCallback
@@ -59,13 +60,14 @@ type ParallelJobManager struct {
 }
 
 // NewParallelJobManager creates a new ParallelJobManager
-func NewParallelJobManager(fs *irodsclient_fs.FileSystem, maxThreads int, showProgress bool) *ParallelJobManager {
+func NewParallelJobManager(fs *irodsclient_fs.FileSystem, maxThreads int, showProgress bool, showFullPath bool) *ParallelJobManager {
 	manager := &ParallelJobManager{
 		filesystem:              fs,
 		nextJobIndex:            0,
 		pendingJobs:             make(chan *ParallelJob, 100),
 		maxThreads:              maxThreads,
 		showProgress:            showProgress,
+		showFullPath:            showFullPath,
 		progressWriter:          nil,
 		progressTrackers:        map[string]*progress.Tracker{},
 		progressTrackerCallback: nil,
@@ -155,7 +157,10 @@ func (manager *ParallelJobManager) startProgress() {
 			var tracker *progress.Tracker
 			if t, ok := manager.progressTrackers[name]; !ok {
 				// created a new tracker if not exists
-				msg := GetShortPathMessage(name, messageWidth)
+				msg := name
+				if !manager.showFullPath {
+					msg = GetShortPathMessage(name, messageWidth)
+				}
 
 				tracker = &progress.Tracker{
 					Message: msg,

@@ -129,7 +129,7 @@ func processPutCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to put multiple source dirs without creating root directory")
 	}
 
-	parallelJobManager := commons.NewParallelJobManager(filesystem, parallelTransferFlagValues.ThreadNumber, progressFlagValues.ShowProgress)
+	parallelJobManager := commons.NewParallelJobManager(filesystem, parallelTransferFlagValues.ThreadNumber, progressFlagValues.ShowProgress, progressFlagValues.ShowFullPath)
 	parallelJobManager.Start()
 
 	inputPathMap := map[string]bool{}

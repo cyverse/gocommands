@@ -181,6 +181,7 @@ type BundleTransferManager struct {
 	noHashForComparison     bool
 	noBulkRegistration      bool
 	showProgress            bool
+	showFullPath            bool
 	progressWriter          progress.Writer
 	progressTrackers        map[string]*progress.Tracker
 	progressTrackerCallback ProgressTrackerCallback
@@ -192,7 +193,7 @@ type BundleTransferManager struct {
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
-func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, singleThreaded bool, uploadThreadNum int, redirectToResource bool, useIcat bool, localTempDirPath string, irodsTempDirPath string, diff bool, noHash bool, noBulkReg bool, showProgress bool) *BundleTransferManager {
+func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, maxBundleFileNum int, maxBundleFileSize int64, singleThreaded bool, uploadThreadNum int, redirectToResource bool, useIcat bool, localTempDirPath string, irodsTempDirPath string, diff bool, noHash bool, noBulkReg bool, showProgress bool, showFullPath bool) *BundleTransferManager {
 	manager := &BundleTransferManager{
 		filesystem:              fs,
 		irodsDestPath:           irodsDestPath,
@@ -214,6 +215,7 @@ func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath strin
 		noHashForComparison:     noHash,
 		noBulkRegistration:      noBulkReg,
 		showProgress:            showProgress,
+		showFullPath:            showFullPath,
 		progressWriter:          nil,
 		progressTrackers:        map[string]*progress.Tracker{},
 		progressTrackerCallback: nil,
@@ -499,7 +501,10 @@ func (manager *BundleTransferManager) startProgress() {
 			var tracker *progress.Tracker
 			if t, ok := manager.progressTrackers[name]; !ok {
 				// created a new tracker if not exists
-				msg := GetShortPathMessage(name, messageWidth)
+				msg := name
+				if !manager.showFullPath {
+					msg = GetShortPathMessage(name, messageWidth)
+				}
 
 				tracker = &progress.Tracker{
 					Message: msg,

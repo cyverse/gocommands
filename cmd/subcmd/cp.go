@@ -92,7 +92,7 @@ func processCpCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to copy multiple source collections without creating root directory")
 	}
 
-	parallelJobManager := commons.NewParallelJobManager(filesystem, commons.TransferTreadNumDefault, progressFlagValues.ShowProgress)
+	parallelJobManager := commons.NewParallelJobManager(filesystem, commons.TransferTreadNumDefault, progressFlagValues.ShowProgress, progressFlagValues.ShowFullPath)
 	parallelJobManager.Start()
 
 	inputPathMap := map[string]bool{}

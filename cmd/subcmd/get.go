@@ -130,7 +130,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to get multiple source collections without creating root directory")
 	}
 
-	parallelJobManager := commons.NewParallelJobManager(filesystem, parallelTransferFlagValues.ThreadNumber, progressFlagValues.ShowProgress)
+	parallelJobManager := commons.NewParallelJobManager(filesystem, parallelTransferFlagValues.ThreadNumber, progressFlagValues.ShowProgress, progressFlagValues.ShowFullPath)
 	parallelJobManager.Start()
 
 	inputPathMap := map[string]bool{}
