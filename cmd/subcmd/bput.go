@@ -214,33 +214,33 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string) er
 
 	if !sourceStat.IsDir() {
 		// file
-		bundleManager.Schedule(sourcePath, false, sourceStat.Size(), sourceStat.ModTime().Local())
+		err = bundleManager.Schedule(sourcePath, false, sourceStat.Size(), sourceStat.ModTime().Local())
+		if err != nil {
+			return xerrors.Errorf("failed to schedule %s: %w", sourcePath, err)
+		}
 	} else {
 		// dir
 		logger.Debugf("bundle-uploading a local directory %s", sourcePath)
 
-		walkFunc := func(path string, entry os.DirEntry, err2 error) error {
-			if err2 != nil {
-				return xerrors.Errorf("failed to walk for %s: %w", path, err2)
-			}
-
-			info, err := entry.Info()
-			if err != nil {
-				return xerrors.Errorf("failed to get info for %s: %w", path, err)
-			}
-
-			err = bundleManager.Schedule(path, info.IsDir(), info.Size(), info.ModTime())
-			if err != nil {
-				return xerrors.Errorf("failed to schedule %s: %w", path, err)
-			}
-			return nil
+		entries, err := os.ReadDir(sourcePath)
+		if err != nil {
+			return xerrors.Errorf("failed to read dir %s: %w", sourcePath, err)
 		}
 
-		err := filepath.WalkDir(sourcePath, walkFunc)
-		if err != nil {
-			return xerrors.Errorf("failed to walk for %s: %w", sourcePath, err)
+		for _, entry := range entries {
+			entryPath := filepath.Join(sourcePath, entry.Name())
+			entryStat, err := entry.Info()
+			if err != nil {
+				return xerrors.Errorf("failed to get info for %s: %w", entryPath, err)
+			}
+
+			err = bundleManager.Schedule(entryPath, entryStat.IsDir(), entryStat.Size(), entryStat.ModTime().Local())
+			if err != nil {
+				return xerrors.Errorf("failed to schedule %s: %w", entryPath, err)
+			}
 		}
 	}
+
 	return nil
 }
 
