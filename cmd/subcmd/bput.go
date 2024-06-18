@@ -203,13 +203,20 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string) er
 
 	sourcePath = commons.MakeLocalPath(sourcePath)
 
-	sourceStat, err := os.Stat(sourcePath)
+	realSourcePath, err := commons.ResolveSymlink(sourcePath)
+	if err != nil {
+		return xerrors.Errorf("failed to resolve symlink %s: %w", sourcePath, err)
+	}
+
+	logger.Debugf("path %s ==> %s", sourcePath, realSourcePath)
+
+	sourceStat, err := os.Stat(realSourcePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return irodsclient_types.NewFileNotFoundError(sourcePath)
+			return irodsclient_types.NewFileNotFoundError(realSourcePath)
 		}
 
-		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
+		return xerrors.Errorf("failed to stat %s: %w", realSourcePath, err)
 	}
 
 	if !sourceStat.IsDir() {
@@ -229,14 +236,9 @@ func bputOne(bundleManager *commons.BundleTransferManager, sourcePath string) er
 
 		for _, entry := range entries {
 			entryPath := filepath.Join(sourcePath, entry.Name())
-			entryStat, err := entry.Info()
+			err = bputOne(bundleManager, entryPath)
 			if err != nil {
-				return xerrors.Errorf("failed to get info for %s: %w", entryPath, err)
-			}
-
-			err = bundleManager.Schedule(entryPath, entryStat.IsDir(), entryStat.Size(), entryStat.ModTime().Local())
-			if err != nil {
-				return xerrors.Errorf("failed to schedule %s: %w", entryPath, err)
+				return err
 			}
 		}
 	}

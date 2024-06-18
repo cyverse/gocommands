@@ -467,13 +467,20 @@ func getDeleteExtraInternal(inputPathMap map[string]bool, targetPath string) err
 		"function": "getDeleteExtraInternal",
 	})
 
-	targetStat, err := os.Stat(targetPath)
+	realTargetPath, err := commons.ResolveSymlink(targetPath)
+	if err != nil {
+		return xerrors.Errorf("failed to resolve symlink %s: %w", targetPath, err)
+	}
+
+	logger.Debugf("path %s ==> %s", targetPath, realTargetPath)
+
+	targetStat, err := os.Stat(realTargetPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return irodsclient_types.NewFileNotFoundError(targetPath)
+			return irodsclient_types.NewFileNotFoundError(realTargetPath)
 		}
 
-		return xerrors.Errorf("failed to stat %s: %w", targetPath, err)
+		return xerrors.Errorf("failed to stat %s: %w", realTargetPath, err)
 	}
 
 	if !targetStat.IsDir() {

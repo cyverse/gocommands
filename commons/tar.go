@@ -30,13 +30,18 @@ func Tar(baseDir string, sources []string, target string, callback TrackerCallBa
 	createdDirs := map[string]bool{}
 
 	for _, source := range sources {
-		sourceStat, err := os.Stat(source)
+		realSource, err := ResolveSymlink(source)
+		if err != nil {
+			return xerrors.Errorf("failed to resolve symlink %s: %w", source, err)
+		}
+
+		sourceStat, err := os.Stat(realSource)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return irodsclient_types.NewFileNotFoundError(source)
+				return irodsclient_types.NewFileNotFoundError(realSource)
 			}
 
-			return xerrors.Errorf("failed to stat %s: %w", source, err)
+			return xerrors.Errorf("failed to stat %s: %w", realSource, err)
 		}
 
 		rel, err := filepath.Rel(baseDir, source)
@@ -71,7 +76,12 @@ func makeTar(entries []*TarEntry, target string, callback TrackerCallBack) error
 	totalSize := int64(0)
 	currentSize := int64(0)
 	for _, entry := range entries {
-		sourceStat, err := os.Stat(entry.source)
+		realSource, err := ResolveSymlink(entry.source)
+		if err != nil {
+			return xerrors.Errorf("failed to resolve symlink %s: %w", entry.source, err)
+		}
+
+		sourceStat, err := os.Stat(realSource)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return irodsclient_types.NewFileNotFoundError(entry.source)
@@ -100,7 +110,12 @@ func makeTar(entries []*TarEntry, target string, callback TrackerCallBack) error
 	defer tarWriter.Close()
 
 	for _, entry := range entries {
-		sourceStat, err := os.Stat(entry.source)
+		realSource, err := ResolveSymlink(entry.source)
+		if err != nil {
+			return xerrors.Errorf("failed to resolve symlink %s: %w", entry.source, err)
+		}
+
+		sourceStat, err := os.Stat(realSource)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return irodsclient_types.NewFileNotFoundError(entry.source)

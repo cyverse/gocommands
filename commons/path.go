@@ -59,7 +59,12 @@ func MakeTargetIRODSFilePath(filesystem *irodsclient_fs.FileSystem, source strin
 }
 
 func MakeTargetLocalFilePath(source string, target string) string {
-	st, err := os.Stat(target)
+	realTarget, err := ResolveSymlink(target)
+	if err != nil {
+		return target
+	}
+
+	st, err := os.Stat(realTarget)
 	if err == nil {
 		if st.IsDir() {
 			// make full file name for target
@@ -264,13 +269,19 @@ func GetCommonRootLocalDirPathForSync(paths []string) (string, error) {
 
 	// find shortest path
 	commonRoot := commonPrefix(filepath.Separator, absPaths...)
-	commonRootStat, err := os.Stat(commonRoot)
+
+	realCommonRoot, err := ResolveSymlink(commonRoot)
+	if err != nil {
+		return "", xerrors.Errorf("failed to resolve symlink %s: %w", commonRoot, err)
+	}
+
+	commonRootStat, err := os.Stat(realCommonRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", irodsclient_types.NewFileNotFoundError(commonRoot)
+			return "", irodsclient_types.NewFileNotFoundError(realCommonRoot)
 		}
 
-		return "", xerrors.Errorf("failed to stat %s: %w", commonRoot, err)
+		return "", xerrors.Errorf("failed to stat %s: %w", realCommonRoot, err)
 	}
 
 	if commonRootStat.IsDir() {
@@ -302,7 +313,12 @@ func ExpandHomeDir(p string) (string, error) {
 }
 
 func ExistFile(p string) bool {
-	st, err := os.Stat(p)
+	realPath, err := ResolveSymlink(p)
+	if err != nil {
+		return false
+	}
+
+	st, err := os.Stat(realPath)
 	if err != nil {
 		return false
 	}
@@ -320,4 +336,28 @@ func MarkPathMap(pathMap map[string]bool, p string) {
 	}
 
 	pathMap[p] = true
+}
+
+func ResolveSymlink(p string) (string, error) {
+	st, err := os.Lstat(p)
+	if err != nil {
+		return "", xerrors.Errorf("failed to lstat path %s: %w", p, err)
+	}
+
+	if st.Mode()&os.ModeSymlink == os.ModeSymlink {
+		// symlink
+		new_p, err := filepath.EvalSymlinks(p)
+		if err != nil {
+			return "", xerrors.Errorf("failed to evaluate symlink path %s: %w", p, err)
+		}
+
+		// follow recursively
+		new_pp, err := ResolveSymlink(new_p)
+		if err != nil {
+			return "", xerrors.Errorf("failed to evaluate symlink path %s: %w", new_p, err)
+		}
+
+		return new_pp, nil
+	}
+	return p, nil
 }

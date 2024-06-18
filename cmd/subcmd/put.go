@@ -192,13 +192,20 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 
 	filesystem := parallelJobManager.GetFilesystem()
 
-	sourceStat, err := os.Stat(sourcePath)
+	realSourcePath, err := commons.ResolveSymlink(sourcePath)
+	if err != nil {
+		return xerrors.Errorf("failed to resolve symlink %s: %w", sourcePath, err)
+	}
+
+	logger.Debugf("path %s ==> %s", sourcePath, realSourcePath)
+
+	sourceStat, err := os.Stat(realSourcePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return irodsclient_types.NewFileNotFoundError(sourcePath)
+			return irodsclient_types.NewFileNotFoundError(realSourcePath)
 		}
 
-		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
+		return xerrors.Errorf("failed to stat %s: %w", realSourcePath, err)
 	}
 
 	// load encryption config from meta
@@ -384,8 +391,24 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 		for _, entry := range entries {
 			encryptionFlagValuesCopy := encryptionFlagValues
 
+			newSourcePath := filepath.Join(sourcePath, entry.Name())
+
+			realNewSourcePath, err := commons.ResolveSymlink(newSourcePath)
+			if err != nil {
+				return xerrors.Errorf("failed to resolve symlink %s: %w", newSourcePath, err)
+			}
+
+			newSourceStat, err := os.Stat(realNewSourcePath)
+			if err != nil {
+				if os.IsNotExist(err) {
+					return irodsclient_types.NewFileNotFoundError(realNewSourcePath)
+				}
+
+				return xerrors.Errorf("failed to stat %s: %w", realNewSourcePath, err)
+			}
+
 			targetDirPath := targetPath
-			if entry.IsDir() {
+			if newSourceStat.IsDir() {
 				// dir
 				targetDirPath = commons.MakeTargetIRODSFilePath(filesystem, entry.Name(), targetPath)
 
@@ -400,7 +423,6 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 
 			commons.MarkPathMap(inputPathMap, targetDirPath)
 
-			newSourcePath := filepath.Join(sourcePath, entry.Name())
 			err = putOne(parallelJobManager, inputPathMap, newSourcePath, targetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, checksumFlagValues, encryptionFlagValuesCopy, postTransferFlagValues)
 			if err != nil {
 				return xerrors.Errorf("failed to perform put %s to %s: %w", newSourcePath, targetDirPath, err)
@@ -411,19 +433,31 @@ func putOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 }
 
 func makePutTargetDirPath(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, noRoot bool) (string, error) {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"function": "makePutTargetDirPath",
+	})
+
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
 	sourcePath = commons.MakeLocalPath(sourcePath)
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	sourceStat, err := os.Stat(sourcePath)
+	realSourcePath, err := commons.ResolveSymlink(sourcePath)
+	if err != nil {
+		return "", xerrors.Errorf("failed to resolve symlink %s: %w", sourcePath, err)
+	}
+
+	logger.Debugf("path %s ==> %s", sourcePath, realSourcePath)
+
+	sourceStat, err := os.Stat(realSourcePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", irodsclient_types.NewFileNotFoundError(sourcePath)
+			return "", irodsclient_types.NewFileNotFoundError(realSourcePath)
 		}
 
-		return "", xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
+		return "", xerrors.Errorf("failed to stat %s: %w", realSourcePath, err)
 	}
 
 	if !sourceStat.IsDir() {

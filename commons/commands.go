@@ -367,7 +367,12 @@ func ReinputFields() (bool, error) {
 }
 
 func isICommandsEnvDir(dirPath string) bool {
-	st, err := os.Stat(dirPath)
+	realDirPath, err := ResolveSymlink(dirPath)
+	if err != nil {
+		return false
+	}
+
+	st, err := os.Stat(realDirPath)
 	if err != nil {
 		return false
 	}
