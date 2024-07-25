@@ -2,9 +2,11 @@ package subcmd
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
@@ -38,6 +40,7 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	flag.SetRetryFlags(getCmd)
 	flag.SetDifferentialTransferFlags(getCmd, true)
 	flag.SetChecksumFlags(getCmd, false)
+	flag.SetTransferReportFlags(getCmd)
 	flag.SetNoRootFlags(getCmd)
 	flag.SetSyncFlags(getCmd)
 	flag.SetDecryptionFlags(getCmd)
@@ -78,6 +81,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 	syncFlagValues := flag.GetSyncFlagValues()
 	decryptionFlagValues := flag.GetDecryptionFlagValues(command)
 	postTransferFlagValues := flag.GetPostTransferFlagValues()
+	transferReportFlagValues := flag.GetTransferReportFlagValues(command)
 
 	maxConnectionNum := parallelTransferFlagValues.ThreadNumber + 2 // 2 for metadata op
 
@@ -130,6 +134,11 @@ func processGetCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to get multiple source collections without creating root directory")
 	}
 
+	transferReportManager, err := commons.NewTransferReportManager(transferReportFlagValues.Report, transferReportFlagValues.ReportPath, transferReportFlagValues.ReportToStdout)
+	if err != nil {
+		return xerrors.Errorf("failed to create transfer report manager: %w", err)
+	}
+
 	parallelJobManager := commons.NewParallelJobManager(filesystem, parallelTransferFlagValues.ThreadNumber, progressFlagValues.ShowProgress, progressFlagValues.ShowFullPath)
 	parallelJobManager.Start()
 
@@ -141,7 +150,7 @@ func processGetCommand(command *cobra.Command, args []string) error {
 			return xerrors.Errorf("failed to make new target path for get %s to %s: %w", sourcePath, targetPath, err)
 		}
 
-		err = getOne(parallelJobManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, checksumFlagValues, decryptionFlagValues, postTransferFlagValues)
+		err = getOne(parallelJobManager, transferReportManager, inputPathMap, sourcePath, newTargetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, checksumFlagValues, decryptionFlagValues, postTransferFlagValues)
 		if err != nil {
 			return xerrors.Errorf("failed to perform get %s to %s: %w", sourcePath, targetPath, err)
 		}
@@ -179,7 +188,7 @@ func getEncryptionManagerForDecrypt(mode commons.EncryptionMode, decryptionFlagV
 	return manager
 }
 
-func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, parallelTransferFlagValues *flag.ParallelTransferFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, checksumFlagValues *flag.ChecksumFlagValues, decryptionFlagValues *flag.DecryptionFlagValues, postTransferFlagValues *flag.PostTransferFlagValues) error {
+func getOne(parallelJobManager *commons.ParallelJobManager, transferReportManager *commons.TransferReportManager, inputPathMap map[string]bool, sourcePath string, targetPath string, forceFlagValues *flag.ForceFlagValues, parallelTransferFlagValues *flag.ParallelTransferFlagValues, differentialTransferFlagValues *flag.DifferentialTransferFlagValues, checksumFlagValues *flag.ChecksumFlagValues, decryptionFlagValues *flag.DecryptionFlagValues, postTransferFlagValues *flag.PostTransferFlagValues) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"function": "getOne",
@@ -261,24 +270,36 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 			logger.Debugf("downloading a data object %s to %s", sourcePath, targetFilePath)
 
 			var downloadErr error
+			var downloadResult *irodsclient_fs.FileTransferResult
 
 			// determine how to download
+			notes := []string{}
 
 			if parallelTransferFlagValues.SingleTread || parallelTransferFlagValues.ThreadNumber == 1 {
-				downloadErr = fs.DownloadFileResumable(sourcePath, "", targetFilePath, checksumFlagValues.VerifyChecksum, callbackGet)
+				downloadResult, downloadErr = fs.DownloadFileResumable(sourcePath, "", targetFilePath, checksumFlagValues.VerifyChecksum, callbackGet)
+				notes = append(notes, "icat")
+				notes = append(notes, "single-thread")
 			} else if parallelTransferFlagValues.RedirectToResource {
-				downloadErr = fs.DownloadFileRedirectToResource(sourcePath, "", targetFilePath, 0, checksumFlagValues.VerifyChecksum, callbackGet)
+				downloadResult, downloadErr = fs.DownloadFileRedirectToResource(sourcePath, "", targetFilePath, 0, checksumFlagValues.VerifyChecksum, callbackGet)
+				notes = append(notes, "redirect-to-resource")
 			} else if parallelTransferFlagValues.Icat {
-				downloadErr = fs.DownloadFileParallelResumable(sourcePath, "", targetFilePath, 0, checksumFlagValues.VerifyChecksum, callbackGet)
+				downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourcePath, "", targetFilePath, 0, checksumFlagValues.VerifyChecksum, callbackGet)
+				notes = append(notes, "icat")
+				notes = append(notes, "multi-thread")
 			} else {
 				// auto
 				if sourceEntry.Size >= commons.RedirectToResourceMinSize {
 					// redirect-to-resource
-					downloadErr = fs.DownloadFileRedirectToResource(sourcePath, "", targetFilePath, 0, checksumFlagValues.VerifyChecksum, callbackGet)
+					downloadResult, downloadErr = fs.DownloadFileRedirectToResource(sourcePath, "", targetFilePath, 0, checksumFlagValues.VerifyChecksum, callbackGet)
+					notes = append(notes, "redirect-to-resource")
 				} else {
-					downloadErr = fs.DownloadFileParallelResumable(sourcePath, "", targetFilePath, 0, checksumFlagValues.VerifyChecksum, callbackGet)
+					downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourcePath, "", targetFilePath, 0, checksumFlagValues.VerifyChecksum, callbackGet)
+					notes = append(notes, "icat")
+					notes = append(notes, "multi-thread")
 				}
 			}
+
+			transferReportManager.AddTransfer(downloadResult, commons.TransferMethodGet, downloadErr, notes)
 
 			if downloadErr != nil {
 				job.Progress(-1, sourceEntry.Size, true)
@@ -324,13 +345,27 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 				// trx status not exist
 				if differentialTransferFlagValues.NoHash {
 					if targetEntry.Size() == sourceEntry.Size {
+						// skip
+						now := time.Now()
+						reportFile := &commons.TransferReportFile{
+							Method:            commons.TransferMethodGet,
+							StartAt:           now,
+							EndAt:             now,
+							LocalPath:         targetFilePath,
+							LocalSize:         targetEntry.Size(),
+							IrodsPath:         sourcePath,
+							IrodsSize:         sourceEntry.Size,
+							IrodsChecksum:     hex.EncodeToString(sourceEntry.CheckSum),
+							ChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
+							Notes:             []string{"differential", "no_hash", "same file size", "skip"},
+						}
+
+						transferReportManager.AddFile(reportFile)
+
 						commons.Printf("skip downloading a data object %s. The file already exists!\n", targetFilePath)
 						logger.Debugf("skip downloading a data object %s. The file already exists!", targetFilePath)
 						return nil
 					}
-
-					// delete file to not write to existing file
-					os.Remove(targetFilePath)
 				} else {
 					if targetEntry.Size() == sourceEntry.Size {
 						if len(sourceEntry.CheckSum) > 0 {
@@ -341,29 +376,57 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 							}
 
 							if bytes.Equal(sourceEntry.CheckSum, hash) {
+								// skip
+								now := time.Now()
+								reportFile := &commons.TransferReportFile{
+									Method:            commons.TransferMethodGet,
+									StartAt:           now,
+									EndAt:             now,
+									LocalPath:         targetFilePath,
+									LocalSize:         targetEntry.Size(),
+									IrodsPath:         sourcePath,
+									IrodsSize:         sourceEntry.Size,
+									IrodsChecksum:     hex.EncodeToString(sourceEntry.CheckSum),
+									ChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
+									Notes:             []string{"differential", "same hash", "same file size", "skip"},
+								}
+
+								transferReportManager.AddFile(reportFile)
+
 								commons.Printf("skip downloading a data object %s. The file with the same hash already exists!\n", targetFilePath)
 								logger.Debugf("skip downloading a data object %s. The file with the same hash already exists!", targetFilePath)
 								return nil
 							}
 						}
 					}
-
-					// delete file to not write to existing file
-					os.Remove(targetFilePath)
 				}
 			} else {
 				if !forceFlagValues.Force {
 					// ask
 					overwrite := commons.InputYN(fmt.Sprintf("file %s already exists. Overwrite?", targetFilePath))
 					if !overwrite {
+						// skip
+						now := time.Now()
+						reportFile := &commons.TransferReportFile{
+							Method:            commons.TransferMethodGet,
+							StartAt:           now,
+							EndAt:             now,
+							LocalPath:         targetFilePath,
+							LocalSize:         targetEntry.Size(),
+							IrodsPath:         sourcePath,
+							IrodsSize:         sourceEntry.Size,
+							IrodsChecksum:     hex.EncodeToString(sourceEntry.CheckSum),
+							ChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
+							Notes:             []string{"no overwrite", "skip"},
+						}
+
+						transferReportManager.AddFile(reportFile)
+
 						commons.Printf("skip downloading a data object %s. The file already exists!\n", targetFilePath)
 						logger.Debugf("skip downloading a data object %s. The file already exists!", targetFilePath)
 						return nil
 					}
 				}
-
-				// delete file to not write to existing file
-				os.Remove(targetFilePath)
 			}
 		}
 
@@ -394,7 +457,7 @@ func getOne(parallelJobManager *commons.ParallelJobManager, inputPathMap map[str
 
 			commons.MarkPathMap(inputPathMap, targetDirPath)
 
-			err = getOne(parallelJobManager, inputPathMap, entry.Path, targetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, checksumFlagValues, decryptionFlagValuesCopy, postTransferFlagValues)
+			err = getOne(parallelJobManager, transferReportManager, inputPathMap, entry.Path, targetDirPath, forceFlagValues, parallelTransferFlagValues, differentialTransferFlagValues, checksumFlagValues, decryptionFlagValuesCopy, postTransferFlagValues)
 			if err != nil {
 				return xerrors.Errorf("failed to perform get %s to %s: %w", entry.Path, targetDirPath, err)
 			}
