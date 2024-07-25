@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -49,6 +50,8 @@ type Bundle struct {
 	irodsBundlePath   string
 	lastError         error
 	lastErrorTaskName string
+
+	done bool
 }
 
 func newBundle(manager *BundleTransferManager) (*Bundle, error) {
@@ -61,6 +64,8 @@ func newBundle(manager *BundleTransferManager) (*Bundle, error) {
 		irodsBundlePath:   "",
 		lastError:         nil,
 		lastErrorTaskName: "",
+
+		done: false,
 	}
 
 	err := bundle.updateBundlePath()
@@ -160,6 +165,10 @@ func (bundle *Bundle) requireTar() bool {
 	return len(bundle.entries) >= MinBundleFileNumDefault
 }
 
+func (bundle *Bundle) Done() {
+	bundle.done = true
+}
+
 type BundleTransferManager struct {
 	filesystem              *irodsclient_fs.FileSystem
 	irodsDestPath           string
@@ -190,6 +199,9 @@ type BundleTransferManager struct {
 
 	scheduleWait sync.WaitGroup
 	transferWait sync.WaitGroup
+
+	bundlesScheduledCounter atomic.Uint64
+	bundlesDoneCounter      atomic.Uint64
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
@@ -223,6 +235,9 @@ func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath strin
 		mutex:                   sync.RWMutex{},
 		scheduleWait:            sync.WaitGroup{},
 		transferWait:            sync.WaitGroup{},
+
+		bundlesScheduledCounter: atomic.Uint64{},
+		bundlesDoneCounter:      atomic.Uint64{},
 	}
 
 	if manager.uploadThreadNum > UploadTreadNumMax {
@@ -286,6 +301,7 @@ func (manager *BundleTransferManager) Schedule(source string, dir bool, size int
 			manager.mutex.Lock()
 			manager.currentBundle = nil
 			manager.transferWait.Add(1)
+			manager.bundlesScheduledCounter.Add(1)
 		}
 	}
 
@@ -384,6 +400,7 @@ func (manager *BundleTransferManager) DoneScheduling() {
 		manager.bundles = append(manager.bundles, manager.currentBundle)
 		manager.currentBundle = nil
 		manager.transferWait.Add(1)
+		manager.bundlesScheduledCounter.Add(1)
 	}
 	manager.mutex.Unlock()
 
@@ -415,7 +432,16 @@ func (manager *BundleTransferManager) Wait() error {
 
 	manager.mutex.RLock()
 	defer manager.mutex.RUnlock()
-	return manager.lastError
+
+	if manager.lastError != nil {
+		return manager.lastError
+	}
+
+	if manager.bundlesDoneCounter.Load() != manager.bundlesScheduledCounter.Load() {
+		return xerrors.Errorf("bundles '%d/%d' were canceled!", manager.bundlesDoneCounter.Load(), manager.bundlesScheduledCounter.Load())
+	}
+
+	return nil
 }
 
 func (manager *BundleTransferManager) SetBundleRootPath(bundleRootPath string) {
@@ -1225,6 +1251,10 @@ func (manager *BundleTransferManager) processBundleExtract(bundle *Bundle) error
 	if manager.showProgress {
 		manager.progress(progressName, totalFileNum, totalFileNum, progress.UnitsDefault, false)
 	}
+
+	// set it done
+	bundle.Done()
+	manager.bundlesDoneCounter.Add(1)
 
 	logger.Debugf("extracted bundle %d at %s to %s", bundle.index, bundle.irodsBundlePath, manager.irodsDestPath)
 	return nil

@@ -2,10 +2,12 @@ package commons
 
 import (
 	"sync"
+	"sync/atomic"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/xerrors"
 )
 
 type ParallelJobTask func(job *ParallelJob) error
@@ -19,6 +21,8 @@ type ParallelJob struct {
 	threadsRequired int
 	progressUnit    progress.Units
 	lastError       error
+
+	done bool
 }
 
 func (job *ParallelJob) GetManager() *ParallelJobManager {
@@ -27,6 +31,10 @@ func (job *ParallelJob) GetManager() *ParallelJobManager {
 
 func (job *ParallelJob) Progress(processed int64, total int64, errored bool) {
 	job.manager.progress(job.name, processed, total, job.progressUnit, errored)
+}
+
+func (job *ParallelJob) Done() {
+	job.done = true
 }
 
 func newParallelJob(manager *ParallelJobManager, index int64, name string, task ParallelJobTask, threadsRequired int, progressUnit progress.Units) *ParallelJob {
@@ -38,6 +46,8 @@ func newParallelJob(manager *ParallelJobManager, index int64, name string, task 
 		threadsRequired: threadsRequired,
 		progressUnit:    progressUnit,
 		lastError:       nil,
+
+		done: false,
 	}
 }
 
@@ -57,6 +67,9 @@ type ParallelJobManager struct {
 	availableThreadWaitCondition *sync.Cond // used for checking available threads
 	scheduleWait                 sync.WaitGroup
 	jobWait                      sync.WaitGroup
+
+	jobsScheduledCounter atomic.Uint64
+	jobsDoneCounter      atomic.Uint64
 }
 
 // NewParallelJobManager creates a new ParallelJobManager
@@ -75,6 +88,9 @@ func NewParallelJobManager(fs *irodsclient_fs.FileSystem, maxThreads int, showPr
 		mutex:                   sync.RWMutex{},
 		scheduleWait:            sync.WaitGroup{},
 		jobWait:                 sync.WaitGroup{},
+
+		jobsScheduledCounter: atomic.Uint64{},
+		jobsDoneCounter:      atomic.Uint64{},
 	}
 
 	manager.availableThreadWaitCondition = sync.NewCond(&manager.mutex)
@@ -116,6 +132,7 @@ func (manager *ParallelJobManager) Schedule(name string, task ParallelJobTask, t
 
 	manager.pendingJobs <- job
 	manager.jobWait.Add(1)
+	manager.jobsScheduledCounter.Add(1)
 
 	return nil
 }
@@ -139,7 +156,16 @@ func (manager *ParallelJobManager) Wait() error {
 
 	manager.mutex.RLock()
 	defer manager.mutex.RUnlock()
-	return manager.lastError
+
+	if manager.lastError != nil {
+		return manager.lastError
+	}
+
+	if manager.jobsDoneCounter.Load() != manager.jobsScheduledCounter.Load() {
+		return xerrors.Errorf("jobs '%d/%d' were canceled!", manager.jobsDoneCounter.Load(), manager.jobsScheduledCounter.Load())
+	}
+
+	return nil
 }
 
 func (manager *ParallelJobManager) startProgress() {
@@ -255,8 +281,6 @@ func (manager *ParallelJobManager) Start() {
 
 					err := pjob.task(pjob)
 
-					logger.Debugf("Run job %d, %s", pjob.index, pjob.name)
-
 					if err != nil {
 						// mark error
 						manager.mutex.Lock()
@@ -271,6 +295,10 @@ func (manager *ParallelJobManager) Start() {
 					logger.Debugf("# threads : %d, max %d", currentThreads, manager.maxThreads)
 
 					manager.jobWait.Done()
+					if pjob.done {
+						// increase jobs done counter
+						manager.jobsDoneCounter.Add(1)
+					}
 
 					manager.mutex.Lock()
 					manager.availableThreadWaitCondition.Broadcast()
