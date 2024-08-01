@@ -32,7 +32,48 @@ func AddBunCommand(rootCmd *cobra.Command) {
 }
 
 func processBunCommand(command *cobra.Command, args []string) error {
-	cont, err := flag.ProcessCommonFlags(command)
+	bun, err := NewBunCommand(command, args)
+	if err != nil {
+		return err
+	}
+
+	return bun.Process()
+}
+
+type BunCommand struct {
+	command *cobra.Command
+
+	forceFlagValues  *flag.ForceFlagValues
+	bundleFlagValues *flag.BundleFlagValues
+
+	account    *irodsclient_types.IRODSAccount
+	filesystem *irodsclient_fs.FileSystem
+
+	sourcePaths []string
+	targetPath  string
+}
+
+func NewBunCommand(command *cobra.Command, args []string) (*BunCommand, error) {
+	bun := &BunCommand{
+		command: command,
+
+		forceFlagValues:  flag.GetForceFlagValues(),
+		bundleFlagValues: flag.GetBundleFlagValues(),
+	}
+
+	// path
+	bun.targetPath = args[len(args)-1]
+	bun.sourcePaths = args[:len(args)-1]
+
+	if !bun.bundleFlagValues.Extract {
+		return nil, xerrors.Errorf("support only extract mode")
+	}
+
+	return bun, nil
+}
+
+func (bun *BunCommand) Process() error {
+	cont, err := flag.ProcessCommonFlags(bun.command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
@@ -47,28 +88,20 @@ func processBunCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	forceFlagValues := flag.GetForceFlagValues()
-	bundleFlagValues := flag.GetBundleFlagValues()
-
-	if !bundleFlagValues.Extract {
-		return xerrors.Errorf("support only extract mode")
-	}
-
 	// Create a file system
 	account := commons.GetAccount()
 	filesystem, err := commons.GetIRODSFSClient(account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
-
 	defer filesystem.Release()
 
-	targetPath := args[len(args)-1]
-	for _, sourcePath := range args[:len(args)-1] {
-		if bundleFlagValues.Extract {
-			err = extractOne(filesystem, sourcePath, targetPath, bundleFlagValues, forceFlagValues)
+	// run
+	for _, sourcePath := range bun.sourcePaths {
+		if bun.bundleFlagValues.Extract {
+			err = bun.extractOne(sourcePath, bun.targetPath)
 			if err != nil {
-				return xerrors.Errorf("failed to perform bun %s to %s: %w", sourcePath, targetPath, err)
+				return xerrors.Errorf("failed to perform bun %s to %s: %w", sourcePath, bun.targetPath, err)
 			}
 		}
 	}
@@ -76,7 +109,7 @@ func processBunCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func getDataType(irodsPath string, dataType string) (irodsclient_types.DataType, error) {
+func (bun *BunCommand) getDataType(irodsPath string, dataType string) (irodsclient_types.DataType, error) {
 	switch strings.ToLower(dataType) {
 	case "tar", "t", "tar file":
 		return irodsclient_types.TAR_FILE_DT, nil
@@ -108,9 +141,10 @@ func getDataType(irodsPath string, dataType string) (irodsclient_types.DataType,
 	}
 }
 
-func extractOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, targetPath string, bundleFlagValues *flag.BundleFlagValues, forceFlagValues *flag.ForceFlagValues) error {
+func (bun *BunCommand) extractOne(sourcePath string, targetPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
+		"struct":   "BunCommand",
 		"function": "extractOne",
 	})
 
@@ -120,12 +154,12 @@ func extractOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, target
 	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	sourceEntry, err := filesystem.Stat(sourcePath)
+	sourceEntry, err := bun.filesystem.Stat(sourcePath)
 	if err != nil {
 		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
 
-	targetEntry, err := filesystem.Stat(targetPath)
+	targetEntry, err := bun.filesystem.Stat(targetPath)
 	if err != nil {
 		if !irodsclient_types.IsFileNotFoundError(err) {
 			return xerrors.Errorf("failed to stat %s: %w", targetPath, err)
@@ -136,21 +170,22 @@ func extractOne(filesystem *irodsclient_fs.FileSystem, sourcePath string, target
 		}
 	}
 
-	if sourceEntry.Type == irodsclient_fs.FileEntry {
-		// file
-		logger.Debugf("extracting a data object %s to %s", sourcePath, targetPath)
-
-		dt, err := getDataType(sourcePath, bundleFlagValues.DataType)
-		if err != nil {
-			return xerrors.Errorf("failed to get type %s: %w", sourcePath, err)
-		}
-
-		err = filesystem.ExtractStructFile(sourcePath, targetPath, "", dt, forceFlagValues.Force, bundleFlagValues.BulkRegistration)
-		if err != nil {
-			return xerrors.Errorf("failed to extract file %s to %s: %w", sourcePath, targetPath, err)
-		}
-	} else {
+	if sourceEntry.Type != irodsclient_fs.FileEntry {
 		return xerrors.Errorf("source %s must be a data object", sourcePath)
 	}
+
+	// file
+	logger.Debugf("extracting a data object %s to %s", sourcePath, targetPath)
+
+	dt, err := bun.getDataType(sourcePath, bun.bundleFlagValues.DataType)
+	if err != nil {
+		return xerrors.Errorf("failed to get type %s: %w", sourcePath, err)
+	}
+
+	err = bun.filesystem.ExtractStructFile(sourcePath, targetPath, "", dt, bun.forceFlagValues.Force, bun.bundleFlagValues.BulkRegistration)
+	if err != nil {
+		return xerrors.Errorf("failed to extract file %s to %s: %w", sourcePath, targetPath, err)
+	}
+
 	return nil
 }

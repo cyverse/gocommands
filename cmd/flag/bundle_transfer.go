@@ -13,7 +13,7 @@ type BundleTempFlagValues struct {
 	IRODSTempPath string
 }
 
-type BundleClearFlagVlaues struct {
+type BundleClearFlagValues struct {
 	Clear bool
 }
 
@@ -26,7 +26,7 @@ type BundleConfigFlagValues struct {
 
 var (
 	bundleTempFlagValues   BundleTempFlagValues
-	bundleClearFlagValues  BundleClearFlagVlaues
+	bundleClearFlagValues  BundleClearFlagValues
 	bundleConfigFlagValues BundleConfigFlagValues
 )
 
@@ -43,7 +43,7 @@ func SetBundleClearFlags(command *cobra.Command) {
 	command.Flags().BoolVar(&bundleClearFlagValues.Clear, "clear", false, "Clear stale bundle files")
 }
 
-func GetBundleClearFlagValues() *BundleClearFlagVlaues {
+func GetBundleClearFlagValues() *BundleClearFlagValues {
 	return &bundleClearFlagValues
 }
 

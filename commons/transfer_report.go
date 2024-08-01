@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -82,6 +83,7 @@ type TransferReportManager struct {
 	reportToStdout bool
 
 	writer io.WriteCloser
+	lock   sync.Mutex
 }
 
 // NewTransferReportManager creates a new TransferReportManager
@@ -107,6 +109,7 @@ func NewTransferReportManager(report bool, reportPath string, reportToStdout boo
 		reportToStdout: reportToStdout,
 
 		writer: writer,
+		lock:   sync.Mutex{},
 	}
 
 	return manager, nil
@@ -132,6 +135,9 @@ func (manager *TransferReportManager) AddFile(file *TransferReportFile) error {
 	if manager.writer == nil {
 		return nil
 	}
+
+	manager.lock.Lock()
+	defer manager.lock.Unlock()
 
 	lineOutput := ""
 	if manager.reportToStdout {

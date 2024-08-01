@@ -68,8 +68,8 @@ type ParallelJobManager struct {
 	scheduleWait                 sync.WaitGroup
 	jobWait                      sync.WaitGroup
 
-	jobsScheduledCounter atomic.Uint64
-	jobsDoneCounter      atomic.Uint64
+	jobsScheduledCounter int64
+	jobsDoneCounter      int64
 }
 
 // NewParallelJobManager creates a new ParallelJobManager
@@ -89,8 +89,8 @@ func NewParallelJobManager(fs *irodsclient_fs.FileSystem, maxThreads int, showPr
 		scheduleWait:            sync.WaitGroup{},
 		jobWait:                 sync.WaitGroup{},
 
-		jobsScheduledCounter: atomic.Uint64{},
-		jobsDoneCounter:      atomic.Uint64{},
+		jobsScheduledCounter: 0,
+		jobsDoneCounter:      0,
 	}
 
 	manager.availableThreadWaitCondition = sync.NewCond(&manager.mutex)
@@ -132,7 +132,7 @@ func (manager *ParallelJobManager) Schedule(name string, task ParallelJobTask, t
 
 	manager.pendingJobs <- job
 	manager.jobWait.Add(1)
-	manager.jobsScheduledCounter.Add(1)
+	atomic.AddInt64(&manager.jobsScheduledCounter, 1)
 
 	return nil
 }
@@ -161,8 +161,8 @@ func (manager *ParallelJobManager) Wait() error {
 		return manager.lastError
 	}
 
-	if manager.jobsDoneCounter.Load() != manager.jobsScheduledCounter.Load() {
-		return xerrors.Errorf("jobs '%d/%d' were canceled!", manager.jobsDoneCounter.Load(), manager.jobsScheduledCounter.Load())
+	if manager.jobsDoneCounter != manager.jobsScheduledCounter {
+		return xerrors.Errorf("jobs '%d/%d' were canceled!", manager.jobsDoneCounter, manager.jobsScheduledCounter)
 	}
 
 	return nil
@@ -297,7 +297,7 @@ func (manager *ParallelJobManager) Start() {
 					manager.jobWait.Done()
 					if pjob.done {
 						// increase jobs done counter
-						manager.jobsDoneCounter.Add(1)
+						atomic.AddInt64(&manager.jobsDoneCounter, 1)
 					}
 
 					manager.mutex.Lock()

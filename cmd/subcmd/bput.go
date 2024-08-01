@@ -40,6 +40,57 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	rootCmd.AddCommand(bputCmd)
 }
 
+type BputCommand struct {
+	command *cobra.Command
+
+	bundleTempFlagValues           *flag.BundleTempFlagValues
+	bundleClearFlagValues          *flag.BundleClearFlagValues
+	bundleConfigFlagValues         *flag.BundleConfigFlagValues
+	parallelTransferFlagValues     *flag.ParallelTransferFlagValues
+	progressFlagValues             *flag.ProgressFlagValues
+	retryFlagValues                *flag.RetryFlagValues
+	differentialTransferFlagValues *flag.DifferentialTransferFlagValues
+	noRootFlagValues               *flag.NoRootFlagValues
+	syncFlagValues                 *flag.SyncFlagValues
+
+	maxConnectionNum int
+
+	account    *irodsclient_types.IRODSAccount
+	filesystem *irodsclient_fs.FileSystem
+
+	sourcePaths []string
+	targetPath  string
+}
+
+func NewBputCommand(command *cobra.Command, args []string) (*BputCommand, error) {
+	bput := &BputCommand{
+		command: command,
+
+		bundleTempFlagValues:           flag.GetBundleTempFlagValues(),
+		bundleClearFlagValues:          flag.GetBundleClearFlagValues(),
+		bundleConfigFlagValues:         flag.GetBundleConfigFlagValues(),
+		parallelTransferFlagValues:     flag.GetParallelTransferFlagValues(),
+		progressFlagValues:             flag.GetProgressFlagValues(),
+		retryFlagValues:                flag.GetRetryFlagValues(),
+		differentialTransferFlagValues: flag.GetDifferentialTransferFlagValues(),
+		noRootFlagValues:               flag.GetNoRootFlagValues(),
+		syncFlagValues:                 flag.GetSyncFlagValues(),
+	}
+
+	bput.maxConnectionNum = bput.parallelTransferFlagValues.ThreadNumber + 2 + 2 // 2 for metadata op, 2 for extraction
+
+	// path
+	bput.targetPath = "./"
+	bput.sourcePaths = args[:]
+
+	if len(args) >= 2 {
+		bput.targetPath = args[len(args)-1]
+		bput.sourcePaths = args[:len(args)-1]
+	}
+
+	return bput, nil
+}
+
 func processBputCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
