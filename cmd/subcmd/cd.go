@@ -3,6 +3,7 @@ package subcmd
 import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
@@ -27,7 +28,42 @@ func AddCdCommand(rootCmd *cobra.Command) {
 }
 
 func processCdCommand(command *cobra.Command, args []string) error {
-	cont, err := flag.ProcessCommonFlags(command)
+	cd, err := NewCdCommand(command, args)
+	if err != nil {
+		return err
+	}
+
+	return cd.Process()
+}
+
+type CdCommand struct {
+	command *cobra.Command
+
+	account    *irodsclient_types.IRODSAccount
+	filesystem *irodsclient_fs.FileSystem
+
+	targetPath string
+}
+
+func NewCdCommand(command *cobra.Command, args []string) (*CdCommand, error) {
+	cd := &CdCommand{
+		command: command,
+	}
+
+	// path
+	cd.targetPath = ""
+	if len(args) == 0 {
+		// move to home dir
+		cd.targetPath = "~"
+	} else if len(args) == 1 {
+		cd.targetPath = args[0]
+	}
+
+	return cd, nil
+}
+
+func (cd *CdCommand) Process() error {
+	cont, err := flag.ProcessCommonFlags(cd.command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
@@ -42,34 +78,27 @@ func processCdCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	// Create a connection
-	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	// Create a file system
+	cd.account = commons.GetAccount()
+	cd.filesystem, err = commons.GetIRODSFSClient(cd.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
+	defer cd.filesystem.Release()
 
-	defer filesystem.Release()
-
-	targetPath := ""
-	if len(args) == 0 {
-		// move to home dir
-		targetPath = "~"
-	} else if len(args) == 1 {
-		targetPath = args[0]
-	}
-
-	// cd
-	err = changeWorkingDir(filesystem, targetPath)
+	// run
+	err = cd.changeWorkingDir(cd.targetPath)
 	if err != nil {
-		return xerrors.Errorf("failed to perform cd %s: %w", targetPath, err)
+		return xerrors.Errorf("failed to perform cd %s: %w", cd.targetPath, err)
 	}
+
 	return nil
 }
 
-func changeWorkingDir(fs *irodsclient_fs.FileSystem, collectionPath string) error {
+func (cd *CdCommand) changeWorkingDir(collectionPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
+		"struct":   "CdCommand",
 		"function": "changeWorkingDir",
 	})
 
@@ -78,11 +107,11 @@ func changeWorkingDir(fs *irodsclient_fs.FileSystem, collectionPath string) erro
 	zone := commons.GetZone()
 	collectionPath = commons.MakeIRODSPath(cwd, home, zone, collectionPath)
 
-	connection, err := fs.GetMetadataConnection()
+	connection, err := cd.filesystem.GetMetadataConnection()
 	if err != nil {
 		return xerrors.Errorf("failed to get connection: %w", err)
 	}
-	defer fs.ReturnMetadataConnection(connection)
+	defer cd.filesystem.ReturnMetadataConnection(connection)
 
 	logger.Debugf("changing working dir: %s", collectionPath)
 

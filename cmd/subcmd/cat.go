@@ -5,6 +5,7 @@ import (
 	"io"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
@@ -31,12 +32,46 @@ func AddCatCommand(rootCmd *cobra.Command) {
 }
 
 func processCatCommand(command *cobra.Command, args []string) error {
+	cat, err := NewCatCommand(command, args)
+	if err != nil {
+		return err
+	}
+
+	return cat.Process()
+}
+
+type CatCommand struct {
+	command *cobra.Command
+
+	ticketAccessFlagValues *flag.TicketAccessFlagValues
+
+	account    *irodsclient_types.IRODSAccount
+	filesystem *irodsclient_fs.FileSystem
+
+	sourcePaths []string
+}
+
+func NewCatCommand(command *cobra.Command, args []string) (*CatCommand, error) {
+	cat := &CatCommand{
+		command: command,
+
+		ticketAccessFlagValues: flag.GetTicketAccessFlagValues(),
+	}
+
+	// path
+	cat.sourcePaths = args
+
+	return cat, nil
+}
+
+func (cat *CatCommand) Process() error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
-		"function": "processCatCommand",
+		"struct":   "CatCommand",
+		"function": "Process",
 	})
 
-	cont, err := flag.ProcessCommonFlags(command)
+	cont, err := flag.ProcessCommonFlags(cat.command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
@@ -51,13 +86,12 @@ func processCatCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	ticketAccessFlagValues := flag.GetTicketAccessFlagValues()
-
+	// config
 	appConfig := commons.GetConfig()
 	syncAccount := false
-	if len(ticketAccessFlagValues.Name) > 0 {
-		logger.Debugf("use ticket: %s", ticketAccessFlagValues.Name)
-		appConfig.Ticket = ticketAccessFlagValues.Name
+	if len(cat.ticketAccessFlagValues.Name) > 0 {
+		logger.Debugf("use ticket: %s", cat.ticketAccessFlagValues.Name)
+		appConfig.Ticket = cat.ticketAccessFlagValues.Name
 		syncAccount = true
 	}
 
@@ -69,65 +103,58 @@ func processCatCommand(command *cobra.Command, args []string) error {
 	}
 
 	// Create a file system
-	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	cat.account = commons.GetAccount()
+	cat.filesystem, err = commons.GetIRODSFSClient(cat.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
+	defer cat.filesystem.Release()
 
-	defer filesystem.Release()
-
-	for _, sourcePath := range args {
-		err = catOne(filesystem, sourcePath)
+	// run
+	for _, sourcePath := range cat.sourcePaths {
+		err = cat.catOne(sourcePath)
 		if err != nil {
 			return xerrors.Errorf("failed to perform cat %s: %w", sourcePath, err)
 		}
 	}
+
 	return nil
 }
 
-func catOne(filesystem *irodsclient_fs.FileSystem, targetPath string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"function": "catOne",
-	})
-
+func (cat *CatCommand) catOne(sourcePath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 
-	targetEntry, err := filesystem.Stat(targetPath)
+	sourceEntry, err := cat.filesystem.Stat(sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %s: %w", targetPath, err)
+		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
 	}
 
-	if targetEntry.Type == irodsclient_fs.FileEntry {
-		// file
-		logger.Debugf("showing the content of a data object %s", targetPath)
-		fh, err := filesystem.OpenFile(targetPath, "", "r")
-		if err != nil {
-			return xerrors.Errorf("failed to open file %s: %w", targetPath, err)
-		}
-
-		defer fh.Close()
-
-		buf := make([]byte, 10240) // 10KB buffer
-		for {
-			readLen, err := fh.Read(buf)
-			if readLen > 0 {
-				fmt.Printf("%s", string(buf[:readLen]))
-			}
-
-			if err == io.EOF {
-				// EOF
-				break
-			}
-		}
-
-	} else {
-		// dir
+	if sourceEntry.Type != irodsclient_fs.FileEntry {
 		return xerrors.Errorf("cannot show the content of a collection")
 	}
+
+	// file
+	fh, err := cat.filesystem.OpenFile(sourcePath, "", "r")
+	if err != nil {
+		return xerrors.Errorf("failed to open file %s: %w", sourcePath, err)
+	}
+	defer fh.Close()
+
+	buf := make([]byte, 10240) // 10KB buffer
+	for {
+		readLen, err := fh.Read(buf)
+		if readLen > 0 {
+			fmt.Printf("%s", string(buf[:readLen]))
+		}
+
+		if err == io.EOF {
+			// EOF
+			break
+		}
+	}
+
 	return nil
 }

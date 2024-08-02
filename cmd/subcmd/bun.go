@@ -89,12 +89,12 @@ func (bun *BunCommand) Process() error {
 	}
 
 	// Create a file system
-	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	bun.account = commons.GetAccount()
+	bun.filesystem, err = commons.GetIRODSFSClient(bun.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
-	defer filesystem.Release()
+	defer bun.filesystem.Release()
 
 	// run
 	for _, sourcePath := range bun.sourcePaths {
