@@ -6,6 +6,7 @@ import (
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -33,7 +34,35 @@ func AddPsCommand(rootCmd *cobra.Command) {
 }
 
 func processPsCommand(command *cobra.Command, args []string) error {
-	cont, err := flag.ProcessCommonFlags(command)
+	ps, err := NewPsCommand(command, args)
+	if err != nil {
+		return err
+	}
+
+	return ps.Process()
+}
+
+type PsCommand struct {
+	command *cobra.Command
+
+	processFilterFlagValues *flag.ProcessFilterFlagValues
+
+	account    *irodsclient_types.IRODSAccount
+	filesystem *irodsclient_fs.FileSystem
+}
+
+func NewPsCommand(command *cobra.Command, args []string) (*PsCommand, error) {
+	ps := &PsCommand{
+		command: command,
+
+		processFilterFlagValues: flag.GetProcessFilterFlagValues(),
+	}
+
+	return ps, nil
+}
+
+func (ps *PsCommand) Process() error {
+	cont, err := flag.ProcessCommonFlags(ps.command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
@@ -48,48 +77,46 @@ func processPsCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	processFilterFlagValues := flag.GetProcessFilterFlagValues()
-
 	// Create a connection
-	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	ps.account = commons.GetAccount()
+	ps.filesystem, err = commons.GetIRODSFSClient(ps.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
+	defer ps.filesystem.Release()
 
-	defer filesystem.Release()
-
-	err = listProcesses(filesystem, processFilterFlagValues)
+	err = ps.listProcesses()
 	if err != nil {
-		return xerrors.Errorf("failed to perform list processes addr %s, zone %s : %w", processFilterFlagValues.Address, processFilterFlagValues.Zone, err)
+		return xerrors.Errorf("failed to list processes: %w", err)
 	}
 
 	return nil
 }
 
-func listProcesses(fs *irodsclient_fs.FileSystem, processFilterFlagValues *flag.ProcessFilterFlagValues) error {
+func (ps *PsCommand) listProcesses() error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
+		"struct":   "PsCommand",
 		"function": "listProcesses",
 	})
 
-	connection, err := fs.GetMetadataConnection()
+	connection, err := ps.filesystem.GetMetadataConnection()
 	if err != nil {
 		return xerrors.Errorf("failed to get connection: %w", err)
 	}
-	defer fs.ReturnMetadataConnection(connection)
+	defer ps.filesystem.ReturnMetadataConnection(connection)
 
-	logger.Debugf("listing processes - addr: %s, zone: %s", processFilterFlagValues.Address, processFilterFlagValues.Zone)
+	logger.Debugf("listing processes - addr: %q, zone: %q", ps.processFilterFlagValues.Address, ps.processFilterFlagValues.Zone)
 
-	processes, err := irodsclient_irodsfs.StatProcess(connection, processFilterFlagValues.Address, processFilterFlagValues.Zone)
+	processes, err := irodsclient_irodsfs.StatProcess(connection, ps.processFilterFlagValues.Address, ps.processFilterFlagValues.Zone)
 	if err != nil {
-		return xerrors.Errorf("failed to stat process addr %s, zone %s: %w", processFilterFlagValues.Address, processFilterFlagValues.Zone, err)
+		return xerrors.Errorf("failed to stat process addr %q, zone %q: %w", ps.processFilterFlagValues.Address, ps.processFilterFlagValues.Zone, err)
 	}
 
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 
-	switch processFilterFlagValues.GroupBy {
+	switch ps.processFilterFlagValues.GroupBy {
 	case flag.ProcessGroupByNone:
 		t.AppendHeader(table.Row{
 			"Process ID",

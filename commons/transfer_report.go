@@ -24,6 +24,10 @@ const (
 	TransferMethodPut TransferMethod = "PUT"
 	// TransferMethodBput is for bput command
 	TransferMethodBput TransferMethod = "BPUT"
+	// TransferMethodCopy is for cp command
+	TransferMethodCopy TransferMethod = "COPY"
+	// TransferMethodDelete is for delete command
+	TransferMethodDelete TransferMethod = "DELETE"
 	// TransferMethodBputUnknown is for unknown command
 	TransferMethodBputUnknown TransferMethod = "UNKNOWN"
 )
@@ -34,13 +38,13 @@ type TransferReportFile struct {
 	StartAt time.Time `json:"start_time"`
 	EndAt   time.Time `json:"end_at"`
 
-	LocalPath         string `json:"local_path"`
-	IrodsPath         string `json:"irods_path"`
+	SourcePath        string `json:"source_path"`
+	DestPath          string `json:"dest_path"`
 	ChecksumAlgorithm string `json:"checksum_algorithm"`
-	LocalSize         int64  `json:"local_size"`
-	LocalChecksum     string `json:"local_checksum"`
-	IrodsSize         int64  `json:"irods_size"`
-	IrodsChecksum     string `json:"irods_checksum"`
+	SourceSize        int64  `json:"source_size"`
+	SourceChecksum    string `json:"source_checksum"`
+	DestSize          int64  `json:"dest_size"`
+	DestChecksum      string `json:"dest_checksum"`
 
 	Error error    `json:"error,omitempty"`
 	Notes []string `json:"notes"` // additional notes
@@ -55,25 +59,58 @@ func GetTransferMethod(method string) TransferMethod {
 		return TransferMethodPut
 	case string(TransferMethodBput), "BULK_UPLOAD":
 		return TransferMethodBput
+	case string(TransferMethodCopy), "CP":
+		return TransferMethodCopy
+	case string(TransferMethodDelete), "DEL":
+		return TransferMethodDelete
 	default:
 		return TransferMethodBputUnknown
 	}
 }
 
-func NewTransferReportFileFromTransferResult(result *irodsclient_fs.FileTransferResult, method TransferMethod, err error, notes []string) *TransferReportFile {
-	return &TransferReportFile{
-		Method:            method,
-		StartAt:           result.StartTime,
-		EndAt:             result.EndTime,
-		LocalPath:         result.LocalPath,
-		LocalSize:         result.LocalSize,
-		LocalChecksum:     hex.EncodeToString(result.LocalCheckSum),
-		IrodsPath:         result.IRODSPath,
-		IrodsSize:         result.IRODSSize,
-		IrodsChecksum:     hex.EncodeToString(result.IRODSCheckSum),
-		ChecksumAlgorithm: string(result.CheckSumAlgorithm),
-		Error:             err,
-		Notes:             notes,
+func NewTransferReportFileFromTransferResult(result *irodsclient_fs.FileTransferResult, method TransferMethod, err error, notes []string) (*TransferReportFile, error) {
+	if method == TransferMethodGet {
+		// get
+		// source is irods, target is local
+		return &TransferReportFile{
+			Method:  method,
+			StartAt: result.StartTime,
+			EndAt:   result.EndTime,
+
+			SourcePath:     result.IRODSPath,
+			SourceSize:     result.IRODSSize,
+			SourceChecksum: hex.EncodeToString(result.IRODSCheckSum),
+
+			DestPath:     result.LocalPath,
+			DestSize:     result.LocalSize,
+			DestChecksum: hex.EncodeToString(result.LocalCheckSum),
+
+			ChecksumAlgorithm: string(result.CheckSumAlgorithm),
+			Error:             err,
+			Notes:             notes,
+		}, nil
+	} else if method == TransferMethodPut || method == TransferMethodBput {
+		// put
+		// source is local, target is irods
+		return &TransferReportFile{
+			Method:  method,
+			StartAt: result.StartTime,
+			EndAt:   result.EndTime,
+
+			SourcePath:     result.LocalPath,
+			SourceSize:     result.LocalSize,
+			SourceChecksum: hex.EncodeToString(result.LocalCheckSum),
+
+			DestPath:     result.IRODSPath,
+			DestSize:     result.IRODSSize,
+			DestChecksum: hex.EncodeToString(result.IRODSCheckSum),
+
+			ChecksumAlgorithm: string(result.CheckSumAlgorithm),
+			Error:             err,
+			Notes:             notes,
+		}, nil
+	} else {
+		return nil, xerrors.Errorf("unknown method %q", method)
 	}
 }
 
@@ -98,7 +135,7 @@ func NewTransferReportManager(report bool, reportPath string, reportToStdout boo
 		// file
 		fileWriter, err := os.Create(reportPath)
 		if err != nil {
-			return nil, xerrors.Errorf("failed to create a report file %s: %w", reportPath, err)
+			return nil, xerrors.Errorf("failed to create a report file %q: %w", reportPath, err)
 		}
 		writer = fileWriter
 	}
@@ -142,7 +179,7 @@ func (manager *TransferReportManager) AddFile(file *TransferReportFile) error {
 	lineOutput := ""
 	if manager.reportToStdout {
 		// line print
-		fmt.Printf("[%s]\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", file.Method, file.StartAt, file.EndAt, file.LocalPath, file.IrodsPath, file.LocalSize, file.IrodsSize, file.LocalChecksum, file.IrodsChecksum)
+		fmt.Printf("[%s]\t%s\t%s\t%s\t%d\t%s\t%s\t%d\t%s\n", file.Method, file.StartAt, file.EndAt, file.SourcePath, file.SourceSize, file.SourceChecksum, file.DestPath, file.DestSize, file.DestChecksum)
 	} else {
 		// json
 		fileBytes, err := json.Marshal(file)
@@ -163,6 +200,10 @@ func (manager *TransferReportManager) AddFile(file *TransferReportFile) error {
 
 // AddTransfer adds a new file transfer
 func (manager *TransferReportManager) AddTransfer(result *irodsclient_fs.FileTransferResult, method TransferMethod, err error, notes []string) error {
-	file := NewTransferReportFileFromTransferResult(result, method, err, notes)
+	file, err := NewTransferReportFileFromTransferResult(result, method, err, notes)
+	if err != nil {
+		return err
+	}
+
 	return manager.AddFile(file)
 }

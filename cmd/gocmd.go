@@ -8,6 +8,7 @@ import (
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/cmd/subcmd"
+	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -105,11 +106,11 @@ func main() {
 		logger.Errorf("%+v", err)
 
 		if os.IsNotExist(err) {
-			fmt.Fprintf(os.Stderr, "File or dir not found!\n")
+			fmt.Fprintf(os.Stderr, "File or directory not found!\n")
 		} else if irodsclient_types.IsConnectionConfigError(err) {
 			var connectionConfigError *irodsclient_types.ConnectionConfigError
 			if errors.As(err, &connectionConfigError) {
-				fmt.Fprintf(os.Stderr, "Failed to establish a connection to iRODS server (host: '%s', port: '%d')!\n", connectionConfigError.Config.Host, connectionConfigError.Config.Port)
+				fmt.Fprintf(os.Stderr, "Failed to establish a connection to iRODS server (host: %q, port: %d)!\n", connectionConfigError.Config.Host, connectionConfigError.Config.Port)
 			} else {
 				fmt.Fprintf(os.Stderr, "Failed to establish a connection to iRODS server!\n")
 			}
@@ -125,55 +126,64 @@ func main() {
 		} else if irodsclient_types.IsAuthError(err) {
 			var authError *irodsclient_types.AuthError
 			if errors.As(err, &authError) {
-				fmt.Fprintf(os.Stderr, "Authentication failed (auth scheme: '%s', username: '%s', zone: '%s')!\n", authError.Config.AuthenticationScheme, authError.Config.ClientUser, authError.Config.ClientZone)
+				fmt.Fprintf(os.Stderr, "Authentication failed (auth scheme: %q, username: %q, zone: %q)!\n", authError.Config.AuthenticationScheme, authError.Config.ClientUser, authError.Config.ClientZone)
 			} else {
 				fmt.Fprintf(os.Stderr, "Authentication failed!\n")
 			}
 		} else if irodsclient_types.IsFileNotFoundError(err) {
 			var fileNotFoundError *irodsclient_types.FileNotFoundError
 			if errors.As(err, &fileNotFoundError) {
-				fmt.Fprintf(os.Stderr, "File or dir '%s' not found!\n", fileNotFoundError.Path)
+				fmt.Fprintf(os.Stderr, "File or directory %q is not found!\n", fileNotFoundError.Path)
 			} else {
-				fmt.Fprintf(os.Stderr, "File or dir not found!\n")
+				fmt.Fprintf(os.Stderr, "File or directory is not found!\n")
 			}
 		} else if irodsclient_types.IsCollectionNotEmptyError(err) {
 			var collectionNotEmptyError *irodsclient_types.CollectionNotEmptyError
 			if errors.As(err, &collectionNotEmptyError) {
-				fmt.Fprintf(os.Stderr, "Dir '%s' not empty!\n", collectionNotEmptyError.Path)
+				fmt.Fprintf(os.Stderr, "Directory %q is not empty!\n", collectionNotEmptyError.Path)
 			} else {
-				fmt.Fprintf(os.Stderr, "Dir not empty!\n")
+				fmt.Fprintf(os.Stderr, "Directory is not empty!\n")
 			}
 		} else if irodsclient_types.IsFileAlreadyExistError(err) {
 			var fileAlreadyExistError *irodsclient_types.FileAlreadyExistError
 			if errors.As(err, &fileAlreadyExistError) {
-				fmt.Fprintf(os.Stderr, "File or dir '%s' already exist!\n", fileAlreadyExistError.Path)
+				fmt.Fprintf(os.Stderr, "File or directory %q already exists!\n", fileAlreadyExistError.Path)
 			} else {
-				fmt.Fprintf(os.Stderr, "File or dir already exist!\n")
+				fmt.Fprintf(os.Stderr, "File or directory already exists!\n")
 			}
 		} else if irodsclient_types.IsTicketNotFoundError(err) {
 			var ticketNotFoundError *irodsclient_types.TicketNotFoundError
 			if errors.As(err, &ticketNotFoundError) {
-				fmt.Fprintf(os.Stderr, "Ticket '%s' not found!\n", ticketNotFoundError.Ticket)
+				fmt.Fprintf(os.Stderr, "Ticket %q is not found!\n", ticketNotFoundError.Ticket)
 			} else {
-				fmt.Fprintf(os.Stderr, "Ticket not found!\n")
+				fmt.Fprintf(os.Stderr, "Ticket is not found!\n")
 			}
 		} else if irodsclient_types.IsUserNotFoundError(err) {
 			var userNotFoundError *irodsclient_types.UserNotFoundError
 			if errors.As(err, &userNotFoundError) {
-				fmt.Fprintf(os.Stderr, "User '%s' not found!\n", userNotFoundError.Name)
+				fmt.Fprintf(os.Stderr, "User %q is not found!\n", userNotFoundError.Name)
 			} else {
-				fmt.Fprintf(os.Stderr, "User not found!\n")
+				fmt.Fprintf(os.Stderr, "User is not found!\n")
 			}
 		} else if irodsclient_types.IsIRODSError(err) {
 			var irodsError *irodsclient_types.IRODSError
 			if errors.As(err, &irodsError) {
-				fmt.Fprintf(os.Stderr, "iRODS Error (code: '%d', message: '%s')\n", irodsError.Code, irodsError.Error())
+				fmt.Fprintf(os.Stderr, "iRODS Error (code: '%d', message: %q)\n", irodsError.Code, irodsError.Error())
 			} else {
 				fmt.Fprintf(os.Stderr, "iRODS Error!\n")
 			}
+		} else if commons.IsNotDirError(err) {
+			var notDirError *commons.NotDirError
+			if errors.As(err, &notDirError) {
+				fmt.Fprintf(os.Stderr, "Destination %q is not a director!\n", notDirError.Path)
+			} else {
+				fmt.Fprintf(os.Stderr, "Destination is not a director!\n")
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "Unexpected error!\nError Trace:\n  - %+v\n", err)
 		}
 
-		fmt.Fprintf(os.Stderr, "\nError Trace:\n  - %+v\n", err)
+		//fmt.Fprintf(os.Stderr, "\nError Trace:\n  - %+v\n", err)
 		os.Exit(1)
 	}
 }

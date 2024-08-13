@@ -90,7 +90,7 @@ func (cat *CatCommand) Process() error {
 	appConfig := commons.GetConfig()
 	syncAccount := false
 	if len(cat.ticketAccessFlagValues.Name) > 0 {
-		logger.Debugf("use ticket: %s", cat.ticketAccessFlagValues.Name)
+		logger.Debugf("use ticket: %q", cat.ticketAccessFlagValues.Name)
 		appConfig.Ticket = cat.ticketAccessFlagValues.Name
 		syncAccount = true
 	}
@@ -114,7 +114,7 @@ func (cat *CatCommand) Process() error {
 	for _, sourcePath := range cat.sourcePaths {
 		err = cat.catOne(sourcePath)
 		if err != nil {
-			return xerrors.Errorf("failed to perform cat %s: %w", sourcePath, err)
+			return xerrors.Errorf("failed to display content of %q: %w", sourcePath, err)
 		}
 	}
 
@@ -129,17 +129,17 @@ func (cat *CatCommand) catOne(sourcePath string) error {
 
 	sourceEntry, err := cat.filesystem.Stat(sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
+		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
 	}
 
-	if sourceEntry.Type != irodsclient_fs.FileEntry {
+	if sourceEntry.IsDir() {
 		return xerrors.Errorf("cannot show the content of a collection")
 	}
 
 	// file
 	fh, err := cat.filesystem.OpenFile(sourcePath, "", "r")
 	if err != nil {
-		return xerrors.Errorf("failed to open file %s: %w", sourcePath, err)
+		return xerrors.Errorf("failed to open file %q: %w", sourcePath, err)
 	}
 	defer fh.Close()
 

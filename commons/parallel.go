@@ -277,7 +277,7 @@ func (manager *ParallelJobManager) Start() {
 				logger.Debugf("# threads : %d, max %d", currentThreads, manager.maxThreads)
 
 				go func(pjob *ParallelJob) {
-					logger.Debugf("Run job %d, %s", pjob.index, pjob.name)
+					logger.Debugf("Run job %d, %q", pjob.index, pjob.name)
 
 					err := pjob.task(pjob)
 

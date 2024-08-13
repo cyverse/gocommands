@@ -59,7 +59,7 @@ func NewBcleanCommand(command *cobra.Command, args []string) (*BcleanCommand, er
 	}
 
 	// path
-	bclean.targetPaths = args[:]
+	bclean.targetPaths = args
 
 	return bclean, nil
 }
@@ -100,7 +100,7 @@ func (bclean *BcleanCommand) Process() error {
 
 	// clear remote
 	if len(bclean.bundleTempFlagValues.IRODSTempPath) > 0 {
-		logger.Debugf("clearing irods temp dir %s", bclean.bundleTempFlagValues.IRODSTempPath)
+		logger.Debugf("clearing an irods temp directory %q", bclean.bundleTempFlagValues.IRODSTempPath)
 
 		commons.CleanUpOldIRODSBundles(bclean.filesystem, bclean.bundleTempFlagValues.IRODSTempPath, true, bclean.forceFlagValues.Force)
 	} else {
@@ -130,13 +130,13 @@ func (bclean *BcleanCommand) cleanOne(targetPath string) {
 
 	if commons.IsStagingDirInTargetPath(targetPath) {
 		// target is staging dir
-		logger.Debugf("clearing irods target dir %s", targetPath)
+		logger.Debugf("clearing an irods target directory %q", targetPath)
 		commons.CleanUpOldIRODSBundles(bclean.filesystem, targetPath, true, bclean.forceFlagValues.Force)
 		return
 	}
 
 	stagingDirPath := commons.GetDefaultStagingDirInTargetPath(targetPath)
-	logger.Debugf("clearing irods target dir %s", stagingDirPath)
+	logger.Debugf("clearing an irods target directory %q", stagingDirPath)
 
 	commons.CleanUpOldIRODSBundles(bclean.filesystem, stagingDirPath, true, bclean.forceFlagValues.Force)
 }

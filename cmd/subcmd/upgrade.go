@@ -28,7 +28,32 @@ func AddUpgradeCommand(rootCmd *cobra.Command) {
 }
 
 func processUpgradeCommand(command *cobra.Command, args []string) error {
-	cont, err := flag.ProcessCommonFlags(command)
+	upgrade, err := NewUpgradeCommand(command, args)
+	if err != nil {
+		return err
+	}
+
+	return upgrade.Process()
+}
+
+type UpgradeCommand struct {
+	command *cobra.Command
+
+	checkVersionFlagValues *flag.CheckVersionFlagValues
+}
+
+func NewUpgradeCommand(command *cobra.Command, args []string) (*UpgradeCommand, error) {
+	upgrade := &UpgradeCommand{
+		command: command,
+
+		checkVersionFlagValues: flag.GetCheckVersionFlagValues(),
+	}
+
+	return upgrade, nil
+}
+
+func (upgrade *UpgradeCommand) Process() error {
+	cont, err := flag.ProcessCommonFlags(upgrade.command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
@@ -37,24 +62,24 @@ func processUpgradeCommand(command *cobra.Command, args []string) error {
 		return nil
 	}
 
-	checkVersionFlagValues := flag.GetCheckVersionFlagValues()
-
-	if checkVersionFlagValues.Check {
-		err = checkNewVersion()
+	if upgrade.checkVersionFlagValues.Check {
+		err = upgrade.checkNewVersion()
 		if err != nil {
 			return xerrors.Errorf("failed to check new release: %w", err)
 		}
-	} else {
-		err = upgradeToNewVersion()
-		if err != nil {
-			return xerrors.Errorf("failed to upgrade to new release: %w", err)
-		}
+
+		return nil
+	}
+
+	err = upgrade.upgrade()
+	if err != nil {
+		return xerrors.Errorf("failed to upgrade to new release: %w", err)
 	}
 
 	return nil
 }
 
-func checkNewVersion() error {
+func (upgrade *UpgradeCommand) checkNewVersion() error {
 	newRelease, err := commons.CheckNewRelease()
 	if err != nil {
 		return err
@@ -68,6 +93,6 @@ func checkNewVersion() error {
 	return nil
 }
 
-func upgradeToNewVersion() error {
+func (upgrade *UpgradeCommand) upgrade() error {
 	return commons.SelfUpgrade()
 }

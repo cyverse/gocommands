@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path"
 	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -48,6 +49,15 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	rootCmd.AddCommand(getCmd)
 }
 
+func processGetCommand(command *cobra.Command, args []string) error {
+	get, err := NewGetCommand(command, args)
+	if err != nil {
+		return err
+	}
+
+	return get.Process()
+}
+
 type GetCommand struct {
 	command *cobra.Command
 
@@ -74,7 +84,7 @@ type GetCommand struct {
 
 	parallelJobManager    *commons.ParallelJobManager
 	transferReportManager *commons.TransferReportManager
-	inputPathMap          map[string]bool
+	updatedPathMap        map[string]bool
 }
 
 func NewGetCommand(command *cobra.Command, args []string) (*GetCommand, error) {
@@ -94,14 +104,14 @@ func NewGetCommand(command *cobra.Command, args []string) (*GetCommand, error) {
 		postTransferFlagValues:         flag.GetPostTransferFlagValues(),
 		transferReportFlagValues:       flag.GetTransferReportFlagValues(command),
 
-		inputPathMap: map[string]bool{},
+		updatedPathMap: map[string]bool{},
 	}
 
 	get.maxConnectionNum = get.parallelTransferFlagValues.ThreadNumber + 2 // 2 for metadata op
 
 	// path
 	get.targetPath = "./"
-	get.sourcePaths = args[:]
+	get.sourcePaths = args
 
 	if len(args) >= 2 {
 		get.targetPath = args[len(args)-1]
@@ -141,7 +151,7 @@ func (get *GetCommand) Process() error {
 	appConfig := commons.GetConfig()
 	syncAccount := false
 	if len(get.ticketAccessFlagValues.Name) > 0 {
-		logger.Debugf("use ticket: %s", get.ticketAccessFlagValues.Name)
+		logger.Debugf("use ticket %q", get.ticketAccessFlagValues.Name)
 		appConfig.Ticket = get.ticketAccessFlagValues.Name
 		syncAccount = true
 	}
@@ -159,7 +169,6 @@ func (get *GetCommand) Process() error {
 		if err != nil {
 			return xerrors.Errorf("failed to run with retry %d: %w", get.retryFlagValues.RetryNumber, err)
 		}
-
 		return nil
 	}
 
@@ -169,7 +178,6 @@ func (get *GetCommand) Process() error {
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
-
 	defer get.filesystem.Release()
 
 	// transfer report
@@ -177,7 +185,6 @@ func (get *GetCommand) Process() error {
 	if err != nil {
 		return xerrors.Errorf("failed to create transfer report manager: %w", err)
 	}
-
 	defer get.transferReportManager.Release()
 
 	// set default key for decryption
@@ -185,24 +192,23 @@ func (get *GetCommand) Process() error {
 		get.decryptionFlagValues.Key = get.account.Password
 	}
 
-	if get.noRootFlagValues.NoRoot && len(get.sourcePaths) > 1 {
-		return xerrors.Errorf("failed to get multiple source collections without creating root directory")
-	}
-
 	// parallel job manager
 	get.parallelJobManager = commons.NewParallelJobManager(get.filesystem, get.parallelTransferFlagValues.ThreadNumber, get.progressFlagValues.ShowProgress, get.progressFlagValues.ShowFullPath)
 	get.parallelJobManager.Start()
 
 	// run
-	for _, sourcePath := range get.sourcePaths {
-		newSourcePath, newTargetDirPath, err := get.makeSourceAndTargetDirPath(sourcePath, get.targetPath)
+	if len(get.sourcePaths) >= 2 {
+		// multi-source, target must be a dir
+		err = get.ensureTargetIsDir(get.targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to make new target path for get %s to %s: %w", sourcePath, get.targetPath, err)
+			return err
 		}
+	}
 
-		err = get.getOne(newSourcePath, newTargetDirPath, get.decryptionFlagValues.Decryption)
+	for _, sourcePath := range get.sourcePaths {
+		err = get.getOne(sourcePath, get.targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to perform get %s to %s: %w", newSourcePath, newTargetDirPath, err)
+			return xerrors.Errorf("failed to get %q to %q: %w", sourcePath, get.targetPath, err)
 		}
 	}
 
@@ -212,10 +218,82 @@ func (get *GetCommand) Process() error {
 		return xerrors.Errorf("failed to perform parallel jobs: %w", err)
 	}
 
+	// delete on success
+	if get.postTransferFlagValues.DeleteOnSuccess {
+		for _, sourcePath := range get.sourcePaths {
+			logger.Infof("deleting source %q after successful data get", sourcePath)
+
+			err := get.deleteOnSuccess(sourcePath)
+			if err != nil {
+				return xerrors.Errorf("failed to delete source %q: %w", sourcePath, err)
+			}
+		}
+	}
+
+	// delete extra
+	if get.syncFlagValues.Delete {
+		logger.Infof("deleting extra files and directories under %q", get.targetPath)
+
+		err := get.deleteExtra(get.targetPath)
+		if err != nil {
+			return xerrors.Errorf("failed to delete extra files: %w", err)
+		}
+	}
+
 	return nil
 }
 
-func (get *GetCommand) makeSourceAndTargetDirPath(sourcePath string, targetPath string) (string, string, error) {
+func (get *GetCommand) ensureTargetIsDir(targetPath string) error {
+	targetPath = commons.MakeLocalPath(targetPath)
+
+	targetStat, err := os.Stat(targetPath)
+	if err != nil {
+		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+	}
+
+	if !targetStat.IsDir() {
+		return commons.NewNotDirError(targetPath)
+	}
+
+	return nil
+}
+
+func (get *GetCommand) requireDecryption(sourceEntry *irodsclient_fs.Entry, parentDecryption bool) bool {
+	if get.decryptionFlagValues.Decryption {
+		return true
+	}
+
+	if get.decryptionFlagValues.NoDecryption {
+		return false
+	}
+
+	if !get.decryptionFlagValues.IgnoreMeta {
+		// load encryption config from meta
+		sourceDir := sourceEntry.Path
+		if !sourceEntry.IsDir() {
+			sourceDir = commons.GetDir(sourceEntry.Path)
+		}
+
+		encryptionConfig := commons.GetEncryptionConfigFromMeta(get.filesystem, sourceDir)
+
+		return encryptionConfig.Required
+	}
+
+	return parentDecryption
+}
+
+func (get *GetCommand) hasTransferStatusFile(targetPath string) bool {
+	// check transfer status file
+	trxStatusFilePath := irodsclient_irodsfs.GetDataObjectTransferStatusFilePath(targetPath)
+	_, err := os.Stat(trxStatusFilePath)
+	if err == nil {
+		return true
+	}
+
+	return false
+}
+
+func (get *GetCommand) getOne(sourcePath string, targetPath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
@@ -224,47 +302,449 @@ func (get *GetCommand) makeSourceAndTargetDirPath(sourcePath string, targetPath 
 
 	sourceEntry, err := get.filesystem.Stat(sourcePath)
 	if err != nil {
-		return "", "", xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
+		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
 	}
 
-	if sourceEntry.Type == irodsclient_fs.FileEntry {
-		// file
-		targetFilePath := commons.MakeTargetLocalFilePath(sourcePath, targetPath)
-		targetDirPath := commons.GetDir(targetFilePath)
-		_, err := os.Stat(targetDirPath)
+	if sourceEntry.IsDir() {
+		// dir
+		if !get.noRootFlagValues.NoRoot {
+			targetPath = commons.MakeTargetLocalFilePath(sourcePath, targetPath)
+		}
+
+		return get.getDir(sourceEntry, targetPath, false)
+	}
+
+	// file
+	requireDecryption := get.requireDecryption(sourceEntry, false)
+	if requireDecryption {
+		// decrypt filename
+		tempPath, newTargetPath, err := get.getPathsForDecryption(sourceEntry.Path, targetPath)
 		if err != nil {
-			if os.IsNotExist(err) {
-				return "", "", irodsclient_types.NewFileNotFoundError(targetDirPath)
+			return xerrors.Errorf("failed to get decryption path for %q: %w", sourceEntry.Path, err)
+		}
+
+		return get.getFile(sourceEntry, tempPath, newTargetPath, requireDecryption)
+	}
+
+	targetPath = commons.MakeTargetLocalFilePath(sourcePath, targetPath)
+	return get.getFile(sourceEntry, "", targetPath, requireDecryption)
+}
+
+func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath string, targetPath string, resume bool, requireDecryption bool) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"struct":   "GetCommand",
+		"function": "scheduleGet",
+	})
+
+	getTask := func(job *commons.ParallelJob) error {
+		manager := job.GetManager()
+		fs := manager.GetFilesystem()
+
+		callbackGet := func(processed int64, total int64) {
+			job.Progress(processed, total, false)
+		}
+
+		job.Progress(0, sourceEntry.Size, false)
+
+		logger.Debugf("downloading a data object %q to %q", sourceEntry.Path, targetPath)
+
+		var downloadErr error
+		var downloadResult *irodsclient_fs.FileTransferResult
+		notes := []string{}
+
+		downloadPath := targetPath
+		if len(tempPath) > 0 {
+			downloadPath = tempPath
+		}
+
+		// determine how to download
+		if get.parallelTransferFlagValues.SingleTread || get.parallelTransferFlagValues.ThreadNumber == 1 {
+			downloadResult, downloadErr = fs.DownloadFileResumable(sourceEntry.Path, "", downloadPath, get.checksumFlagValues.VerifyChecksum, callbackGet)
+			notes = append(notes, "icat", "single-thread")
+		} else if get.parallelTransferFlagValues.RedirectToResource {
+			if resume {
+				downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
+				notes = append(notes, "icat", "multi-thread", "resume")
+			} else {
+				downloadResult, downloadErr = fs.DownloadFileRedirectToResource(sourceEntry.Path, "", downloadPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
+				notes = append(notes, "redirect-to-resource")
+			}
+		} else if get.parallelTransferFlagValues.Icat {
+			downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
+			notes = append(notes, "icat", "multi-thread")
+		} else {
+			// auto
+			if sourceEntry.Size >= commons.RedirectToResourceMinSize {
+				// redirect-to-resource
+				if resume {
+					downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
+					notes = append(notes, "icat", "multi-thread", "resume")
+				} else {
+					downloadResult, downloadErr = fs.DownloadFileRedirectToResource(sourceEntry.Path, "", downloadPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
+					notes = append(notes, "redirect-to-resource")
+				}
+			} else {
+				downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
+				notes = append(notes, "icat", "multi-thread")
+			}
+		}
+
+		if downloadErr != nil {
+			job.Progress(-1, sourceEntry.Size, true)
+			return xerrors.Errorf("failed to download %q to %q: %w", sourceEntry.Path, targetPath, downloadErr)
+		}
+
+		// decrypt
+		if requireDecryption {
+			decrypted, err := get.decryptFile(sourceEntry.Path, tempPath, targetPath)
+			if err != nil {
+				job.Progress(-1, sourceEntry.Size, true)
+				return xerrors.Errorf("failed to decrypt file: %w", err)
 			}
 
-			return "", "", xerrors.Errorf("failed to stat dir %s: %w", targetDirPath, err)
+			if decrypted {
+				notes = append(notes, "decrypted", targetPath)
+			}
 		}
 
-		return sourcePath, targetDirPath, nil
+		err := get.transferReportManager.AddTransfer(downloadResult, commons.TransferMethodGet, downloadErr, notes)
+		if err != nil {
+			job.Progress(-1, sourceEntry.Size, true)
+			return xerrors.Errorf("failed to add transfer report: %w", err)
+		}
+
+		logger.Debugf("downloaded a data object %q to %q", sourceEntry.Path, targetPath)
+		job.Progress(sourceEntry.Size, sourceEntry.Size, false)
+
+		return nil
 	}
 
-	// dir
-	_, err = os.Stat(targetPath)
+	threadsRequired := irodsclient_util.GetNumTasksForParallelTransfer(sourceEntry.Size)
+	err := get.parallelJobManager.Schedule(sourceEntry.Path, getTask, threadsRequired, progress.UnitsBytes)
+	if err != nil {
+		return xerrors.Errorf("failed to schedule download %q to %q: %w", sourceEntry.Path, targetPath, err)
+	}
+
+	commons.MarkPathMap(get.updatedPathMap, targetPath)
+
+	logger.Debugf("scheduled a data object download %q to %q", sourceEntry.Path, targetPath)
+
+	return nil
+}
+
+func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath string, targetPath string, requireDecryption bool) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"struct":   "GetCommand",
+		"function": "getFile",
+	})
+
+	targetStat, err := os.Stat(targetPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", "", irodsclient_types.NewFileNotFoundError(targetPath)
+			// target does not exist
+			// target must be a file with new name
+			return get.scheduleGet(sourceEntry, tempPath, targetPath, false, requireDecryption)
 		}
 
-		return "", "", xerrors.Errorf("failed to stat dir %s: %w", targetPath, err)
+		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
 	}
 
-	targetDirPath := targetPath
+	// target exists
+	// target must be a file
+	if targetStat.IsDir() {
+		return commons.NewNotFileError(targetPath)
+	}
 
-	if !get.noRootFlagValues.NoRoot {
-		// make target dir
-		targetDirPath = commons.MakeTargetLocalFilePath(sourceEntry.Path, targetDirPath)
-		err = os.MkdirAll(targetDirPath, 0766)
+	// check transfer status file
+	if get.hasTransferStatusFile(targetPath) {
+		// incomplete file - resume downloading
+		commons.Printf("resume downloading a data object %q\n", targetPath)
+		logger.Debugf("resume downloading a data object %q", targetPath)
+
+		return get.scheduleGet(sourceEntry, tempPath, targetPath, true, requireDecryption)
+	}
+
+	if get.differentialTransferFlagValues.DifferentialTransfer {
+		if get.differentialTransferFlagValues.NoHash {
+			if targetStat.Size() == sourceEntry.Size {
+				// skip
+				now := time.Now()
+				reportFile := &commons.TransferReportFile{
+					Method:         commons.TransferMethodGet,
+					StartAt:        now,
+					EndAt:          now,
+					SourcePath:     sourceEntry.Path,
+					SourceSize:     sourceEntry.Size,
+					SourceChecksum: hex.EncodeToString(sourceEntry.CheckSum),
+
+					DestPath:          targetPath,
+					DestSize:          targetStat.Size(),
+					ChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
+					Notes:             []string{"differential", "no_hash", "same file size", "skip"},
+				}
+
+				get.transferReportManager.AddFile(reportFile)
+
+				commons.Printf("skip downloading a data object %q to %q. The file already exists!\n", sourceEntry.Path, targetPath)
+				logger.Debugf("skip downloading a data object %q to %q. The file already exists!", sourceEntry.Path, targetPath)
+				return nil
+			}
+		} else {
+			if targetStat.Size() == sourceEntry.Size {
+				// compare hash
+				if len(sourceEntry.CheckSum) > 0 {
+					localChecksum, err := irodsclient_util.HashLocalFile(targetPath, string(sourceEntry.CheckSumAlgorithm))
+					if err != nil {
+						return xerrors.Errorf("failed to get hash of %q: %w", targetPath, err)
+					}
+
+					if bytes.Equal(sourceEntry.CheckSum, localChecksum) {
+						// skip
+						now := time.Now()
+						reportFile := &commons.TransferReportFile{
+							Method:            commons.TransferMethodGet,
+							StartAt:           now,
+							EndAt:             now,
+							SourcePath:        sourceEntry.Path,
+							SourceSize:        sourceEntry.Size,
+							SourceChecksum:    hex.EncodeToString(sourceEntry.CheckSum),
+							DestPath:          targetPath,
+							DestSize:          targetStat.Size(),
+							DestChecksum:      hex.EncodeToString(localChecksum),
+							ChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
+							Notes:             []string{"differential", "same checksum", "skip"},
+						}
+
+						get.transferReportManager.AddFile(reportFile)
+
+						commons.Printf("skip downloading a data object %q to %q. The file with the same hash already exists!\n", sourceEntry.Path, targetPath)
+						logger.Debugf("skip downloading a data object %q to %q. The file with the same hash already exists!", sourceEntry.Path, targetPath)
+						return nil
+					}
+				}
+			}
+		}
+	} else {
+		if !get.forceFlagValues.Force {
+			// ask
+			overwrite := commons.InputYN(fmt.Sprintf("file %q already exists. Overwrite?", targetPath))
+			if !overwrite {
+				// skip
+				now := time.Now()
+				reportFile := &commons.TransferReportFile{
+					Method:            commons.TransferMethodGet,
+					StartAt:           now,
+					EndAt:             now,
+					SourcePath:        sourceEntry.Path,
+					SourceSize:        sourceEntry.Size,
+					SourceChecksum:    hex.EncodeToString(sourceEntry.CheckSum),
+					DestPath:          targetPath,
+					DestSize:          targetStat.Size(),
+					ChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
+					Notes:             []string{"no_overwrite", "skip"},
+				}
+
+				get.transferReportManager.AddFile(reportFile)
+
+				commons.Printf("skip downloading a data object %q to %q. The file already exists!\n", sourceEntry.Path, targetPath)
+				logger.Debugf("skip downloading a data object %q to %q. The file already exists!", sourceEntry.Path, targetPath)
+				return nil
+			}
+		}
+	}
+
+	// schedule
+	return get.scheduleGet(sourceEntry, tempPath, targetPath, false, requireDecryption)
+}
+
+func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath string, parentDecryption bool) error {
+	targetStat, err := os.Stat(targetPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// target does not exist
+			// target must be a directorywith new name
+			err = os.MkdirAll(targetPath, 0766)
+			if err != nil {
+				return xerrors.Errorf("failed to make a directory %q: %w", targetPath, err)
+			}
+
+			now := time.Now()
+			reportFile := &commons.TransferReportFile{
+				Method:     commons.TransferMethodGet,
+				StartAt:    now,
+				EndAt:      now,
+				SourcePath: sourceEntry.Path,
+				DestPath:   targetPath,
+				Notes:      []string{"directory"},
+			}
+
+			get.transferReportManager.AddFile(reportFile)
+		} else {
+			return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		}
+	} else {
+		// target exists
+		if !targetStat.IsDir() {
+			return commons.NewNotDirError(targetPath)
+		}
+	}
+
+	// load encryption config
+	requireDecryption := get.requireDecryption(sourceEntry, parentDecryption)
+
+	// get entries
+	entries, err := get.filesystem.List(sourceEntry.Path)
+	if err != nil {
+		return xerrors.Errorf("failed to list a directory %q: %w", sourceEntry.Path, err)
+	}
+
+	for _, entry := range entries {
+		newEntryPath := commons.MakeTargetLocalFilePath(entry.Path, targetPath)
+
+		if entry.IsDir() {
+			// dir
+			err = get.getDir(entry, newEntryPath, requireDecryption)
+			if err != nil {
+				return err
+			}
+
+			commons.MarkPathMap(get.updatedPathMap, newEntryPath)
+		} else {
+			// file
+			if requireDecryption {
+				// decrypt filename
+				tempPath, newTargetPath, err := get.getPathsForDecryption(entry.Path, targetPath)
+				if err != nil {
+					return xerrors.Errorf("failed to get decryption path for %q: %w", entry.Path, err)
+				}
+
+				err = get.getFile(entry, tempPath, newTargetPath, requireDecryption)
+				if err != nil {
+					return err
+				}
+
+				commons.MarkPathMap(get.updatedPathMap, newTargetPath)
+			} else {
+				err = get.getFile(entry, "", newEntryPath, requireDecryption)
+				if err != nil {
+					return err
+				}
+
+				commons.MarkPathMap(get.updatedPathMap, newEntryPath)
+			}
+		}
+	}
+
+	commons.MarkPathMap(get.updatedPathMap, targetPath)
+
+	return nil
+}
+
+func (get *GetCommand) deleteOnSuccess(sourcePath string) error {
+	sourceEntry, err := get.filesystem.Stat(sourcePath)
+	if err != nil {
+		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
+	}
+
+	if sourceEntry.IsDir() {
+		return get.filesystem.RemoveDir(sourcePath, true, true)
+	}
+
+	return get.filesystem.RemoveFile(sourcePath, true)
+}
+
+func (get *GetCommand) deleteExtra(targetPath string) error {
+	targetPath = commons.MakeLocalPath(targetPath)
+
+	return get.deleteExtraInternal(targetPath)
+}
+
+func (get *GetCommand) deleteExtraInternal(targetPath string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"struct":   "GetCommand",
+		"function": "deleteExtraInternal",
+	})
+
+	targetStat, err := os.Stat(targetPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return irodsclient_types.NewFileNotFoundError(targetPath)
+		}
+
+		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+	}
+
+	// target is file
+	if !targetStat.IsDir() {
+		if _, ok := get.updatedPathMap[targetPath]; !ok {
+			// extra file
+			logger.Debugf("removing an extra file %q", targetPath)
+
+			removeErr := os.Remove(targetPath)
+
+			now := time.Now()
+			reportFile := &commons.TransferReportFile{
+				Method:     commons.TransferMethodDelete,
+				StartAt:    now,
+				EndAt:      now,
+				SourcePath: targetPath,
+				Error:      removeErr,
+				Notes:      []string{"extra", "get"},
+			}
+
+			get.transferReportManager.AddFile(reportFile)
+
+			if removeErr != nil {
+				return removeErr
+			}
+		}
+
+		return nil
+	}
+
+	// target is dir
+	if _, ok := get.updatedPathMap[targetPath]; !ok {
+		// extra dir
+		logger.Debugf("removing an extra directory %q", targetPath)
+
+		removeErr := os.RemoveAll(targetPath)
+
+		now := time.Now()
+		reportFile := &commons.TransferReportFile{
+			Method:     commons.TransferMethodDelete,
+			StartAt:    now,
+			EndAt:      now,
+			SourcePath: targetPath,
+			Error:      removeErr,
+			Notes:      []string{"extra", "get", "dir"},
+		}
+
+		get.transferReportManager.AddFile(reportFile)
+
+		if removeErr != nil {
+			return removeErr
+		}
+	} else {
+		// non extra dir
+		// scan recursively
+		entries, err := os.ReadDir(targetPath)
 		if err != nil {
-			return "", "", xerrors.Errorf("failed to make dir %s: %w", targetDirPath, err)
+			return xerrors.Errorf("failed to list a directory %q: %w", targetPath, err)
+		}
+
+		for _, entry := range entries {
+			newTargetPath := path.Join(targetPath, entry.Name())
+			err = get.deleteExtraInternal(newTargetPath)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
-	return sourcePath, targetDirPath, nil
+	return nil
 }
 
 func (get *GetCommand) getEncryptionManagerForDecryption(mode commons.EncryptionMode) *commons.EncryptionManager {
@@ -280,226 +760,19 @@ func (get *GetCommand) getEncryptionManagerForDecryption(mode commons.Encryption
 	return manager
 }
 
-func (get *GetCommand) getOne(sourcePath string, targetPath string, requireDecryption bool) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "GetCommand",
-		"function": "getOne",
-	})
-
-	sourceEntry, err := get.filesystem.Stat(sourcePath)
-	if err != nil {
-		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
-	}
-
-	// load encryption config
-	if !requireDecryption {
-		requireDecryption = get.requireDecryptionByMeta(sourceEntry)
-	}
-
-	// if source is dir, recursive
-	if sourceEntry.Type == irodsclient_fs.DirectoryEntry {
-		// dir
-		logger.Debugf("downloading a collection %s to %s", sourcePath, targetPath)
-
-		entries, err := filesystem.List(sourceEntry.Path)
-		if err != nil {
-			return xerrors.Errorf("failed to list dir %s: %w", sourceEntry.Path, err)
-		}
-
-		for _, entry := range entries {
-			targetDirPath := targetPath
-			if entry.Type != irodsclient_fs.FileEntry {
-				// dir
-				targetDirPath = commons.MakeTargetLocalFilePath(entry.Path, targetPath)
-				err = os.MkdirAll(targetDirPath, 0766)
-				if err != nil {
-					return xerrors.Errorf("failed to make dir %s: %w", targetDirPath, err)
-				}
-			}
-
-			commons.MarkPathMap(get.inputPathMap, targetDirPath)
-
-			err = get.getOne(entry.Path, targetDirPath, requireDecryption)
-			if err != nil {
-				return xerrors.Errorf("failed to perform get %s to %s: %w", entry.Path, targetDirPath, err)
-			}
-		}
-
-		return nil
-	}
-
-	if sourceEntry.Type != irodsclient_fs.FileEntry {
-		return xerrors.Errorf("unhandled file entry type %s", sourceEntry.Type)
-	}
-
-	// file
-
-	commons.MarkPathMap(get.inputPathMap, decryptedTargetFilePath)
-
-	fileExist := false
-	targetEntry, err := os.Stat(targetFilePath)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return xerrors.Errorf("failed to stat %s: %w", targetFilePath, err)
-		}
-	} else {
-		fileExist = true
-	}
-
-	getTask := get.getTask(sourcePath, targetFilePath, sourceEntry.Size)
-
-	if fileExist {
-		// check transfer status file
-		trxStatusFilePath := irodsclient_irodsfs.GetDataObjectTransferStatusFilePath(targetFilePath)
-		trxStatusFileExist := false
-		_, err = os.Stat(trxStatusFilePath)
-		if err == nil {
-			trxStatusFileExist = true
-		}
-
-		if trxStatusFileExist {
-			// incomplete file - resume downloading
-			commons.Printf("resume downloading a data object %s\n", targetFilePath)
-			logger.Debugf("resume downloading a data object %s", targetFilePath)
-		} else if get.differentialTransferFlagValues.DifferentialTransfer {
-			// trx status not exist
-			if get.differentialTransferFlagValues.NoHash {
-				if targetEntry.Size() == sourceEntry.Size {
-					// skip
-					now := time.Now()
-					reportFile := &commons.TransferReportFile{
-						Method:            commons.TransferMethodGet,
-						StartAt:           now,
-						EndAt:             now,
-						LocalPath:         targetFilePath,
-						LocalSize:         targetEntry.Size(),
-						IrodsPath:         sourcePath,
-						IrodsSize:         sourceEntry.Size,
-						IrodsChecksum:     hex.EncodeToString(sourceEntry.CheckSum),
-						ChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
-						Notes:             []string{"differential", "no_hash", "same file size", "skip"},
-					}
-
-					get.transferReportManager.AddFile(reportFile)
-
-					commons.Printf("skip downloading a data object %s. The file already exists!\n", targetFilePath)
-					logger.Debugf("skip downloading a data object %s. The file already exists!", targetFilePath)
-					return nil
-				}
-			} else {
-				if targetEntry.Size() == sourceEntry.Size {
-					if len(sourceEntry.CheckSum) > 0 {
-						// compare hash
-						hash, err := irodsclient_util.HashLocalFile(targetFilePath, string(sourceEntry.CheckSumAlgorithm))
-						if err != nil {
-							return xerrors.Errorf("failed to get hash of %s: %w", targetFilePath, err)
-						}
-
-						if bytes.Equal(sourceEntry.CheckSum, hash) {
-							// skip
-							now := time.Now()
-							reportFile := &commons.TransferReportFile{
-								Method:            commons.TransferMethodGet,
-								StartAt:           now,
-								EndAt:             now,
-								LocalPath:         targetFilePath,
-								LocalSize:         targetEntry.Size(),
-								IrodsPath:         sourcePath,
-								IrodsSize:         sourceEntry.Size,
-								IrodsChecksum:     hex.EncodeToString(sourceEntry.CheckSum),
-								ChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
-								Notes:             []string{"differential", "same hash", "same file size", "skip"},
-							}
-
-							get.transferReportManager.AddFile(reportFile)
-
-							commons.Printf("skip downloading a data object %s. The file with the same hash already exists!\n", targetFilePath)
-							logger.Debugf("skip downloading a data object %s. The file with the same hash already exists!", targetFilePath)
-							return nil
-						}
-					}
-				}
-			}
-		} else {
-			if !get.forceFlagValues.Force {
-				// ask
-				overwrite := commons.InputYN(fmt.Sprintf("file %s already exists. Overwrite?", targetFilePath))
-				if !overwrite {
-					// skip
-					now := time.Now()
-					reportFile := &commons.TransferReportFile{
-						Method:            commons.TransferMethodGet,
-						StartAt:           now,
-						EndAt:             now,
-						LocalPath:         targetFilePath,
-						LocalSize:         targetEntry.Size(),
-						IrodsPath:         sourcePath,
-						IrodsSize:         sourceEntry.Size,
-						IrodsChecksum:     hex.EncodeToString(sourceEntry.CheckSum),
-						ChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
-						Notes:             []string{"no overwrite", "skip"},
-					}
-
-					get.transferReportManager.AddFile(reportFile)
-
-					commons.Printf("skip downloading a data object %s. The file already exists!\n", targetFilePath)
-					logger.Debugf("skip downloading a data object %s. The file already exists!", targetFilePath)
-					return nil
-				}
-			}
-		}
-	}
-
-	threadsRequired := irodsclient_util.GetNumTasksForParallelTransfer(sourceEntry.Size)
-	err = get.parallelJobManager.Schedule(sourcePath, getTask, threadsRequired, progress.UnitsBytes)
-	if err != nil {
-		return xerrors.Errorf("failed to schedule %s: %w", sourcePath, err)
-	}
-
-	logger.Debugf("scheduled a data object download %s to %s", sourcePath, targetPath)
-	return nil
-}
-
-func (get *GetCommand) requireDecryptionByMeta(sourceEntry *irodsclient_fs.Entry) bool {
-	// load encryption config from meta
-	if !get.decryptionFlagValues.NoDecryption && !get.decryptionFlagValues.IgnoreMeta {
-		sourceDir := sourceEntry.Path
-		if !sourceEntry.IsDir() {
-			sourceDir = commons.GetDir(sourceEntry.Path)
-		}
-
-		encryptionConfig := commons.GetEncryptionConfigFromMeta(get.filesystem, sourceDir)
-
-		if encryptionConfig.Required {
-			return encryptionConfig.Required
-		}
-	}
-
-	return false
-}
-
-func (get *GetCommand) requireDecryption(sourcePath string) bool {
-	encryptionMode := commons.DetectEncryptionMode(sourcePath)
-	if get.decryptionFlagValues.Decryption && encryptionMode != commons.EncryptionModeUnknown {
-		return true
-	}
-
-	return false
-}
-
 func (get *GetCommand) getPathsForDecryption(sourcePath string, targetPath string) (string, string, error) {
-	sourceFilename := commons.GetBasename(sourcePath)
+	encryptionMode := commons.DetectEncryptionMode(sourcePath)
 
-	encryptionMode := commons.DetectEncryptionMode(sourceFilename)
-	encryptManager := get.getEncryptionManagerForDecryption(encryptionMode)
+	if encryptionMode != commons.EncryptionModeUnknown {
+		// encrypted file
+		sourceFilename := commons.GetBasename(sourcePath)
+		encryptManager := get.getEncryptionManagerForDecryption(encryptionMode)
 
-	if get.requireDecryption(sourcePath) {
 		tempFilePath := commons.MakeTargetLocalFilePath(sourcePath, get.decryptionFlagValues.TempPath)
 
 		decryptedFilename, err := encryptManager.DecryptFilename(sourceFilename)
 		if err != nil {
-			return "", "", xerrors.Errorf("failed to decrypt filename %s: %w", sourcePath, err)
+			return "", "", xerrors.Errorf("failed to decrypt filename %q: %w", sourcePath, err)
 		}
 
 		targetFilePath := commons.MakeTargetLocalFilePath(decryptedFilename, targetPath)
@@ -512,7 +785,7 @@ func (get *GetCommand) getPathsForDecryption(sourcePath string, targetPath strin
 	return "", targetFilePath, nil
 }
 
-func (get *GetCommand) decryptFile(sourcePath string, encryptedFilePath string, targetPath string) error {
+func (get *GetCommand) decryptFile(sourcePath string, encryptedFilePath string, targetPath string) (bool, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "GetCommand",
@@ -520,206 +793,22 @@ func (get *GetCommand) decryptFile(sourcePath string, encryptedFilePath string, 
 	})
 
 	encryptionMode := commons.DetectEncryptionMode(sourcePath)
-	encryptManager := get.getEncryptionManagerForDecryption(encryptionMode)
 
-	if get.requireDecryption(sourcePath) {
-		logger.Debugf("decrypt a data object %s to %s", encryptedFilePath, targetPath)
+	if encryptionMode != commons.EncryptionModeUnknown {
+		logger.Debugf("decrypt a data object %q to %q", encryptedFilePath, targetPath)
+
+		encryptManager := get.getEncryptionManagerForDecryption(encryptionMode)
+
 		err := encryptManager.DecryptFile(encryptedFilePath, targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to decrypt %s: %w", encryptedFilePath, err)
+			return false, xerrors.Errorf("failed to decrypt %q to %q: %w", encryptedFilePath, targetPath, err)
 		}
 
-		logger.Debugf("removing a temp file %s", encryptedFilePath)
+		logger.Debugf("removing a temp file %q", encryptedFilePath)
 		os.Remove(encryptedFilePath)
+
+		return true, nil
 	}
 
-	return nil
-}
-
-func (get *GetCommand) getTask(sourcePath string, targetPath string, sourceSize int64) func(job *commons.ParallelJob) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "GetCommand",
-		"function": "getTask",
-	})
-
-	return func(job *commons.ParallelJob) error {
-		manager := job.GetManager()
-		fs := manager.GetFilesystem()
-
-		callbackGet := func(processed int64, total int64) {
-			job.Progress(processed, total, false)
-		}
-
-		job.Progress(0, sourceSize, false)
-
-		logger.Debugf("downloading a data object %s to %s", sourcePath, targetPath)
-
-		var downloadErr error
-		var downloadResult *irodsclient_fs.FileTransferResult
-		notes := []string{}
-
-		// determine how to download
-		if get.parallelTransferFlagValues.SingleTread || get.parallelTransferFlagValues.ThreadNumber == 1 {
-			downloadResult, downloadErr = fs.DownloadFileResumable(sourcePath, "", targetPath, get.checksumFlagValues.VerifyChecksum, callbackGet)
-			notes = append(notes, "icat")
-			notes = append(notes, "single-thread")
-		} else if get.parallelTransferFlagValues.RedirectToResource {
-			downloadResult, downloadErr = fs.DownloadFileRedirectToResource(sourcePath, "", targetPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
-			notes = append(notes, "redirect-to-resource")
-		} else if get.parallelTransferFlagValues.Icat {
-			downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourcePath, "", targetPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
-			notes = append(notes, "icat")
-			notes = append(notes, "multi-thread")
-		} else {
-			// auto
-			if sourceSize >= commons.RedirectToResourceMinSize {
-				// redirect-to-resource
-				downloadResult, downloadErr = fs.DownloadFileRedirectToResource(sourcePath, "", targetPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
-				notes = append(notes, "redirect-to-resource")
-			} else {
-				downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourcePath, "", targetPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
-				notes = append(notes, "icat")
-				notes = append(notes, "multi-thread")
-			}
-		}
-
-		get.transferReportManager.AddTransfer(downloadResult, commons.TransferMethodGet, downloadErr, notes)
-
-		if downloadErr != nil {
-			job.Progress(-1, sourceSize, true)
-			return xerrors.Errorf("failed to download %s to %s: %w", sourcePath, targetPath, downloadErr)
-		}
-
-		logger.Debugf("downloaded a data object %s to %s", sourcePath, targetPath)
-		job.Progress(sourceSize, sourceSize, false)
-
-		return nil
-	}
-}
-
-func (get *GetCommand) deleteOnSuccess(sourcePath string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "GetCommand",
-		"function": "deleteOnSuccess",
-	})
-
-	if get.postTransferFlagValues.DeleteOnSuccess {
-		logger.Debugf("removing source file %s", sourcePath)
-		get.filesystem.RemoveFile(sourcePath, true)
-	}
-
-	return nil
-}
-
-func (get *GetCommand) deleteExtra() error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "GetCommand",
-		"function": "deleteExtra",
-	})
-
-	if get.syncFlagValues.Delete {
-		logger.Infof("deleting extra files and dirs under %s", get.targetPath)
-		targetPath := commons.MakeLocalPath(get.targetPath)
-
-		err := get.deleteExtraInternal(targetPath)
-		if err != nil {
-			return xerrors.Errorf("failed to delete extra files: %w", err)
-		}
-	}
-
-	return nil
-}
-
-func (get *GetCommand) deleteExtraInternal(targetPath string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "GetCommand",
-		"function": "deleteExtraInternal",
-	})
-
-	realTargetPath, err := commons.ResolveSymlink(targetPath)
-	if err != nil {
-		return xerrors.Errorf("failed to resolve symlink %s: %w", targetPath, err)
-	}
-
-	targetStat, err := os.Stat(realTargetPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return irodsclient_types.NewFileNotFoundError(realTargetPath)
-		}
-
-		return xerrors.Errorf("failed to stat %s: %w", realTargetPath, err)
-	}
-
-	// if target is dir, recursive
-	if targetStat.IsDir() {
-		// dir
-		if _, ok := get.inputPathMap[targetPath]; !ok {
-			// extra dir
-			logger.Debugf("removing an extra dir %s", targetPath)
-			removeErr := os.RemoveAll(targetPath)
-
-			now := time.Now()
-			reportFile := &commons.TransferReportFile{
-				Method:    commons.TransferMethodGet,
-				StartAt:   now,
-				EndAt:     now,
-				LocalPath: targetPath,
-				LocalSize: targetStat.Size(),
-				Error:     removeErr,
-				Notes:     []string{"deleted", "extra"},
-			}
-
-			get.transferReportManager.AddFile(reportFile)
-
-			if removeErr != nil {
-				return removeErr
-			}
-		} else {
-			// non extra dir
-			entries, err := os.ReadDir(targetPath)
-			if err != nil {
-				return xerrors.Errorf("failed to list dir %s: %w", targetPath, err)
-			}
-
-			for _, entryInDir := range entries {
-				newTargetPath := commons.MakeTargetLocalFilePath(entryInDir.Name(), targetPath)
-				err = get.deleteExtraInternal(newTargetPath)
-				if err != nil {
-					return err
-				}
-			}
-		}
-
-		return nil
-	}
-
-	// file
-	if _, ok := get.inputPathMap[targetPath]; !ok {
-		// extra file
-		logger.Debugf("removing an extra file %s", targetPath)
-		removeErr := os.Remove(targetPath)
-
-		now := time.Now()
-		reportFile := &commons.TransferReportFile{
-			Method:    commons.TransferMethodGet,
-			StartAt:   now,
-			EndAt:     now,
-			LocalPath: targetPath,
-			LocalSize: targetStat.Size(),
-			Error:     removeErr,
-			Notes:     []string{"deleted", "extra"},
-		}
-
-		get.transferReportManager.AddFile(reportFile)
-
-		if removeErr != nil {
-			return removeErr
-		}
-	}
-
-	return nil
+	return false, nil
 }

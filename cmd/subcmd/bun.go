@@ -101,7 +101,7 @@ func (bun *BunCommand) Process() error {
 		if bun.bundleFlagValues.Extract {
 			err = bun.extractOne(sourcePath, bun.targetPath)
 			if err != nil {
-				return xerrors.Errorf("failed to perform bun %s to %s: %w", sourcePath, bun.targetPath, err)
+				return xerrors.Errorf("failed to extract bundle file %q to %q: %w", sourcePath, bun.targetPath, err)
 			}
 		}
 	}
@@ -122,7 +122,7 @@ func (bun *BunCommand) getDataType(irodsPath string, dataType string) (irodsclie
 	case "":
 		// auto
 	default:
-		return "", xerrors.Errorf("unknown format %s", dataType)
+		return "", xerrors.Errorf("unknown format %q", dataType)
 	}
 
 	// auto
@@ -156,35 +156,35 @@ func (bun *BunCommand) extractOne(sourcePath string, targetPath string) error {
 
 	sourceEntry, err := bun.filesystem.Stat(sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
+		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
 	}
 
 	targetEntry, err := bun.filesystem.Stat(targetPath)
 	if err != nil {
 		if !irodsclient_types.IsFileNotFoundError(err) {
-			return xerrors.Errorf("failed to stat %s: %w", targetPath, err)
+			return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
 		}
 	} else {
-		if targetEntry.Type == irodsclient_fs.FileEntry {
-			return xerrors.Errorf("%s is not a collection", targetPath)
+		if !targetEntry.IsDir() {
+			return commons.NewNotDirError(targetPath)
 		}
 	}
 
-	if sourceEntry.Type != irodsclient_fs.FileEntry {
-		return xerrors.Errorf("source %s must be a data object", sourcePath)
+	if sourceEntry.IsDir() {
+		return xerrors.Errorf("source %q must be a data object", sourcePath)
 	}
 
 	// file
-	logger.Debugf("extracting a data object %s to %s", sourcePath, targetPath)
+	logger.Debugf("extracting a data object %q to %q", sourcePath, targetPath)
 
 	dt, err := bun.getDataType(sourcePath, bun.bundleFlagValues.DataType)
 	if err != nil {
-		return xerrors.Errorf("failed to get type %s: %w", sourcePath, err)
+		return xerrors.Errorf("failed to get type %q: %w", sourcePath, err)
 	}
 
 	err = bun.filesystem.ExtractStructFile(sourcePath, targetPath, "", dt, bun.forceFlagValues.Force, bun.bundleFlagValues.BulkRegistration)
 	if err != nil {
-		return xerrors.Errorf("failed to extract file %s to %s: %w", sourcePath, targetPath, err)
+		return xerrors.Errorf("failed to extract file %q to %q: %w", sourcePath, targetPath, err)
 	}
 
 	return nil

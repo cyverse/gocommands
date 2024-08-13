@@ -6,6 +6,7 @@ import (
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/go-irodsclient/irods/types"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
@@ -32,7 +33,40 @@ func AddLsticketCommand(rootCmd *cobra.Command) {
 }
 
 func processLsticketCommand(command *cobra.Command, args []string) error {
-	cont, err := flag.ProcessCommonFlags(command)
+	lsTicket, err := NewLsTicketCommand(command, args)
+	if err != nil {
+		return err
+	}
+
+	return lsTicket.Process()
+}
+
+type LsTicketCommand struct {
+	command *cobra.Command
+
+	listFlagValues *flag.ListFlagValues
+
+	account    *irodsclient_types.IRODSAccount
+	filesystem *irodsclient_fs.FileSystem
+
+	tickets []string
+}
+
+func NewLsTicketCommand(command *cobra.Command, args []string) (*LsTicketCommand, error) {
+	lsTicket := &LsTicketCommand{
+		command: command,
+
+		listFlagValues: flag.GetListFlagValues(),
+	}
+
+	// tickets
+	lsTicket.tickets = args
+
+	return lsTicket, nil
+}
+
+func (lsTicket *LsTicketCommand) Process() error {
+	cont, err := flag.ProcessCommonFlags(lsTicket.command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
@@ -47,27 +81,126 @@ func processLsticketCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	listFlagValues := flag.GetListFlagValues()
-
 	// Create a file system
-	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	lsTicket.account = commons.GetAccount()
+	lsTicket.filesystem, err = commons.GetIRODSFSClient(lsTicket.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
+	defer lsTicket.filesystem.Release()
 
-	defer filesystem.Release()
+	if len(lsTicket.tickets) == 0 {
+		return lsTicket.listTickets()
+	}
 
-	if len(args) == 0 {
-		err = listTicket(filesystem, listFlagValues)
+	for _, ticketName := range lsTicket.tickets {
+		err = lsTicket.printTicket(ticketName)
 		if err != nil {
-			return xerrors.Errorf("failed to perform list ticket: %w", err)
+			return xerrors.Errorf("failed to print ticket %q: %w", ticketName, err)
 		}
+	}
+
+	return nil
+}
+
+func (lsTicket *LsTicketCommand) listTickets() error {
+	tickets, err := lsTicket.filesystem.ListTickets()
+	if err != nil {
+		return xerrors.Errorf("failed to list tickets: %w", err)
+	}
+
+	if len(tickets) == 0 {
+		commons.Printf("Found no tickets\n")
+	}
+
+	return lsTicket.printTickets(tickets)
+}
+
+func (lsTicket *LsTicketCommand) printTicket(ticketName string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"struct":   "LsTicketCommand",
+		"function": "printTicket",
+	})
+
+	logger.Debugf("print ticket %q", ticketName)
+
+	ticket, err := lsTicket.filesystem.GetTicket(ticketName)
+	if err != nil {
+		return xerrors.Errorf("failed to get ticket %q: %w", ticketName, err)
+	}
+
+	tickets := []*types.IRODSTicket{ticket}
+	return lsTicket.printTickets(tickets)
+}
+
+func (lsTicket *LsTicketCommand) printTickets(tickets []*types.IRODSTicket) error {
+	sort.SliceStable(tickets, lsTicket.getTicketSortFunction(tickets, lsTicket.listFlagValues.SortOrder, lsTicket.listFlagValues.SortReverse))
+
+	for _, ticket := range tickets {
+		err := lsTicket.printTicketInternal(ticket)
+		if err != nil {
+			return xerrors.Errorf("failed to print ticket %q: %w", ticket, err)
+		}
+	}
+
+	return nil
+}
+
+func (lsTicket *LsTicketCommand) printTicketInternal(ticket *types.IRODSTicket) error {
+	fmt.Printf("[%s]\n", ticket.Name)
+	fmt.Printf("  id: %d\n", ticket.ID)
+	fmt.Printf("  name: %s\n", ticket.Name)
+	fmt.Printf("  type: %s\n", ticket.Type)
+	fmt.Printf("  owner: %s\n", ticket.Owner)
+	fmt.Printf("  owner zone: %s\n", ticket.OwnerZone)
+	fmt.Printf("  object type: %s\n", ticket.ObjectType)
+	fmt.Printf("  path: %s\n", ticket.Path)
+	fmt.Printf("  uses limit: %d\n", ticket.UsesLimit)
+	fmt.Printf("  uses count: %d\n", ticket.UsesCount)
+	fmt.Printf("  write file limit: %d\n", ticket.WriteFileLimit)
+	fmt.Printf("  write file count: %d\n", ticket.WriteFileCount)
+	fmt.Printf("  write byte limit: %d\n", ticket.WriteByteLimit)
+	fmt.Printf("  write byte count: %d\n", ticket.WriteByteCount)
+
+	if ticket.ExpirationTime.IsZero() {
+		fmt.Print("  expiry time: none\n")
 	} else {
-		for _, ticketName := range args {
-			err = getTicket(filesystem, ticketName, listFlagValues)
-			if err != nil {
-				return xerrors.Errorf("failed to perform get ticket %s: %w", ticketName, err)
+		fmt.Printf("  expiry time: %s\n", commons.MakeDateTimeString(ticket.ExpirationTime))
+	}
+
+	if lsTicket.listFlagValues.Format == commons.ListFormatLong || lsTicket.listFlagValues.Format == commons.ListFormatVeryLong {
+		restrictions, err := lsTicket.filesystem.GetTicketRestrictions(ticket.ID)
+		if err != nil {
+			return xerrors.Errorf("failed to get ticket restrictions %q: %w", ticket.Name, err)
+		}
+
+		if restrictions != nil {
+			if len(restrictions.AllowedHosts) == 0 {
+				fmt.Printf("  No host restrictions\n")
+			} else {
+				for _, host := range restrictions.AllowedHosts {
+					fmt.Printf("  Allowed Hosts:\n")
+					fmt.Printf("    - %s\n", host)
+				}
+			}
+
+			if len(restrictions.AllowedUserNames) == 0 {
+				fmt.Printf("  No user restrictions\n")
+			} else {
+				for _, user := range restrictions.AllowedUserNames {
+					fmt.Printf("  Allowed Users:\n")
+					fmt.Printf("    - %s\n", user)
+				}
+			}
+
+			if len(restrictions.AllowedGroupNames) == 0 {
+				fmt.Printf("  No group restrictions\n")
+			} else {
+				for _, group := range restrictions.AllowedGroupNames {
+					fmt.Printf("  Allowed Groups:\n")
+					fmt.Printf("    - %s\n", group)
+				}
 			}
 		}
 	}
@@ -75,7 +208,7 @@ func processLsticketCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func getTicketSortFunction(tickets []*types.IRODSTicket, sortOrder commons.ListSortOrder, sortReverse bool) func(i int, j int) bool {
+func (lsTicket *LsTicketCommand) getTicketSortFunction(tickets []*types.IRODSTicket, sortOrder commons.ListSortOrder, sortReverse bool) func(i int, j int) bool {
 	if sortReverse {
 		switch sortOrder {
 		case commons.ListSortOrderName:
@@ -112,118 +245,6 @@ func getTicketSortFunction(tickets []*types.IRODSTicket, sortOrder commons.ListS
 	default:
 		return func(i int, j int) bool {
 			return tickets[i].Name < tickets[j].Name
-		}
-	}
-}
-
-func listTicket(fs *irodsclient_fs.FileSystem, listFlagValues *flag.ListFlagValues) error {
-	tickets, err := fs.ListTickets()
-	if err != nil {
-		return xerrors.Errorf("failed to list tickets: %w", err)
-	}
-
-	if len(tickets) == 0 {
-		commons.Printf("Found no tickets\n")
-	} else {
-		err = printTickets(fs, tickets, listFlagValues)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func getTicket(fs *irodsclient_fs.FileSystem, ticketName string, listFlagValues *flag.ListFlagValues) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"function": "getTicket",
-	})
-
-	logger.Debugf("get ticket: %s", ticketName)
-
-	ticket, err := fs.GetTicket(ticketName)
-	if err != nil {
-		return xerrors.Errorf("failed to get ticket %s: %w", ticketName, err)
-	}
-
-	tickets := []*types.IRODSTicket{ticket}
-	err = printTickets(fs, tickets, listFlagValues)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func printTickets(fs *irodsclient_fs.FileSystem, tickets []*types.IRODSTicket, listFlagValues *flag.ListFlagValues) error {
-	sort.SliceStable(tickets, getTicketSortFunction(tickets, listFlagValues.SortOrder, listFlagValues.SortReverse))
-
-	for _, ticket := range tickets {
-		switch listFlagValues.Format {
-		case commons.ListFormatLong, commons.ListFormatVeryLong:
-			restrictions, err := fs.GetTicketRestrictions(ticket.ID)
-			if err != nil {
-				return xerrors.Errorf("failed to get ticket restrictions %s: %w", ticket.Name, err)
-			}
-
-			printTicketInternal(ticket, restrictions)
-		default:
-			printTicketInternal(ticket, nil)
-		}
-	}
-
-	return nil
-}
-
-func printTicketInternal(ticket *types.IRODSTicket, restrictions *irodsclient_fs.IRODSTicketRestrictions) {
-	fmt.Printf("[%s]\n", ticket.Name)
-	fmt.Printf("  id: %d\n", ticket.ID)
-	fmt.Printf("  name: %s\n", ticket.Name)
-	fmt.Printf("  type: %s\n", ticket.Type)
-	fmt.Printf("  owner: %s\n", ticket.Owner)
-	fmt.Printf("  owner zone: %s\n", ticket.OwnerZone)
-	fmt.Printf("  object type: %s\n", ticket.ObjectType)
-	fmt.Printf("  path: %s\n", ticket.Path)
-	fmt.Printf("  uses limit: %d\n", ticket.UsesLimit)
-	fmt.Printf("  uses count: %d\n", ticket.UsesCount)
-	fmt.Printf("  write file limit: %d\n", ticket.WriteFileLimit)
-	fmt.Printf("  write file count: %d\n", ticket.WriteFileCount)
-	fmt.Printf("  write byte limit: %d\n", ticket.WriteByteLimit)
-	fmt.Printf("  write byte count: %d\n", ticket.WriteByteCount)
-
-	if ticket.ExpirationTime.IsZero() {
-		fmt.Print("  expiry time: none\n")
-	} else {
-		fmt.Printf("  expiry time: %s\n", commons.MakeDateTimeString(ticket.ExpirationTime))
-	}
-
-	if restrictions != nil {
-		if len(restrictions.AllowedHosts) == 0 {
-			fmt.Printf("  No host restrictions\n")
-		} else {
-			for _, host := range restrictions.AllowedHosts {
-				fmt.Printf("  Allowed Hosts:\n")
-				fmt.Printf("    - %s\n", host)
-			}
-		}
-
-		if len(restrictions.AllowedUserNames) == 0 {
-			fmt.Printf("  No user restrictions\n")
-		} else {
-			for _, user := range restrictions.AllowedUserNames {
-				fmt.Printf("  Allowed Users:\n")
-				fmt.Printf("    - %s\n", user)
-			}
-		}
-
-		if len(restrictions.AllowedGroupNames) == 0 {
-			fmt.Printf("  No group restrictions\n")
-		} else {
-			for _, group := range restrictions.AllowedGroupNames {
-				fmt.Printf("  Allowed Groups:\n")
-				fmt.Printf("    - %s\n", group)
-			}
 		}
 	}
 }

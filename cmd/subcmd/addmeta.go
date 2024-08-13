@@ -128,11 +128,11 @@ func (addMeta *AddMetaCommand) addMetaToPath(targetPath string, attribute string
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	logger.Debugf("add metadata to path %s (attr %s, value %s, unit %s)", targetPath, attribute, value, unit)
+	logger.Debugf("add metadata to path %q (attr %q, value %q, unit %q)", targetPath, attribute, value, unit)
 
 	err := addMeta.filesystem.AddMetadata(targetPath, attribute, value, unit)
 	if err != nil {
-		return xerrors.Errorf("failed to add metadata to path %s (attr %s, value %s, unit %s): %w", targetPath, attribute, value, unit, err)
+		return xerrors.Errorf("failed to add metadata to path %q (attr %q, value %q, unit %q): %w", targetPath, attribute, value, unit, err)
 	}
 
 	return nil
@@ -145,11 +145,11 @@ func (addMeta *AddMetaCommand) addMetaToUser(username string, attribute string, 
 		"function": "addMetaToUser",
 	})
 
-	logger.Debugf("add metadata to user %s (attr %s, value %s, unit %s)", username, attribute, value, unit)
+	logger.Debugf("add metadata to user %q (attr %q, value %q, unit %q)", username, attribute, value, unit)
 
 	err := addMeta.filesystem.AddUserMetadata(username, attribute, value, unit)
 	if err != nil {
-		return xerrors.Errorf("failed to add metadata to user %s (attr %s, value %s, unit %s): %w", username, attribute, value, unit, err)
+		return xerrors.Errorf("failed to add metadata to user %q (attr %q, value %q, unit %q): %w", username, attribute, value, unit, err)
 	}
 
 	return nil
@@ -162,11 +162,11 @@ func (addMeta *AddMetaCommand) addMetaToResource(resource string, attribute stri
 		"function": "addMetaToResource",
 	})
 
-	logger.Debugf("add metadata to resource %s (attr %s, value %s, unit %s)", resource, attribute, value, unit)
+	logger.Debugf("add metadata to resource %q (attr %q, value %q, unit %q)", resource, attribute, value, unit)
 
 	err := addMeta.filesystem.AddUserMetadata(resource, attribute, value, unit)
 	if err != nil {
-		return xerrors.Errorf("failed to add metadata to resource %s (attr %s, value %s, unit %s): %w", resource, attribute, value, unit, err)
+		return xerrors.Errorf("failed to add metadata to resource %q (attr %q, value %q, unit %q): %w", resource, attribute, value, unit, err)
 	}
 
 	return nil

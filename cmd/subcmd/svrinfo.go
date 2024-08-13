@@ -4,7 +4,7 @@ import (
 	"os"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
-	"github.com/cyverse/go-irodsclient/irods/types"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -30,7 +30,31 @@ func AddSvrinfoCommand(rootCmd *cobra.Command) {
 }
 
 func processSvrinfoCommand(command *cobra.Command, args []string) error {
-	cont, err := flag.ProcessCommonFlags(command)
+	svrInfo, err := NewSvrInfoCommand(command, args)
+	if err != nil {
+		return err
+	}
+
+	return svrInfo.Process()
+}
+
+type SvrInfoCommand struct {
+	command *cobra.Command
+
+	account    *irodsclient_types.IRODSAccount
+	filesystem *irodsclient_fs.FileSystem
+}
+
+func NewSvrInfoCommand(command *cobra.Command, args []string) (*SvrInfoCommand, error) {
+	svrInfo := &SvrInfoCommand{
+		command: command,
+	}
+
+	return svrInfo, nil
+}
+
+func (svrInfo *SvrInfoCommand) Process() error {
+	cont, err := flag.ProcessCommonFlags(svrInfo.command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
@@ -45,32 +69,33 @@ func processSvrinfoCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	// Create a connection
-	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	// Create a file system
+	svrInfo.account = commons.GetAccount()
+	svrInfo.filesystem, err = commons.GetIRODSFSClient(svrInfo.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
+	defer svrInfo.filesystem.Release()
 
-	defer filesystem.Release()
-
-	err = displayVersion(account, filesystem)
+	// run
+	err = svrInfo.displayInfo()
 	if err != nil {
-		return xerrors.Errorf("failed to perform svrinfo: %w", err)
+		return xerrors.Errorf("failed to display server info: %w", err)
 	}
 
 	return nil
 }
 
-func displayVersion(account *types.IRODSAccount, fs *irodsclient_fs.FileSystem) error {
+func (svrInfo *SvrInfoCommand) displayInfo() error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
-		"function": "displayVersion",
+		"struct":   "SvrInfoCommand",
+		"function": "displayInfo",
 	})
 
 	logger.Debug("displaying version")
 
-	ver, err := fs.GetServerVersion()
+	ver, err := svrInfo.filesystem.GetServerVersion()
 	if err != nil {
 		return xerrors.Errorf("failed to get server version: %w", err)
 	}
@@ -89,7 +114,7 @@ func displayVersion(account *types.IRODSAccount, fs *irodsclient_fs.FileSystem) 
 		},
 		{
 			"iRODS Zone",
-			account.ClientZone,
+			svrInfo.account.ClientZone,
 		},
 	}, table.RowConfig{})
 	t.Render()

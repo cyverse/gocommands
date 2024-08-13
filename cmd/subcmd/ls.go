@@ -111,7 +111,7 @@ func (ls *LsCommand) Process() error {
 	appConfig := commons.GetConfig()
 	syncAccount := false
 	if len(ls.ticketAccessFlagValues.Name) > 0 {
-		logger.Debugf("use ticket: %s", ls.ticketAccessFlagValues.Name)
+		logger.Debugf("use ticket %q", ls.ticketAccessFlagValues.Name)
 		appConfig.Ticket = ls.ticketAccessFlagValues.Name
 		syncAccount = true
 	}
@@ -138,18 +138,26 @@ func (ls *LsCommand) Process() error {
 
 	// run
 	for _, sourcePath := range ls.sourcePaths {
-		err = ls.listOne(sourcePath, false)
+		err = ls.listOne(sourcePath)
 		if err != nil {
-			return xerrors.Errorf("failed to perform ls %s: %w", sourcePath, err)
+			return xerrors.Errorf("failed to list path %q: %w", sourcePath, err)
 		}
 	}
 
 	return nil
 }
 
-func (ls *LsCommand) requireDecryptionByMeta(sourceEntry *irodsclient_fs.Entry) bool {
-	// load encryption config from meta
-	if !ls.decryptionFlagValues.NoDecryption && !ls.decryptionFlagValues.IgnoreMeta {
+func (ls *LsCommand) requireDecryption(sourceEntry *irodsclient_fs.Entry, parentDecryption bool) bool {
+	if ls.decryptionFlagValues.Decryption {
+		return true
+	}
+
+	if ls.decryptionFlagValues.NoDecryption {
+		return false
+	}
+
+	if !ls.decryptionFlagValues.IgnoreMeta {
+		// load encryption config from meta
 		sourceDir := sourceEntry.Path
 		if !sourceEntry.IsDir() {
 			sourceDir = commons.GetDir(sourceEntry.Path)
@@ -160,10 +168,10 @@ func (ls *LsCommand) requireDecryptionByMeta(sourceEntry *irodsclient_fs.Entry) 
 		return encryptionConfig.Required
 	}
 
-	return false
+	return parentDecryption
 }
 
-func (ls *LsCommand) listOne(sourcePath string, requireDecryption bool) error {
+func (ls *LsCommand) listOne(sourcePath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
@@ -171,13 +179,14 @@ func (ls *LsCommand) listOne(sourcePath string, requireDecryption bool) error {
 
 	sourceEntry, err := ls.filesystem.Stat(sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
+		if !irodsclient_types.IsFileNotFoundError(err) {
+			return xerrors.Errorf("failed to find data-object/collection %q: %w", sourcePath, err)
+		}
+
+		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
 	}
 
-	// load encryption config from meta
-	if !requireDecryption {
-		requireDecryption = ls.requireDecryptionByMeta(sourceEntry)
-	}
+	requireDecryption := ls.requireDecryption(sourceEntry, false)
 
 	connection, err := ls.filesystem.GetMetadataConnection()
 	if err != nil {
@@ -185,27 +194,26 @@ func (ls *LsCommand) listOne(sourcePath string, requireDecryption bool) error {
 	}
 	defer ls.filesystem.ReturnMetadataConnection(connection)
 
-	collection, err := irodsclient_irodsfs.GetCollection(connection, sourcePath)
-	if err != nil {
-		if !irodsclient_types.IsFileNotFoundError(err) {
-			return xerrors.Errorf("failed to get collection %s: %w", sourcePath, err)
-		}
-	}
-
-	if err == nil {
+	if sourceEntry.IsDir() {
 		// collection
+		collection, err := irodsclient_irodsfs.GetCollection(connection, sourcePath)
+		if err != nil {
+			return xerrors.Errorf("failed to get collection %q: %w", sourcePath, err)
+		}
+
 		colls, err := irodsclient_irodsfs.ListSubCollections(connection, sourcePath)
 		if err != nil {
-			return xerrors.Errorf("failed to list sub-collections in %s: %w", sourcePath, err)
+			return xerrors.Errorf("failed to list sub-collections in %q: %w", sourcePath, err)
 		}
 
 		objs, err := irodsclient_irodsfs.ListDataObjects(connection, collection)
 		if err != nil {
-			return xerrors.Errorf("failed to list data-objects in %s: %w", sourcePath, err)
+			return xerrors.Errorf("failed to list data-objects in %q: %w", sourcePath, err)
 		}
 
 		ls.printDataObjects(objs, requireDecryption)
 		ls.printCollections(colls)
+
 		return nil
 	}
 
@@ -214,12 +222,12 @@ func (ls *LsCommand) listOne(sourcePath string, requireDecryption bool) error {
 
 	parentCollection, err := irodsclient_irodsfs.GetCollection(connection, parentSourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to get collection %s: %w", parentSourcePath, err)
+		return xerrors.Errorf("failed to get collection %q: %w", parentSourcePath, err)
 	}
 
 	entry, err := irodsclient_irodsfs.GetDataObject(connection, parentCollection, path.Base(sourcePath))
 	if err != nil {
-		return xerrors.Errorf("failed to get data-object %s: %w", sourcePath, err)
+		return xerrors.Errorf("failed to get data-object %q: %w", sourcePath, err)
 	}
 
 	entries := []*irodsclient_types.IRODSDataObject{entry}
@@ -417,7 +425,7 @@ func (ls *LsCommand) printDataObjectShort(entry *irodsclient_types.IRODSDataObje
 				logger.Debugf("%+v", err)
 				newName = fmt.Sprintf("%s\t(decryption_failed)", newName)
 			} else {
-				newName = fmt.Sprintf("%s\t(encrypted: %s)", newName, decryptedFilename)
+				newName = fmt.Sprintf("%s\t(encrypted: %q)", newName, decryptedFilename)
 			}
 		}
 	}
@@ -464,7 +472,7 @@ func (ls *LsCommand) printReplica(flatReplica FlatReplica, requireDecryption boo
 				logger.Debugf("%+v", err)
 				newName = fmt.Sprintf("%s\tdecryption_failed", newName)
 			} else {
-				newName = fmt.Sprintf("%s\t(encrypted: %s", newName, decryptedFilename)
+				newName = fmt.Sprintf("%s\t(encrypted: %q", newName, decryptedFilename)
 			}
 		}
 	}

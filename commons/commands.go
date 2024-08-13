@@ -566,26 +566,26 @@ func LoadConfigFromFile(configPath string) error {
 
 	configPath, err := ExpandHomeDir(configPath)
 	if err != nil {
-		return xerrors.Errorf("failed to expand home dir for %s: %w", configPath, err)
+		return xerrors.Errorf("failed to expand home directory for %q: %w", configPath, err)
 	}
 
 	configPath, err = filepath.Abs(configPath)
 	if err != nil {
-		return xerrors.Errorf("failed to compute absolute path for %s: %w", configPath, err)
+		return xerrors.Errorf("failed to compute absolute path for %q: %w", configPath, err)
 	}
 
-	logger.Debugf("reading config file/dir - %s", configPath)
+	logger.Debugf("reading config path %q", configPath)
 	// check if it is a file or a dir
 	_, err = os.Stat(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return irodsclient_types.NewFileNotFoundError(configPath)
 		}
-		return xerrors.Errorf("failed to stat %s: %w", configPath, err)
+		return xerrors.Errorf("failed to stat %q: %w", configPath, err)
 	}
 
 	if isYAMLFile(configPath) {
-		logger.Debugf("reading gocommands YAML config file - %s", configPath)
+		logger.Debugf("reading gocommands YAML config file %q", configPath)
 
 		iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
 		if err != nil {
@@ -594,7 +594,7 @@ func LoadConfigFromFile(configPath string) error {
 
 		err = iCommandsEnvMgr.SetEnvironmentFilePath(configPath)
 		if err != nil {
-			return xerrors.Errorf("failed to set environment file path %s: %w", configPath, err)
+			return xerrors.Errorf("failed to set environment file path %q: %w", configPath, err)
 		}
 
 		// read session
@@ -602,7 +602,7 @@ func LoadConfigFromFile(configPath string) error {
 		if util.ExistFile(sessionFilePath) {
 			session, err := irodsclient_icommands.CreateICommandsEnvironmentFromFile(sessionFilePath)
 			if err != nil {
-				return xerrors.Errorf("failed to create icommands environment from file %s: %w", sessionFilePath, err)
+				return xerrors.Errorf("failed to create icommands environment from file %q: %w", sessionFilePath, err)
 			}
 
 			iCommandsEnvMgr.Session = session
@@ -611,7 +611,7 @@ func LoadConfigFromFile(configPath string) error {
 		// load from YAML
 		yjBytes, err := os.ReadFile(configPath)
 		if err != nil {
-			return xerrors.Errorf("failed to read file %s: %w", configPath, err)
+			return xerrors.Errorf("failed to read file %q: %w", configPath, err)
 		}
 
 		defaultConfig := GetDefaultConfig()
@@ -644,7 +644,7 @@ func LoadConfigFromFile(configPath string) error {
 		configFilePath = filepath.Join(configPath, "irods_environment.json")
 	}
 
-	logger.Debugf("reading icommands environment file - %s", configFilePath)
+	logger.Debugf("reading icommands environment file %q", configFilePath)
 
 	iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
 	if err != nil {
@@ -653,7 +653,7 @@ func LoadConfigFromFile(configPath string) error {
 
 	err = iCommandsEnvMgr.SetEnvironmentFilePath(configFilePath)
 	if err != nil {
-		return xerrors.Errorf("failed to set iCommands Environment file %s: %w", configFilePath, err)
+		return xerrors.Errorf("failed to set iCommands Environment file %q: %w", configFilePath, err)
 	}
 
 	err = iCommandsEnvMgr.Load(sessionID)
@@ -738,89 +738,6 @@ func PrintAccount() error {
 		{
 			"iRODS Authentication Scheme",
 			envMgr.Environment.AuthenticationScheme,
-		},
-	}, table.RowConfig{})
-	t.Render()
-	return nil
-}
-
-func PrintEnvironment() error {
-	envMgr := GetEnvironmentManager()
-	if envMgr == nil {
-		return xerrors.Errorf("environment is not set")
-	}
-
-	t := table.NewWriter()
-	t.SetOutputMirror(os.Stdout)
-
-	t.AppendRows([]table.Row{
-		{
-			"iRODS Session Environment File",
-			envMgr.GetSessionFilePath(os.Getppid()),
-		},
-		{
-			"iRODS Environment File",
-			envMgr.GetEnvironmentFilePath(),
-		},
-		{
-			"iRODS Host",
-			envMgr.Environment.Host,
-		},
-		{
-			"iRODS Port",
-			envMgr.Environment.Port,
-		},
-		{
-			"iRODS Zone",
-			envMgr.Environment.Zone,
-		},
-		{
-			"iRODS Username",
-			envMgr.Environment.Username,
-		},
-		{
-			"iRODS Default Resource",
-			envMgr.Environment.DefaultResource,
-		},
-		{
-			"iRODS Default Hash Scheme",
-			envMgr.Environment.DefaultHashScheme,
-		},
-		{
-			"iRODS Authentication Scheme",
-			envMgr.Environment.AuthenticationScheme,
-		},
-		{
-			"iRODS Client Server Negotiation",
-			envMgr.Environment.ClientServerNegotiation,
-		},
-		{
-			"iRODS Client Server Policy",
-			envMgr.Environment.ClientServerPolicy,
-		},
-		{
-			"iRODS SSL CA Certification File",
-			envMgr.Environment.SSLCACertificateFile,
-		},
-		{
-			"iRODS SSL CA Certification Path",
-			envMgr.Environment.SSLCACertificatePath,
-		},
-		{
-			"iRODS SSL Encryption Key Size",
-			envMgr.Environment.EncryptionKeySize,
-		},
-		{
-			"iRODS SSL Encryption Key Algorithm",
-			envMgr.Environment.EncryptionAlgorithm,
-		},
-		{
-			"iRODS SSL Encryption Salt Size",
-			envMgr.Environment.EncryptionSaltSize,
-		},
-		{
-			"iRODS SSL Encryption Hash Rounds",
-			envMgr.Environment.EncryptionNumHashRounds,
 		},
 	}, table.RowConfig{})
 	t.Render()

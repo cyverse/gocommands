@@ -2,6 +2,7 @@ package subcmd
 
 import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
@@ -29,7 +30,42 @@ func AddRmCommand(rootCmd *cobra.Command) {
 }
 
 func processRmCommand(command *cobra.Command, args []string) error {
-	cont, err := flag.ProcessCommonFlags(command)
+	rm, err := NewRmCommand(command, args)
+	if err != nil {
+		return err
+	}
+
+	return rm.Process()
+}
+
+type RmCommand struct {
+	command *cobra.Command
+
+	recursiveFlagValues *flag.RecursiveFlagValues
+	forceFlagValues     *flag.ForceFlagValues
+
+	account    *irodsclient_types.IRODSAccount
+	filesystem *irodsclient_fs.FileSystem
+
+	targetPaths []string
+}
+
+func NewRmCommand(command *cobra.Command, args []string) (*RmCommand, error) {
+	rm := &RmCommand{
+		command: command,
+
+		recursiveFlagValues: flag.GetRecursiveFlagValues(),
+		forceFlagValues:     flag.GetForceFlagValues(),
+	}
+
+	// path
+	rm.targetPaths = args
+
+	return rm, nil
+}
+
+func (rm *RmCommand) Process() error {
+	cont, err := flag.ProcessCommonFlags(rm.command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
@@ -44,30 +80,28 @@ func processRmCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	recursiveFlagValues := flag.GetRecursiveFlagValues()
-	forceFlagValues := flag.GetForceFlagValues()
-
 	// Create a file system
-	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	rm.account = commons.GetAccount()
+	rm.filesystem, err = commons.GetIRODSFSClient(rm.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
+	defer rm.filesystem.Release()
 
-	defer filesystem.Release()
-
-	for _, sourcePath := range args {
-		err = removeOne(filesystem, sourcePath, forceFlagValues, recursiveFlagValues)
+	// remove
+	for _, targetPath := range rm.targetPaths {
+		err = rm.removeOne(targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to perform rm %s: %w", sourcePath, err)
+			return xerrors.Errorf("failed to remove %q: %w", targetPath, err)
 		}
 	}
 	return nil
 }
 
-func removeOne(filesystem *irodsclient_fs.FileSystem, targetPath string, forceFlagValues *flag.ForceFlagValues, recursiveFlagValues *flag.RecursiveFlagValues) error {
+func (rm *RmCommand) removeOne(targetPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
+		"struct":   "RmCommand",
 		"function": "removeOne",
 	})
 
@@ -76,35 +110,37 @@ func removeOne(filesystem *irodsclient_fs.FileSystem, targetPath string, forceFl
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	targetEntry, err := filesystem.Stat(targetPath)
+	targetEntry, err := rm.filesystem.Stat(targetPath)
 	if err != nil {
-		//return xerrors.Errorf("failed to stat %s: %w", targetPath, err)
-		logger.Debugf("failed to find a data object %s, but trying to remove", targetPath)
-		err = filesystem.RemoveFile(targetPath, forceFlagValues.Force)
+		logger.Debugf("failed to find a data object %q, but trying to remove", targetPath)
+		err = rm.filesystem.RemoveFile(targetPath, rm.forceFlagValues.Force)
 		if err != nil {
-			return xerrors.Errorf("failed to remove %s: %w", targetPath, err)
+			return xerrors.Errorf("failed to remove %q: %w", targetPath, err)
 		}
 		return nil
 	}
 
-	if targetEntry.Type == irodsclient_fs.FileEntry {
-		// file
-		logger.Debugf("removing a data object %s", targetPath)
-		err = filesystem.RemoveFile(targetPath, forceFlagValues.Force)
-		if err != nil {
-			return xerrors.Errorf("failed to remove %s: %w", targetPath, err)
-		}
-	} else {
+	if targetEntry.IsDir() {
 		// dir
-		if !recursiveFlagValues.Recursive {
+		if !rm.recursiveFlagValues.Recursive {
 			return xerrors.Errorf("cannot remove a collection, recurse is not set")
 		}
 
-		logger.Debugf("removing a collection %s", targetPath)
-		err = filesystem.RemoveDir(targetPath, recursiveFlagValues.Recursive, forceFlagValues.Force)
+		logger.Debugf("removing a collection %q", targetPath)
+		err = rm.filesystem.RemoveDir(targetPath, rm.recursiveFlagValues.Recursive, rm.forceFlagValues.Force)
 		if err != nil {
-			return xerrors.Errorf("failed to remove dir %s: %w", targetPath, err)
+			return xerrors.Errorf("failed to remove a directory %q: %w", targetPath, err)
 		}
+
+		return nil
 	}
+
+	// file
+	logger.Debugf("removing a data object %q", targetPath)
+	err = rm.filesystem.RemoveFile(targetPath, rm.forceFlagValues.Force)
+	if err != nil {
+		return xerrors.Errorf("failed to remove %q: %w", targetPath, err)
+	}
+
 	return nil
 }

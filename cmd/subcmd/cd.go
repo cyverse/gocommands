@@ -89,7 +89,7 @@ func (cd *CdCommand) Process() error {
 	// run
 	err = cd.changeWorkingDir(cd.targetPath)
 	if err != nil {
-		return xerrors.Errorf("failed to perform cd %s: %w", cd.targetPath, err)
+		return xerrors.Errorf("failed to change working directory to %q: %w", cd.targetPath, err)
 	}
 
 	return nil
@@ -113,16 +113,16 @@ func (cd *CdCommand) changeWorkingDir(collectionPath string) error {
 	}
 	defer cd.filesystem.ReturnMetadataConnection(connection)
 
-	logger.Debugf("changing working dir: %s", collectionPath)
+	logger.Debugf("changing working directory to %q", collectionPath)
 
 	_, err = irodsclient_irodsfs.GetCollection(connection, collectionPath)
 	if err != nil {
-		return xerrors.Errorf("failed to get collection %s: %w", collectionPath, err)
+		return xerrors.Errorf("failed to get collection %q: %w", collectionPath, err)
 	}
 
 	err = commons.SetCWD(collectionPath)
 	if err != nil {
-		return xerrors.Errorf("failed to set current working collection %s: %w", collectionPath, err)
+		return xerrors.Errorf("failed to set current working collection to %q: %w", collectionPath, err)
 	}
 
 	return nil

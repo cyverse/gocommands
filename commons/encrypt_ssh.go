@@ -41,7 +41,7 @@ func GetDefaultPrivateKeyPath() string {
 func DecodePublicPrivateKey(keyPath string) (interface{}, error) {
 	pemBytes, err := os.ReadFile(keyPath)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to read public/private key file %s: %w", keyPath, err)
+		return nil, xerrors.Errorf("failed to read public/private key file %q: %w", keyPath, err)
 	}
 
 	// is pem?
@@ -55,26 +55,26 @@ func DecodePublicPrivateKey(keyPath string) (interface{}, error) {
 		case "RSA PRIVATE KEY", "PRIVATE KEY", "EC PRIVATE KEY", "DSA PRIVATE KEY", "OPENSSH PRIVATE KEY":
 			privateKey, err := ssh.ParseRawPrivateKey(pemBytes)
 			if err != nil {
-				return nil, xerrors.Errorf("failed to parse private key file %s: %w", keyPath, err)
+				return nil, xerrors.Errorf("failed to parse private key file %q: %w", keyPath, err)
 			}
 
 			return privateKey, nil
 		case "RSA PUBLIC KEY", "PUBLIC KEY", "EC PUBLIC KEY", "DSA PUBLIC KEY", "OPENSSH PUBLIC KEY":
 			publicKey, err := ssh.ParsePublicKey(pemBytes)
 			if err != nil {
-				return nil, xerrors.Errorf("failed to parse public key file %s: %w", keyPath, err)
+				return nil, xerrors.Errorf("failed to parse public key file %q: %w", keyPath, err)
 			}
 
 			return publicKey, nil
 		default:
-			return nil, xerrors.Errorf("failed to parse public/private key file %s: %w", keyPath, err)
+			return nil, xerrors.Errorf("failed to parse public/private key file %q: %w", keyPath, err)
 		}
 	}
 
 	// authorized key
 	publicKey, _, _, _, err := ssh.ParseAuthorizedKey(pemBytes)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to parse public key file %s: %w", keyPath, err)
+		return nil, xerrors.Errorf("failed to parse public key file %q: %w", keyPath, err)
 	}
 
 	parsedCryptoKey, ok := publicKey.(ssh.CryptoPublicKey)
