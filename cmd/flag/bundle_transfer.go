@@ -8,16 +8,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type BundleTempFlagValues struct {
-	LocalTempPath string
-	IRODSTempPath string
-}
-
-type BundleClearFlagValues struct {
-	Clear bool
-}
-
-type BundleConfigFlagValues struct {
+type BundleTransferFlagValues struct {
+	LocalTempPath      string
+	IRODSTempPath      string
+	ClearOld           bool
+	MinFileNum         int
 	MaxFileNum         int
 	MaxFileSize        int64
 	NoBulkRegistration bool
@@ -25,37 +20,25 @@ type BundleConfigFlagValues struct {
 }
 
 var (
-	bundleTempFlagValues   BundleTempFlagValues
-	bundleClearFlagValues  BundleClearFlagValues
-	bundleConfigFlagValues BundleConfigFlagValues
+	bundleTransferFlagValues BundleTransferFlagValues
 )
 
-func SetBundleTempFlags(command *cobra.Command) {
-	command.Flags().StringVar(&bundleTempFlagValues.LocalTempPath, "local_temp", os.TempDir(), "Specify local temp directory path to create bundle files")
-	command.Flags().StringVar(&bundleTempFlagValues.IRODSTempPath, "irods_temp", "", "Specify iRODS temp collection path to upload bundle files to")
+func SetBundleTransferFlags(command *cobra.Command, displayTransferConfig bool) {
+	command.Flags().StringVar(&bundleTransferFlagValues.LocalTempPath, "local_temp", os.TempDir(), "Specify local temp directory path to create bundle files")
+	command.Flags().StringVar(&bundleTransferFlagValues.IRODSTempPath, "irods_temp", "", "Specify iRODS temp collection path to upload bundle files to")
+
+	if displayTransferConfig {
+		command.Flags().BoolVar(&bundleTransferFlagValues.ClearOld, "clear", false, "Clear stale bundle files")
+		command.Flags().IntVar(&bundleTransferFlagValues.MinFileNum, "min_file_num", commons.MinBundleFileNumDefault, "Specify min file number in a bundle file")
+		command.Flags().IntVar(&bundleTransferFlagValues.MaxFileNum, "max_file_num", commons.MaxBundleFileNumDefault, "Specify max file number in a bundle file")
+		command.Flags().StringVar(&bundleTransferFlagValues.maxFileSizeInput, "max_file_size", strconv.FormatInt(commons.MaxBundleFileSizeDefault, 10), "Specify max file size of a bundle file")
+		command.Flags().BoolVar(&bundleTransferFlagValues.NoBulkRegistration, "no_bulk_reg", false, "Disable bulk registration")
+	}
 }
 
-func GetBundleTempFlagValues() *BundleTempFlagValues {
-	return &bundleTempFlagValues
-}
+func GetBundleTransferFlagValues() *BundleTransferFlagValues {
+	size, _ := commons.ParseSize(bundleTransferFlagValues.maxFileSizeInput)
+	bundleTransferFlagValues.MaxFileSize = size
 
-func SetBundleClearFlags(command *cobra.Command) {
-	command.Flags().BoolVar(&bundleClearFlagValues.Clear, "clear", false, "Clear stale bundle files")
-}
-
-func GetBundleClearFlagValues() *BundleClearFlagValues {
-	return &bundleClearFlagValues
-}
-
-func SetBundleConfigFlags(command *cobra.Command) {
-	command.Flags().IntVar(&bundleConfigFlagValues.MaxFileNum, "max_file_num", commons.MaxBundleFileNumDefault, "Specify max file number in a bundle file")
-	command.Flags().StringVar(&bundleConfigFlagValues.maxFileSizeInput, "max_file_size", strconv.FormatInt(commons.MaxBundleFileSizeDefault, 10), "Specify max file size of a bundle file")
-	command.Flags().BoolVar(&bundleConfigFlagValues.NoBulkRegistration, "no_bulk_reg", false, "Disable bulk registration")
-}
-
-func GetBundleConfigFlagValues() *BundleConfigFlagValues {
-	size, _ := commons.ParseSize(bundleConfigFlagValues.maxFileSizeInput)
-	bundleConfigFlagValues.MaxFileSize = size
-
-	return &bundleConfigFlagValues
+	return &bundleTransferFlagValues
 }

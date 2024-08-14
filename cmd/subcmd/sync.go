@@ -4,8 +4,6 @@ import (
 	"os"
 	"strings"
 
-	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
-	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
@@ -26,9 +24,7 @@ func AddSyncCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(syncCmd, false)
 
-	flag.SetBundleTempFlags(syncCmd)
-	flag.SetBundleClearFlags(syncCmd)
-	flag.SetBundleConfigFlags(syncCmd)
+	flag.SetBundleTransferFlags(syncCmd, true)
 	flag.SetParallelTransferFlags(syncCmd, true)
 	flag.SetForceFlags(syncCmd, true)
 	flag.SetProgressFlags(syncCmd)
@@ -53,9 +49,6 @@ type SyncCommand struct {
 	command *cobra.Command
 
 	retryFlagValues *flag.RetryFlagValues
-
-	account    *irodsclient_types.IRODSAccount
-	filesystem *irodsclient_fs.FileSystem
 
 	sourcePaths []string
 	targetPath  string

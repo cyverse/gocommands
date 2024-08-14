@@ -287,8 +287,6 @@ func (cp *CpCommand) scheduleCopy(sourceEntry *irodsclient_fs.Entry, targetPath 
 		return xerrors.Errorf("failed to schedule copy %q to %q: %w", sourceEntry.Path, targetPath, err)
 	}
 
-	commons.MarkPathMap(cp.updatedPathMap, targetPath)
-
 	logger.Debugf("scheduled a data object copy %q to %q", sourceEntry.Path, targetPath)
 
 	return nil
@@ -300,6 +298,8 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 		"struct":   "CpCommand",
 		"function": "copyFile",
 	})
+
+	commons.MarkPathMap(cp.updatedPathMap, targetPath)
 
 	targetEntry, err := cp.filesystem.Stat(targetPath)
 	if err != nil {
@@ -404,6 +404,8 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 }
 
 func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath string) error {
+	commons.MarkPathMap(cp.updatedPathMap, targetPath)
+
 	targetEntry, err := cp.filesystem.Stat(targetPath)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
@@ -457,11 +459,7 @@ func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 				return err
 			}
 		}
-
-		commons.MarkPathMap(cp.updatedPathMap, newEntryPath)
 	}
-
-	commons.MarkPathMap(cp.updatedPathMap, targetPath)
 
 	return nil
 }

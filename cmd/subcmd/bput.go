@@ -1,6 +1,9 @@
 package subcmd
 
 import (
+	"bytes"
+	"encoding/hex"
+	"fmt"
 	"io/fs"
 	"os"
 	"path"
@@ -9,6 +12,7 @@ import (
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
@@ -29,9 +33,7 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(bputCmd, false)
 
-	flag.SetBundleTempFlags(bputCmd)
-	flag.SetBundleClearFlags(bputCmd)
-	flag.SetBundleConfigFlags(bputCmd)
+	flag.SetBundleTransferFlags(bputCmd, true)
 	flag.SetParallelTransferFlags(bputCmd, true)
 	flag.SetForceFlags(bputCmd, true)
 	flag.SetProgressFlags(bputCmd)
@@ -57,9 +59,7 @@ type BputCommand struct {
 	command *cobra.Command
 
 	forceFlagValues                *flag.ForceFlagValues
-	bundleTempFlagValues           *flag.BundleTempFlagValues
-	bundleClearFlagValues          *flag.BundleClearFlagValues
-	bundleConfigFlagValues         *flag.BundleConfigFlagValues
+	bundleTransferFlagValues       *flag.BundleTransferFlagValues
 	parallelTransferFlagValues     *flag.ParallelTransferFlagValues
 	progressFlagValues             *flag.ProgressFlagValues
 	retryFlagValues                *flag.RetryFlagValues
@@ -88,9 +88,7 @@ func NewBputCommand(command *cobra.Command, args []string) (*BputCommand, error)
 		command: command,
 
 		forceFlagValues:                flag.GetForceFlagValues(),
-		bundleTempFlagValues:           flag.GetBundleTempFlagValues(),
-		bundleClearFlagValues:          flag.GetBundleClearFlagValues(),
-		bundleConfigFlagValues:         flag.GetBundleConfigFlagValues(),
+		bundleTransferFlagValues:       flag.GetBundleTransferFlagValues(),
 		parallelTransferFlagValues:     flag.GetParallelTransferFlagValues(),
 		progressFlagValues:             flag.GetProgressFlagValues(),
 		retryFlagValues:                flag.GetRetryFlagValues(),
@@ -146,8 +144,8 @@ func (bput *BputCommand) Process() error {
 
 	// clear local
 	// delete local bundles before entering to retry
-	if bput.bundleClearFlagValues.Clear {
-		commons.CleanUpOldLocalBundles(bput.bundleTempFlagValues.LocalTempPath, true)
+	if bput.bundleTransferFlagValues.ClearOld {
+		commons.CleanUpOldLocalBundles(bput.bundleTransferFlagValues.LocalTempPath, true)
 	}
 
 	// handle retry
@@ -188,7 +186,7 @@ func (bput *BputCommand) Process() error {
 	}
 
 	// clear old irods bundles
-	if bput.bundleClearFlagValues.Clear {
+	if bput.bundleTransferFlagValues.ClearOld {
 		logger.Debugf("clearing an irods temp directory %q", stagingDirPath)
 		err = commons.CleanUpOldIRODSBundles(bput.filesystem, stagingDirPath, false, true)
 		if err != nil {
@@ -209,7 +207,7 @@ func (bput *BputCommand) Process() error {
 	}
 
 	// bundle transfer manager
-	bput.bundleTransferManager = commons.NewBundleTransferManager(bput.filesystem, bput.targetPath, bundleRootPath, bput.bundleConfigFlagValues.MaxFileNum, bput.bundleConfigFlagValues.MaxFileSize, bput.parallelTransferFlagValues.SingleTread, bput.parallelTransferFlagValues.ThreadNumber, bput.parallelTransferFlagValues.RedirectToResource, bput.parallelTransferFlagValues.Icat, bput.bundleTempFlagValues.LocalTempPath, bput.bundleTempFlagValues.IRODSTempPath, bput.differentialTransferFlagValues.DifferentialTransfer, bput.differentialTransferFlagValues.NoHash, bput.bundleConfigFlagValues.NoBulkRegistration, bput.progressFlagValues.ShowProgress, bput.progressFlagValues.ShowFullPath)
+	bput.bundleTransferManager = commons.NewBundleTransferManager(bput.filesystem, bput.targetPath, bundleRootPath, bput.bundleTransferFlagValues.MinFileNum, bput.bundleTransferFlagValues.MaxFileNum, bput.bundleTransferFlagValues.MaxFileSize, bput.parallelTransferFlagValues.SingleTread, bput.parallelTransferFlagValues.ThreadNumber, bput.parallelTransferFlagValues.RedirectToResource, bput.parallelTransferFlagValues.Icat, bput.bundleTransferFlagValues.LocalTempPath, bput.bundleTransferFlagValues.IRODSTempPath, bput.bundleTransferFlagValues.NoBulkRegistration, bput.progressFlagValues.ShowProgress, bput.progressFlagValues.ShowFullPath)
 	bput.bundleTransferManager.Start()
 
 	// run
@@ -281,8 +279,8 @@ func (bput *BputCommand) getStagingDir(targetPath string) (string, error) {
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	if len(bput.bundleTempFlagValues.IRODSTempPath) > 0 {
-		stagingPath := commons.MakeIRODSPath(cwd, home, zone, bput.bundleTempFlagValues.IRODSTempPath)
+	if len(bput.bundleTransferFlagValues.IRODSTempPath) > 0 {
+		stagingPath := commons.MakeIRODSPath(cwd, home, zone, bput.bundleTransferFlagValues.IRODSTempPath)
 
 		createdDir := false
 		tempEntry, err := bput.filesystem.Stat(stagingPath)
@@ -320,14 +318,14 @@ func (bput *BputCommand) getStagingDir(targetPath string) (string, error) {
 
 		ok, err := commons.IsSameResourceServer(bput.filesystem, targetPath, stagingPath)
 		if err != nil {
-			logger.Debugf("failed to validate staging directory %q and target %q - %s", stagingPath, targetPath, err.Error())
+			logger.WithError(err).Debugf("failed to validate staging directory %q and target %q", stagingPath, targetPath)
 
 			if createdDir {
 				bput.filesystem.RemoveDir(stagingPath, true, true)
 			}
 
 			stagingPath = commons.GetDefaultStagingDir(targetPath)
-			logger.Debugf("use default staging path %q for target %q - %s", stagingPath, targetPath, err.Error())
+			logger.WithError(err).Debugf("use default staging path %q for target %q", stagingPath, targetPath)
 			return stagingPath, nil
 		}
 
@@ -389,23 +387,184 @@ func (bput *BputCommand) bputOne(sourcePath string) error {
 	return bput.putFile(sourceStat, sourcePath)
 }
 
-func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string) error {
-	err := bput.bundleTransferManager.Schedule(sourcePath, false, sourceStat.Size(), sourceStat.ModTime().Local())
+func (bput *BputCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"struct":   "BputCommand",
+		"function": "schedulePut",
+	})
+
+	err := bput.bundleTransferManager.Schedule(sourceStat, sourcePath)
 	if err != nil {
 		return xerrors.Errorf("failed to schedule a file %q: %w", sourcePath, err)
 	}
 
-	//commons.MarkPathMap(bput.updatedPathMap, targetPath)
+	logger.Debugf("scheduled a file upload %q", sourcePath)
 
 	return nil
 }
 
-func (bput *BputCommand) putDir(sourceStat fs.FileInfo, sourcePath string) error {
-	err := bput.bundleTransferManager.Schedule(sourcePath, true, 0, sourceStat.ModTime().Local())
+func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"struct":   "BputCommand",
+		"function": "putFile",
+	})
+
+	targetPath, err := bput.bundleTransferManager.GetTargetPath(sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to schedule a directory %q: %w", sourcePath, err)
+		return xerrors.Errorf("failed to get target path for source %q: %w", sourcePath, err)
 	}
 
+	commons.MarkPathMap(bput.updatedPathMap, targetPath)
+
+	targetEntry, err := bput.filesystem.Stat(targetPath)
+	if err != nil {
+		if irodsclient_types.IsFileNotFoundError(err) {
+			// target does not exist
+			return bput.schedulePut(sourceStat, sourcePath)
+		}
+
+		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+	}
+
+	// target exists
+	// target must be a file
+	if targetEntry.IsDir() {
+		return commons.NewNotFileError(targetPath)
+	}
+
+	if bput.differentialTransferFlagValues.DifferentialTransfer {
+		if bput.differentialTransferFlagValues.NoHash {
+			if targetEntry.Size == sourceStat.Size() {
+				// skip
+				now := time.Now()
+				reportFile := &commons.TransferReportFile{
+					Method:     commons.TransferMethodPut,
+					StartAt:    now,
+					EndAt:      now,
+					SourcePath: sourcePath,
+					SourceSize: sourceStat.Size(),
+
+					DestPath:          targetEntry.Path,
+					DestSize:          targetEntry.Size,
+					ChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
+					Notes:             []string{"differential", "no_hash", "same file size", "skip"},
+				}
+
+				bput.transferReportManager.AddFile(reportFile)
+
+				commons.Printf("skip uploading a file %q to %q. The file already exists!\n", sourcePath, targetPath)
+				logger.Debugf("skip uploading a file %q to %q. The file already exists!", sourcePath, targetPath)
+				return nil
+			}
+		} else {
+			if targetEntry.Size == sourceStat.Size() {
+				// compare hash
+				if len(targetEntry.CheckSum) > 0 {
+					localChecksum, err := irodsclient_util.HashLocalFile(sourcePath, string(targetEntry.CheckSumAlgorithm))
+					if err != nil {
+						return xerrors.Errorf("failed to get hash %q: %w", sourcePath, err)
+					}
+
+					if bytes.Equal(localChecksum, targetEntry.CheckSum) {
+						// skip
+						now := time.Now()
+						reportFile := &commons.TransferReportFile{
+							Method:            commons.TransferMethodPut,
+							StartAt:           now,
+							EndAt:             now,
+							SourcePath:        sourcePath,
+							SourceSize:        sourceStat.Size(),
+							SourceChecksum:    hex.EncodeToString(localChecksum),
+							DestPath:          targetEntry.Path,
+							DestSize:          targetEntry.Size,
+							DestChecksum:      hex.EncodeToString(targetEntry.CheckSum),
+							ChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
+							Notes:             []string{"differential", "same checksum", "skip"},
+						}
+
+						bput.transferReportManager.AddFile(reportFile)
+
+						commons.Printf("skip uploading a file %q to %q. The file with the same hash already exists!\n", sourcePath, targetPath)
+						logger.Debugf("skip uploading a file %q to %q. The file with the same hash already exists!", sourcePath, targetPath)
+						return nil
+					}
+				}
+			}
+		}
+	} else {
+		if !bput.forceFlagValues.Force {
+			// ask
+			overwrite := commons.InputYN(fmt.Sprintf("file %q already exists. Overwrite?", targetPath))
+			if !overwrite {
+				// skip
+				now := time.Now()
+				reportFile := &commons.TransferReportFile{
+					Method:            commons.TransferMethodPut,
+					StartAt:           now,
+					EndAt:             now,
+					SourcePath:        sourcePath,
+					SourceSize:        sourceStat.Size(),
+					DestPath:          targetEntry.Path,
+					DestSize:          targetEntry.Size,
+					DestChecksum:      hex.EncodeToString(targetEntry.CheckSum),
+					ChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
+					Notes:             []string{"no_overwrite", "skip"},
+				}
+
+				bput.transferReportManager.AddFile(reportFile)
+
+				commons.Printf("skip uploading a file %q to %q. The data object already exists!\n", sourcePath, targetPath)
+				logger.Debugf("skip uploading a file %q to %q. The data object already exists!", sourcePath, targetPath)
+				return nil
+			}
+		}
+	}
+
+	// schedule
+	return bput.schedulePut(sourceStat, sourcePath)
+}
+
+func (bput *BputCommand) putDir(sourceStat fs.FileInfo, sourcePath string) error {
+	targetPath, err := bput.bundleTransferManager.GetTargetPath(sourcePath)
+	if err != nil {
+		return xerrors.Errorf("failed to get target path for source %q: %w", sourcePath, err)
+	}
+
+	commons.MarkPathMap(bput.updatedPathMap, targetPath)
+
+	targetEntry, err := bput.filesystem.Stat(targetPath)
+	if err != nil {
+		if irodsclient_types.IsFileNotFoundError(err) {
+			// target does not exist
+			err = bput.filesystem.MakeDir(targetPath, true)
+			if err != nil {
+				return xerrors.Errorf("failed to make a collection %q: %w", targetPath, err)
+			}
+
+			now := time.Now()
+			reportFile := &commons.TransferReportFile{
+				Method:     commons.TransferMethodPut,
+				StartAt:    now,
+				EndAt:      now,
+				SourcePath: sourcePath,
+				DestPath:   targetPath,
+				Notes:      []string{"directory"},
+			}
+
+			bput.transferReportManager.AddFile(reportFile)
+		} else {
+			return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		}
+	} else {
+		// target exists
+		if !targetEntry.IsDir() {
+			return commons.NewNotDirError(targetPath)
+		}
+	}
+
+	// get entries
 	entries, err := os.ReadDir(sourcePath)
 	if err != nil {
 		return xerrors.Errorf("failed to read a directory %q: %w", sourcePath, err)
@@ -429,20 +588,14 @@ func (bput *BputCommand) putDir(sourceStat fs.FileInfo, sourcePath string) error
 			if err != nil {
 				return err
 			}
-
-			//commons.MarkPathMap(bput.updatedPathMap, newEntryPath)
 		} else {
 			// file
 			err = bput.putFile(entryStat, entryPath)
 			if err != nil {
 				return err
 			}
-
-			//commons.MarkPathMap(bput.updatedPathMap, newEntryPath)
 		}
 	}
-
-	//commons.MarkPathMap(put.updatedPathMap, targetPath)
 
 	return nil
 }

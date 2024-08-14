@@ -236,7 +236,7 @@ func (copy *CopySftpIdCommand) updateAuthorizedKeys(identityFiles []string, auth
 			authorizedKey, _, _, _, err := ssh.ParseAuthorizedKey([]byte(keyLine))
 			if err != nil {
 				// skip
-				log.Debugf("failed to parse a authorized key line - %s", err.Error())
+				log.WithError(err).Debugf("failed to parse a authorized key line")
 				continue
 			}
 

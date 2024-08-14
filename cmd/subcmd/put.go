@@ -436,8 +436,6 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 		return xerrors.Errorf("failed to schedule upload %q to %q: %w", sourcePath, targetPath, err)
 	}
 
-	commons.MarkPathMap(put.updatedPathMap, targetPath)
-
 	logger.Debugf("scheduled a file upload %q to %q", sourcePath, targetPath)
 
 	return nil
@@ -449,6 +447,8 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 		"struct":   "PutCommand",
 		"function": "putFile",
 	})
+
+	commons.MarkPathMap(put.updatedPathMap, targetPath)
 
 	targetEntry, err := put.filesystem.Stat(targetPath)
 	if err != nil {
@@ -560,6 +560,8 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 }
 
 func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetPath string, parentEncryption bool, parentEncryptionMode commons.EncryptionMode) error {
+	commons.MarkPathMap(put.updatedPathMap, targetPath)
+
 	targetEntry, err := put.filesystem.Stat(targetPath)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
@@ -619,8 +621,6 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 			if err != nil {
 				return err
 			}
-
-			commons.MarkPathMap(put.updatedPathMap, newEntryPath)
 		} else {
 			// file
 			if requireEncryption {
@@ -634,20 +634,14 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 				if err != nil {
 					return err
 				}
-
-				commons.MarkPathMap(put.updatedPathMap, newTargetPath)
 			} else {
 				err = put.putFile(entryStat, entryPath, "", newEntryPath, requireEncryption, encryptionMode)
 				if err != nil {
 					return err
 				}
-
-				commons.MarkPathMap(put.updatedPathMap, newEntryPath)
 			}
 		}
 	}
-
-	commons.MarkPathMap(put.updatedPathMap, targetPath)
 
 	return nil
 }

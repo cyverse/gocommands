@@ -426,8 +426,6 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 		return xerrors.Errorf("failed to schedule download %q to %q: %w", sourceEntry.Path, targetPath, err)
 	}
 
-	commons.MarkPathMap(get.updatedPathMap, targetPath)
-
 	logger.Debugf("scheduled a data object download %q to %q", sourceEntry.Path, targetPath)
 
 	return nil
@@ -439,6 +437,8 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 		"struct":   "GetCommand",
 		"function": "getFile",
 	})
+
+	commons.MarkPathMap(get.updatedPathMap, targetPath)
 
 	targetStat, err := os.Stat(targetPath)
 	if err != nil {
@@ -560,6 +560,8 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 }
 
 func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath string, parentDecryption bool) error {
+	commons.MarkPathMap(get.updatedPathMap, targetPath)
+
 	targetStat, err := os.Stat(targetPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -609,8 +611,6 @@ func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath stri
 			if err != nil {
 				return err
 			}
-
-			commons.MarkPathMap(get.updatedPathMap, newEntryPath)
 		} else {
 			// file
 			if requireDecryption {
@@ -624,20 +624,14 @@ func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath stri
 				if err != nil {
 					return err
 				}
-
-				commons.MarkPathMap(get.updatedPathMap, newTargetPath)
 			} else {
 				err = get.getFile(entry, "", newEntryPath, requireDecryption)
 				if err != nil {
 					return err
 				}
-
-				commons.MarkPathMap(get.updatedPathMap, newEntryPath)
 			}
 		}
 	}
-
-	commons.MarkPathMap(get.updatedPathMap, targetPath)
 
 	return nil
 }

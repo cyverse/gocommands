@@ -22,8 +22,7 @@ func AddBcleanCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(bcleanCmd, false)
 
-	// attach bundle temp flags
-	flag.SetBundleTempFlags(bcleanCmd)
+	flag.SetBundleTransferFlags(bcleanCmd, false)
 	flag.SetForceFlags(bcleanCmd, false)
 
 	rootCmd.AddCommand(bcleanCmd)
@@ -41,8 +40,8 @@ func processBcleanCommand(command *cobra.Command, args []string) error {
 type BcleanCommand struct {
 	command *cobra.Command
 
-	forceFlagValues      *flag.ForceFlagValues
-	bundleTempFlagValues *flag.BundleTempFlagValues
+	forceFlagValues          *flag.ForceFlagValues
+	bundleTransferFlagValues *flag.BundleTransferFlagValues
 
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
@@ -54,8 +53,8 @@ func NewBcleanCommand(command *cobra.Command, args []string) (*BcleanCommand, er
 	bclean := &BcleanCommand{
 		command: command,
 
-		forceFlagValues:      flag.GetForceFlagValues(),
-		bundleTempFlagValues: flag.GetBundleTempFlagValues(),
+		forceFlagValues:          flag.GetForceFlagValues(),
+		bundleTransferFlagValues: flag.GetBundleTransferFlagValues(),
 	}
 
 	// path
@@ -96,13 +95,13 @@ func (bclean *BcleanCommand) Process() error {
 
 	// run
 	// clear local
-	commons.CleanUpOldLocalBundles(bclean.bundleTempFlagValues.LocalTempPath, bclean.forceFlagValues.Force)
+	commons.CleanUpOldLocalBundles(bclean.bundleTransferFlagValues.LocalTempPath, bclean.forceFlagValues.Force)
 
 	// clear remote
-	if len(bclean.bundleTempFlagValues.IRODSTempPath) > 0 {
-		logger.Debugf("clearing an irods temp directory %q", bclean.bundleTempFlagValues.IRODSTempPath)
+	if len(bclean.bundleTransferFlagValues.IRODSTempPath) > 0 {
+		logger.Debugf("clearing an irods temp directory %q", bclean.bundleTransferFlagValues.IRODSTempPath)
 
-		commons.CleanUpOldIRODSBundles(bclean.filesystem, bclean.bundleTempFlagValues.IRODSTempPath, true, bclean.forceFlagValues.Force)
+		commons.CleanUpOldIRODSBundles(bclean.filesystem, bclean.bundleTransferFlagValues.IRODSTempPath, true, bclean.forceFlagValues.Force)
 	} else {
 		userHome := commons.GetHomeDir()
 		homeStagingDir := commons.GetDefaultStagingDir(userHome)
