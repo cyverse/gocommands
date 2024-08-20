@@ -41,7 +41,7 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	flag.SetDifferentialTransferFlags(bputCmd, true)
 	flag.SetNoRootFlags(bputCmd)
 	flag.SetSyncFlags(bputCmd, false)
-	flag.SetTransferReportFlags(putCmd)
+	flag.SetTransferReportFlags(bputCmd)
 
 	rootCmd.AddCommand(bputCmd)
 }

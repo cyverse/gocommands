@@ -37,7 +37,7 @@ func AddCpCommand(rootCmd *cobra.Command) {
 	flag.SetDifferentialTransferFlags(cpCmd, true)
 	flag.SetNoRootFlags(cpCmd)
 	flag.SetSyncFlags(cpCmd, false)
-	flag.SetTransferReportFlags(getCmd)
+	flag.SetTransferReportFlags(cpCmd)
 
 	rootCmd.AddCommand(cpCmd)
 }
