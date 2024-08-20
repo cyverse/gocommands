@@ -175,9 +175,9 @@ func main() {
 		} else if commons.IsNotDirError(err) {
 			var notDirError *commons.NotDirError
 			if errors.As(err, &notDirError) {
-				fmt.Fprintf(os.Stderr, "Destination %q is not a director!\n", notDirError.Path)
+				fmt.Fprintf(os.Stderr, "Destination %q is not a directory!\n", notDirError.Path)
 			} else {
-				fmt.Fprintf(os.Stderr, "Destination is not a director!\n")
+				fmt.Fprintf(os.Stderr, "Destination is not a directory!\n")
 			}
 		} else {
 			fmt.Fprintf(os.Stderr, "Unexpected error!\nError Trace:\n  - %+v\n", err)
