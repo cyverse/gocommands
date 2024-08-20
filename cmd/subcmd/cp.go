@@ -196,6 +196,11 @@ func (cp *CpCommand) ensureTargetIsDir(targetPath string) error {
 
 	targetEntry, err := cp.filesystem.Stat(targetPath)
 	if err != nil {
+		if irodsclient_types.IsFileNotFoundError(err) {
+			// not exist
+			return commons.NewNotDirError(targetPath)
+		}
+
 		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
 	}
 

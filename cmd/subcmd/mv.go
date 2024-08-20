@@ -110,6 +110,11 @@ func (mv *MvCommand) ensureTargetIsDir(targetPath string) error {
 
 	targetEntry, err := mv.filesystem.Stat(targetPath)
 	if err != nil {
+		if irodsclient_types.IsFileNotFoundError(err) {
+			// not exist
+			return commons.NewNotDirError(targetPath)
+		}
+
 		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
 	}
 

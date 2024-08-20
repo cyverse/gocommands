@@ -147,28 +147,17 @@ func (ls *LsCommand) Process() error {
 	return nil
 }
 
-func (ls *LsCommand) requireDecryption(sourceEntry *irodsclient_fs.Entry, parentDecryption bool) bool {
-	if ls.decryptionFlagValues.Decryption {
-		return true
-	}
-
+func (ls *LsCommand) requireDecryption(sourcePath string) bool {
 	if ls.decryptionFlagValues.NoDecryption {
 		return false
 	}
 
-	if !ls.decryptionFlagValues.IgnoreMeta {
-		// load encryption config from meta
-		sourceDir := sourceEntry.Path
-		if !sourceEntry.IsDir() {
-			sourceDir = commons.GetDir(sourceEntry.Path)
-		}
-
-		encryptionConfig := commons.GetEncryptionConfigFromMeta(ls.filesystem, sourceDir)
-
-		return encryptionConfig.Required
+	if !ls.decryptionFlagValues.Decryption {
+		return false
 	}
 
-	return parentDecryption
+	mode := commons.DetectEncryptionMode(sourcePath)
+	return mode != commons.EncryptionModeUnknown
 }
 
 func (ls *LsCommand) listOne(sourcePath string) error {
@@ -185,8 +174,6 @@ func (ls *LsCommand) listOne(sourcePath string) error {
 
 		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
 	}
-
-	requireDecryption := ls.requireDecryption(sourceEntry, false)
 
 	connection, err := ls.filesystem.GetMetadataConnection()
 	if err != nil {
@@ -211,7 +198,7 @@ func (ls *LsCommand) listOne(sourcePath string) error {
 			return xerrors.Errorf("failed to list data-objects in %q: %w", sourcePath, err)
 		}
 
-		ls.printDataObjects(objs, requireDecryption)
+		ls.printDataObjects(objs)
 		ls.printCollections(colls)
 
 		return nil
@@ -231,7 +218,7 @@ func (ls *LsCommand) listOne(sourcePath string) error {
 	}
 
 	entries := []*irodsclient_types.IRODSDataObject{entry}
-	ls.printDataObjects(entries, requireDecryption)
+	ls.printDataObjects(entries)
 
 	return nil
 }
@@ -243,16 +230,16 @@ func (ls *LsCommand) printCollections(entries []*irodsclient_types.IRODSCollecti
 	}
 }
 
-func (ls *LsCommand) printDataObjects(entries []*irodsclient_types.IRODSDataObject, requireDecryption bool) {
+func (ls *LsCommand) printDataObjects(entries []*irodsclient_types.IRODSDataObject) {
 	if ls.listFlagValues.Format == commons.ListFormatNormal {
 		sort.SliceStable(entries, ls.getDataObjectSortFunction(entries, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
 		for _, entry := range entries {
-			ls.printDataObjectShort(entry, requireDecryption)
+			ls.printDataObjectShort(entry)
 		}
 	} else {
 		replicas := ls.flattenReplicas(entries)
 		sort.SliceStable(replicas, ls.getFlatReplicaSortFunction(replicas, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
-		ls.printReplicas(replicas, requireDecryption)
+		ls.printReplicas(replicas)
 	}
 }
 
@@ -405,7 +392,7 @@ func (ls *LsCommand) getDataObjectModifyTime(object *irodsclient_types.IRODSData
 	return maxTime
 }
 
-func (ls *LsCommand) printDataObjectShort(entry *irodsclient_types.IRODSDataObject, requireDecryption bool) {
+func (ls *LsCommand) printDataObjectShort(entry *irodsclient_types.IRODSDataObject) {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "LsCommand",
@@ -414,7 +401,7 @@ func (ls *LsCommand) printDataObjectShort(entry *irodsclient_types.IRODSDataObje
 
 	newName := entry.Name
 
-	if requireDecryption {
+	if ls.requireDecryption(entry.Path) {
 		// need to decrypt
 		encryptionMode := commons.DetectEncryptionMode(newName)
 		if encryptionMode != commons.EncryptionModeUnknown {
@@ -433,9 +420,9 @@ func (ls *LsCommand) printDataObjectShort(entry *irodsclient_types.IRODSDataObje
 	fmt.Printf("  %s\n", newName)
 }
 
-func (ls *LsCommand) printReplicas(flatReplicas []*FlatReplica, requireDecryption bool) {
+func (ls *LsCommand) printReplicas(flatReplicas []*FlatReplica) {
 	for _, flatReplica := range flatReplicas {
-		ls.printReplica(*flatReplica, requireDecryption)
+		ls.printReplica(*flatReplica)
 	}
 }
 
@@ -452,7 +439,7 @@ func (ls *LsCommand) getEncryptionManagerForDecryption(mode commons.EncryptionMo
 	return manager
 }
 
-func (ls *LsCommand) printReplica(flatReplica FlatReplica, requireDecryption bool) {
+func (ls *LsCommand) printReplica(flatReplica FlatReplica) {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "LsCommand",
@@ -461,7 +448,7 @@ func (ls *LsCommand) printReplica(flatReplica FlatReplica, requireDecryption boo
 
 	newName := flatReplica.DataObject.Name
 
-	if requireDecryption {
+	if ls.requireDecryption(flatReplica.DataObject.Path) {
 		// need to decrypt
 		encryptionMode := commons.DetectEncryptionMode(newName)
 		if encryptionMode != commons.EncryptionModeUnknown {

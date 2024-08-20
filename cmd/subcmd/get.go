@@ -248,6 +248,11 @@ func (get *GetCommand) ensureTargetIsDir(targetPath string) error {
 
 	targetStat, err := os.Stat(targetPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			// not exist
+			return commons.NewNotDirError(targetPath)
+		}
+
 		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
 	}
 
@@ -258,39 +263,24 @@ func (get *GetCommand) ensureTargetIsDir(targetPath string) error {
 	return nil
 }
 
-func (get *GetCommand) requireDecryption(sourceEntry *irodsclient_fs.Entry, parentDecryption bool) bool {
-	if get.decryptionFlagValues.Decryption {
-		return true
-	}
-
+func (get *GetCommand) requireDecryption(sourcePath string) bool {
 	if get.decryptionFlagValues.NoDecryption {
 		return false
 	}
 
-	if !get.decryptionFlagValues.IgnoreMeta {
-		// load encryption config from meta
-		sourceDir := sourceEntry.Path
-		if !sourceEntry.IsDir() {
-			sourceDir = commons.GetDir(sourceEntry.Path)
-		}
-
-		encryptionConfig := commons.GetEncryptionConfigFromMeta(get.filesystem, sourceDir)
-
-		return encryptionConfig.Required
+	if !get.decryptionFlagValues.Decryption {
+		return false
 	}
 
-	return parentDecryption
+	mode := commons.DetectEncryptionMode(sourcePath)
+	return mode != commons.EncryptionModeUnknown
 }
 
 func (get *GetCommand) hasTransferStatusFile(targetPath string) bool {
 	// check transfer status file
 	trxStatusFilePath := irodsclient_irodsfs.GetDataObjectTransferStatusFilePath(targetPath)
 	_, err := os.Stat(trxStatusFilePath)
-	if err == nil {
-		return true
-	}
-
-	return false
+	return err == nil
 }
 
 func (get *GetCommand) getOne(sourcePath string, targetPath string) error {
@@ -311,26 +301,25 @@ func (get *GetCommand) getOne(sourcePath string, targetPath string) error {
 			targetPath = commons.MakeTargetLocalFilePath(sourcePath, targetPath)
 		}
 
-		return get.getDir(sourceEntry, targetPath, false)
+		return get.getDir(sourceEntry, targetPath)
 	}
 
 	// file
-	requireDecryption := get.requireDecryption(sourceEntry, false)
-	if requireDecryption {
+	if get.requireDecryption(sourceEntry.Path) {
 		// decrypt filename
 		tempPath, newTargetPath, err := get.getPathsForDecryption(sourceEntry.Path, targetPath)
 		if err != nil {
 			return xerrors.Errorf("failed to get decryption path for %q: %w", sourceEntry.Path, err)
 		}
 
-		return get.getFile(sourceEntry, tempPath, newTargetPath, requireDecryption)
+		return get.getFile(sourceEntry, tempPath, newTargetPath)
 	}
 
 	targetPath = commons.MakeTargetLocalFilePath(sourcePath, targetPath)
-	return get.getFile(sourceEntry, "", targetPath, requireDecryption)
+	return get.getFile(sourceEntry, "", targetPath)
 }
 
-func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath string, targetPath string, resume bool, requireDecryption bool) error {
+func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath string, targetPath string, resume bool) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "GetCommand",
@@ -396,7 +385,7 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 		}
 
 		// decrypt
-		if requireDecryption {
+		if get.requireDecryption(sourceEntry.Path) {
 			decrypted, err := get.decryptFile(sourceEntry.Path, tempPath, targetPath)
 			if err != nil {
 				job.Progress(-1, sourceEntry.Size, true)
@@ -417,6 +406,8 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 		logger.Debugf("downloaded a data object %q to %q", sourceEntry.Path, targetPath)
 		job.Progress(sourceEntry.Size, sourceEntry.Size, false)
 
+		job.Done()
+
 		return nil
 	}
 
@@ -431,7 +422,7 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 	return nil
 }
 
-func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath string, targetPath string, requireDecryption bool) error {
+func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath string, targetPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "GetCommand",
@@ -445,7 +436,7 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 		if os.IsNotExist(err) {
 			// target does not exist
 			// target must be a file with new name
-			return get.scheduleGet(sourceEntry, tempPath, targetPath, false, requireDecryption)
+			return get.scheduleGet(sourceEntry, tempPath, targetPath, false)
 		}
 
 		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
@@ -510,7 +501,7 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 		commons.Printf("resume downloading a data object %q\n", targetPath)
 		logger.Debugf("resume downloading a data object %q", targetPath)
 
-		return get.scheduleGet(sourceEntry, tempPath, targetPath, true, requireDecryption)
+		return get.scheduleGet(sourceEntry, tempPath, targetPath, true)
 	}
 
 	if get.differentialTransferFlagValues.DifferentialTransfer {
@@ -603,10 +594,10 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 	}
 
 	// schedule
-	return get.scheduleGet(sourceEntry, tempPath, targetPath, false, requireDecryption)
+	return get.scheduleGet(sourceEntry, tempPath, targetPath, false)
 }
 
-func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath string, parentDecryption bool) error {
+func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath string) error {
 	commons.MarkPathMap(get.updatedPathMap, targetPath)
 
 	targetStat, err := os.Stat(targetPath)
@@ -688,7 +679,7 @@ func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath stri
 	}
 
 	// load encryption config
-	requireDecryption := get.requireDecryption(sourceEntry, parentDecryption)
+	requireDecryption := get.requireDecryption(sourceEntry.Path)
 
 	// get entries
 	entries, err := get.filesystem.List(sourceEntry.Path)
@@ -701,7 +692,7 @@ func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath stri
 
 		if entry.IsDir() {
 			// dir
-			err = get.getDir(entry, newEntryPath, requireDecryption)
+			err = get.getDir(entry, newEntryPath)
 			if err != nil {
 				return err
 			}
@@ -714,12 +705,12 @@ func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath stri
 					return xerrors.Errorf("failed to get decryption path for %q: %w", entry.Path, err)
 				}
 
-				err = get.getFile(entry, tempPath, newTargetPath, requireDecryption)
+				err = get.getFile(entry, tempPath, newTargetPath)
 				if err != nil {
 					return err
 				}
 			} else {
-				err = get.getFile(entry, "", newEntryPath, requireDecryption)
+				err = get.getFile(entry, "", newEntryPath)
 				if err != nil {
 					return err
 				}

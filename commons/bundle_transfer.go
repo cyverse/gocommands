@@ -357,7 +357,7 @@ func (manager *BundleTransferManager) Wait() error {
 	}
 
 	if manager.bundlesDoneCounter != manager.bundlesScheduledCounter {
-		return xerrors.Errorf("bundles '%d/%d' were canceled!", manager.bundlesDoneCounter, manager.bundlesScheduledCounter)
+		return xerrors.Errorf("bundles '%d/%d' were not completed!", manager.bundlesDoneCounter, manager.bundlesScheduledCounter)
 	}
 
 	return nil

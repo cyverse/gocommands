@@ -162,7 +162,7 @@ func (manager *ParallelJobManager) Wait() error {
 	}
 
 	if manager.jobsDoneCounter != manager.jobsScheduledCounter {
-		return xerrors.Errorf("jobs '%d/%d' were canceled!", manager.jobsDoneCounter, manager.jobsScheduledCounter)
+		return xerrors.Errorf("jobs '%d/%d' were not completed!", manager.jobsDoneCounter, manager.jobsScheduledCounter)
 	}
 
 	return nil
@@ -294,11 +294,12 @@ func (manager *ParallelJobManager) Start() {
 					currentThreads -= pjob.threadsRequired
 					logger.Debugf("# threads : %d, max %d", currentThreads, manager.maxThreads)
 
-					manager.jobWait.Done()
 					if pjob.done {
 						// increase jobs done counter
 						atomic.AddInt64(&manager.jobsDoneCounter, 1)
 					}
+
+					manager.jobWait.Done()
 
 					manager.mutex.Lock()
 					manager.availableThreadWaitCondition.Broadcast()
