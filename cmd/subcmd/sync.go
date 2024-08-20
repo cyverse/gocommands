@@ -31,7 +31,7 @@ func AddSyncCommand(rootCmd *cobra.Command) {
 	flag.SetRetryFlags(syncCmd)
 	flag.SetDifferentialTransferFlags(syncCmd, false)
 	flag.SetNoRootFlags(syncCmd)
-	flag.SetSyncFlags(syncCmd)
+	flag.SetSyncFlags(syncCmd, true)
 
 	rootCmd.AddCommand(syncCmd)
 }
@@ -49,6 +49,7 @@ type SyncCommand struct {
 	command *cobra.Command
 
 	retryFlagValues *flag.RetryFlagValues
+	syncFlagValues  *flag.SyncFlagValues
 
 	sourcePaths []string
 	targetPath  string
@@ -59,6 +60,7 @@ func NewSyncCommand(command *cobra.Command, args []string) (*SyncCommand, error)
 		command: command,
 
 		retryFlagValues: flag.GetRetryFlagValues(),
+		syncFlagValues:  flag.GetSyncFlagValues(),
 	}
 
 	// path
@@ -159,7 +161,7 @@ func (sync *SyncCommand) syncIRODS(targetPath string) error {
 	return nil
 }
 
-func (sync *SyncCommand) getNewCommandArgsForRetry() ([]string, error) {
+func (sync *SyncCommand) getNewCommandArgs() ([]string, error) {
 	newArgs := []string{}
 
 	commandName := sync.command.CalledAs()
@@ -179,6 +181,7 @@ func (sync *SyncCommand) getNewCommandArgsForRetry() ([]string, error) {
 
 	newArgs = append(newArgs, osArgs[:commandIdx]...)
 	newArgs = append(newArgs, "--diff")
+	newArgs = append(newArgs, "--sync")
 	newArgs = append(newArgs, osArgs[commandIdx+1:]...)
 
 	// filter out retry flag
@@ -199,16 +202,24 @@ func (sync *SyncCommand) syncLocalToIRODS() error {
 		"function": "syncLocalToIRODS",
 	})
 
-	newArgs, err := sync.getNewCommandArgsForRetry()
+	newArgs, err := sync.getNewCommandArgs()
 	if err != nil {
 		return xerrors.Errorf("failed to get new command args for retry: %w", err)
 	}
 
-	// run bput
-	logger.Debugf("run bput with args: %v", newArgs)
-	bputCmd.ParseFlags(newArgs)
-	argWoFlags := bputCmd.Flags().Args()
-	return bputCmd.RunE(bputCmd, argWoFlags)
+	if sync.syncFlagValues.BulkUpload {
+		// run bput
+		logger.Debugf("run bput with args: %v", newArgs)
+		bputCmd.ParseFlags(newArgs)
+		argWoFlags := bputCmd.Flags().Args()
+		return bputCmd.RunE(bputCmd, argWoFlags)
+	}
+
+	// run put
+	logger.Debugf("run put with args: %v", newArgs)
+	putCmd.ParseFlags(newArgs)
+	argWoFlags := putCmd.Flags().Args()
+	return putCmd.RunE(putCmd, argWoFlags)
 }
 
 func (sync *SyncCommand) syncIRODSToIRODS() error {
@@ -218,7 +229,7 @@ func (sync *SyncCommand) syncIRODSToIRODS() error {
 		"function": "syncIRODSToIRODS",
 	})
 
-	newArgs, err := sync.getNewCommandArgsForRetry()
+	newArgs, err := sync.getNewCommandArgs()
 	if err != nil {
 		return xerrors.Errorf("failed to get new command args for retry: %w", err)
 	}
@@ -237,7 +248,7 @@ func (sync *SyncCommand) syncIRODSToLocal() error {
 		"function": "syncIRODSToLocal",
 	})
 
-	newArgs, err := sync.getNewCommandArgsForRetry()
+	newArgs, err := sync.getNewCommandArgs()
 	if err != nil {
 		return xerrors.Errorf("failed to get new command args for retry: %w", err)
 	}

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
@@ -153,6 +154,7 @@ func (bundle *Bundle) SetCompleted() {
 
 type BundleTransferManager struct {
 	filesystem              *irodsclient_fs.FileSystem
+	transferReportManager   *TransferReportManager
 	irodsDestPath           string
 	currentBundle           *Bundle
 	nextBundleIndex         int64
@@ -185,7 +187,7 @@ type BundleTransferManager struct {
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
-func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath string, bundleRootPath string, minBundleFileNum int, maxBundleFileNum int, maxBundleFileSize int64, singleThreaded bool, uploadThreadNum int, redirectToResource bool, useIcat bool, localTempDirPath string, irodsTempDirPath string, noBulkReg bool, showProgress bool, showFullPath bool) *BundleTransferManager {
+func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, transferReportManager *TransferReportManager, irodsDestPath string, bundleRootPath string, minBundleFileNum int, maxBundleFileNum int, maxBundleFileSize int64, singleThreaded bool, uploadThreadNum int, redirectToResource bool, useIcat bool, localTempDirPath string, irodsTempDirPath string, noBulkReg bool, showProgress bool, showFullPath bool) *BundleTransferManager {
 	cwd := GetCWD()
 	home := GetHomeDir()
 	zone := GetZone()
@@ -193,6 +195,7 @@ func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, irodsDestPath strin
 
 	manager := &BundleTransferManager{
 		filesystem:              fs,
+		transferReportManager:   transferReportManager,
 		irodsDestPath:           irodsDestPath,
 		currentBundle:           nil,
 		nextBundleIndex:         0,
@@ -922,17 +925,7 @@ func (manager *BundleTransferManager) processBundleUploadWithTar(bundle *Bundle)
 			// redirect-to-resource
 			_, err = manager.filesystem.UploadFileParallelRedirectToResource(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, true, true, callbackPut)
 		} else {
-			if manager.filesystem.SupportParallelUpload() {
-				_, err = manager.filesystem.UploadFileParallel(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, false, false, callbackPut)
-			} else {
-				if bundle.Size >= ParallelUploadMinSize {
-					// does not support parall upload via iCAT
-					// redirect-to-resource
-					_, err = manager.filesystem.UploadFileParallelRedirectToResource(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, false, false, callbackPut)
-				} else {
-					_, err = manager.filesystem.UploadFileParallel(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, false, false, callbackPut)
-				}
-			}
+			_, err = manager.filesystem.UploadFileParallel(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, false, false, callbackPut)
 		}
 	}
 
@@ -982,6 +975,18 @@ func (manager *BundleTransferManager) processBundleUploadWithoutTar(bundle *Bund
 				return xerrors.Errorf("failed to upload a directory %q in bundle %d to %q: %w", file.LocalPath, bundle.Index, file.IRODSPath, err)
 			}
 
+			now := time.Now()
+			reportFile := &TransferReportFile{
+				Method:     TransferMethodPut,
+				StartAt:    now,
+				EndAt:      now,
+				SourcePath: file.LocalPath,
+				DestPath:   file.IRODSPath,
+				Notes:      []string{"directory"},
+			}
+
+			manager.transferReportManager.AddFile(reportFile)
+
 			manager.progress(progressName, 0, bundle.Size, progress.UnitsBytes, false)
 			logger.Debugf("uploaded a directory %q in bundle %d to %q", file.LocalPath, bundle.Index, file.IRODSPath)
 			continue
@@ -998,37 +1003,41 @@ func (manager *BundleTransferManager) processBundleUploadWithoutTar(bundle *Bund
 			}
 		}
 
+		var uploadResult *irodsclient_fs.FileTransferResult
+		notes := []string{}
+
 		// determine how to download
 		var err error
 		if manager.singleThreaded || manager.uploadThreadNum == 1 {
-			_, err = manager.filesystem.UploadFile(file.LocalPath, file.IRODSPath, "", false, true, true, callbackPut)
+			uploadResult, err = manager.filesystem.UploadFile(file.LocalPath, file.IRODSPath, "", false, true, true, callbackPut)
+			notes = append(notes, "icat", "single-thread")
 		} else if manager.redirectToResource {
-			_, err = manager.filesystem.UploadFileParallelRedirectToResource(file.LocalPath, file.IRODSPath, "", 0, false, true, true, callbackPut)
+			uploadResult, err = manager.filesystem.UploadFileParallelRedirectToResource(file.LocalPath, file.IRODSPath, "", 0, false, true, true, callbackPut)
+			notes = append(notes, "redirect-to-resource")
 		} else if manager.useIcat {
-			_, err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, true, true, callbackPut)
+			uploadResult, err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, true, true, callbackPut)
+			notes = append(notes, "icat", "multi-thread")
 		} else {
 			// auto
 			if bundle.Size >= RedirectToResourceMinSize {
 				// redirect-to-resource
-				_, err = manager.filesystem.UploadFileParallelRedirectToResource(file.LocalPath, file.IRODSPath, "", 0, false, true, true, callbackPut)
+				uploadResult, err = manager.filesystem.UploadFileParallelRedirectToResource(file.LocalPath, file.IRODSPath, "", 0, false, true, true, callbackPut)
+				notes = append(notes, "redirect-to-resource")
 			} else {
-				if manager.filesystem.SupportParallelUpload() {
-					_, err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, true, true, callbackPut)
-				} else {
-					if bundle.Size >= ParallelUploadMinSize {
-						// does not support parall upload via iCAT
-						// redirect-to-resource
-						_, err = manager.filesystem.UploadFileParallelRedirectToResource(file.LocalPath, file.IRODSPath, "", 0, false, true, true, callbackPut)
-					} else {
-						_, err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, true, true, callbackPut)
-					}
-				}
+				uploadResult, err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, true, true, callbackPut)
+				notes = append(notes, "icat", "multi-thread")
 			}
 		}
 
 		if err != nil {
 			manager.progress(progressName, 0, bundle.Size, progress.UnitsBytes, true)
 			return xerrors.Errorf("failed to upload file %q in bundle %d to %q: %w", file.LocalPath, bundle.Index, file.IRODSPath, err)
+		}
+
+		err = manager.transferReportManager.AddTransfer(uploadResult, TransferMethodPut, err, notes)
+		if err != nil {
+			manager.progress(progressName, 0, bundle.Size, progress.UnitsBytes, true)
+			return xerrors.Errorf("failed to add transfer report: %w", err)
 		}
 
 		manager.progress(progressName, file.Size, bundle.Size, progress.UnitsBytes, false)
@@ -1076,6 +1085,24 @@ func (manager *BundleTransferManager) processBundleExtract(bundle *Bundle) error
 	// set it done
 	bundle.SetCompleted()
 	atomic.AddInt64(&manager.bundlesDoneCounter, 1)
+
+	now := time.Now()
+
+	for _, file := range bundle.Entries {
+		reportFile := &TransferReportFile{
+			Method:     TransferMethodPut,
+			StartAt:    now,
+			EndAt:      now,
+			SourcePath: file.LocalPath,
+			SourceSize: file.Size,
+
+			DestPath: file.IRODSPath,
+			DestSize: file.Size,
+			Notes:    []string{"bundle_extracted"},
+		}
+
+		manager.transferReportManager.AddFile(reportFile)
+	}
 
 	logger.Debugf("extracted bundle %d at %q to %q", bundle.Index, bundle.IRODSBundlePath, manager.irodsDestPath)
 	return nil

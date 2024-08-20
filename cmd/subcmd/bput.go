@@ -40,7 +40,7 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	flag.SetRetryFlags(bputCmd)
 	flag.SetDifferentialTransferFlags(bputCmd, true)
 	flag.SetNoRootFlags(bputCmd)
-	flag.SetSyncFlags(bputCmd)
+	flag.SetSyncFlags(bputCmd, false)
 	flag.SetTransferReportFlags(putCmd)
 
 	rootCmd.AddCommand(bputCmd)
@@ -207,7 +207,7 @@ func (bput *BputCommand) Process() error {
 	}
 
 	// bundle transfer manager
-	bput.bundleTransferManager = commons.NewBundleTransferManager(bput.filesystem, bput.targetPath, bundleRootPath, bput.bundleTransferFlagValues.MinFileNum, bput.bundleTransferFlagValues.MaxFileNum, bput.bundleTransferFlagValues.MaxFileSize, bput.parallelTransferFlagValues.SingleTread, bput.parallelTransferFlagValues.ThreadNumber, bput.parallelTransferFlagValues.RedirectToResource, bput.parallelTransferFlagValues.Icat, bput.bundleTransferFlagValues.LocalTempPath, bput.bundleTransferFlagValues.IRODSTempPath, bput.bundleTransferFlagValues.NoBulkRegistration, bput.progressFlagValues.ShowProgress, bput.progressFlagValues.ShowFullPath)
+	bput.bundleTransferManager = commons.NewBundleTransferManager(bput.filesystem, bput.transferReportManager, bput.targetPath, bundleRootPath, bput.bundleTransferFlagValues.MinFileNum, bput.bundleTransferFlagValues.MaxFileNum, bput.bundleTransferFlagValues.MaxFileSize, bput.parallelTransferFlagValues.SingleTread, bput.parallelTransferFlagValues.ThreadNumber, bput.parallelTransferFlagValues.RedirectToResource, bput.parallelTransferFlagValues.Icat, bput.bundleTransferFlagValues.LocalTempPath, bput.bundleTransferFlagValues.IRODSTempPath, bput.bundleTransferFlagValues.NoBulkRegistration, bput.progressFlagValues.ShowProgress, bput.progressFlagValues.ShowFullPath)
 	bput.bundleTransferManager.Start()
 
 	// run
@@ -431,7 +431,54 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string) erro
 	// target exists
 	// target must be a file
 	if targetEntry.IsDir() {
-		return commons.NewNotFileError(targetPath)
+		if bput.syncFlagValues.Sync {
+			// if it is sync, remove
+			if bput.forceFlagValues.Force {
+				removeErr := bput.filesystem.RemoveDir(targetPath, true, true)
+
+				now := time.Now()
+				reportFile := &commons.TransferReportFile{
+					Method:     commons.TransferMethodDelete,
+					StartAt:    now,
+					EndAt:      now,
+					SourcePath: targetPath,
+					Error:      removeErr,
+					Notes:      []string{"overwrite", "put", "dir"},
+				}
+
+				bput.transferReportManager.AddFile(reportFile)
+
+				if removeErr != nil {
+					return removeErr
+				}
+			} else {
+				// ask
+				overwrite := commons.InputYN(fmt.Sprintf("overwriting a file %q, but directory exists. Overwrite?", targetPath))
+				if overwrite {
+					removeErr := bput.filesystem.RemoveDir(targetPath, true, true)
+
+					now := time.Now()
+					reportFile := &commons.TransferReportFile{
+						Method:     commons.TransferMethodDelete,
+						StartAt:    now,
+						EndAt:      now,
+						SourcePath: targetPath,
+						Error:      removeErr,
+						Notes:      []string{"overwrite", "put", "dir"},
+					}
+
+					bput.transferReportManager.AddFile(reportFile)
+
+					if removeErr != nil {
+						return removeErr
+					}
+				} else {
+					return commons.NewNotFileError(targetPath)
+				}
+			}
+		} else {
+			return commons.NewNotFileError(targetPath)
+		}
 	}
 
 	if bput.differentialTransferFlagValues.DifferentialTransfer {
@@ -560,7 +607,54 @@ func (bput *BputCommand) putDir(sourceStat fs.FileInfo, sourcePath string) error
 	} else {
 		// target exists
 		if !targetEntry.IsDir() {
-			return commons.NewNotDirError(targetPath)
+			if bput.syncFlagValues.Sync {
+				// if it is sync, remove
+				if bput.forceFlagValues.Force {
+					removeErr := bput.filesystem.RemoveFile(targetPath, true)
+
+					now := time.Now()
+					reportFile := &commons.TransferReportFile{
+						Method:     commons.TransferMethodDelete,
+						StartAt:    now,
+						EndAt:      now,
+						SourcePath: targetPath,
+						Error:      removeErr,
+						Notes:      []string{"overwrite", "put"},
+					}
+
+					bput.transferReportManager.AddFile(reportFile)
+
+					if removeErr != nil {
+						return removeErr
+					}
+				} else {
+					// ask
+					overwrite := commons.InputYN(fmt.Sprintf("overwriting a directory %q, but file exists. Overwrite?", targetPath))
+					if overwrite {
+						removeErr := bput.filesystem.RemoveFile(targetPath, true)
+
+						now := time.Now()
+						reportFile := &commons.TransferReportFile{
+							Method:     commons.TransferMethodDelete,
+							StartAt:    now,
+							EndAt:      now,
+							SourcePath: targetPath,
+							Error:      removeErr,
+							Notes:      []string{"overwrite", "put"},
+						}
+
+						bput.transferReportManager.AddFile(reportFile)
+
+						if removeErr != nil {
+							return removeErr
+						}
+					} else {
+						return commons.NewNotDirError(targetPath)
+					}
+				}
+			} else {
+				return commons.NewNotDirError(targetPath)
+			}
 		}
 	}
 

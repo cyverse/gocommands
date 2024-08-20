@@ -42,7 +42,7 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	flag.SetChecksumFlags(getCmd, false)
 	flag.SetTransferReportFlags(getCmd)
 	flag.SetNoRootFlags(getCmd)
-	flag.SetSyncFlags(getCmd)
+	flag.SetSyncFlags(getCmd, false)
 	flag.SetDecryptionFlags(getCmd)
 	flag.SetPostTransferFlagValues(getCmd)
 
@@ -454,7 +454,54 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 	// target exists
 	// target must be a file
 	if targetStat.IsDir() {
-		return commons.NewNotFileError(targetPath)
+		if get.syncFlagValues.Sync {
+			// if it is sync, remove
+			if get.forceFlagValues.Force {
+				removeErr := os.RemoveAll(targetPath)
+
+				now := time.Now()
+				reportFile := &commons.TransferReportFile{
+					Method:     commons.TransferMethodDelete,
+					StartAt:    now,
+					EndAt:      now,
+					SourcePath: targetPath,
+					Error:      removeErr,
+					Notes:      []string{"overwrite", "get", "dir"},
+				}
+
+				get.transferReportManager.AddFile(reportFile)
+
+				if removeErr != nil {
+					return removeErr
+				}
+			} else {
+				// ask
+				overwrite := commons.InputYN(fmt.Sprintf("overwriting a file %q, but directory exists. Overwrite?", targetPath))
+				if overwrite {
+					removeErr := os.RemoveAll(targetPath)
+
+					now := time.Now()
+					reportFile := &commons.TransferReportFile{
+						Method:     commons.TransferMethodDelete,
+						StartAt:    now,
+						EndAt:      now,
+						SourcePath: targetPath,
+						Error:      removeErr,
+						Notes:      []string{"overwrite", "get", "dir"},
+					}
+
+					get.transferReportManager.AddFile(reportFile)
+
+					if removeErr != nil {
+						return removeErr
+					}
+				} else {
+					return commons.NewNotFileError(targetPath)
+				}
+			}
+		} else {
+			return commons.NewNotFileError(targetPath)
+		}
 	}
 
 	// check transfer status file
@@ -589,7 +636,54 @@ func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath stri
 	} else {
 		// target exists
 		if !targetStat.IsDir() {
-			return commons.NewNotDirError(targetPath)
+			if get.syncFlagValues.Sync {
+				// if it is sync, remove
+				if get.forceFlagValues.Force {
+					removeErr := os.Remove(targetPath)
+
+					now := time.Now()
+					reportFile := &commons.TransferReportFile{
+						Method:     commons.TransferMethodDelete,
+						StartAt:    now,
+						EndAt:      now,
+						SourcePath: targetPath,
+						Error:      removeErr,
+						Notes:      []string{"overwrite", "get"},
+					}
+
+					get.transferReportManager.AddFile(reportFile)
+
+					if removeErr != nil {
+						return removeErr
+					}
+				} else {
+					// ask
+					overwrite := commons.InputYN(fmt.Sprintf("overwriting a directory %q, but file exists. Overwrite?", targetPath))
+					if overwrite {
+						removeErr := os.Remove(targetPath)
+
+						now := time.Now()
+						reportFile := &commons.TransferReportFile{
+							Method:     commons.TransferMethodDelete,
+							StartAt:    now,
+							EndAt:      now,
+							SourcePath: targetPath,
+							Error:      removeErr,
+							Notes:      []string{"overwrite", "put"},
+						}
+
+						get.transferReportManager.AddFile(reportFile)
+
+						if removeErr != nil {
+							return removeErr
+						}
+					} else {
+						return commons.NewNotDirError(targetPath)
+					}
+				}
+			} else {
+				return commons.NewNotDirError(targetPath)
+			}
 		}
 	}
 

@@ -36,7 +36,7 @@ func AddCpCommand(rootCmd *cobra.Command) {
 	flag.SetRetryFlags(cpCmd)
 	flag.SetDifferentialTransferFlags(cpCmd, true)
 	flag.SetNoRootFlags(cpCmd)
-	flag.SetSyncFlags(cpCmd)
+	flag.SetSyncFlags(cpCmd, false)
 	flag.SetTransferReportFlags(getCmd)
 
 	rootCmd.AddCommand(cpCmd)
@@ -315,7 +315,54 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 	// target exists
 	// target must be a file
 	if targetEntry.IsDir() {
-		return commons.NewNotFileError(targetPath)
+		if cp.syncFlagValues.Sync {
+			// if it is sync, remove
+			if cp.forceFlagValues.Force {
+				removeErr := cp.filesystem.RemoveDir(targetPath, true, true)
+
+				now := time.Now()
+				reportFile := &commons.TransferReportFile{
+					Method:     commons.TransferMethodDelete,
+					StartAt:    now,
+					EndAt:      now,
+					SourcePath: targetPath,
+					Error:      removeErr,
+					Notes:      []string{"overwrite", "cp", "dir"},
+				}
+
+				cp.transferReportManager.AddFile(reportFile)
+
+				if removeErr != nil {
+					return removeErr
+				}
+			} else {
+				// ask
+				overwrite := commons.InputYN(fmt.Sprintf("overwriting a file %q, but directory exists. Overwrite?", targetPath))
+				if overwrite {
+					removeErr := cp.filesystem.RemoveDir(targetPath, true, true)
+
+					now := time.Now()
+					reportFile := &commons.TransferReportFile{
+						Method:     commons.TransferMethodDelete,
+						StartAt:    now,
+						EndAt:      now,
+						SourcePath: targetPath,
+						Error:      removeErr,
+						Notes:      []string{"overwrite", "cp", "dir"},
+					}
+
+					cp.transferReportManager.AddFile(reportFile)
+
+					if removeErr != nil {
+						return removeErr
+					}
+				} else {
+					return commons.NewNotFileError(targetPath)
+				}
+			}
+		} else {
+			return commons.NewNotFileError(targetPath)
+		}
 	}
 
 	if cp.differentialTransferFlagValues.DifferentialTransfer {
@@ -433,7 +480,54 @@ func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 	} else {
 		// target exists
 		if !targetEntry.IsDir() {
-			return commons.NewNotDirError(targetPath)
+			if cp.syncFlagValues.Sync {
+				// if it is sync, remove
+				if cp.forceFlagValues.Force {
+					removeErr := cp.filesystem.RemoveFile(targetPath, true)
+
+					now := time.Now()
+					reportFile := &commons.TransferReportFile{
+						Method:     commons.TransferMethodDelete,
+						StartAt:    now,
+						EndAt:      now,
+						SourcePath: targetPath,
+						Error:      removeErr,
+						Notes:      []string{"overwrite", "cp"},
+					}
+
+					cp.transferReportManager.AddFile(reportFile)
+
+					if removeErr != nil {
+						return removeErr
+					}
+				} else {
+					// ask
+					overwrite := commons.InputYN(fmt.Sprintf("overwriting a directory %q, but file exists. Overwrite?", targetPath))
+					if overwrite {
+						removeErr := cp.filesystem.RemoveFile(targetPath, true)
+
+						now := time.Now()
+						reportFile := &commons.TransferReportFile{
+							Method:     commons.TransferMethodDelete,
+							StartAt:    now,
+							EndAt:      now,
+							SourcePath: targetPath,
+							Error:      removeErr,
+							Notes:      []string{"overwrite", "cp"},
+						}
+
+						cp.transferReportManager.AddFile(reportFile)
+
+						if removeErr != nil {
+							return removeErr
+						}
+					} else {
+						return commons.NewNotDirError(targetPath)
+					}
+				}
+			} else {
+				return commons.NewNotDirError(targetPath)
+			}
 		}
 	}
 

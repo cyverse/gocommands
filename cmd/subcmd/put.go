@@ -42,7 +42,7 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	flag.SetDifferentialTransferFlags(putCmd, true)
 	flag.SetChecksumFlags(putCmd, true)
 	flag.SetNoRootFlags(putCmd)
-	flag.SetSyncFlags(putCmd)
+	flag.SetSyncFlags(putCmd, false)
 	flag.SetEncryptionFlags(putCmd)
 	flag.SetPostTransferFlagValues(putCmd)
 	flag.SetTransferReportFlags(putCmd)
@@ -464,7 +464,54 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 	// target exists
 	// target must be a file
 	if targetEntry.IsDir() {
-		return commons.NewNotFileError(targetPath)
+		if put.syncFlagValues.Sync {
+			// if it is sync, remove
+			if put.forceFlagValues.Force {
+				removeErr := put.filesystem.RemoveDir(targetPath, true, true)
+
+				now := time.Now()
+				reportFile := &commons.TransferReportFile{
+					Method:     commons.TransferMethodDelete,
+					StartAt:    now,
+					EndAt:      now,
+					SourcePath: targetPath,
+					Error:      removeErr,
+					Notes:      []string{"overwrite", "put", "dir"},
+				}
+
+				put.transferReportManager.AddFile(reportFile)
+
+				if removeErr != nil {
+					return removeErr
+				}
+			} else {
+				// ask
+				overwrite := commons.InputYN(fmt.Sprintf("overwriting a file %q, but directory exists. Overwrite?", targetPath))
+				if overwrite {
+					removeErr := put.filesystem.RemoveDir(targetPath, true, true)
+
+					now := time.Now()
+					reportFile := &commons.TransferReportFile{
+						Method:     commons.TransferMethodDelete,
+						StartAt:    now,
+						EndAt:      now,
+						SourcePath: targetPath,
+						Error:      removeErr,
+						Notes:      []string{"overwrite", "put", "dir"},
+					}
+
+					put.transferReportManager.AddFile(reportFile)
+
+					if removeErr != nil {
+						return removeErr
+					}
+				} else {
+					return commons.NewNotFileError(targetPath)
+				}
+			}
+		} else {
+			return commons.NewNotFileError(targetPath)
+		}
 	}
 
 	if put.differentialTransferFlagValues.DifferentialTransfer {
@@ -566,7 +613,7 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
 			// target does not exist
-			// target must be a directorywith new name
+			// target must be a directory with new name
 			err = put.filesystem.MakeDir(targetPath, true)
 			if err != nil {
 				return xerrors.Errorf("failed to make a collection %q: %w", targetPath, err)
@@ -589,7 +636,54 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 	} else {
 		// target exists
 		if !targetEntry.IsDir() {
-			return commons.NewNotDirError(targetPath)
+			if put.syncFlagValues.Sync {
+				// if it is sync, remove
+				if put.forceFlagValues.Force {
+					removeErr := put.filesystem.RemoveFile(targetPath, true)
+
+					now := time.Now()
+					reportFile := &commons.TransferReportFile{
+						Method:     commons.TransferMethodDelete,
+						StartAt:    now,
+						EndAt:      now,
+						SourcePath: targetPath,
+						Error:      removeErr,
+						Notes:      []string{"overwrite", "put"},
+					}
+
+					put.transferReportManager.AddFile(reportFile)
+
+					if removeErr != nil {
+						return removeErr
+					}
+				} else {
+					// ask
+					overwrite := commons.InputYN(fmt.Sprintf("overwriting a directory %q, but file exists. Overwrite?", targetPath))
+					if overwrite {
+						removeErr := put.filesystem.RemoveFile(targetPath, true)
+
+						now := time.Now()
+						reportFile := &commons.TransferReportFile{
+							Method:     commons.TransferMethodDelete,
+							StartAt:    now,
+							EndAt:      now,
+							SourcePath: targetPath,
+							Error:      removeErr,
+							Notes:      []string{"overwrite", "put"},
+						}
+
+						put.transferReportManager.AddFile(reportFile)
+
+						if removeErr != nil {
+							return removeErr
+						}
+					} else {
+						return commons.NewNotDirError(targetPath)
+					}
+				}
+			} else {
+				return commons.NewNotDirError(targetPath)
+			}
 		}
 	}
 
