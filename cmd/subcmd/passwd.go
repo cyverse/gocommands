@@ -98,11 +98,7 @@ func (passwd *PasswdCommand) changePassword() error {
 
 	pass := false
 	for i := 0; i < 3; i++ {
-		currentPassword, err := commons.InputPassword("Current iRODS Password")
-		if err != nil {
-			return xerrors.Errorf("failed to read password: %w", err)
-		}
-
+		currentPassword := commons.InputPassword("Current iRODS Password")
 		if currentPassword == passwd.account.Password {
 			pass = true
 			break
@@ -119,11 +115,7 @@ func (passwd *PasswdCommand) changePassword() error {
 	pass = false
 	newPassword := ""
 	for i := 0; i < 3; i++ {
-		newPassword, err = commons.InputPassword("New iRODS Password")
-		if err != nil {
-			return xerrors.Errorf("failed to read password: %w", err)
-		}
-
+		newPassword = commons.InputPassword("New iRODS Password")
 		if newPassword != passwd.account.Password {
 			pass = true
 			break
@@ -137,11 +129,7 @@ func (passwd *PasswdCommand) changePassword() error {
 		return xerrors.Errorf("invalid password provided")
 	}
 
-	newPasswordConfirm, err := commons.InputPassword("Confirm New iRODS Password")
-	if err != nil {
-		return xerrors.Errorf("failed to read password: %w", err)
-	}
-
+	newPasswordConfirm := commons.InputPassword("Confirm New iRODS Password")
 	if newPassword != newPasswordConfirm {
 		return xerrors.Errorf("password mismatched")
 	}

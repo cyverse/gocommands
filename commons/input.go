@@ -9,7 +9,7 @@ import (
 	"golang.org/x/term"
 )
 
-func Input(msg string) (string, error) {
+func Input(msg string) string {
 	terminalWriter := GetTerminalWriter()
 
 	terminalWriter.Lock()
@@ -21,16 +21,16 @@ func Input(msg string) (string, error) {
 	fmt.Printf("%s%s: %s", red, msg, reset)
 
 	userInput := ""
-	_, err := fmt.Scanln(&userInput)
+	fmt.Scanln(&userInput)
 
-	return userInput, err
+	return userInput
 }
 
 // InputYN inputs Y or N
 // true for Y, false for N
 func InputYN(msg string) bool {
 	for {
-		inputString, _ := Input(fmt.Sprintf("%s [y/n]", msg))
+		inputString := Input(fmt.Sprintf("%s [y/n]", msg))
 		inputString = strings.ToLower(inputString)
 		if inputString == "y" || inputString == "yes" || inputString == "true" {
 			return true
@@ -40,16 +40,21 @@ func InputYN(msg string) bool {
 	}
 }
 
-func InputInt(msg string) (int, error) {
-	inputString, err := Input(msg)
-	if err != nil {
-		return -1, err
+func InputInt(msg string) int {
+	inputString := Input(msg)
+	if len(inputString) == 0 {
+		return 0
 	}
 
-	return strconv.Atoi(inputString)
+	v, err := strconv.Atoi(inputString)
+	if err != nil {
+		return 0
+	}
+
+	return v
 }
 
-func InputPassword(msg string) (string, error) {
+func InputPassword(msg string) string {
 	terminalWriter := GetTerminalWriter()
 
 	terminalWriter.Lock()
@@ -63,8 +68,8 @@ func InputPassword(msg string) (string, error) {
 	fmt.Print("\n")
 
 	if err != nil {
-		return "", err
+		return ""
 	}
 
-	return string(bytePassword), nil
+	return string(bytePassword)
 }

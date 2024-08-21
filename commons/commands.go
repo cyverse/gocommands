@@ -187,22 +187,12 @@ func InputMissingFields() (bool, error) {
 
 	env := environmentManager.Environment
 	if len(env.Host) == 0 {
-		host, err := Input("iRODS Host [data.cyverse.org]")
-		if err != nil {
-			return false, xerrors.Errorf("failed to read input: %w", err)
-		}
-
-		env.Host = host
+		env.Host = Input("iRODS Host [data.cyverse.org]")
 		if len(env.Host) == 0 {
 			env.Host = "data.cyverse.org"
 		}
 
-		port, err := InputInt("iRODS Port [1247]")
-		if err != nil {
-			return false, xerrors.Errorf("failed to read input: %w", err)
-		}
-
-		env.Port = port
+		env.Port = InputInt("iRODS Port [1247]")
 		if env.Port == 0 {
 			env.Port = 1247
 		}
@@ -211,12 +201,7 @@ func InputMissingFields() (bool, error) {
 	}
 
 	if len(env.Zone) == 0 {
-		zone, err := Input("iRODS Zone [iplant]")
-		if err != nil {
-			return false, xerrors.Errorf("failed to read input: %w", err)
-		}
-
-		env.Zone = zone
+		env.Zone = Input("iRODS Zone [iplant]")
 		if len(env.Zone) == 0 {
 			env.Zone = "iplant"
 		}
@@ -225,24 +210,14 @@ func InputMissingFields() (bool, error) {
 	}
 
 	if len(env.Username) == 0 {
-		username, err := Input("iRODS Username")
-		if err != nil {
-			return false, xerrors.Errorf("failed to read input: %w", err)
-		}
-
-		env.Username = username
+		env.Username = Input("iRODS Username")
 		updated = true
 	}
 
 	password := environmentManager.Password
 	pamToken := environmentManager.PamToken
 	if len(password) == 0 && len(pamToken) == 0 && env.Username != "anonymous" {
-		password, err := InputPassword("iRODS Password")
-		if err != nil {
-			return false, xerrors.Errorf("failed to read password: %w", err)
-		}
-
-		environmentManager.Password = password
+		environmentManager.Password = InputPassword("iRODS Password")
 		updated = true
 	}
 
@@ -308,11 +283,7 @@ func ReinputFields() (bool, error) {
 		env.Host = "data.cyverse.org" // default
 	}
 
-	newHost, err := Input(fmt.Sprintf("iRODS Host [%s]", env.Host))
-	if err != nil {
-		return false, xerrors.Errorf("failed to read input: %w", err)
-	}
-
+	newHost := Input(fmt.Sprintf("iRODS Host [%s]", env.Host))
 	if len(newHost) > 0 && newHost != env.Host {
 		env.Host = newHost
 		updated = true
@@ -322,11 +293,7 @@ func ReinputFields() (bool, error) {
 		env.Port = 1247 // default
 	}
 
-	newPort, err := InputInt(fmt.Sprintf("iRODS Port [%d]", env.Port))
-	if err != nil {
-		return false, xerrors.Errorf("failed to read input: %w", err)
-	}
-
+	newPort := InputInt(fmt.Sprintf("iRODS Port [%d]", env.Port))
 	if newPort > 0 && newPort != env.Port {
 		env.Port = newPort
 		updated = true
@@ -336,11 +303,7 @@ func ReinputFields() (bool, error) {
 		env.Zone = "iplant" // default
 	}
 
-	newZone, err := Input(fmt.Sprintf("iRODS Zone [%s]", env.Zone))
-	if err != nil {
-		return false, xerrors.Errorf("failed to read input: %w", err)
-	}
-
+	newZone := Input(fmt.Sprintf("iRODS Zone [%s]", env.Zone))
 	if len(newZone) > 0 && newZone != env.Zone {
 		env.Zone = newZone
 		updated = true
@@ -349,15 +312,9 @@ func ReinputFields() (bool, error) {
 	for {
 		newUsername := ""
 		if len(env.Username) > 0 {
-			newUsername, err = Input(fmt.Sprintf("iRODS Username [%s]", env.Username))
-			if err != nil {
-				return false, xerrors.Errorf("failed to read input: %w", err)
-			}
+			newUsername = Input(fmt.Sprintf("iRODS Username [%s]", env.Username))
 		} else {
-			newUsername, err = Input("iRODS Username")
-			if err != nil {
-				return false, xerrors.Errorf("failed to read input: %w", err)
-			}
+			newUsername = Input("iRODS Username")
 		}
 
 		if len(newUsername) > 0 && newUsername != env.Username {
@@ -370,16 +327,12 @@ func ReinputFields() (bool, error) {
 		}
 	}
 
-	newPassword, err := InputPassword("iRODS Password")
-	if err != nil {
-		return false, xerrors.Errorf("failed to read password: %w", err)
-	}
-
+	newPassword := InputPassword("iRODS Password")
 	updated = true
 
 	environmentManager.Password = newPassword
 
-	err = SyncAccount()
+	err := SyncAccount()
 	if err != nil {
 		return updated, xerrors.Errorf("failed to get iCommands Environment: %w", err)
 	}
