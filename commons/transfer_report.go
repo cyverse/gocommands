@@ -3,7 +3,6 @@ package commons
 import (
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -179,7 +178,7 @@ func (manager *TransferReportManager) AddFile(file *TransferReportFile) error {
 	lineOutput := ""
 	if manager.reportToStdout {
 		// line print
-		fmt.Printf("[%s]\t%s\t%s\t%s\t%d\t%s\t%s\t%d\t%s\n", file.Method, file.StartAt, file.EndAt, file.SourcePath, file.SourceSize, file.SourceChecksum, file.DestPath, file.DestSize, file.DestChecksum)
+		Printf("[%s]\t%s\t%s\t%s\t%d\t%s\t%s\t%d\t%s\n", file.Method, file.StartAt, file.EndAt, file.SourcePath, file.SourceSize, file.SourceChecksum, file.DestPath, file.DestSize, file.DestChecksum)
 	} else {
 		// json
 		fileBytes, err := json.Marshal(file)

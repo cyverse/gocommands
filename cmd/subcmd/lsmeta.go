@@ -182,18 +182,18 @@ func (lsMeta *LsMetaCommand) printMetaInternal(meta *types.IRODSMeta) {
 
 	switch lsMeta.listFlagValues.Format {
 	case commons.ListFormatLong, commons.ListFormatVeryLong:
-		fmt.Printf("[%s]\n", meta.Name)
-		fmt.Printf("[%s]\n", meta.Name)
-		fmt.Printf("  id: %d\n", meta.AVUID)
-		fmt.Printf("  attribute: %s\n", name)
-		fmt.Printf("  value: %s\n", value)
-		fmt.Printf("  unit: %s\n", units)
-		fmt.Printf("  create time: %s\n", createTime)
-		fmt.Printf("  modify time: %s\n", modTime)
+		commons.Printf("[%s]\n", meta.Name)
+		commons.Printf("[%s]\n", meta.Name)
+		commons.Printf("  id: %d\n", meta.AVUID)
+		commons.Printf("  attribute: %s\n", name)
+		commons.Printf("  value: %s\n", value)
+		commons.Printf("  unit: %s\n", units)
+		commons.Printf("  create time: %s\n", createTime)
+		commons.Printf("  modify time: %s\n", modTime)
 	case commons.ListFormatNormal:
 		fallthrough
 	default:
-		fmt.Printf("%d\t%s\t%s\t%s\n", meta.AVUID, name, value, units)
+		commons.Printf("%d\t%s\t%s\t%s\n", meta.AVUID, name, value, units)
 	}
 }
 

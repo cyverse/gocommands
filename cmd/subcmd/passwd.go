@@ -1,9 +1,6 @@
 package subcmd
 
 import (
-	"fmt"
-	"syscall"
-
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
@@ -11,7 +8,6 @@ import (
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 	"golang.org/x/xerrors"
 )
 
@@ -102,22 +98,18 @@ func (passwd *PasswdCommand) changePassword() error {
 
 	pass := false
 	for i := 0; i < 3; i++ {
-		fmt.Print("Current iRODS Password: ")
-		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+		currentPassword, err := commons.InputPassword("Current iRODS Password")
 		if err != nil {
 			return xerrors.Errorf("failed to read password: %w", err)
 		}
-
-		fmt.Print("\n")
-		currentPassword := string(bytePassword)
 
 		if currentPassword == passwd.account.Password {
 			pass = true
 			break
 		}
 
-		fmt.Println("Wrong password")
-		fmt.Println("")
+		commons.Println("Wrong password")
+		commons.Println("")
 	}
 
 	if !pass {
@@ -127,37 +119,28 @@ func (passwd *PasswdCommand) changePassword() error {
 	pass = false
 	newPassword := ""
 	for i := 0; i < 3; i++ {
-		fmt.Print("New iRODS Password: ")
-		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+		newPassword, err = commons.InputPassword("New iRODS Password")
 		if err != nil {
 			return xerrors.Errorf("failed to read password: %w", err)
 		}
-
-		fmt.Print("\n")
-		newPassword = string(bytePassword)
 
 		if newPassword != passwd.account.Password {
 			pass = true
 			break
 		}
 
-		fmt.Println("Please provide new password")
-		fmt.Println("")
+		commons.Println("Please provide new password")
+		commons.Println("")
 	}
 
 	if !pass {
 		return xerrors.Errorf("invalid password provided")
 	}
 
-	newPasswordConfirm := ""
-	fmt.Print("Confirm New iRODS Password: ")
-	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+	newPasswordConfirm, err := commons.InputPassword("Confirm New iRODS Password")
 	if err != nil {
 		return xerrors.Errorf("failed to read password: %w", err)
 	}
-
-	fmt.Print("\n")
-	newPasswordConfirm = string(bytePassword)
 
 	if newPassword != newPasswordConfirm {
 		return xerrors.Errorf("password mismatched")

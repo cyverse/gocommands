@@ -196,6 +196,6 @@ func printVersion() error {
 		return xerrors.Errorf("failed to get version json: %w", err)
 	}
 
-	fmt.Println(info)
+	commons.Println(info)
 	return nil
 }

@@ -1,7 +1,6 @@
 package subcmd
 
 import (
-	"fmt"
 	"runtime"
 
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -85,11 +84,11 @@ func (upgrade *UpgradeCommand) checkNewVersion() error {
 		return err
 	}
 
-	fmt.Printf("Latest version v%s for %s/%s\n", newRelease.Version(), runtime.GOOS, runtime.GOARCH)
-	fmt.Printf("Latest release URL: %s\n", newRelease.URL)
+	commons.Printf("Latest version v%s for %s/%s\n", newRelease.Version(), runtime.GOOS, runtime.GOARCH)
+	commons.Printf("Latest release URL: %s\n", newRelease.URL)
 
 	myVersion := commons.GetClientVersion()
-	fmt.Printf("Current cilent version installed: %s\n", myVersion)
+	commons.Printf("Current cilent version installed: %s\n", myVersion)
 	return nil
 }
 

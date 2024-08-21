@@ -7,13 +7,11 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	irodsclient_icommands "github.com/cyverse/go-irodsclient/icommands"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/go-irodsclient/irods/util"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/term"
 	"golang.org/x/xerrors"
 
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -189,14 +187,22 @@ func InputMissingFields() (bool, error) {
 
 	env := environmentManager.Environment
 	if len(env.Host) == 0 {
-		fmt.Print("iRODS Host [data.cyverse.org]: ")
-		fmt.Scanln(&env.Host)
+		host, err := Input("iRODS Host [data.cyverse.org]")
+		if err != nil {
+			return false, xerrors.Errorf("failed to read input: %w", err)
+		}
+
+		env.Host = host
 		if len(env.Host) == 0 {
 			env.Host = "data.cyverse.org"
 		}
 
-		fmt.Print("iRODS Port [1247]: ")
-		fmt.Scanln(&env.Port)
+		port, err := InputInt("iRODS Port [1247]")
+		if err != nil {
+			return false, xerrors.Errorf("failed to read input: %w", err)
+		}
+
+		env.Port = port
 		if env.Port == 0 {
 			env.Port = 1247
 		}
@@ -205,8 +211,12 @@ func InputMissingFields() (bool, error) {
 	}
 
 	if len(env.Zone) == 0 {
-		fmt.Print("iRODS Zone [iplant]: ")
-		fmt.Scanln(&env.Zone)
+		zone, err := Input("iRODS Zone [iplant]")
+		if err != nil {
+			return false, xerrors.Errorf("failed to read input: %w", err)
+		}
+
+		env.Zone = zone
 		if len(env.Zone) == 0 {
 			env.Zone = "iplant"
 		}
@@ -215,25 +225,27 @@ func InputMissingFields() (bool, error) {
 	}
 
 	if len(env.Username) == 0 {
-		fmt.Print("iRODS Username: ")
-		fmt.Scanln(&env.Username)
+		username, err := Input("iRODS Username")
+		if err != nil {
+			return false, xerrors.Errorf("failed to read input: %w", err)
+		}
+
+		env.Username = username
 		updated = true
 	}
 
 	password := environmentManager.Password
 	pamToken := environmentManager.PamToken
 	if len(password) == 0 && len(pamToken) == 0 && env.Username != "anonymous" {
-		fmt.Print("iRODS Password: ")
-		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+		password, err := InputPassword("iRODS Password")
 		if err != nil {
 			return false, xerrors.Errorf("failed to read password: %w", err)
 		}
 
-		fmt.Print("\n")
-		password = string(bytePassword)
+		environmentManager.Password = password
 		updated = true
 	}
-	environmentManager.Password = password
+
 	err := SyncAccount()
 	if err != nil {
 		return updated, xerrors.Errorf("failed to get iCommands Environment: %w", err)
@@ -296,9 +308,11 @@ func ReinputFields() (bool, error) {
 		env.Host = "data.cyverse.org" // default
 	}
 
-	fmt.Printf("iRODS Host [%s]: ", env.Host)
-	newHost := ""
-	fmt.Scanln(&newHost)
+	newHost, err := Input(fmt.Sprintf("iRODS Host [%s]", env.Host))
+	if err != nil {
+		return false, xerrors.Errorf("failed to read input: %w", err)
+	}
+
 	if len(newHost) > 0 && newHost != env.Host {
 		env.Host = newHost
 		updated = true
@@ -308,9 +322,11 @@ func ReinputFields() (bool, error) {
 		env.Port = 1247 // default
 	}
 
-	fmt.Printf("iRODS Port [%d]: ", env.Port)
-	newPort := 0
-	fmt.Scanln(&newPort)
+	newPort, err := InputInt(fmt.Sprintf("iRODS Port [%d]", env.Port))
+	if err != nil {
+		return false, xerrors.Errorf("failed to read input: %w", err)
+	}
+
 	if newPort > 0 && newPort != env.Port {
 		env.Port = newPort
 		updated = true
@@ -320,23 +336,30 @@ func ReinputFields() (bool, error) {
 		env.Zone = "iplant" // default
 	}
 
-	fmt.Printf("iRODS Zone [%s]: ", env.Zone)
-	newZone := ""
-	fmt.Scanln(&newZone)
+	newZone, err := Input(fmt.Sprintf("iRODS Zone [%s]", env.Zone))
+	if err != nil {
+		return false, xerrors.Errorf("failed to read input: %w", err)
+	}
+
 	if len(newZone) > 0 && newZone != env.Zone {
 		env.Zone = newZone
 		updated = true
 	}
 
 	for {
+		newUsername := ""
 		if len(env.Username) > 0 {
-			fmt.Printf("iRODS Username [%s]: ", env.Username)
+			newUsername, err = Input(fmt.Sprintf("iRODS Username [%s]", env.Username))
+			if err != nil {
+				return false, xerrors.Errorf("failed to read input: %w", err)
+			}
 		} else {
-			fmt.Printf("iRODS Username: ")
+			newUsername, err = Input("iRODS Username")
+			if err != nil {
+				return false, xerrors.Errorf("failed to read input: %w", err)
+			}
 		}
 
-		newUsername := ""
-		fmt.Scanln(&newUsername)
 		if len(newUsername) > 0 && newUsername != env.Username {
 			env.Username = newUsername
 			updated = true
@@ -347,13 +370,11 @@ func ReinputFields() (bool, error) {
 		}
 	}
 
-	fmt.Print("iRODS Password: ")
-	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
+	newPassword, err := InputPassword("iRODS Password")
 	if err != nil {
 		return false, xerrors.Errorf("failed to read password: %w", err)
 	}
-	fmt.Print("\n")
-	newPassword := string(bytePassword)
+
 	updated = true
 
 	environmentManager.Password = newPassword
@@ -742,23 +763,4 @@ func PrintAccount() error {
 	}, table.RowConfig{})
 	t.Render()
 	return nil
-}
-
-// InputYN inputs Y or N
-// true for Y, false for N
-func InputYN(msg string) bool {
-	userInput := ""
-
-	for {
-		fmt.Printf("%s [y/n]: ", msg)
-
-		fmt.Scanln(&userInput)
-		userInput = strings.ToLower(userInput)
-
-		if userInput == "y" || userInput == "yes" {
-			return true
-		} else if userInput == "n" || userInput == "no" {
-			return false
-		}
-	}
 }

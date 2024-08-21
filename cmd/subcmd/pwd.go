@@ -1,8 +1,6 @@
 package subcmd
 
 import (
-	"fmt"
-
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -76,7 +74,7 @@ func (pwd *PwdCommand) Process() error {
 
 func (pwd *PwdCommand) printCurrentWorkingDir() error {
 	cwd := commons.GetCWD()
-	fmt.Printf("%s\n", cwd)
+	commons.Printf("%s\n", cwd)
 
 	return nil
 }

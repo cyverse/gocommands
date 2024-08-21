@@ -1,7 +1,6 @@
 package subcmd
 
 import (
-	"fmt"
 	"sort"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -148,25 +147,25 @@ func (lsTicket *LsTicketCommand) printTickets(tickets []*types.IRODSTicket) erro
 }
 
 func (lsTicket *LsTicketCommand) printTicketInternal(ticket *types.IRODSTicket) error {
-	fmt.Printf("[%s]\n", ticket.Name)
-	fmt.Printf("  id: %d\n", ticket.ID)
-	fmt.Printf("  name: %s\n", ticket.Name)
-	fmt.Printf("  type: %s\n", ticket.Type)
-	fmt.Printf("  owner: %s\n", ticket.Owner)
-	fmt.Printf("  owner zone: %s\n", ticket.OwnerZone)
-	fmt.Printf("  object type: %s\n", ticket.ObjectType)
-	fmt.Printf("  path: %s\n", ticket.Path)
-	fmt.Printf("  uses limit: %d\n", ticket.UsesLimit)
-	fmt.Printf("  uses count: %d\n", ticket.UsesCount)
-	fmt.Printf("  write file limit: %d\n", ticket.WriteFileLimit)
-	fmt.Printf("  write file count: %d\n", ticket.WriteFileCount)
-	fmt.Printf("  write byte limit: %d\n", ticket.WriteByteLimit)
-	fmt.Printf("  write byte count: %d\n", ticket.WriteByteCount)
+	commons.Printf("[%s]\n", ticket.Name)
+	commons.Printf("  id: %d\n", ticket.ID)
+	commons.Printf("  name: %s\n", ticket.Name)
+	commons.Printf("  type: %s\n", ticket.Type)
+	commons.Printf("  owner: %s\n", ticket.Owner)
+	commons.Printf("  owner zone: %s\n", ticket.OwnerZone)
+	commons.Printf("  object type: %s\n", ticket.ObjectType)
+	commons.Printf("  path: %s\n", ticket.Path)
+	commons.Printf("  uses limit: %d\n", ticket.UsesLimit)
+	commons.Printf("  uses count: %d\n", ticket.UsesCount)
+	commons.Printf("  write file limit: %d\n", ticket.WriteFileLimit)
+	commons.Printf("  write file count: %d\n", ticket.WriteFileCount)
+	commons.Printf("  write byte limit: %d\n", ticket.WriteByteLimit)
+	commons.Printf("  write byte count: %d\n", ticket.WriteByteCount)
 
 	if ticket.ExpirationTime.IsZero() {
-		fmt.Print("  expiry time: none\n")
+		commons.Print("  expiry time: none\n")
 	} else {
-		fmt.Printf("  expiry time: %s\n", commons.MakeDateTimeString(ticket.ExpirationTime))
+		commons.Printf("  expiry time: %s\n", commons.MakeDateTimeString(ticket.ExpirationTime))
 	}
 
 	if lsTicket.listFlagValues.Format == commons.ListFormatLong || lsTicket.listFlagValues.Format == commons.ListFormatVeryLong {
@@ -177,29 +176,29 @@ func (lsTicket *LsTicketCommand) printTicketInternal(ticket *types.IRODSTicket) 
 
 		if restrictions != nil {
 			if len(restrictions.AllowedHosts) == 0 {
-				fmt.Printf("  No host restrictions\n")
+				commons.Printf("  No host restrictions\n")
 			} else {
 				for _, host := range restrictions.AllowedHosts {
-					fmt.Printf("  Allowed Hosts:\n")
-					fmt.Printf("    - %s\n", host)
+					commons.Printf("  Allowed Hosts:\n")
+					commons.Printf("    - %s\n", host)
 				}
 			}
 
 			if len(restrictions.AllowedUserNames) == 0 {
-				fmt.Printf("  No user restrictions\n")
+				commons.Printf("  No user restrictions\n")
 			} else {
 				for _, user := range restrictions.AllowedUserNames {
-					fmt.Printf("  Allowed Users:\n")
-					fmt.Printf("    - %s\n", user)
+					commons.Printf("  Allowed Users:\n")
+					commons.Printf("    - %s\n", user)
 				}
 			}
 
 			if len(restrictions.AllowedGroupNames) == 0 {
-				fmt.Printf("  No group restrictions\n")
+				commons.Printf("  No group restrictions\n")
 			} else {
 				for _, group := range restrictions.AllowedGroupNames {
-					fmt.Printf("  Allowed Groups:\n")
-					fmt.Printf("    - %s\n", group)
+					commons.Printf("  Allowed Groups:\n")
+					commons.Printf("    - %s\n", group)
 				}
 			}
 		}

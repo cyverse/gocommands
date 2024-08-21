@@ -1,7 +1,6 @@
 package subcmd
 
 import (
-	"fmt"
 	"io"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -147,7 +146,7 @@ func (cat *CatCommand) catOne(sourcePath string) error {
 	for {
 		readLen, err := fh.Read(buf)
 		if readLen > 0 {
-			fmt.Printf("%s", string(buf[:readLen]))
+			commons.Printf("%s", string(buf[:readLen]))
 		}
 
 		if err == io.EOF {

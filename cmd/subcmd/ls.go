@@ -226,7 +226,7 @@ func (ls *LsCommand) listOne(sourcePath string) error {
 func (ls *LsCommand) printCollections(entries []*irodsclient_types.IRODSCollection) {
 	sort.SliceStable(entries, ls.getCollectionSortFunction(entries, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
 	for _, entry := range entries {
-		fmt.Printf("  C- %s\n", entry.Path)
+		commons.Printf("  C- %s\n", entry.Path)
 	}
 }
 
@@ -417,7 +417,7 @@ func (ls *LsCommand) printDataObjectShort(entry *irodsclient_types.IRODSDataObje
 		}
 	}
 
-	fmt.Printf("  %s\n", newName)
+	commons.Printf("  %s\n", newName)
 }
 
 func (ls *LsCommand) printReplicas(flatReplicas []*FlatReplica) {
@@ -471,18 +471,18 @@ func (ls *LsCommand) printReplica(flatReplica FlatReplica) {
 
 	switch ls.listFlagValues.Format {
 	case commons.ListFormatNormal:
-		fmt.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
+		commons.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
 	case commons.ListFormatLong:
 		modTime := commons.MakeDateTimeString(flatReplica.Replica.ModifyTime)
-		fmt.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
+		commons.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
 			size, modTime, ls.getStatusMark(flatReplica.Replica.Status), newName)
 	case commons.ListFormatVeryLong:
 		modTime := commons.MakeDateTimeString(flatReplica.Replica.ModifyTime)
-		fmt.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
+		commons.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
 			size, modTime, ls.getStatusMark(flatReplica.Replica.Status), newName)
-		fmt.Printf("    %s\t%s\n", flatReplica.Replica.Checksum.IRODSChecksumString, flatReplica.Replica.Path)
+		commons.Printf("    %s\t%s\n", flatReplica.Replica.Checksum.IRODSChecksumString, flatReplica.Replica.Path)
 	default:
-		fmt.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
+		commons.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
 	}
 }
 
