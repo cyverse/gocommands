@@ -407,7 +407,6 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 		job.Progress(sourceEntry.Size, sourceEntry.Size, false)
 
 		job.Done()
-
 		return nil
 	}
 

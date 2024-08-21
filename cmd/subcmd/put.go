@@ -432,6 +432,7 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 		logger.Debugf("uploaded a file %q to %q", sourcePath, targetPath)
 		job.Progress(sourceStat.Size(), sourceStat.Size(), false)
 
+		job.Done()
 		return nil
 	}
 

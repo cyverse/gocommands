@@ -20,7 +20,6 @@ type ParallelJob struct {
 	task            ParallelJobTask
 	threadsRequired int
 	progressUnit    progress.Units
-	lastError       error
 
 	done bool
 }
@@ -45,7 +44,6 @@ func newParallelJob(manager *ParallelJobManager, index int64, name string, task 
 		task:            task,
 		threadsRequired: threadsRequired,
 		progressUnit:    progressUnit,
-		lastError:       nil,
 
 		done: false,
 	}

@@ -30,7 +30,7 @@ func Input(msg string) (string, error) {
 // true for Y, false for N
 func InputYN(msg string) bool {
 	for {
-		inputString, _ := Input(msg)
+		inputString, _ := Input(fmt.Sprintf("%s [y/n]", msg))
 		inputString = strings.ToLower(inputString)
 		if inputString == "y" || inputString == "yes" || inputString == "true" {
 			return true

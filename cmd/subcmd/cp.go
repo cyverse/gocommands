@@ -284,6 +284,8 @@ func (cp *CpCommand) scheduleCopy(sourceEntry *irodsclient_fs.Entry, targetPath 
 
 		logger.Debugf("copied a data object %q to %q", sourceEntry.Path, targetPath)
 		job.Progress(1, 1, false)
+
+		job.Done()
 		return nil
 	}
 
