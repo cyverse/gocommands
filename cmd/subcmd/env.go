@@ -27,12 +27,12 @@ func AddEnvCommand(rootCmd *cobra.Command) {
 }
 
 func processEnvCommand(command *cobra.Command, args []string) error {
-	bun, err := NewBunCommand(command, args)
+	env, err := NewEnvCommand(command, args)
 	if err != nil {
 		return err
 	}
 
-	return bun.Process()
+	return env.Process()
 }
 
 type EnvCommand struct {
