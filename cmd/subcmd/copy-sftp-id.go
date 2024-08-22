@@ -102,7 +102,7 @@ func (copy *CopySftpIdCommand) Process() error {
 
 	err = copy.copySftpId(identityFiles)
 	if err != nil {
-		return xerrors.Errorf("failed to copy sftp-ID: %w", err)
+		return xerrors.Errorf("failed to copy sftp public key: %w", err)
 	}
 
 	return nil
@@ -174,7 +174,7 @@ func (copy *CopySftpIdCommand) readAuthorizedKeys(authorizedKeyPath string) ([]s
 
 		contentBuffer := bytes.Buffer{}
 
-		_, err := copy.filesystem.DownloadFileToBuffer(authorizedKeyPath, "", contentBuffer, true, nil)
+		_, err := copy.filesystem.DownloadFileToBuffer(authorizedKeyPath, "", &contentBuffer, true, nil)
 		if err != nil {
 			return nil, xerrors.Errorf("failed to read file %q: %w", authorizedKeyPath, err)
 		}
@@ -310,7 +310,7 @@ func (copy *CopySftpIdCommand) copySftpId(identityFiles []string) error {
 
 		logger.Debugf("writing authorized_keys %q on iRODS for user %q", authorizedKeyPath, copy.account.ClientUser)
 
-		_, err := copy.filesystem.UploadFileFromBuffer(contentBuf, authorizedKeyPath, "", false, true, true, nil)
+		_, err := copy.filesystem.UploadFileFromBuffer(&contentBuf, authorizedKeyPath, "", false, true, true, nil)
 		if err != nil {
 			return xerrors.Errorf("failed to update keys in %q: %w", authorizedKeyPath, err)
 		}
