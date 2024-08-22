@@ -108,84 +108,83 @@ func main() {
 		logger.Errorf("%+v", err)
 
 		if os.IsNotExist(err) {
-			commons.Fprintf(os.Stderr, "File or directory not found!\n")
+			commons.PrintErrorf("File or directory not found!\n")
 		} else if irodsclient_types.IsConnectionConfigError(err) {
 			var connectionConfigError *irodsclient_types.ConnectionConfigError
 			if errors.As(err, &connectionConfigError) {
-				commons.Fprintf(os.Stderr, "Failed to establish a connection to iRODS server (host: %q, port: %d)!\n", connectionConfigError.Config.Host, connectionConfigError.Config.Port)
+				commons.PrintErrorf("Failed to establish a connection to iRODS server (host: %q, port: %d)!\n", connectionConfigError.Config.Host, connectionConfigError.Config.Port)
 			} else {
-				commons.Fprintf(os.Stderr, "Failed to establish a connection to iRODS server!\n")
+				commons.PrintErrorf("Failed to establish a connection to iRODS server!\n")
 			}
 		} else if irodsclient_types.IsConnectionError(err) {
-			commons.Fprintf(os.Stderr, "Failed to establish a connection to iRODS server!\n")
+			commons.PrintErrorf("Failed to establish a connection to iRODS server!\n")
 		} else if irodsclient_types.IsConnectionPoolFullError(err) {
 			var connectionPoolFullError *irodsclient_types.ConnectionPoolFullError
 			if errors.As(err, &connectionPoolFullError) {
-				commons.Fprintf(os.Stderr, "Failed to establish a new connection to iRODS server as connection pool is full (occupied: %d, max: %d)!\n", connectionPoolFullError.Occupied, connectionPoolFullError.Max)
+				commons.PrintErrorf("Failed to establish a new connection to iRODS server as connection pool is full (occupied: %d, max: %d)!\n", connectionPoolFullError.Occupied, connectionPoolFullError.Max)
 			} else {
-				commons.Fprintf(os.Stderr, "Failed to establish a new connection to iRODS server as connection pool is full!\n")
+				commons.PrintErrorf("Failed to establish a new connection to iRODS server as connection pool is full!\n")
 			}
 		} else if irodsclient_types.IsAuthError(err) {
 			var authError *irodsclient_types.AuthError
 			if errors.As(err, &authError) {
-				commons.Fprintf(os.Stderr, "Authentication failed (auth scheme: %q, username: %q, zone: %q)!\n", authError.Config.AuthenticationScheme, authError.Config.ClientUser, authError.Config.ClientZone)
+				commons.PrintErrorf("Authentication failed (auth scheme: %q, username: %q, zone: %q)!\n", authError.Config.AuthenticationScheme, authError.Config.ClientUser, authError.Config.ClientZone)
 			} else {
-				commons.Fprintf(os.Stderr, "Authentication failed!\n")
+				commons.PrintErrorf("Authentication failed!\n")
 			}
 		} else if irodsclient_types.IsFileNotFoundError(err) {
 			var fileNotFoundError *irodsclient_types.FileNotFoundError
 			if errors.As(err, &fileNotFoundError) {
-				commons.Fprintf(os.Stderr, "File or directory %q is not found!\n", fileNotFoundError.Path)
+				commons.PrintErrorf("File or directory %q is not found!\n", fileNotFoundError.Path)
 			} else {
-				commons.Fprintf(os.Stderr, "File or directory is not found!\n")
+				commons.PrintErrorf("File or directory is not found!\n")
 			}
 		} else if irodsclient_types.IsCollectionNotEmptyError(err) {
 			var collectionNotEmptyError *irodsclient_types.CollectionNotEmptyError
 			if errors.As(err, &collectionNotEmptyError) {
-				commons.Fprintf(os.Stderr, "Directory %q is not empty!\n", collectionNotEmptyError.Path)
+				commons.PrintErrorf("Directory %q is not empty!\n", collectionNotEmptyError.Path)
 			} else {
-				commons.Fprintf(os.Stderr, "Directory is not empty!\n")
+				commons.PrintErrorf("Directory is not empty!\n")
 			}
 		} else if irodsclient_types.IsFileAlreadyExistError(err) {
 			var fileAlreadyExistError *irodsclient_types.FileAlreadyExistError
 			if errors.As(err, &fileAlreadyExistError) {
-				commons.Fprintf(os.Stderr, "File or directory %q already exists!\n", fileAlreadyExistError.Path)
+				commons.PrintErrorf("File or directory %q already exists!\n", fileAlreadyExistError.Path)
 			} else {
-				commons.Fprintf(os.Stderr, "File or directory already exists!\n")
+				commons.PrintErrorf("File or directory already exists!\n")
 			}
 		} else if irodsclient_types.IsTicketNotFoundError(err) {
 			var ticketNotFoundError *irodsclient_types.TicketNotFoundError
 			if errors.As(err, &ticketNotFoundError) {
-				commons.Fprintf(os.Stderr, "Ticket %q is not found!\n", ticketNotFoundError.Ticket)
+				commons.PrintErrorf("Ticket %q is not found!\n", ticketNotFoundError.Ticket)
 			} else {
-				commons.Fprintf(os.Stderr, "Ticket is not found!\n")
+				commons.PrintErrorf("Ticket is not found!\n")
 			}
 		} else if irodsclient_types.IsUserNotFoundError(err) {
 			var userNotFoundError *irodsclient_types.UserNotFoundError
 			if errors.As(err, &userNotFoundError) {
-				commons.Fprintf(os.Stderr, "User %q is not found!\n", userNotFoundError.Name)
+				commons.PrintErrorf("User %q is not found!\n", userNotFoundError.Name)
 			} else {
-				commons.Fprintf(os.Stderr, "User is not found!\n")
+				commons.PrintErrorf("User is not found!\n")
 			}
 		} else if irodsclient_types.IsIRODSError(err) {
 			var irodsError *irodsclient_types.IRODSError
 			if errors.As(err, &irodsError) {
-				commons.Fprintf(os.Stderr, "iRODS Error (code: '%d', message: %q)\n", irodsError.Code, irodsError.Error())
+				commons.PrintErrorf("iRODS Error (code: '%d', message: %q)\n", irodsError.Code, irodsError.Error())
 			} else {
-				commons.Fprintf(os.Stderr, "iRODS Error!\n")
+				commons.PrintErrorf("iRODS Error!\n")
 			}
 		} else if commons.IsNotDirError(err) {
 			var notDirError *commons.NotDirError
 			if errors.As(err, &notDirError) {
-				commons.Fprintf(os.Stderr, "Destination %q is not a directory!\n", notDirError.Path)
+				commons.PrintErrorf("Destination %q is not a directory!\n", notDirError.Path)
 			} else {
-				commons.Fprintf(os.Stderr, "Destination is not a directory!\n")
+				commons.PrintErrorf("Destination is not a directory!\n")
 			}
 		} else {
-			commons.Fprintf(os.Stderr, "Unexpected error!\nError Trace:\n  - %+v\n", err)
+			commons.PrintErrorf("Unexpected error!\nError Trace:\n  - %+v\n", err)
 		}
 
-		//commons.Fprintf(os.Stderr, "\nError Trace:\n  - %+v\n", err)
 		os.Exit(1)
 	}
 }

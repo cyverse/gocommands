@@ -26,10 +26,10 @@ func RunWithRetry(retry int, retryInterval int) error {
 		}
 
 		logger.Errorf("%+v", err)
-		Fprintf(os.Stderr, "Error: %+v\n", err)
+		PrintErrorf("%+v\n", err)
 
 		logger.Errorf("Waiting %d seconds for next try...", retryInterval)
-		Fprintf(os.Stderr, "Waiting %d seconds for next try...", retryInterval)
+		PrintErrorf("Waiting %d seconds for next try...", retryInterval)
 
 		sleepTime := time.Duration(retryInterval * int(time.Second))
 		time.Sleep(sleepTime)

@@ -65,9 +65,23 @@ func Println(a ...any) (n int, err error) {
 	return fmt.Fprintln(terminalOutput, a...)
 }
 
-func Fprintf(w io.Writer, format string, a ...any) (n int, err error) {
+func Fprintf(w io.Writer, format string, a ...any) (int, error) {
 	terminalOutput.Lock()
 	defer terminalOutput.Unlock()
 
 	return fmt.Fprintf(w, format, a...)
+}
+
+func PrintErrorf(format string, a ...any) (int, error) {
+	terminalOutput.Lock()
+	defer terminalOutput.Unlock()
+
+	red := "\033[31m"
+	reset := "\033[0m"
+
+	fmt.Fprint(os.Stderr, red)
+	n, err := fmt.Fprintf(os.Stderr, format, a...)
+	fmt.Fprint(os.Stderr, reset)
+
+	return n, err
 }
