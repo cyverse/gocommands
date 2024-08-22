@@ -2,6 +2,7 @@ package subcmd
 
 import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
@@ -26,7 +27,36 @@ func AddRmticketCommand(rootCmd *cobra.Command) {
 }
 
 func processRmticketCommand(command *cobra.Command, args []string) error {
-	cont, err := flag.ProcessCommonFlags(command)
+	rmTicket, err := NewRmTicketCommand(command, args)
+	if err != nil {
+		return err
+	}
+
+	return rmTicket.Process()
+}
+
+type RmTicketCommand struct {
+	command *cobra.Command
+
+	account    *irodsclient_types.IRODSAccount
+	filesystem *irodsclient_fs.FileSystem
+
+	tickets []string
+}
+
+func NewRmTicketCommand(command *cobra.Command, args []string) (*RmTicketCommand, error) {
+	rmTicket := &RmTicketCommand{
+		command: command,
+	}
+
+	// tickets
+	rmTicket.tickets = args
+
+	return rmTicket, nil
+}
+
+func (rmTicket *RmTicketCommand) Process() error {
+	cont, err := flag.ProcessCommonFlags(rmTicket.command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
@@ -42,16 +72,15 @@ func processRmticketCommand(command *cobra.Command, args []string) error {
 	}
 
 	// Create a file system
-	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	rmTicket.account = commons.GetAccount()
+	rmTicket.filesystem, err = commons.GetIRODSFSClient(rmTicket.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
+	defer rmTicket.filesystem.Release()
 
-	defer filesystem.Release()
-
-	for _, ticketName := range args {
-		err = removeTicket(filesystem, ticketName)
+	for _, ticketName := range rmTicket.tickets {
+		err = rmTicket.removeTicket(ticketName)
 		if err != nil {
 			return err
 		}
@@ -59,17 +88,18 @@ func processRmticketCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func removeTicket(fs *irodsclient_fs.FileSystem, ticketName string) error {
+func (rmTicket *RmTicketCommand) removeTicket(ticketName string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
+		"struct":   "RmTicketCommand",
 		"function": "removeTicket",
 	})
 
-	logger.Debugf("remove ticket: %s", ticketName)
+	logger.Debugf("remove ticket %q", ticketName)
 
-	err := fs.DeleteTicket(ticketName)
+	err := rmTicket.filesystem.DeleteTicket(ticketName)
 	if err != nil {
-		return xerrors.Errorf("failed to delete ticket %s: %w", ticketName, err)
+		return xerrors.Errorf("failed to delete ticket %q: %w", ticketName, err)
 	}
 
 	return nil

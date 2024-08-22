@@ -4,6 +4,7 @@ import (
 	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/spf13/cobra"
@@ -29,7 +30,39 @@ func AddModticketCommand(rootCmd *cobra.Command) {
 }
 
 func processModticketCommand(command *cobra.Command, args []string) error {
-	cont, err := flag.ProcessCommonFlags(command)
+	modTicket, err := NewModTicketCommand(command, args)
+	if err != nil {
+		return err
+	}
+
+	return modTicket.Process()
+}
+
+type ModTicketCommand struct {
+	command *cobra.Command
+
+	ticketUpdateFlagValues *flag.TicketUpdateFlagValues
+
+	account    *irodsclient_types.IRODSAccount
+	filesystem *irodsclient_fs.FileSystem
+
+	tickets []string
+}
+
+func NewModTicketCommand(command *cobra.Command, args []string) (*ModTicketCommand, error) {
+	modTicket := &ModTicketCommand{
+		command: command,
+
+		ticketUpdateFlagValues: flag.GetTicketUpdateFlagValues(command),
+	}
+
+	modTicket.tickets = args
+
+	return modTicket, nil
+}
+
+func (modTicket *ModTicketCommand) Process() error {
+	cont, err := flag.ProcessCommonFlags(modTicket.command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
@@ -44,83 +77,80 @@ func processModticketCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	ticketUpdateFlagValues := flag.GetTicketUpdateFlagValues(command)
-
-	// Create a connection
-	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	// Create a file system
+	modTicket.account = commons.GetAccount()
+	modTicket.filesystem, err = commons.GetIRODSFSClient(modTicket.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
+	defer modTicket.filesystem.Release()
 
-	defer filesystem.Release()
-
-	for _, ticketName := range args {
-		if ticketUpdateFlagValues.UseLimitUpdated {
-			err = modTicketUseLimit(filesystem, ticketName, ticketUpdateFlagValues.UseLimit)
+	for _, ticketName := range modTicket.tickets {
+		if modTicket.ticketUpdateFlagValues.UseLimitUpdated {
+			err = modTicket.modTicketUseLimit(ticketName, modTicket.ticketUpdateFlagValues.UseLimit)
 			if err != nil {
 				return err
 			}
 		}
 
-		if ticketUpdateFlagValues.WriteFileLimitUpdated {
-			err = modTicketWriteFileLimit(filesystem, ticketName, ticketUpdateFlagValues.WriteFileLimit)
+		if modTicket.ticketUpdateFlagValues.WriteFileLimitUpdated {
+			err = modTicket.modTicketWriteFileLimit(ticketName, modTicket.ticketUpdateFlagValues.WriteFileLimit)
 			if err != nil {
 				return err
 			}
 		}
 
-		if ticketUpdateFlagValues.WriteByteLimitUpdated {
-			err = modTicketWriteByteLimit(filesystem, ticketName, ticketUpdateFlagValues.WriteByteLimit)
+		if modTicket.ticketUpdateFlagValues.WriteByteLimitUpdated {
+			err = modTicket.modTicketWriteByteLimit(ticketName, modTicket.ticketUpdateFlagValues.WriteByteLimit)
 			if err != nil {
 				return err
 			}
 		}
 
-		if ticketUpdateFlagValues.ExpirationTimeUpdated {
-			err = modTicketExpirationTime(filesystem, ticketName, ticketUpdateFlagValues.ExpirationTime)
+		if modTicket.ticketUpdateFlagValues.ExpirationTimeUpdated {
+			err = modTicket.modTicketExpirationTime(ticketName, modTicket.ticketUpdateFlagValues.ExpirationTime)
 			if err != nil {
 				return err
 			}
 		}
 
-		if len(ticketUpdateFlagValues.AddAllowedUsers) > 0 {
-			err = modTicketAddAllowedUsers(filesystem, ticketName, ticketUpdateFlagValues.AddAllowedUsers)
+		if len(modTicket.ticketUpdateFlagValues.AddAllowedUsers) > 0 {
+			err = modTicket.modTicketAddAllowedUsers(ticketName, modTicket.ticketUpdateFlagValues.AddAllowedUsers)
 			if err != nil {
 				return err
 			}
 		}
 
-		if len(ticketUpdateFlagValues.RemoveAllwedUsers) > 0 {
-			err = modTicketRemoveAllowedUsers(filesystem, ticketName, ticketUpdateFlagValues.RemoveAllwedUsers)
+		if len(modTicket.ticketUpdateFlagValues.RemoveAllwedUsers) > 0 {
+			err = modTicket.modTicketRemoveAllowedUsers(ticketName, modTicket.ticketUpdateFlagValues.RemoveAllwedUsers)
 			if err != nil {
 				return err
 			}
 		}
 
-		if len(ticketUpdateFlagValues.AddAllowedGroups) > 0 {
-			err = modTicketAddAllowedGroups(filesystem, ticketName, ticketUpdateFlagValues.AddAllowedGroups)
+		if len(modTicket.ticketUpdateFlagValues.AddAllowedGroups) > 0 {
+			err = modTicket.modTicketAddAllowedGroups(ticketName, modTicket.ticketUpdateFlagValues.AddAllowedGroups)
 			if err != nil {
 				return err
 			}
 		}
 
-		if len(ticketUpdateFlagValues.RemoveAllowedGroups) > 0 {
-			err = modTicketRemoveAllowedGroups(filesystem, ticketName, ticketUpdateFlagValues.RemoveAllowedGroups)
+		if len(modTicket.ticketUpdateFlagValues.RemoveAllowedGroups) > 0 {
+			err = modTicket.modTicketRemoveAllowedGroups(ticketName, modTicket.ticketUpdateFlagValues.RemoveAllowedGroups)
 			if err != nil {
 				return err
 			}
 		}
 
-		if len(ticketUpdateFlagValues.AddAllowedHosts) > 0 {
-			err = modTicketAddAllowedHosts(filesystem, ticketName, ticketUpdateFlagValues.AddAllowedHosts)
+		if len(modTicket.ticketUpdateFlagValues.AddAllowedHosts) > 0 {
+			err = modTicket.modTicketAddAllowedHosts(ticketName, modTicket.ticketUpdateFlagValues.AddAllowedHosts)
 			if err != nil {
 				return err
 			}
 		}
 
-		if len(ticketUpdateFlagValues.RemoveAllowedHosts) > 0 {
-			err = modTicketRemoveAllowedHosts(filesystem, ticketName, ticketUpdateFlagValues.RemoveAllowedHosts)
+		if len(modTicket.ticketUpdateFlagValues.RemoveAllowedHosts) > 0 {
+			err = modTicket.modTicketRemoveAllowedHosts(ticketName, modTicket.ticketUpdateFlagValues.RemoveAllowedHosts)
 			if err != nil {
 				return err
 			}
@@ -130,93 +160,93 @@ func processModticketCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func modTicketUseLimit(fs *irodsclient_fs.FileSystem, ticketName string, ulimit int64) error {
-	err := fs.ModifyTicketUseLimit(ticketName, ulimit)
+func (modTicket *ModTicketCommand) modTicketUseLimit(ticketName string, ulimit int64) error {
+	err := modTicket.filesystem.ModifyTicketUseLimit(ticketName, ulimit)
 	if err != nil {
-		return xerrors.Errorf("failed to mod ticket (modify uses limit) %s: %w", ticketName, err)
+		return xerrors.Errorf("failed to mod ticket (modify uses limit) %q: %w", ticketName, err)
 	}
 	return nil
 }
 
-func modTicketWriteFileLimit(fs *irodsclient_fs.FileSystem, ticketName string, wflimit int64) error {
-	err := fs.ModifyTicketWriteFileLimit(ticketName, wflimit)
+func (modTicket *ModTicketCommand) modTicketWriteFileLimit(ticketName string, wflimit int64) error {
+	err := modTicket.filesystem.ModifyTicketWriteFileLimit(ticketName, wflimit)
 	if err != nil {
-		return xerrors.Errorf("failed to mod ticket (modify write file limit) %s: %w", ticketName, err)
+		return xerrors.Errorf("failed to mod ticket (modify write file limit) %q: %w", ticketName, err)
 	}
 	return nil
 }
 
-func modTicketWriteByteLimit(fs *irodsclient_fs.FileSystem, ticketName string, wblimit int64) error {
-	err := fs.ModifyTicketWriteByteLimit(ticketName, wblimit)
+func (modTicket *ModTicketCommand) modTicketWriteByteLimit(ticketName string, wblimit int64) error {
+	err := modTicket.filesystem.ModifyTicketWriteByteLimit(ticketName, wblimit)
 	if err != nil {
-		return xerrors.Errorf("failed to mod ticket (modify write byte limit) %s: %w", ticketName, err)
+		return xerrors.Errorf("failed to mod ticket (modify write byte limit) %q: %w", ticketName, err)
 	}
 	return nil
 }
 
-func modTicketExpirationTime(fs *irodsclient_fs.FileSystem, ticketName string, expiry time.Time) error {
-	err := fs.ModifyTicketExpirationTime(ticketName, expiry)
+func (modTicket *ModTicketCommand) modTicketExpirationTime(ticketName string, expiry time.Time) error {
+	err := modTicket.filesystem.ModifyTicketExpirationTime(ticketName, expiry)
 	if err != nil {
-		return xerrors.Errorf("failed to mod ticket (modify expiration time) %s: %w", ticketName, err)
+		return xerrors.Errorf("failed to mod ticket (modify expiration time) %q: %w", ticketName, err)
 	}
 	return nil
 }
 
-func modTicketAddAllowedUsers(fs *irodsclient_fs.FileSystem, ticketName string, addUsers []string) error {
+func (modTicket *ModTicketCommand) modTicketAddAllowedUsers(ticketName string, addUsers []string) error {
 	for _, addUser := range addUsers {
-		err := fs.AddTicketAllowedUser(ticketName, addUser)
+		err := modTicket.filesystem.AddTicketAllowedUser(ticketName, addUser)
 		if err != nil {
-			return xerrors.Errorf("failed to mod ticket (add allowed user) %s: %w", ticketName, err)
+			return xerrors.Errorf("failed to mod ticket (add allowed user) %q: %w", ticketName, err)
 		}
 	}
 	return nil
 }
 
-func modTicketRemoveAllowedUsers(fs *irodsclient_fs.FileSystem, ticketName string, rmUsers []string) error {
+func (modTicket *ModTicketCommand) modTicketRemoveAllowedUsers(ticketName string, rmUsers []string) error {
 	for _, rmUser := range rmUsers {
-		err := fs.RemoveTicketAllowedUser(ticketName, rmUser)
+		err := modTicket.filesystem.RemoveTicketAllowedUser(ticketName, rmUser)
 		if err != nil {
-			return xerrors.Errorf("failed to mod ticket (remove allowed user) %s: %w", ticketName, err)
+			return xerrors.Errorf("failed to mod ticket (remove allowed user) %q: %w", ticketName, err)
 		}
 	}
 	return nil
 }
 
-func modTicketAddAllowedGroups(fs *irodsclient_fs.FileSystem, ticketName string, addGroups []string) error {
+func (modTicket *ModTicketCommand) modTicketAddAllowedGroups(ticketName string, addGroups []string) error {
 	for _, addGroup := range addGroups {
-		err := fs.AddTicketAllowedUser(ticketName, addGroup)
+		err := modTicket.filesystem.AddTicketAllowedUser(ticketName, addGroup)
 		if err != nil {
-			return xerrors.Errorf("failed to mod ticket (add allowed group) %s: %w", ticketName, err)
+			return xerrors.Errorf("failed to mod ticket (add allowed group) %q: %w", ticketName, err)
 		}
 	}
 	return nil
 }
 
-func modTicketRemoveAllowedGroups(fs *irodsclient_fs.FileSystem, ticketName string, rmGroups []string) error {
+func (modTicket *ModTicketCommand) modTicketRemoveAllowedGroups(ticketName string, rmGroups []string) error {
 	for _, rmGroup := range rmGroups {
-		err := fs.RemoveTicketAllowedUser(ticketName, rmGroup)
+		err := modTicket.filesystem.RemoveTicketAllowedUser(ticketName, rmGroup)
 		if err != nil {
-			return xerrors.Errorf("failed to mod ticket (remove allowed group) %s: %w", ticketName, err)
+			return xerrors.Errorf("failed to mod ticket (remove allowed group) %q: %w", ticketName, err)
 		}
 	}
 	return nil
 }
 
-func modTicketAddAllowedHosts(fs *irodsclient_fs.FileSystem, ticketName string, addHosts []string) error {
+func (modTicket *ModTicketCommand) modTicketAddAllowedHosts(ticketName string, addHosts []string) error {
 	for _, addHost := range addHosts {
-		err := fs.AddTicketAllowedHost(ticketName, addHost)
+		err := modTicket.filesystem.AddTicketAllowedHost(ticketName, addHost)
 		if err != nil {
-			return xerrors.Errorf("failed to mod ticket (add allowed host) %s: %w", ticketName, err)
+			return xerrors.Errorf("failed to mod ticket (add allowed host) %q: %w", ticketName, err)
 		}
 	}
 	return nil
 }
 
-func modTicketRemoveAllowedHosts(fs *irodsclient_fs.FileSystem, ticketName string, rmHosts []string) error {
+func (modTicket *ModTicketCommand) modTicketRemoveAllowedHosts(ticketName string, rmHosts []string) error {
 	for _, rmHost := range rmHosts {
-		err := fs.RemoveTicketAllowedHost(ticketName, rmHost)
+		err := modTicket.filesystem.RemoveTicketAllowedHost(ticketName, rmHost)
 		if err != nil {
-			return xerrors.Errorf("failed to mod ticket (remove allowed host) %s: %w", ticketName, err)
+			return xerrors.Errorf("failed to mod ticket (remove allowed host) %q: %w", ticketName, err)
 		}
 	}
 	return nil

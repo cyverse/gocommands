@@ -2,6 +2,7 @@ package subcmd
 
 import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
@@ -22,11 +23,49 @@ func AddRmdirCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(rmdirCmd, false)
 
+	flag.SetForceFlags(rmdirCmd, false)
+	flag.SetRecursiveFlags(rmdirCmd)
+
 	rootCmd.AddCommand(rmdirCmd)
 }
 
 func processRmdirCommand(command *cobra.Command, args []string) error {
-	cont, err := flag.ProcessCommonFlags(command)
+	rm, err := NewRmDirCommand(command, args)
+	if err != nil {
+		return err
+	}
+
+	return rm.Process()
+}
+
+type RmDirCommand struct {
+	command *cobra.Command
+
+	recursiveFlagValues *flag.RecursiveFlagValues
+	forceFlagValues     *flag.ForceFlagValues
+
+	account    *irodsclient_types.IRODSAccount
+	filesystem *irodsclient_fs.FileSystem
+
+	targetPaths []string
+}
+
+func NewRmDirCommand(command *cobra.Command, args []string) (*RmDirCommand, error) {
+	rmDir := &RmDirCommand{
+		command: command,
+
+		recursiveFlagValues: flag.GetRecursiveFlagValues(),
+		forceFlagValues:     flag.GetForceFlagValues(),
+	}
+
+	// path
+	rmDir.targetPaths = args
+
+	return rmDir, nil
+}
+
+func (rmDir *RmDirCommand) Process() error {
+	cont, err := flag.ProcessCommonFlags(rmDir.command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
@@ -42,27 +81,29 @@ func processRmdirCommand(command *cobra.Command, args []string) error {
 	}
 
 	// Create a file system
-	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	rmDir.account = commons.GetAccount()
+	rmDir.filesystem, err = commons.GetIRODSFSClient(rmDir.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
+	defer rmDir.filesystem.Release()
 
-	defer filesystem.Release()
-
-	for _, targetPath := range args {
-		err = removeDirOne(filesystem, targetPath)
+	// rmdir
+	for _, targetPath := range rmDir.targetPaths {
+		err = rmDir.removeOne(targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to perform rmdir %s: %w", targetPath, err)
+			return xerrors.Errorf("failed to remove a directory %q: %w", targetPath, err)
 		}
 	}
+
 	return nil
 }
 
-func removeDirOne(filesystem *irodsclient_fs.FileSystem, targetPath string) error {
+func (rmDir *RmDirCommand) removeOne(targetPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
-		"function": "removeDirOne",
+		"struct":   "RmDirCommand",
+		"function": "removeOne",
 	})
 
 	cwd := commons.GetCWD()
@@ -70,21 +111,22 @@ func removeDirOne(filesystem *irodsclient_fs.FileSystem, targetPath string) erro
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	targetEntry, err := filesystem.Stat(targetPath)
+	targetEntry, err := rmDir.filesystem.Stat(targetPath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %s: %w", targetPath, err)
+		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
 	}
 
-	if targetEntry.Type == irodsclient_fs.FileEntry {
+	if !targetEntry.IsDir() {
 		// file
-		return xerrors.Errorf("%s is not a collection", targetPath)
-	} else {
-		// dir
-		logger.Debugf("removing a collection %s", targetPath)
-		err = filesystem.RemoveDir(targetPath, false, false)
-		if err != nil {
-			return xerrors.Errorf("failed to rmdir %s: %w", targetPath, err)
-		}
+		return commons.NewNotDirError(targetPath)
 	}
+
+	// dir
+	logger.Debugf("removing a collection %q", targetPath)
+	err = rmDir.filesystem.RemoveDir(targetPath, rmDir.recursiveFlagValues.Recursive, rmDir.forceFlagValues.Force)
+	if err != nil {
+		return xerrors.Errorf("failed to remove a directory %q: %w", targetPath, err)
+	}
+
 	return nil
 }

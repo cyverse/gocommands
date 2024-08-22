@@ -45,12 +45,54 @@ func AddLsCommand(rootCmd *cobra.Command) {
 }
 
 func processLsCommand(command *cobra.Command, args []string) error {
+	ls, err := NewLsCommand(command, args)
+	if err != nil {
+		return err
+	}
+
+	return ls.Process()
+}
+
+type LsCommand struct {
+	command *cobra.Command
+
+	ticketAccessFlagValues *flag.TicketAccessFlagValues
+	listFlagValues         *flag.ListFlagValues
+	decryptionFlagValues   *flag.DecryptionFlagValues
+
+	account    *irodsclient_types.IRODSAccount
+	filesystem *irodsclient_fs.FileSystem
+
+	sourcePaths []string
+}
+
+func NewLsCommand(command *cobra.Command, args []string) (*LsCommand, error) {
+	ls := &LsCommand{
+		command: command,
+
+		ticketAccessFlagValues: flag.GetTicketAccessFlagValues(),
+		listFlagValues:         flag.GetListFlagValues(),
+		decryptionFlagValues:   flag.GetDecryptionFlagValues(command),
+	}
+
+	// path
+	ls.sourcePaths = args[:]
+
+	if len(args) == 0 {
+		ls.sourcePaths = []string{"."}
+	}
+
+	return ls, nil
+}
+
+func (ls *LsCommand) Process() error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
-		"function": "processLsCommand",
+		"struct":   "LsCommand",
+		"function": "Process",
 	})
 
-	cont, err := flag.ProcessCommonFlags(command)
+	cont, err := flag.ProcessCommonFlags(ls.command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
@@ -65,16 +107,12 @@ func processLsCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	ticketAccessFlagValues := flag.GetTicketAccessFlagValues()
-	listFlagValues := flag.GetListFlagValues()
-	decryptionFlagValues := flag.GetDecryptionFlagValues(command)
-
+	// config
 	appConfig := commons.GetConfig()
-
 	syncAccount := false
-	if len(ticketAccessFlagValues.Name) > 0 {
-		logger.Debugf("use ticket: %s", ticketAccessFlagValues.Name)
-		appConfig.Ticket = ticketAccessFlagValues.Name
+	if len(ls.ticketAccessFlagValues.Name) > 0 {
+		logger.Debugf("use ticket %q", ls.ticketAccessFlagValues.Name)
+		appConfig.Ticket = ls.ticketAccessFlagValues.Name
 		syncAccount = true
 	}
 
@@ -86,85 +124,83 @@ func processLsCommand(command *cobra.Command, args []string) error {
 	}
 
 	// Create a file system
-	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	ls.account = commons.GetAccount()
+	ls.filesystem, err = commons.GetIRODSFSClient(ls.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
-	defer filesystem.Release()
+	defer ls.filesystem.Release()
 
 	// set default key for decryption
-	if len(decryptionFlagValues.Key) == 0 {
-		decryptionFlagValues.Key = account.Password
+	if len(ls.decryptionFlagValues.Key) == 0 {
+		ls.decryptionFlagValues.Key = ls.account.Password
 	}
 
-	sourcePaths := args[:]
-
-	if len(args) == 0 {
-		sourcePaths = []string{"."}
-	}
-
-	for _, sourcePath := range sourcePaths {
-		err = listOne(filesystem, sourcePath, listFlagValues, decryptionFlagValues)
+	// run
+	for _, sourcePath := range ls.sourcePaths {
+		err = ls.listOne(sourcePath)
 		if err != nil {
-			return xerrors.Errorf("failed to perform ls %s: %w", sourcePath, err)
+			return xerrors.Errorf("failed to list path %q: %w", sourcePath, err)
 		}
 	}
 
 	return nil
 }
 
-func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, listFlagValues *flag.ListFlagValues, decryptionFlagValues *flag.DecryptionFlagValues) error {
+func (ls *LsCommand) requireDecryption(sourcePath string) bool {
+	if ls.decryptionFlagValues.NoDecryption {
+		return false
+	}
+
+	if !ls.decryptionFlagValues.Decryption {
+		return false
+	}
+
+	mode := commons.DetectEncryptionMode(sourcePath)
+	return mode != commons.EncryptionModeUnknown
+}
+
+func (ls *LsCommand) listOne(sourcePath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
 	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 
-	sourceEntry, err := fs.Stat(sourcePath)
+	sourceEntry, err := ls.filesystem.Stat(sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %s: %w", sourcePath, err)
-	}
-
-	// load encryption config from meta
-	if !decryptionFlagValues.NoDecryption && !decryptionFlagValues.IgnoreMeta {
-		sourceDir := sourcePath
-		if !sourceEntry.IsDir() {
-			sourceDir = commons.GetDir(sourcePath)
+		if !irodsclient_types.IsFileNotFoundError(err) {
+			return xerrors.Errorf("failed to find data-object/collection %q: %w", sourcePath, err)
 		}
 
-		encryptionConfig := commons.GetEncryptionConfigFromMeta(fs, sourceDir)
-
-		if encryptionConfig.Required {
-			decryptionFlagValues.Decryption = encryptionConfig.Required
-		}
+		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
 	}
 
-	connection, err := fs.GetMetadataConnection()
+	connection, err := ls.filesystem.GetMetadataConnection()
 	if err != nil {
 		return xerrors.Errorf("failed to get connection: %w", err)
 	}
-	defer fs.ReturnMetadataConnection(connection)
+	defer ls.filesystem.ReturnMetadataConnection(connection)
 
-	collection, err := irodsclient_irodsfs.GetCollection(connection, sourcePath)
-	if err != nil {
-		if !irodsclient_types.IsFileNotFoundError(err) {
-			return xerrors.Errorf("failed to get collection %s: %w", sourcePath, err)
+	if sourceEntry.IsDir() {
+		// collection
+		collection, err := irodsclient_irodsfs.GetCollection(connection, sourcePath)
+		if err != nil {
+			return xerrors.Errorf("failed to get collection %q: %w", sourcePath, err)
 		}
-	}
 
-	if err == nil {
 		colls, err := irodsclient_irodsfs.ListSubCollections(connection, sourcePath)
 		if err != nil {
-			return xerrors.Errorf("failed to list sub-collections in %s: %w", sourcePath, err)
+			return xerrors.Errorf("failed to list sub-collections in %q: %w", sourcePath, err)
 		}
 
 		objs, err := irodsclient_irodsfs.ListDataObjects(connection, collection)
 		if err != nil {
-			return xerrors.Errorf("failed to list data-objects in %s: %w", sourcePath, err)
+			return xerrors.Errorf("failed to list data-objects in %q: %w", sourcePath, err)
 		}
 
-		printDataObjects(objs, listFlagValues, decryptionFlagValues)
-		printCollections(colls, listFlagValues)
+		ls.printDataObjects(objs)
+		ls.printCollections(colls)
+
 		return nil
 	}
 
@@ -173,31 +209,55 @@ func listOne(fs *irodsclient_fs.FileSystem, sourcePath string, listFlagValues *f
 
 	parentCollection, err := irodsclient_irodsfs.GetCollection(connection, parentSourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to get collection %s: %w", parentSourcePath, err)
+		return xerrors.Errorf("failed to get collection %q: %w", parentSourcePath, err)
 	}
 
 	entry, err := irodsclient_irodsfs.GetDataObject(connection, parentCollection, path.Base(sourcePath))
 	if err != nil {
-		return xerrors.Errorf("failed to get data-object %s: %w", sourcePath, err)
+		return xerrors.Errorf("failed to get data-object %q: %w", sourcePath, err)
 	}
 
 	entries := []*irodsclient_types.IRODSDataObject{entry}
-	printDataObjects(entries, listFlagValues, decryptionFlagValues)
+	ls.printDataObjects(entries)
+
 	return nil
 }
 
-func flattenReplicas(objects []*irodsclient_types.IRODSDataObject) []*FlatReplica {
+func (ls *LsCommand) printCollections(entries []*irodsclient_types.IRODSCollection) {
+	sort.SliceStable(entries, ls.getCollectionSortFunction(entries, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
+	for _, entry := range entries {
+		commons.Printf("  C- %s\n", entry.Path)
+	}
+}
+
+func (ls *LsCommand) printDataObjects(entries []*irodsclient_types.IRODSDataObject) {
+	if ls.listFlagValues.Format == commons.ListFormatNormal {
+		sort.SliceStable(entries, ls.getDataObjectSortFunction(entries, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
+		for _, entry := range entries {
+			ls.printDataObjectShort(entry)
+		}
+	} else {
+		replicas := ls.flattenReplicas(entries)
+		sort.SliceStable(replicas, ls.getFlatReplicaSortFunction(replicas, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
+		ls.printReplicas(replicas)
+	}
+}
+
+func (ls *LsCommand) flattenReplicas(objects []*irodsclient_types.IRODSDataObject) []*FlatReplica {
 	var result []*FlatReplica
 	for _, object := range objects {
 		for _, replica := range object.Replicas {
-			flatReplica := FlatReplica{DataObject: object, Replica: replica}
+			flatReplica := FlatReplica{
+				DataObject: object,
+				Replica:    replica,
+			}
 			result = append(result, &flatReplica)
 		}
 	}
 	return result
 }
 
-func getFlatReplicaSortFunction(entries []*FlatReplica, sortOrder commons.ListSortOrder, sortReverse bool) func(i int, j int) bool {
+func (ls *LsCommand) getFlatReplicaSortFunction(entries []*FlatReplica, sortOrder commons.ListSortOrder, sortReverse bool) func(i int, j int) bool {
 	if sortReverse {
 		switch sortOrder {
 		case commons.ListSortOrderName:
@@ -259,20 +319,7 @@ func getFlatReplicaSortFunction(entries []*FlatReplica, sortOrder commons.ListSo
 	}
 }
 
-func printDataObjects(entries []*irodsclient_types.IRODSDataObject, listFlagValues *flag.ListFlagValues, decryptionFlagValues *flag.DecryptionFlagValues) {
-	if listFlagValues.Format == commons.ListFormatNormal {
-		sort.SliceStable(entries, getDataObjectSortFunction(entries, listFlagValues.SortOrder, listFlagValues.SortReverse))
-		for _, entry := range entries {
-			printDataObjectShort(entry, decryptionFlagValues)
-		}
-	} else {
-		replicas := flattenReplicas(entries)
-		sort.SliceStable(replicas, getFlatReplicaSortFunction(replicas, listFlagValues.SortOrder, listFlagValues.SortReverse))
-		printReplicas(replicas, listFlagValues, decryptionFlagValues)
-	}
-}
-
-func getDataObjectSortFunction(entries []*irodsclient_types.IRODSDataObject, sortOrder commons.ListSortOrder, sortReverse bool) func(i int, j int) bool {
+func (ls *LsCommand) getDataObjectSortFunction(entries []*irodsclient_types.IRODSDataObject, sortOrder commons.ListSortOrder, sortReverse bool) func(i int, j int) bool {
 	if sortReverse {
 		switch sortOrder {
 		case commons.ListSortOrderName:
@@ -287,8 +334,8 @@ func getDataObjectSortFunction(entries []*irodsclient_types.IRODSDataObject, sor
 			}
 		case commons.ListSortOrderTime:
 			return func(i int, j int) bool {
-				return (getDataObjectModifyTime(entries[i]).After(getDataObjectModifyTime(entries[j]))) ||
-					(getDataObjectModifyTime(entries[i]).Equal(getDataObjectModifyTime(entries[j])) &&
+				return (ls.getDataObjectModifyTime(entries[i]).After(ls.getDataObjectModifyTime(entries[j]))) ||
+					(ls.getDataObjectModifyTime(entries[i]).Equal(ls.getDataObjectModifyTime(entries[j])) &&
 						entries[i].Name < entries[j].Name)
 			}
 		case commons.ListSortOrderSize:
@@ -317,8 +364,8 @@ func getDataObjectSortFunction(entries []*irodsclient_types.IRODSDataObject, sor
 		}
 	case commons.ListSortOrderTime:
 		return func(i int, j int) bool {
-			return (getDataObjectModifyTime(entries[i]).Before(getDataObjectModifyTime(entries[j]))) ||
-				(getDataObjectModifyTime(entries[i]).Equal(getDataObjectModifyTime(entries[j])) &&
+			return (ls.getDataObjectModifyTime(entries[i]).Before(ls.getDataObjectModifyTime(entries[j]))) ||
+				(ls.getDataObjectModifyTime(entries[i]).Equal(ls.getDataObjectModifyTime(entries[j])) &&
 					entries[i].Name < entries[j].Name)
 		}
 	case commons.ListSortOrderSize:
@@ -334,7 +381,7 @@ func getDataObjectSortFunction(entries []*irodsclient_types.IRODSDataObject, sor
 	}
 }
 
-func getDataObjectModifyTime(object *irodsclient_types.IRODSDataObject) time.Time {
+func (ls *LsCommand) getDataObjectModifyTime(object *irodsclient_types.IRODSDataObject) time.Time {
 	// ModifyTime of data object is considered to be ModifyTime of replica modified most recently
 	maxTime := object.Replicas[0].ModifyTime
 	for _, t := range object.Replicas[1:] {
@@ -345,91 +392,101 @@ func getDataObjectModifyTime(object *irodsclient_types.IRODSDataObject) time.Tim
 	return maxTime
 }
 
-func printDataObjectShort(entry *irodsclient_types.IRODSDataObject, decryptionFlagValues *flag.DecryptionFlagValues) {
+func (ls *LsCommand) printDataObjectShort(entry *irodsclient_types.IRODSDataObject) {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
+		"struct":   "LsCommand",
 		"function": "printDataObjectShort",
 	})
 
 	newName := entry.Name
 
-	if decryptionFlagValues.Decryption {
-		// need to decrypted
+	if ls.requireDecryption(entry.Path) {
+		// need to decrypt
 		encryptionMode := commons.DetectEncryptionMode(newName)
 		if encryptionMode != commons.EncryptionModeUnknown {
-			encryptManager := getEncryptionManagerForDecrypt(encryptionMode, decryptionFlagValues)
+			encryptManager := ls.getEncryptionManagerForDecryption(encryptionMode)
+
 			decryptedFilename, err := encryptManager.DecryptFilename(newName)
 			if err != nil {
 				logger.Debugf("%+v", err)
 				newName = fmt.Sprintf("%s\t(decryption_failed)", newName)
 			} else {
-				newName = fmt.Sprintf("%s\t(encrypted: %s)", newName, decryptedFilename)
+				newName = fmt.Sprintf("%s\t(encrypted: %q)", newName, decryptedFilename)
 			}
 		}
 	}
 
-	fmt.Printf("  %s\n", newName)
+	commons.Printf("  %s\n", newName)
 }
 
-func printReplicas(flatReplicas []*FlatReplica, listFlagValues *flag.ListFlagValues, decryptionFlagValues *flag.DecryptionFlagValues) {
+func (ls *LsCommand) printReplicas(flatReplicas []*FlatReplica) {
 	for _, flatReplica := range flatReplicas {
-		printReplica(*flatReplica, listFlagValues, decryptionFlagValues)
+		ls.printReplica(*flatReplica)
 	}
 }
 
-func printReplica(flatReplica FlatReplica, listFlagValues *flag.ListFlagValues, decryptionFlagValues *flag.DecryptionFlagValues) {
+func (ls *LsCommand) getEncryptionManagerForDecryption(mode commons.EncryptionMode) *commons.EncryptionManager {
+	manager := commons.NewEncryptionManager(mode)
+
+	switch mode {
+	case commons.EncryptionModeWinSCP, commons.EncryptionModePGP:
+		manager.SetKey([]byte(ls.decryptionFlagValues.Key))
+	case commons.EncryptionModeSSH:
+		manager.SetPublicPrivateKey(ls.decryptionFlagValues.PrivateKeyPath)
+	}
+
+	return manager
+}
+
+func (ls *LsCommand) printReplica(flatReplica FlatReplica) {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
+		"struct":   "LsCommand",
 		"function": "printReplica",
 	})
 
 	newName := flatReplica.DataObject.Name
 
-	if decryptionFlagValues.Decryption {
-		// need to decrypted
+	if ls.requireDecryption(flatReplica.DataObject.Path) {
+		// need to decrypt
 		encryptionMode := commons.DetectEncryptionMode(newName)
 		if encryptionMode != commons.EncryptionModeUnknown {
-			encryptManager := getEncryptionManagerForDecrypt(encryptionMode, decryptionFlagValues)
+			encryptManager := ls.getEncryptionManagerForDecryption(encryptionMode)
+
 			decryptedFilename, err := encryptManager.DecryptFilename(newName)
 			if err != nil {
 				logger.Debugf("%+v", err)
 				newName = fmt.Sprintf("%s\tdecryption_failed", newName)
 			} else {
-				newName = fmt.Sprintf("%s\t(encrypted: %s", newName, decryptedFilename)
+				newName = fmt.Sprintf("%s\t(encrypted: %q", newName, decryptedFilename)
 			}
 		}
 	}
 
 	size := fmt.Sprintf("%v", flatReplica.DataObject.Size)
-	if listFlagValues.HumanReadableSizes {
+	if ls.listFlagValues.HumanReadableSizes {
 		size = humanize.Bytes(uint64(flatReplica.DataObject.Size))
 	}
 
-	switch listFlagValues.Format {
+	switch ls.listFlagValues.Format {
 	case commons.ListFormatNormal:
-		fmt.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
+		commons.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
 	case commons.ListFormatLong:
 		modTime := commons.MakeDateTimeString(flatReplica.Replica.ModifyTime)
-		fmt.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
-			size, modTime, getStatusMark(flatReplica.Replica.Status), newName)
+		commons.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
+			size, modTime, ls.getStatusMark(flatReplica.Replica.Status), newName)
 	case commons.ListFormatVeryLong:
 		modTime := commons.MakeDateTimeString(flatReplica.Replica.ModifyTime)
-		fmt.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
-			size, modTime, getStatusMark(flatReplica.Replica.Status), newName)
-		fmt.Printf("    %s\t%s\n", flatReplica.Replica.Checksum.IRODSChecksumString, flatReplica.Replica.Path)
+		commons.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
+			size, modTime, ls.getStatusMark(flatReplica.Replica.Status), newName)
+		commons.Printf("    %s\t%s\n", flatReplica.Replica.Checksum.IRODSChecksumString, flatReplica.Replica.Path)
 	default:
-		fmt.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
+		commons.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
 	}
 }
 
-func printCollections(entries []*irodsclient_types.IRODSCollection, listFlagValues *flag.ListFlagValues) {
-	sort.SliceStable(entries, getCollectionSortFunction(entries, listFlagValues.SortOrder, listFlagValues.SortReverse))
-	for _, entry := range entries {
-		fmt.Printf("  C- %s\n", entry.Path)
-	}
-}
-
-func getCollectionSortFunction(entries []*irodsclient_types.IRODSCollection, sortOrder commons.ListSortOrder, sortReverse bool) func(i int, j int) bool {
+func (ls *LsCommand) getCollectionSortFunction(entries []*irodsclient_types.IRODSCollection, sortOrder commons.ListSortOrder, sortReverse bool) func(i int, j int) bool {
 	if sortReverse {
 		switch sortOrder {
 		case commons.ListSortOrderName:
@@ -470,7 +527,7 @@ func getCollectionSortFunction(entries []*irodsclient_types.IRODSCollection, sor
 	}
 }
 
-func getStatusMark(status string) string {
+func (ls *LsCommand) getStatusMark(status string) string {
 	switch status {
 	case "0":
 		return "X" // stale

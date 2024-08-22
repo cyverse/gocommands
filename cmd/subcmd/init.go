@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
 
+	irodsclient_icommands "github.com/cyverse/go-irodsclient/icommands"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 )
 
@@ -29,7 +30,35 @@ func AddInitCommand(rootCmd *cobra.Command) {
 }
 
 func processInitCommand(command *cobra.Command, args []string) error {
-	cont, err := flag.ProcessCommonFlags(command)
+	init, err := NewInitCommand(command, args)
+	if err != nil {
+		return err
+	}
+
+	return init.Process()
+}
+
+type InitCommand struct {
+	command *cobra.Command
+
+	initFlagValues *flag.InitFlagValues
+
+	environmentManager *irodsclient_icommands.ICommandsEnvironmentManager
+	account            *irodsclient_types.IRODSAccount
+}
+
+func NewInitCommand(command *cobra.Command, args []string) (*InitCommand, error) {
+	init := &InitCommand{
+		command: command,
+
+		initFlagValues: flag.GetInitFlagValues(),
+	}
+
+	return init, nil
+}
+
+func (init *InitCommand) Process() error {
+	cont, err := flag.ProcessCommonFlags(init.command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
@@ -38,9 +67,7 @@ func processInitCommand(command *cobra.Command, args []string) error {
 		return nil
 	}
 
-	initFlagValues := flag.GetInitFlagValues()
-
-	environmentManager := commons.GetEnvironmentManager()
+	init.environmentManager = commons.GetEnvironmentManager()
 
 	// handle local flags
 	updated, err := commons.ReinputFields()
@@ -48,25 +75,24 @@ func processInitCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input fields: %w", err)
 	}
 
-	account, err := environmentManager.ToIRODSAccount()
+	init.account, err = init.environmentManager.ToIRODSAccount()
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS account info from iCommands Environment: %w", err)
 	}
 
 	// update PAM TTL
-	account.PamTTL = initFlagValues.PamTTL
+	init.account.PamTTL = init.initFlagValues.PamTTL
 
 	// test connect
-	conn, err := commons.GetIRODSConnection(account)
+	conn, err := commons.GetIRODSConnection(init.account)
 	if err != nil {
 		return xerrors.Errorf("failed to connect to iRODS server: %w", err)
 	}
-
 	defer conn.Disconnect()
 
-	if account.AuthenticationScheme == irodsclient_types.AuthSchemePAM {
-		// set pam token
-		environmentManager.PamToken = conn.GetPAMToken()
+	if init.account.AuthenticationScheme == irodsclient_types.AuthSchemePAM {
+		// update pam token
+		init.environmentManager.PamToken = conn.GetPAMToken()
 	}
 
 	if updated {
@@ -82,5 +108,6 @@ func processInitCommand(command *cobra.Command, args []string) error {
 			return xerrors.Errorf("failed to print account info: %w", err)
 		}
 	}
+
 	return nil
 }

@@ -2,6 +2,7 @@ package subcmd
 
 import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
@@ -28,7 +29,47 @@ func AddAddmetaCommand(rootCmd *cobra.Command) {
 }
 
 func processAddmetaCommand(command *cobra.Command, args []string) error {
-	cont, err := flag.ProcessCommonFlags(command)
+	addMeta, err := NewAddMetaCommand(command, args)
+	if err != nil {
+		return err
+	}
+
+	return addMeta.Process()
+}
+
+type AddMetaCommand struct {
+	command *cobra.Command
+
+	targetObjectFlagValues *flag.TargetObjectFlagValues
+
+	account    *irodsclient_types.IRODSAccount
+	filesystem *irodsclient_fs.FileSystem
+
+	attribute string
+	value     string
+	unit      string
+}
+
+func NewAddMetaCommand(command *cobra.Command, args []string) (*AddMetaCommand, error) {
+	addMeta := &AddMetaCommand{
+		command: command,
+
+		targetObjectFlagValues: flag.GetTargetObjectFlagValues(command),
+	}
+
+	// get avu
+	addMeta.attribute = args[0]
+	addMeta.value = args[1]
+	addMeta.unit = ""
+	if len(args) >= 3 {
+		addMeta.unit = args[2]
+	}
+
+	return addMeta, nil
+}
+
+func (addMeta *AddMetaCommand) Process() error {
+	cont, err := flag.ProcessCommonFlags(addMeta.command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
@@ -43,37 +84,27 @@ func processAddmetaCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	targetObjectFlagValues := flag.GetTargetObjectFlagValues(command)
-
-	// Create a connection
-	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	// Create a file system
+	addMeta.account = commons.GetAccount()
+	addMeta.filesystem, err = commons.GetIRODSFSClient(addMeta.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
+	defer addMeta.filesystem.Release()
 
-	defer filesystem.Release()
-
-	// get avu
-	attr := args[0]
-	value := args[1]
-	unit := ""
-	if len(args) >= 3 {
-		unit = args[2]
-	}
-
-	if targetObjectFlagValues.PathUpdated {
-		err = addMetaToPath(filesystem, targetObjectFlagValues.Path, attr, value, unit)
+	// add meta
+	if addMeta.targetObjectFlagValues.PathUpdated {
+		err = addMeta.addMetaToPath(addMeta.targetObjectFlagValues.Path, addMeta.attribute, addMeta.value, addMeta.unit)
 		if err != nil {
 			return err
 		}
-	} else if targetObjectFlagValues.UserUpdated {
-		err = addMetaToUser(filesystem, targetObjectFlagValues.User, attr, value, unit)
+	} else if addMeta.targetObjectFlagValues.UserUpdated {
+		err = addMeta.addMetaToUser(addMeta.targetObjectFlagValues.User, addMeta.attribute, addMeta.value, addMeta.unit)
 		if err != nil {
 			return err
 		}
-	} else if targetObjectFlagValues.ResourceUpdated {
-		err = addMetaToResource(filesystem, targetObjectFlagValues.Resource, attr, value, unit)
+	} else if addMeta.targetObjectFlagValues.ResourceUpdated {
+		err = addMeta.addMetaToResource(addMeta.targetObjectFlagValues.Resource, addMeta.attribute, addMeta.value, addMeta.unit)
 		if err != nil {
 			return err
 		}
@@ -85,54 +116,57 @@ func processAddmetaCommand(command *cobra.Command, args []string) error {
 	return nil
 }
 
-func addMetaToPath(fs *irodsclient_fs.FileSystem, targetPath string, attribute string, value string, unit string) error {
+func (addMeta *AddMetaCommand) addMetaToPath(targetPath string, attribute string, value string, unit string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
+		"struct":   "AddMetaCommand",
 		"function": "addMetaToPath",
 	})
-
-	logger.Debugf("add metadata to path %s (attr %s, value %s, unit %s)", targetPath, attribute, value, unit)
 
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	err := fs.AddMetadata(targetPath, attribute, value, unit)
+	logger.Debugf("add metadata to path %q (attr %q, value %q, unit %q)", targetPath, attribute, value, unit)
+
+	err := addMeta.filesystem.AddMetadata(targetPath, attribute, value, unit)
 	if err != nil {
-		return xerrors.Errorf("failed to add metadata to path %s (attr %s, value %s, unit %s): %w", targetPath, attribute, value, unit, err)
+		return xerrors.Errorf("failed to add metadata to path %q (attr %q, value %q, unit %q): %w", targetPath, attribute, value, unit, err)
 	}
 
 	return nil
 }
 
-func addMetaToUser(fs *irodsclient_fs.FileSystem, username string, attribute string, value string, unit string) error {
+func (addMeta *AddMetaCommand) addMetaToUser(username string, attribute string, value string, unit string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
+		"struct":   "AddMetaCommand",
 		"function": "addMetaToUser",
 	})
 
-	logger.Debugf("add metadata to user %s (attr %s, value %s, unit %s)", username, attribute, value, unit)
+	logger.Debugf("add metadata to user %q (attr %q, value %q, unit %q)", username, attribute, value, unit)
 
-	err := fs.AddUserMetadata(username, attribute, value, unit)
+	err := addMeta.filesystem.AddUserMetadata(username, attribute, value, unit)
 	if err != nil {
-		return xerrors.Errorf("failed to add metadata to user %s (attr %s, value %s, unit %s): %w", username, attribute, value, unit, err)
+		return xerrors.Errorf("failed to add metadata to user %q (attr %q, value %q, unit %q): %w", username, attribute, value, unit, err)
 	}
 
 	return nil
 }
 
-func addMetaToResource(fs *irodsclient_fs.FileSystem, resource string, attribute string, value string, unit string) error {
+func (addMeta *AddMetaCommand) addMetaToResource(resource string, attribute string, value string, unit string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
+		"struct":   "AddMetaCommand",
 		"function": "addMetaToResource",
 	})
 
-	logger.Debugf("add metadata to resource %s (attr %s, value %s, unit %s)", resource, attribute, value, unit)
+	logger.Debugf("add metadata to resource %q (attr %q, value %q, unit %q)", resource, attribute, value, unit)
 
-	err := fs.AddUserMetadata(resource, attribute, value, unit)
+	err := addMeta.filesystem.AddUserMetadata(resource, attribute, value, unit)
 	if err != nil {
-		return xerrors.Errorf("failed to add metadata to resource %s (attr %s, value %s, unit %s): %w", resource, attribute, value, unit, err)
+		return xerrors.Errorf("failed to add metadata to resource %q (attr %q, value %q, unit %q): %w", resource, attribute, value, unit, err)
 	}
 
 	return nil

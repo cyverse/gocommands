@@ -1,16 +1,13 @@
 package subcmd
 
 import (
-	"fmt"
-	"syscall"
-
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
 	"golang.org/x/xerrors"
 )
 
@@ -31,7 +28,31 @@ func AddPasswdCommand(rootCmd *cobra.Command) {
 }
 
 func processPasswdCommand(command *cobra.Command, args []string) error {
-	cont, err := flag.ProcessCommonFlags(command)
+	passwd, err := NewPasswdCommand(command, args)
+	if err != nil {
+		return err
+	}
+
+	return passwd.Process()
+}
+
+type PasswdCommand struct {
+	command *cobra.Command
+
+	account    *irodsclient_types.IRODSAccount
+	filesystem *irodsclient_fs.FileSystem
+}
+
+func NewPasswdCommand(command *cobra.Command, args []string) (*PasswdCommand, error) {
+	passwd := &PasswdCommand{
+		command: command,
+	}
+
+	return passwd, nil
+}
+
+func (passwd *PasswdCommand) Process() error {
+	cont, err := flag.ProcessCommonFlags(passwd.command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
@@ -47,53 +68,44 @@ func processPasswdCommand(command *cobra.Command, args []string) error {
 	}
 
 	// Create a connection
-	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	passwd.account = commons.GetAccount()
+	passwd.filesystem, err = commons.GetIRODSFSClient(passwd.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 
-	err = changePassword(filesystem)
+	err = passwd.changePassword()
 	if err != nil {
 		return xerrors.Errorf("failed to change password: %w", err)
 	}
 	return nil
 }
 
-func changePassword(fs *irodsclient_fs.FileSystem) error {
+func (passwd *PasswdCommand) changePassword() error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
+		"struct":   "PasswdCommand",
 		"function": "changePassword",
 	})
 
-	account := commons.GetAccount()
-
-	connection, err := fs.GetMetadataConnection()
+	connection, err := passwd.filesystem.GetMetadataConnection()
 	if err != nil {
 		return xerrors.Errorf("failed to get connection: %w", err)
 	}
-	defer fs.ReturnMetadataConnection(connection)
+	defer passwd.filesystem.ReturnMetadataConnection(connection)
 
-	logger.Debugf("changing password for user %s", account.ClientUser)
+	logger.Debugf("changing password for user %q", passwd.account.ClientUser)
 
 	pass := false
 	for i := 0; i < 3; i++ {
-		fmt.Print("Current iRODS Password: ")
-		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
-		if err != nil {
-			return xerrors.Errorf("failed to read password: %w", err)
-		}
-
-		fmt.Print("\n")
-		currentPassword := string(bytePassword)
-
-		if currentPassword == account.Password {
+		currentPassword := commons.InputPassword("Current iRODS Password")
+		if currentPassword == passwd.account.Password {
 			pass = true
 			break
 		}
 
-		fmt.Println("Wrong password")
-		fmt.Println("")
+		commons.Println("Wrong password")
+		commons.Println("")
 	}
 
 	if !pass {
@@ -103,46 +115,29 @@ func changePassword(fs *irodsclient_fs.FileSystem) error {
 	pass = false
 	newPassword := ""
 	for i := 0; i < 3; i++ {
-		fmt.Print("New iRODS Password: ")
-		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
-		if err != nil {
-			return xerrors.Errorf("failed to read password: %w", err)
-		}
-
-		fmt.Print("\n")
-		newPassword = string(bytePassword)
-
-		if newPassword != account.Password {
+		newPassword = commons.InputPassword("New iRODS Password")
+		if newPassword != passwd.account.Password {
 			pass = true
 			break
 		}
 
-		fmt.Println("Please provide new password")
-		fmt.Println("")
+		commons.Println("Please provide new password")
+		commons.Println("")
 	}
 
 	if !pass {
 		return xerrors.Errorf("invalid password provided")
 	}
 
-	newPasswordConfirm := ""
-	fmt.Print("Confirm New iRODS Password: ")
-	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
-	if err != nil {
-		return xerrors.Errorf("failed to read password: %w", err)
-	}
-
-	fmt.Print("\n")
-	newPasswordConfirm = string(bytePassword)
-
+	newPasswordConfirm := commons.InputPassword("Confirm New iRODS Password")
 	if newPassword != newPasswordConfirm {
 		return xerrors.Errorf("password mismatched")
 	}
 
-	err = irodsclient_irodsfs.ChangeUserPassword(connection, account.ClientUser, account.ClientZone, newPassword)
+	err = irodsclient_irodsfs.ChangeUserPassword(connection, passwd.account.ClientUser, passwd.account.ClientZone, newPassword)
 	if err != nil {
-		return xerrors.Errorf("failed to change user password for user %s: %w", account.ClientUser, err)
+		return xerrors.Errorf("failed to change user password for user %q: %w", passwd.account.ClientUser, err)
 	}
-	return nil
 
+	return nil
 }

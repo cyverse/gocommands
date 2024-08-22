@@ -7,13 +7,11 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	irodsclient_icommands "github.com/cyverse/go-irodsclient/icommands"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/go-irodsclient/irods/util"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/term"
 	"golang.org/x/xerrors"
 
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -189,14 +187,12 @@ func InputMissingFields() (bool, error) {
 
 	env := environmentManager.Environment
 	if len(env.Host) == 0 {
-		fmt.Print("iRODS Host [data.cyverse.org]: ")
-		fmt.Scanln(&env.Host)
+		env.Host = Input("iRODS Host [data.cyverse.org]")
 		if len(env.Host) == 0 {
 			env.Host = "data.cyverse.org"
 		}
 
-		fmt.Print("iRODS Port [1247]: ")
-		fmt.Scanln(&env.Port)
+		env.Port = InputInt("iRODS Port [1247]")
 		if env.Port == 0 {
 			env.Port = 1247
 		}
@@ -205,8 +201,7 @@ func InputMissingFields() (bool, error) {
 	}
 
 	if len(env.Zone) == 0 {
-		fmt.Print("iRODS Zone [iplant]: ")
-		fmt.Scanln(&env.Zone)
+		env.Zone = Input("iRODS Zone [iplant]")
 		if len(env.Zone) == 0 {
 			env.Zone = "iplant"
 		}
@@ -215,25 +210,17 @@ func InputMissingFields() (bool, error) {
 	}
 
 	if len(env.Username) == 0 {
-		fmt.Print("iRODS Username: ")
-		fmt.Scanln(&env.Username)
+		env.Username = Input("iRODS Username")
 		updated = true
 	}
 
 	password := environmentManager.Password
 	pamToken := environmentManager.PamToken
 	if len(password) == 0 && len(pamToken) == 0 && env.Username != "anonymous" {
-		fmt.Print("iRODS Password: ")
-		bytePassword, err := term.ReadPassword(int(syscall.Stdin))
-		if err != nil {
-			return false, xerrors.Errorf("failed to read password: %w", err)
-		}
-
-		fmt.Print("\n")
-		password = string(bytePassword)
+		environmentManager.Password = InputPassword("iRODS Password")
 		updated = true
 	}
-	environmentManager.Password = password
+
 	err := SyncAccount()
 	if err != nil {
 		return updated, xerrors.Errorf("failed to get iCommands Environment: %w", err)
@@ -296,9 +283,7 @@ func ReinputFields() (bool, error) {
 		env.Host = "data.cyverse.org" // default
 	}
 
-	fmt.Printf("iRODS Host [%s]: ", env.Host)
-	newHost := ""
-	fmt.Scanln(&newHost)
+	newHost := Input(fmt.Sprintf("iRODS Host [%s]", env.Host))
 	if len(newHost) > 0 && newHost != env.Host {
 		env.Host = newHost
 		updated = true
@@ -308,9 +293,7 @@ func ReinputFields() (bool, error) {
 		env.Port = 1247 // default
 	}
 
-	fmt.Printf("iRODS Port [%d]: ", env.Port)
-	newPort := 0
-	fmt.Scanln(&newPort)
+	newPort := InputInt(fmt.Sprintf("iRODS Port [%d]", env.Port))
 	if newPort > 0 && newPort != env.Port {
 		env.Port = newPort
 		updated = true
@@ -320,23 +303,20 @@ func ReinputFields() (bool, error) {
 		env.Zone = "iplant" // default
 	}
 
-	fmt.Printf("iRODS Zone [%s]: ", env.Zone)
-	newZone := ""
-	fmt.Scanln(&newZone)
+	newZone := Input(fmt.Sprintf("iRODS Zone [%s]", env.Zone))
 	if len(newZone) > 0 && newZone != env.Zone {
 		env.Zone = newZone
 		updated = true
 	}
 
 	for {
+		newUsername := ""
 		if len(env.Username) > 0 {
-			fmt.Printf("iRODS Username [%s]: ", env.Username)
+			newUsername = Input(fmt.Sprintf("iRODS Username [%s]", env.Username))
 		} else {
-			fmt.Printf("iRODS Username: ")
+			newUsername = Input("iRODS Username")
 		}
 
-		newUsername := ""
-		fmt.Scanln(&newUsername)
 		if len(newUsername) > 0 && newUsername != env.Username {
 			env.Username = newUsername
 			updated = true
@@ -347,18 +327,12 @@ func ReinputFields() (bool, error) {
 		}
 	}
 
-	fmt.Print("iRODS Password: ")
-	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
-	if err != nil {
-		return false, xerrors.Errorf("failed to read password: %w", err)
-	}
-	fmt.Print("\n")
-	newPassword := string(bytePassword)
+	newPassword := InputPassword("iRODS Password")
 	updated = true
 
 	environmentManager.Password = newPassword
 
-	err = SyncAccount()
+	err := SyncAccount()
 	if err != nil {
 		return updated, xerrors.Errorf("failed to get iCommands Environment: %w", err)
 	}
@@ -566,26 +540,26 @@ func LoadConfigFromFile(configPath string) error {
 
 	configPath, err := ExpandHomeDir(configPath)
 	if err != nil {
-		return xerrors.Errorf("failed to expand home dir for %s: %w", configPath, err)
+		return xerrors.Errorf("failed to expand home directory for %q: %w", configPath, err)
 	}
 
 	configPath, err = filepath.Abs(configPath)
 	if err != nil {
-		return xerrors.Errorf("failed to compute absolute path for %s: %w", configPath, err)
+		return xerrors.Errorf("failed to compute absolute path for %q: %w", configPath, err)
 	}
 
-	logger.Debugf("reading config file/dir - %s", configPath)
+	logger.Debugf("reading config path %q", configPath)
 	// check if it is a file or a dir
 	_, err = os.Stat(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return irodsclient_types.NewFileNotFoundError(configPath)
 		}
-		return xerrors.Errorf("failed to stat %s: %w", configPath, err)
+		return xerrors.Errorf("failed to stat %q: %w", configPath, err)
 	}
 
 	if isYAMLFile(configPath) {
-		logger.Debugf("reading gocommands YAML config file - %s", configPath)
+		logger.Debugf("reading gocommands YAML config file %q", configPath)
 
 		iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
 		if err != nil {
@@ -594,7 +568,7 @@ func LoadConfigFromFile(configPath string) error {
 
 		err = iCommandsEnvMgr.SetEnvironmentFilePath(configPath)
 		if err != nil {
-			return xerrors.Errorf("failed to set environment file path %s: %w", configPath, err)
+			return xerrors.Errorf("failed to set environment file path %q: %w", configPath, err)
 		}
 
 		// read session
@@ -602,7 +576,7 @@ func LoadConfigFromFile(configPath string) error {
 		if util.ExistFile(sessionFilePath) {
 			session, err := irodsclient_icommands.CreateICommandsEnvironmentFromFile(sessionFilePath)
 			if err != nil {
-				return xerrors.Errorf("failed to create icommands environment from file %s: %w", sessionFilePath, err)
+				return xerrors.Errorf("failed to create icommands environment from file %q: %w", sessionFilePath, err)
 			}
 
 			iCommandsEnvMgr.Session = session
@@ -611,7 +585,7 @@ func LoadConfigFromFile(configPath string) error {
 		// load from YAML
 		yjBytes, err := os.ReadFile(configPath)
 		if err != nil {
-			return xerrors.Errorf("failed to read file %s: %w", configPath, err)
+			return xerrors.Errorf("failed to read file %q: %w", configPath, err)
 		}
 
 		defaultConfig := GetDefaultConfig()
@@ -644,7 +618,7 @@ func LoadConfigFromFile(configPath string) error {
 		configFilePath = filepath.Join(configPath, "irods_environment.json")
 	}
 
-	logger.Debugf("reading icommands environment file - %s", configFilePath)
+	logger.Debugf("reading icommands environment file %q", configFilePath)
 
 	iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
 	if err != nil {
@@ -653,7 +627,7 @@ func LoadConfigFromFile(configPath string) error {
 
 	err = iCommandsEnvMgr.SetEnvironmentFilePath(configFilePath)
 	if err != nil {
-		return xerrors.Errorf("failed to set iCommands Environment file %s: %w", configFilePath, err)
+		return xerrors.Errorf("failed to set iCommands Environment file %q: %w", configFilePath, err)
 	}
 
 	err = iCommandsEnvMgr.Load(sessionID)
@@ -742,106 +716,4 @@ func PrintAccount() error {
 	}, table.RowConfig{})
 	t.Render()
 	return nil
-}
-
-func PrintEnvironment() error {
-	envMgr := GetEnvironmentManager()
-	if envMgr == nil {
-		return xerrors.Errorf("environment is not set")
-	}
-
-	t := table.NewWriter()
-	t.SetOutputMirror(os.Stdout)
-
-	t.AppendRows([]table.Row{
-		{
-			"iRODS Session Environment File",
-			envMgr.GetSessionFilePath(os.Getppid()),
-		},
-		{
-			"iRODS Environment File",
-			envMgr.GetEnvironmentFilePath(),
-		},
-		{
-			"iRODS Host",
-			envMgr.Environment.Host,
-		},
-		{
-			"iRODS Port",
-			envMgr.Environment.Port,
-		},
-		{
-			"iRODS Zone",
-			envMgr.Environment.Zone,
-		},
-		{
-			"iRODS Username",
-			envMgr.Environment.Username,
-		},
-		{
-			"iRODS Default Resource",
-			envMgr.Environment.DefaultResource,
-		},
-		{
-			"iRODS Default Hash Scheme",
-			envMgr.Environment.DefaultHashScheme,
-		},
-		{
-			"iRODS Authentication Scheme",
-			envMgr.Environment.AuthenticationScheme,
-		},
-		{
-			"iRODS Client Server Negotiation",
-			envMgr.Environment.ClientServerNegotiation,
-		},
-		{
-			"iRODS Client Server Policy",
-			envMgr.Environment.ClientServerPolicy,
-		},
-		{
-			"iRODS SSL CA Certification File",
-			envMgr.Environment.SSLCACertificateFile,
-		},
-		{
-			"iRODS SSL CA Certification Path",
-			envMgr.Environment.SSLCACertificatePath,
-		},
-		{
-			"iRODS SSL Encryption Key Size",
-			envMgr.Environment.EncryptionKeySize,
-		},
-		{
-			"iRODS SSL Encryption Key Algorithm",
-			envMgr.Environment.EncryptionAlgorithm,
-		},
-		{
-			"iRODS SSL Encryption Salt Size",
-			envMgr.Environment.EncryptionSaltSize,
-		},
-		{
-			"iRODS SSL Encryption Hash Rounds",
-			envMgr.Environment.EncryptionNumHashRounds,
-		},
-	}, table.RowConfig{})
-	t.Render()
-	return nil
-}
-
-// InputYN inputs Y or N
-// true for Y, false for N
-func InputYN(msg string) bool {
-	userInput := ""
-
-	for {
-		fmt.Printf("%s [y/n]: ", msg)
-
-		fmt.Scanln(&userInput)
-		userInput = strings.ToLower(userInput)
-
-		if userInput == "y" || userInput == "yes" {
-			return true
-		} else if userInput == "n" || userInput == "no" {
-			return false
-		}
-	}
 }

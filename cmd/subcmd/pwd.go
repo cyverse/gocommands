@@ -1,8 +1,8 @@
 package subcmd
 
 import (
-	"fmt"
-
+	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/spf13/cobra"
@@ -26,7 +26,31 @@ func AddPwdCommand(rootCmd *cobra.Command) {
 }
 
 func processPwdCommand(command *cobra.Command, args []string) error {
-	cont, err := flag.ProcessCommonFlags(command)
+	pwd, err := NewPwdCommand(command, args)
+	if err != nil {
+		return err
+	}
+
+	return pwd.Process()
+}
+
+type PwdCommand struct {
+	command *cobra.Command
+
+	account    *irodsclient_types.IRODSAccount
+	filesystem *irodsclient_fs.FileSystem
+}
+
+func NewPwdCommand(command *cobra.Command, args []string) (*PwdCommand, error) {
+	pwd := &PwdCommand{
+		command: command,
+	}
+
+	return pwd, nil
+}
+
+func (pwd *PwdCommand) Process() error {
+	cont, err := flag.ProcessCommonFlags(pwd.command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
@@ -41,11 +65,16 @@ func processPwdCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	printCurrentWorkingDir()
+	err = pwd.printCurrentWorkingDir()
+	if err != nil {
+		return xerrors.Errorf("failed to print current working directory: %w", err)
+	}
 	return nil
 }
 
-func printCurrentWorkingDir() {
+func (pwd *PwdCommand) printCurrentWorkingDir() error {
 	cwd := commons.GetCWD()
-	fmt.Printf("%s\n", cwd)
+	commons.Printf("%s\n", cwd)
+
+	return nil
 }

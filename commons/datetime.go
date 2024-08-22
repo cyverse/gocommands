@@ -32,7 +32,7 @@ func MakeDateTimeFromString(str string) (time.Time, error) {
 
 	t, err := time.Parse(datetimeLayout, str)
 	if err != nil {
-		return time.Time{}, xerrors.Errorf("failed to parse time %s: %w", str, err)
+		return time.Time{}, xerrors.Errorf("failed to parse time %q: %w", str, err)
 	}
 
 	return t, nil

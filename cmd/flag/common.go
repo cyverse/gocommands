@@ -33,7 +33,7 @@ var (
 )
 
 func SetCommonFlags(command *cobra.Command, noResource bool) {
-	command.Flags().StringVarP(&commonFlagValues.ConfigFilePath, "config", "c", "", fmt.Sprintf("Set config file or dir (default \"%s\")", commons.GetDefaultIRODSConfigPath()))
+	command.Flags().StringVarP(&commonFlagValues.ConfigFilePath, "config", "c", "", fmt.Sprintf("Set config file or directory (default %q)", commons.GetDefaultIRODSConfigPath()))
 	command.Flags().BoolVarP(&commonFlagValues.ShowVersion, "version", "v", false, "Print version")
 	command.Flags().BoolVarP(&commonFlagValues.ShowHelp, "help", "h", false, "Print help")
 	command.Flags().BoolVarP(&commonFlagValues.DebugMode, "debug", "d", false, "Enable debug mode")
@@ -116,7 +116,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		// user defined config file
 		err := commons.LoadConfigFromFile(myCommonFlagValues.ConfigFilePath)
 		if err != nil {
-			return false, xerrors.Errorf("failed to load config from file %s: %w", myCommonFlagValues.ConfigFilePath, err) // stop here
+			return false, xerrors.Errorf("failed to load config from file %q: %w", myCommonFlagValues.ConfigFilePath, err) // stop here
 		}
 
 		readConfig = true
@@ -127,7 +127,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 			if len(irodsEnvironmentFileEnvVal) > 0 {
 				err := commons.LoadConfigFromFile(irodsEnvironmentFileEnvVal)
 				if err != nil {
-					return false, xerrors.Errorf("failed to load config file %s: %w", irodsEnvironmentFileEnvVal, err) // stop here
+					return false, xerrors.Errorf("failed to load config file %q: %w", irodsEnvironmentFileEnvVal, err) // stop here
 				}
 
 				readConfig = true
@@ -176,7 +176,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	syncAccount := false
 	if myCommonFlagValues.ResourceUpdated {
 		appConfig.DefaultResource = myCommonFlagValues.Resource
-		logger.Debugf("use default resource server - %s", appConfig.DefaultResource)
+		logger.Debugf("use default resource server %q", appConfig.DefaultResource)
 		syncAccount = true
 	}
 
@@ -196,6 +196,6 @@ func printVersion() error {
 		return xerrors.Errorf("failed to get version json: %w", err)
 	}
 
-	fmt.Println(info)
+	commons.Println(info)
 	return nil
 }

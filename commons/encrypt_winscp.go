@@ -89,21 +89,21 @@ func DecryptFilenameWinSCP(filename string, key []byte) (string, error) {
 func EncryptFileWinSCP(source string, target string, key []byte) error {
 	sourceFileHandle, err := os.Open(source)
 	if err != nil {
-		return xerrors.Errorf("failed to open file %s: %w", source, err)
+		return xerrors.Errorf("failed to open file %q: %w", source, err)
 	}
 
 	defer sourceFileHandle.Close()
 
 	targetFileHandle, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
-		return xerrors.Errorf("failed to create file %s: %w", target, err)
+		return xerrors.Errorf("failed to create file %q: %w", target, err)
 	}
 
 	defer targetFileHandle.Close()
 
 	stat, err := sourceFileHandle.Stat()
 	if err != nil {
-		return xerrors.Errorf("failed to stat file %s: %w", source, err)
+		return xerrors.Errorf("failed to stat file %q: %w", source, err)
 	}
 
 	if stat.Size() == 0 {
@@ -143,14 +143,14 @@ func EncryptFileWinSCP(source string, target string, key []byte) error {
 func DecryptFileWinSCP(source string, target string, key []byte) error {
 	sourceFileHandle, err := os.Open(source)
 	if err != nil {
-		return xerrors.Errorf("failed to open file %s: %w", source, err)
+		return xerrors.Errorf("failed to open file %q: %w", source, err)
 	}
 
 	defer sourceFileHandle.Close()
 
 	targetFileHandle, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
-		return xerrors.Errorf("failed to create file %s: %w", target, err)
+		return xerrors.Errorf("failed to create file %q: %w", target, err)
 	}
 
 	defer targetFileHandle.Close()

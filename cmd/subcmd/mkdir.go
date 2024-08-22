@@ -3,6 +3,7 @@ package subcmd
 import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
@@ -29,7 +30,40 @@ func AddMkdirCommand(rootCmd *cobra.Command) {
 }
 
 func processMkdirCommand(command *cobra.Command, args []string) error {
-	cont, err := flag.ProcessCommonFlags(command)
+	mkDir, err := NewMkDirCommand(command, args)
+	if err != nil {
+		return err
+	}
+
+	return mkDir.Process()
+}
+
+type MkDirCommand struct {
+	command *cobra.Command
+
+	parentsFlagValues *flag.ParentsFlagValues
+
+	account    *irodsclient_types.IRODSAccount
+	filesystem *irodsclient_fs.FileSystem
+
+	targetPaths []string
+}
+
+func NewMkDirCommand(command *cobra.Command, args []string) (*MkDirCommand, error) {
+	mkDir := &MkDirCommand{
+		command: command,
+
+		parentsFlagValues: flag.GetParentsFlagValues(),
+	}
+
+	// target paths
+	mkDir.targetPaths = args
+
+	return mkDir, nil
+}
+
+func (mkDir *MkDirCommand) Process() error {
+	cont, err := flag.ProcessCommonFlags(mkDir.command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
 	}
@@ -44,29 +78,28 @@ func processMkdirCommand(command *cobra.Command, args []string) error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	parentsFlagValues := flag.GetParentsFlagValues()
-
-	// Create a connection
-	account := commons.GetAccount()
-	filesystem, err := commons.GetIRODSFSClient(account)
+	// Create a file system
+	mkDir.account = commons.GetAccount()
+	mkDir.filesystem, err = commons.GetIRODSFSClient(mkDir.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
+	defer mkDir.filesystem.Release()
 
-	defer filesystem.Release()
-
-	for _, targetPath := range args {
-		err = makeOne(filesystem, targetPath, parentsFlagValues)
+	// run
+	for _, targetPath := range mkDir.targetPaths {
+		err = mkDir.makeOne(targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to perform mkdir %s: %w", targetPath, err)
+			return xerrors.Errorf("failed to make a directory %q: %w", targetPath, err)
 		}
 	}
 	return nil
 }
 
-func makeOne(fs *irodsclient_fs.FileSystem, targetPath string, parentsFlagValues *flag.ParentsFlagValues) error {
+func (mkDir *MkDirCommand) makeOne(targetPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
+		"struct":   "MkDirCommand",
 		"function": "makeOne",
 	})
 
@@ -75,17 +108,18 @@ func makeOne(fs *irodsclient_fs.FileSystem, targetPath string, parentsFlagValues
 	zone := commons.GetZone()
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	connection, err := fs.GetMetadataConnection()
+	connection, err := mkDir.filesystem.GetMetadataConnection()
 	if err != nil {
 		return xerrors.Errorf("failed to get connection: %w", err)
 	}
-	defer fs.ReturnMetadataConnection(connection)
+	defer mkDir.filesystem.ReturnMetadataConnection(connection)
 
-	logger.Debugf("making a collection %s", targetPath)
+	logger.Debugf("making a collection %q", targetPath)
 
-	err = irodsclient_irodsfs.CreateCollection(connection, targetPath, parentsFlagValues.MakeParents)
+	err = irodsclient_irodsfs.CreateCollection(connection, targetPath, mkDir.parentsFlagValues.MakeParents)
 	if err != nil {
-		return xerrors.Errorf("failed to create collection %s: %w", targetPath, err)
+		return xerrors.Errorf("failed to create collection %q: %w", targetPath, err)
 	}
+
 	return nil
 }

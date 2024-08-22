@@ -30,12 +30,12 @@ func ParseSize(size string) (int64, error) {
 	case 'K', 'M', 'G', 'T':
 		sizeNum, err = strconv.ParseInt(size[:len(size)-1], 10, 64)
 		if err != nil {
-			return 0, xerrors.Errorf("failed to convert string '%s' to int: %w", size, err)
+			return 0, xerrors.Errorf("failed to convert string %q to int: %w", size, err)
 		}
 	default:
 		sizeNum, err = strconv.ParseInt(size, 10, 64)
 		if err != nil {
-			return 0, xerrors.Errorf("failed to convert string '%s' to int: %w", size, err)
+			return 0, xerrors.Errorf("failed to convert string %q to int: %w", size, err)
 		}
 		return sizeNum, nil
 	}
@@ -65,12 +65,12 @@ func ParseTime(t string) (int, error) {
 	case 'S', 'M', 'H', 'D':
 		tNum, err = strconv.ParseInt(t[:len(t)-1], 10, 64)
 		if err != nil {
-			return 0, xerrors.Errorf("failed to convert string '%s' to int: %w", t, err)
+			return 0, xerrors.Errorf("failed to convert string %q to int: %w", t, err)
 		}
 	default:
 		tNum, err = strconv.ParseInt(t, 10, 64)
 		if err != nil {
-			return 0, xerrors.Errorf("failed to convert string '%s' to int: %w", t, err)
+			return 0, xerrors.Errorf("failed to convert string %q to int: %w", t, err)
 		}
 		return int(tNum), nil
 	}

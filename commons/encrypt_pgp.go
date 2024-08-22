@@ -32,14 +32,14 @@ func DecryptFilenamePGP(filename string) string {
 func EncryptFilePGP(source string, target string, key []byte) error {
 	sourceFileHandle, err := os.Open(source)
 	if err != nil {
-		return xerrors.Errorf("failed to open file %s: %w", source, err)
+		return xerrors.Errorf("failed to open file %q: %w", source, err)
 	}
 
 	defer sourceFileHandle.Close()
 
 	targetFileHandle, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
-		return xerrors.Errorf("failed to create file %s: %w", target, err)
+		return xerrors.Errorf("failed to create file %q: %w", target, err)
 	}
 
 	defer targetFileHandle.Close()
@@ -50,7 +50,7 @@ func EncryptFilePGP(source string, target string, key []byte) error {
 
 	writeHandle, err := openpgp.SymmetricallyEncrypt(targetFileHandle, key, nil, encryptionConfig)
 	if err != nil {
-		return xerrors.Errorf("failed to create a encrypt writer for %s: %w", target, err)
+		return xerrors.Errorf("failed to create a encrypt writer for %q: %w", target, err)
 	}
 
 	defer writeHandle.Close()
@@ -66,14 +66,14 @@ func EncryptFilePGP(source string, target string, key []byte) error {
 func DecryptFilePGP(source string, target string, key []byte) error {
 	sourceFileHandle, err := os.Open(source)
 	if err != nil {
-		return xerrors.Errorf("failed to open file %s: %w", source, err)
+		return xerrors.Errorf("failed to open file %q: %w", source, err)
 	}
 
 	defer sourceFileHandle.Close()
 
 	targetFileHandle, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
-		return xerrors.Errorf("failed to create file %s: %w", target, err)
+		return xerrors.Errorf("failed to create file %q: %w", target, err)
 	}
 
 	defer targetFileHandle.Close()
@@ -93,7 +93,7 @@ func DecryptFilePGP(source string, target string, key []byte) error {
 
 	messageDetail, err := openpgp.ReadMessage(sourceFileHandle, nil, prompt, encryptionConfig)
 	if err != nil {
-		return xerrors.Errorf("failed to decrypt for %s: %w", source, err)
+		return xerrors.Errorf("failed to decrypt for %q: %w", source, err)
 	}
 
 	_, err = io.Copy(targetFileHandle, messageDetail.UnverifiedBody)

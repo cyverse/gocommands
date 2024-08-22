@@ -243,26 +243,13 @@ func commonPrefix(sep byte, paths ...string) string {
 }
 
 func GetCommonRootLocalDirPath(paths []string) (string, error) {
-	commonRootPath, err := GetCommonRootLocalDirPathForSync(paths)
-	if err != nil {
-		return "", err
-	}
-
-	if commonRootPath == "/" {
-		return "/", nil
-	}
-
-	return filepath.Dir(commonRootPath), nil
-}
-
-func GetCommonRootLocalDirPathForSync(paths []string) (string, error) {
 	absPaths := make([]string, len(paths))
 
 	// get abs paths
 	for idx, path := range paths {
 		absPath, err := filepath.Abs(path)
 		if err != nil {
-			return "", xerrors.Errorf("failed to compute absolute path for %s: %w", path, err)
+			return "", xerrors.Errorf("failed to compute absolute path for %q: %w", path, err)
 		}
 		absPaths[idx] = absPath
 	}
@@ -270,18 +257,13 @@ func GetCommonRootLocalDirPathForSync(paths []string) (string, error) {
 	// find shortest path
 	commonRoot := commonPrefix(filepath.Separator, absPaths...)
 
-	realCommonRoot, err := ResolveSymlink(commonRoot)
-	if err != nil {
-		return "", xerrors.Errorf("failed to resolve symlink %s: %w", commonRoot, err)
-	}
-
-	commonRootStat, err := os.Stat(realCommonRoot)
+	commonRootStat, err := os.Stat(commonRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", irodsclient_types.NewFileNotFoundError(realCommonRoot)
+			return "", irodsclient_types.NewFileNotFoundError(commonRoot)
 		}
 
-		return "", xerrors.Errorf("failed to stat %s: %w", realCommonRoot, err)
+		return "", xerrors.Errorf("failed to stat %q: %w", commonRoot, err)
 	}
 
 	if commonRootStat.IsDir() {
@@ -295,14 +277,14 @@ func ExpandHomeDir(p string) (string, error) {
 	if p == "~" {
 		homedir, err := os.UserHomeDir()
 		if err != nil {
-			return "", xerrors.Errorf("failed to get user home dir: %w", err)
+			return "", xerrors.Errorf("failed to get user home directory: %w", err)
 		}
 
 		return homedir, nil
 	} else if strings.HasPrefix(p, "~/") {
 		homedir, err := os.UserHomeDir()
 		if err != nil {
-			return "", xerrors.Errorf("failed to get user home dir: %w", err)
+			return "", xerrors.Errorf("failed to get user home directory: %w", err)
 		}
 
 		p = filepath.Join(homedir, p[2:])
@@ -341,20 +323,20 @@ func MarkPathMap(pathMap map[string]bool, p string) {
 func ResolveSymlink(p string) (string, error) {
 	st, err := os.Lstat(p)
 	if err != nil {
-		return "", xerrors.Errorf("failed to lstat path %s: %w", p, err)
+		return "", xerrors.Errorf("failed to lstat path %q: %w", p, err)
 	}
 
 	if st.Mode()&os.ModeSymlink == os.ModeSymlink {
 		// symlink
 		new_p, err := filepath.EvalSymlinks(p)
 		if err != nil {
-			return "", xerrors.Errorf("failed to evaluate symlink path %s: %w", p, err)
+			return "", xerrors.Errorf("failed to evaluate symlink path %q: %w", p, err)
 		}
 
 		// follow recursively
 		new_pp, err := ResolveSymlink(new_p)
 		if err != nil {
-			return "", xerrors.Errorf("failed to evaluate symlink path %s: %w", new_p, err)
+			return "", xerrors.Errorf("failed to evaluate symlink path %q: %w", new_p, err)
 		}
 
 		return new_pp, nil
