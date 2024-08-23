@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -35,6 +36,7 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	flag.SetCommonFlags(putCmd, false)
 
 	flag.SetForceFlags(putCmd, false)
+	flag.SetRecursiveFlags(putCmd, true)
 	flag.SetTicketAccessFlags(putCmd)
 	flag.SetParallelTransferFlags(putCmd, true)
 	flag.SetProgressFlags(putCmd)
@@ -44,6 +46,7 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	flag.SetNoRootFlags(putCmd)
 	flag.SetSyncFlags(putCmd, false)
 	flag.SetEncryptionFlags(putCmd)
+	flag.SetHiddenFileFlags(putCmd)
 	flag.SetPostTransferFlagValues(putCmd)
 	flag.SetTransferReportFlags(putCmd)
 
@@ -73,6 +76,7 @@ type PutCommand struct {
 	syncFlagValues                 *flag.SyncFlagValues
 	encryptionFlagValues           *flag.EncryptionFlagValues
 	postTransferFlagValues         *flag.PostTransferFlagValues
+	hiddenFileFlagValues           *flag.HiddenFileFlagValues
 	transferReportFlagValues       *flag.TransferReportFlagValues
 
 	maxConnectionNum int
@@ -103,6 +107,7 @@ func NewPutCommand(command *cobra.Command, args []string) (*PutCommand, error) {
 		syncFlagValues:                 flag.GetSyncFlagValues(),
 		encryptionFlagValues:           flag.GetEncryptionFlagValues(command),
 		postTransferFlagValues:         flag.GetPostTransferFlagValues(),
+		hiddenFileFlagValues:           flag.GetHiddenFileFlagValues(),
 		transferReportFlagValues:       flag.GetTransferReportFlagValues(command),
 
 		updatedPathMap: map[string]bool{},
@@ -702,6 +707,12 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 	}
 
 	for _, entry := range entries {
+		if put.hiddenFileFlagValues.Exclude {
+			if strings.HasPrefix(entry.Name(), ".") {
+				continue
+			}
+		}
+
 		newEntryPath := commons.MakeTargetIRODSFilePath(put.filesystem, entry.Name(), targetPath)
 
 		entryPath := filepath.Join(sourcePath, entry.Name())

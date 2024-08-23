@@ -181,6 +181,7 @@ func (sync *SyncCommand) getNewCommandArgs() ([]string, error) {
 
 	newArgs = append(newArgs, osArgs[:commandIdx]...)
 	newArgs = append(newArgs, "--diff")
+	newArgs = append(newArgs, "--recursive")
 	newArgs = append(newArgs, "--sync")
 	newArgs = append(newArgs, osArgs[commandIdx+1:]...)
 

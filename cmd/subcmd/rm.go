@@ -24,7 +24,7 @@ func AddRmCommand(rootCmd *cobra.Command) {
 	flag.SetCommonFlags(rmCmd, false)
 
 	flag.SetForceFlags(rmCmd, false)
-	flag.SetRecursiveFlags(rmCmd)
+	flag.SetRecursiveFlags(rmCmd, false)
 
 	rootCmd.AddCommand(rmCmd)
 }

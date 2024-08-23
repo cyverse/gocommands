@@ -12,10 +12,10 @@ var (
 	forceFlagValues ForceFlagValues
 )
 
-func SetForceFlags(command *cobra.Command, hiddenForce bool) {
+func SetForceFlags(command *cobra.Command, hideForce bool) {
 	command.Flags().BoolVarP(&forceFlagValues.Force, "force", "f", false, "Run forcefully")
 
-	if hiddenForce {
+	if hideForce {
 		command.Flags().MarkHidden("force")
 	}
 }

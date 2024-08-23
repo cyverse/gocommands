@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -36,11 +37,13 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	flag.SetBundleTransferFlags(bputCmd, true)
 	flag.SetParallelTransferFlags(bputCmd, true)
 	flag.SetForceFlags(bputCmd, true)
+	flag.SetRecursiveFlags(bputCmd, true)
 	flag.SetProgressFlags(bputCmd)
 	flag.SetRetryFlags(bputCmd)
 	flag.SetDifferentialTransferFlags(bputCmd, true)
 	flag.SetNoRootFlags(bputCmd)
 	flag.SetSyncFlags(bputCmd, false)
+	flag.SetHiddenFileFlags(bputCmd)
 	flag.SetTransferReportFlags(bputCmd)
 
 	rootCmd.AddCommand(bputCmd)
@@ -68,6 +71,7 @@ type BputCommand struct {
 	noRootFlagValues               *flag.NoRootFlagValues
 	syncFlagValues                 *flag.SyncFlagValues
 	postTransferFlagValues         *flag.PostTransferFlagValues
+	hiddenFileFlagValues           *flag.HiddenFileFlagValues
 	transferReportFlagValues       *flag.TransferReportFlagValues
 
 	maxConnectionNum int
@@ -97,6 +101,7 @@ func NewBputCommand(command *cobra.Command, args []string) (*BputCommand, error)
 		noRootFlagValues:               flag.GetNoRootFlagValues(),
 		syncFlagValues:                 flag.GetSyncFlagValues(),
 		postTransferFlagValues:         flag.GetPostTransferFlagValues(),
+		hiddenFileFlagValues:           flag.GetHiddenFileFlagValues(),
 		transferReportFlagValues:       flag.GetTransferReportFlagValues(command),
 
 		updatedPathMap: map[string]bool{},
@@ -670,6 +675,12 @@ func (bput *BputCommand) putDir(sourceStat fs.FileInfo, sourcePath string) error
 	}
 
 	for _, entry := range entries {
+		if bput.hiddenFileFlagValues.Exclude {
+			if strings.HasPrefix(entry.Name(), ".") {
+				continue
+			}
+		}
+
 		entryPath := filepath.Join(sourcePath, entry.Name())
 
 		entryStat, err := os.Stat(entryPath)
