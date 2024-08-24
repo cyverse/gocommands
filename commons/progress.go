@@ -44,6 +44,7 @@ func getProgressMessageWidth(displayPath bool) int {
 
 func GetProgressWriter(displayPath bool) progress.Writer {
 	progressWriter := progress.NewWriter()
+	progressWriter.SetOutputWriter(GetTerminalWriter())
 	progressWriter.SetAutoStop(false)
 	progressWriter.SetTrackerLength(progressTrackerLength)
 	progressWriter.SetMessageWidth(getProgressMessageWidth(displayPath))

@@ -24,7 +24,7 @@ func AddRmdirCommand(rootCmd *cobra.Command) {
 	flag.SetCommonFlags(rmdirCmd, false)
 
 	flag.SetForceFlags(rmdirCmd, false)
-	flag.SetRecursiveFlags(rmdirCmd)
+	flag.SetRecursiveFlags(rmdirCmd, false)
 
 	rootCmd.AddCommand(rmdirCmd)
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"sort"
+	"strings"
 	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -40,6 +41,7 @@ func AddLsCommand(rootCmd *cobra.Command) {
 	flag.SetListFlags(lsCmd)
 	flag.SetTicketAccessFlags(lsCmd)
 	flag.SetDecryptionFlags(lsCmd)
+	flag.SetHiddenFileFlags(lsCmd)
 
 	rootCmd.AddCommand(lsCmd)
 }
@@ -59,6 +61,7 @@ type LsCommand struct {
 	ticketAccessFlagValues *flag.TicketAccessFlagValues
 	listFlagValues         *flag.ListFlagValues
 	decryptionFlagValues   *flag.DecryptionFlagValues
+	hiddenFileFlagValues   *flag.HiddenFileFlagValues
 
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
@@ -73,6 +76,7 @@ func NewLsCommand(command *cobra.Command, args []string) (*LsCommand, error) {
 		ticketAccessFlagValues: flag.GetTicketAccessFlagValues(),
 		listFlagValues:         flag.GetListFlagValues(),
 		decryptionFlagValues:   flag.GetDecryptionFlagValues(command),
+		hiddenFileFlagValues:   flag.GetHiddenFileFlagValues(),
 	}
 
 	// path
@@ -198,8 +202,12 @@ func (ls *LsCommand) listOne(sourcePath string) error {
 			return xerrors.Errorf("failed to list data-objects in %q: %w", sourcePath, err)
 		}
 
-		ls.printDataObjects(objs)
-		ls.printCollections(colls)
+		// filter out hidden files
+		filtered_colls := ls.filterHiddenCollections(colls)
+		filtered_objs := ls.filterHiddenDataObjects(objs)
+
+		ls.printDataObjects(filtered_objs)
+		ls.printCollections(filtered_colls)
 
 		return nil
 	}
@@ -221,6 +229,40 @@ func (ls *LsCommand) listOne(sourcePath string) error {
 	ls.printDataObjects(entries)
 
 	return nil
+}
+
+func (ls *LsCommand) filterHiddenCollections(entries []*irodsclient_types.IRODSCollection) []*irodsclient_types.IRODSCollection {
+	if !ls.hiddenFileFlagValues.Exclude {
+		return entries
+	}
+
+	filteredEntries := []*irodsclient_types.IRODSCollection{}
+
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name, ".") {
+			// not hidden
+			filteredEntries = append(filteredEntries, entry)
+		}
+	}
+
+	return filteredEntries
+}
+
+func (ls *LsCommand) filterHiddenDataObjects(entries []*irodsclient_types.IRODSDataObject) []*irodsclient_types.IRODSDataObject {
+	if !ls.hiddenFileFlagValues.Exclude {
+		return entries
+	}
+
+	filteredEntries := []*irodsclient_types.IRODSDataObject{}
+
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name, ".") {
+			// not hidden
+			filteredEntries = append(filteredEntries, entry)
+		}
+	}
+
+	return filteredEntries
 }
 
 func (ls *LsCommand) printCollections(entries []*irodsclient_types.IRODSCollection) {

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"path"
+	"strings"
 	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -31,12 +32,13 @@ func AddCpCommand(rootCmd *cobra.Command) {
 	flag.SetCommonFlags(cpCmd, false)
 
 	flag.SetForceFlags(cpCmd, false)
-	flag.SetRecursiveFlags(cpCmd)
+	flag.SetRecursiveFlags(cpCmd, false)
 	flag.SetProgressFlags(cpCmd)
 	flag.SetRetryFlags(cpCmd)
 	flag.SetDifferentialTransferFlags(cpCmd, true)
 	flag.SetNoRootFlags(cpCmd)
 	flag.SetSyncFlags(cpCmd, false)
+	flag.SetHiddenFileFlags(cpCmd)
 	flag.SetTransferReportFlags(cpCmd)
 
 	rootCmd.AddCommand(cpCmd)
@@ -62,6 +64,7 @@ type CpCommand struct {
 	differentialTransferFlagValues *flag.DifferentialTransferFlagValues
 	noRootFlagValues               *flag.NoRootFlagValues
 	syncFlagValues                 *flag.SyncFlagValues
+	hiddenFileFlagValues           *flag.HiddenFileFlagValues
 	transferReportFlagValues       *flag.TransferReportFlagValues
 
 	account    *irodsclient_types.IRODSAccount
@@ -87,6 +90,7 @@ func NewCpCommand(command *cobra.Command, args []string) (*CpCommand, error) {
 		differentialTransferFlagValues: flag.GetDifferentialTransferFlagValues(),
 		noRootFlagValues:               flag.GetNoRootFlagValues(),
 		syncFlagValues:                 flag.GetSyncFlagValues(),
+		hiddenFileFlagValues:           flag.GetHiddenFileFlagValues(),
 		transferReportFlagValues:       flag.GetTransferReportFlagValues(command),
 
 		updatedPathMap: map[string]bool{},
@@ -545,6 +549,12 @@ func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 	}
 
 	for _, entry := range entries {
+		if cp.hiddenFileFlagValues.Exclude {
+			if strings.HasPrefix(entry.Name, ".") {
+				continue
+			}
+		}
+
 		newEntryPath := commons.MakeTargetIRODSFilePath(cp.filesystem, entry.Path, targetPath)
 
 		if entry.IsDir() {
