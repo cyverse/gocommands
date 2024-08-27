@@ -234,8 +234,8 @@ func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, transferReportManag
 		manager.minBundleFileNum = MinBundleFileNumDefault
 	}
 
-	if manager.uploadThreadNum > UploadTreadNumMax {
-		manager.uploadThreadNum = UploadTreadNumMax
+	if manager.uploadThreadNum > UploadThreadNumMax {
+		manager.uploadThreadNum = UploadThreadNumMax
 	}
 
 	manager.scheduleWait.Add(1)
