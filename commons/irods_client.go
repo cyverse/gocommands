@@ -1,23 +1,15 @@
 package commons
 
 import (
-	"time"
-
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_conn "github.com/cyverse/go-irodsclient/irods/connection"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"golang.org/x/xerrors"
 )
 
-const (
-	ClientProgramName string        = "gocommands"
-	connectionTimeout time.Duration = 10 * time.Minute
-	filesystemTimeout time.Duration = 10 * time.Minute
-)
-
 // GetIRODSFSClient returns a file system client
 func GetIRODSFSClient(account *irodsclient_types.IRODSAccount) (*irodsclient_fs.FileSystem, error) {
-	fsConfig := irodsclient_fs.NewFileSystemConfig(ClientProgramName, irodsclient_fs.FileSystemConnectionErrorTimeoutDefault, irodsclient_fs.FileSystemConnectionInitNumberDefault, irodsclient_fs.FileSystemConnectionLifespanDefault,
+	fsConfig := irodsclient_fs.NewFileSystemConfig(clientProgramName, irodsclient_fs.FileSystemConnectionErrorTimeoutDefault, irodsclient_fs.FileSystemConnectionInitNumberDefault, irodsclient_fs.FileSystemConnectionLifespanDefault,
 		filesystemTimeout, filesystemTimeout, irodsclient_fs.FileSystemConnectionMaxDefault, TcpBufferSizeDefault,
 		irodsclient_fs.FileSystemTimeoutDefault, irodsclient_fs.FileSystemTimeoutDefault, []irodsclient_fs.MetadataCacheTimeoutSetting{}, true, true)
 
@@ -34,7 +26,7 @@ func GetIRODSFSClientAdvanced(account *irodsclient_types.IRODSAccount, maxConnec
 		tcpBufferSize = TcpBufferSizeDefault
 	}
 
-	fsConfig := irodsclient_fs.NewFileSystemConfig(ClientProgramName, irodsclient_fs.FileSystemConnectionErrorTimeoutDefault, irodsclient_fs.FileSystemConnectionInitNumberDefault, irodsclient_fs.FileSystemConnectionLifespanDefault,
+	fsConfig := irodsclient_fs.NewFileSystemConfig(clientProgramName, irodsclient_fs.FileSystemConnectionErrorTimeoutDefault, irodsclient_fs.FileSystemConnectionInitNumberDefault, irodsclient_fs.FileSystemConnectionLifespanDefault,
 		filesystemTimeout, filesystemTimeout, maxConnection, tcpBufferSize,
 		irodsclient_fs.FileSystemTimeoutDefault, irodsclient_fs.FileSystemTimeoutDefault, []irodsclient_fs.MetadataCacheTimeoutSetting{}, true, true)
 
@@ -43,11 +35,22 @@ func GetIRODSFSClientAdvanced(account *irodsclient_types.IRODSAccount, maxConnec
 
 // GetIRODSConnection returns a connection
 func GetIRODSConnection(account *irodsclient_types.IRODSAccount) (*irodsclient_conn.IRODSConnection, error) {
-	conn := irodsclient_conn.NewIRODSConnection(account, connectionTimeout, ClientProgramName)
+	conn := irodsclient_conn.NewIRODSConnection(account, connectionTimeout, clientProgramName)
 	err := conn.Connect()
 	if err != nil {
 		return nil, xerrors.Errorf("failed to connect: %w", err)
 	}
 
 	return conn, nil
+}
+
+// TestConnect just test connection creation
+func TestConnect(account *irodsclient_types.IRODSAccount) error {
+	conn, err := GetIRODSConnection(account)
+	if err != nil {
+		return nil
+	}
+
+	defer conn.Disconnect()
+	return nil
 }

@@ -79,6 +79,7 @@ func main() {
 	subcmd.AddPwdCommand(rootCmd)
 	subcmd.AddCdCommand(rootCmd)
 	subcmd.AddLsCommand(rootCmd)
+	subcmd.AddTouchCommand(rootCmd)
 	subcmd.AddCpCommand(rootCmd)
 	subcmd.AddMvCommand(rootCmd)
 	subcmd.AddCatCommand(rootCmd)
@@ -106,6 +107,10 @@ func main() {
 	err := Execute()
 	if err != nil {
 		logger.Errorf("%+v", err)
+
+		if flag.GetCommonFlagValues(rootCmd).DebugMode {
+			commons.PrintErrorf("%+v\n", err)
+		}
 
 		if os.IsNotExist(err) {
 			commons.PrintErrorf("File or directory not found!\n")
@@ -180,6 +185,13 @@ func main() {
 				commons.PrintErrorf("Destination %q is not a directory!\n", notDirError.Path)
 			} else {
 				commons.PrintErrorf("Destination is not a directory!\n")
+			}
+		} else if commons.IsNotFileError(err) {
+			var notFileError *commons.NotFileError
+			if errors.As(err, &notFileError) {
+				commons.PrintErrorf("Destination %q is not a file!\n", notFileError.Path)
+			} else {
+				commons.PrintErrorf("Destination is not a file!\n")
 			}
 		} else {
 			commons.PrintErrorf("Unexpected error!\nError Trace:\n  - %+v\n", err)
