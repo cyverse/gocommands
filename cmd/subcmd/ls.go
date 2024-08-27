@@ -213,14 +213,7 @@ func (ls *LsCommand) listOne(sourcePath string) error {
 	}
 
 	// data object
-	parentSourcePath := path.Dir(sourcePath)
-
-	parentCollection, err := irodsclient_irodsfs.GetCollection(connection, parentSourcePath)
-	if err != nil {
-		return xerrors.Errorf("failed to get collection %q: %w", parentSourcePath, err)
-	}
-
-	entry, err := irodsclient_irodsfs.GetDataObject(connection, parentCollection, path.Base(sourcePath))
+	entry, err := irodsclient_irodsfs.GetDataObjectWithoutCollection(connection, sourcePath)
 	if err != nil {
 		return xerrors.Errorf("failed to get data-object %q: %w", sourcePath, err)
 	}
