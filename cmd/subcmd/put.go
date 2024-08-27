@@ -397,7 +397,7 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 		}
 
 		// determine how to upload
-		if put.parallelTransferFlagValues.SingleTread || put.parallelTransferFlagValues.ThreadNumber == 1 {
+		if put.parallelTransferFlagValues.SingleThread || put.parallelTransferFlagValues.ThreadNumber == 1 {
 			uploadResult, uploadErr = fs.UploadFile(uploadSourcePath, targetPath, "", false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, callbackPut)
 			notes = append(notes, "icat", "single-thread")
 		} else if put.parallelTransferFlagValues.RedirectToResource {
@@ -758,7 +758,7 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 }
 
 func (put *PutCommand) computeThreadsRequired(size int64) int {
-	if put.parallelTransferFlagValues.SingleTread {
+	if put.parallelTransferFlagValues.SingleThread {
 		return 1
 	}
 

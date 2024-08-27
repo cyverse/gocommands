@@ -154,7 +154,7 @@ func (cp *CpCommand) Process() error {
 	defer cp.transferReportManager.Release()
 
 	// parallel job manager
-	cp.parallelJobManager = commons.NewParallelJobManager(cp.filesystem, commons.TransferTreadNumDefault, cp.progressFlagValues.ShowProgress, cp.progressFlagValues.ShowFullPath)
+	cp.parallelJobManager = commons.NewParallelJobManager(cp.filesystem, commons.TransferThreadNumDefault, cp.progressFlagValues.ShowProgress, cp.progressFlagValues.ShowFullPath)
 	cp.parallelJobManager.Start()
 
 	// run
