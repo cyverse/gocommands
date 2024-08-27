@@ -5,7 +5,6 @@ import (
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
 )
@@ -23,7 +22,6 @@ func AddTouchCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(touchCmd, false)
 
-	flag.SetTicketAccessFlags(touchCmd)
 	flag.SetNoCreateFlags(touchCmd)
 
 	rootCmd.AddCommand(touchCmd)
@@ -41,8 +39,7 @@ func processTouchCommand(command *cobra.Command, args []string) error {
 type TouchCommand struct {
 	command *cobra.Command
 
-	ticketAccessFlagValues *flag.TicketAccessFlagValues
-	noCreateFlagValues     *flag.NoCreateFlagValues
+	noCreateFlagValues *flag.NoCreateFlagValues
 
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
@@ -54,8 +51,7 @@ func NewTouchCommand(command *cobra.Command, args []string) (*TouchCommand, erro
 	touch := &TouchCommand{
 		command: command,
 
-		ticketAccessFlagValues: flag.GetTicketAccessFlagValues(),
-		noCreateFlagValues:     flag.GetNoCreateFlagValues(),
+		noCreateFlagValues: flag.GetNoCreateFlagValues(),
 	}
 
 	// path
@@ -65,12 +61,6 @@ func NewTouchCommand(command *cobra.Command, args []string) (*TouchCommand, erro
 }
 
 func (touch *TouchCommand) Process() error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "TouchCommand",
-		"function": "Process",
-	})
-
 	cont, err := flag.ProcessCommonFlags(touch.command)
 	if err != nil {
 		return xerrors.Errorf("failed to process common flags: %w", err)
@@ -84,22 +74,6 @@ func (touch *TouchCommand) Process() error {
 	_, err = commons.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
-	}
-
-	// config
-	appConfig := commons.GetConfig()
-	syncAccount := false
-	if len(touch.ticketAccessFlagValues.Name) > 0 {
-		logger.Debugf("use ticket: %q", touch.ticketAccessFlagValues.Name)
-		appConfig.Ticket = touch.ticketAccessFlagValues.Name
-		syncAccount = true
-	}
-
-	if syncAccount {
-		err := commons.SyncAccount()
-		if err != nil {
-			return err
-		}
 	}
 
 	// Create a file system
