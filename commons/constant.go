@@ -5,7 +5,6 @@ import "time"
 const (
 	clientProgramName          string        = "gocommands"
 	connectionTimeout          time.Duration = 10 * time.Minute
-	filesystemTimeout          time.Duration = 10 * time.Minute
 	TransferThreadNumDefault   int           = 5
 	UploadThreadNumMax         int           = 20
 	TcpBufferSizeDefault       int           = 4 * 1024 * 1024
