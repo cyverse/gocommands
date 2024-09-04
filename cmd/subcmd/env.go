@@ -127,6 +127,10 @@ func (env *EnvCommand) printEnvironment() error {
 			envMgr.Environment.SSLCACertificatePath,
 		},
 		{
+			"iRODS SSL Verify Server",
+			envMgr.Environment.SSLVerifyServer,
+		},
+		{
 			"iRODS SSL Encryption Key Size",
 			envMgr.Environment.EncryptionKeySize,
 		},
