@@ -18,6 +18,7 @@ const (
 	EncryptionAlgorithmDefault  string = "AES-256-CBC"
 	SaltSizeDefault             int    = 8
 	HashRoundsDefault           int    = 16
+	SSLVerifyServerDefault      string = "hostname"
 )
 
 type Config struct {
@@ -37,6 +38,7 @@ type Config struct {
 	ClientServerPolicy      string `yaml:"irods_client_server_policy,omitempty" envconfig:"IRODS_CLIENT_SERVER_POLICY"`
 	SSLCACertificateFile    string `yaml:"irods_ssl_ca_certificate_file,omitempty" envconfig:"IRODS_SSL_CA_CERTIFICATE_FILE"`
 	SSLCACertificatePath    string `yaml:"irods_ssl_ca_certificate_path,omitempty" envconfig:"IRODS_SSL_CA_CERTIFICATE_PATH"`
+	SSLVerifyServer         string `yaml:"irods_ssl_verify_server,omitempty" envconfig:"IRODS_SSL_VERIFY_SERVER"`
 	EncryptionKeySize       int    `yaml:"irods_encryption_key_size,omitempty" envconfig:"IRODS_ENCRYPTION_KEY_SIZE"`
 	EncryptionAlgorithm     string `yaml:"irods_encryption_algorithm,omitempty" envconfig:"IRODS_ENCRYPTION_ALGORITHM"`
 	EncryptionSaltSize      int    `yaml:"irods_encryption_salt_size,omitempty" envconfig:"IRODS_ENCRYPTION_SALT_SIZE"`
@@ -52,6 +54,7 @@ func GetDefaultConfig() *Config {
 		ClientServerPolicy:      ClientServerPolicyDefault,
 		SSLCACertificateFile:    "",
 		SSLCACertificatePath:    "",
+		SSLVerifyServer:         SSLVerifyServerDefault,
 		EncryptionKeySize:       EncryptionKeySizeDefault,
 		EncryptionAlgorithm:     EncryptionAlgorithmDefault,
 		EncryptionSaltSize:      SaltSizeDefault,

@@ -403,6 +403,7 @@ func setConfigToICommandsEnvMgr(envManager *irodsclient_icommands.ICommandsEnvir
 	envManager.Environment.ClientServerPolicy = config.ClientServerPolicy
 	envManager.Environment.SSLCACertificateFile = config.SSLCACertificateFile
 	envManager.Environment.SSLCACertificatePath = config.SSLCACertificatePath
+	envManager.Environment.SSLVerifyServer = config.SSLVerifyServer
 	envManager.Environment.EncryptionKeySize = config.EncryptionKeySize
 	envManager.Environment.EncryptionAlgorithm = config.EncryptionAlgorithm
 	envManager.Environment.EncryptionSaltSize = config.EncryptionSaltSize
@@ -464,6 +465,10 @@ func overwriteConfigToICommandsEnvMgr(envManager *irodsclient_icommands.ICommand
 		envManager.Environment.SSLCACertificatePath = config.SSLCACertificatePath
 	}
 
+	if len(config.SSLVerifyServer) > 0 {
+		envManager.Environment.SSLVerifyServer = config.SSLVerifyServer
+	}
+
 	if config.EncryptionKeySize > 0 {
 		envManager.Environment.EncryptionKeySize = config.EncryptionKeySize
 	}
@@ -499,6 +504,7 @@ func setICommandsEnvMgrToConfig(config *Config, envManager *irodsclient_icommand
 	config.ClientServerPolicy = envManager.Environment.ClientServerPolicy
 	config.SSLCACertificateFile = envManager.Environment.SSLCACertificateFile
 	config.SSLCACertificatePath = envManager.Environment.SSLCACertificatePath
+	config.SSLVerifyServer = envManager.Environment.SSLVerifyServer
 	config.EncryptionKeySize = envManager.Environment.EncryptionKeySize
 	config.EncryptionAlgorithm = envManager.Environment.EncryptionAlgorithm
 	config.EncryptionSaltSize = envManager.Environment.EncryptionSaltSize
