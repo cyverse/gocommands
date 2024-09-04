@@ -83,6 +83,10 @@ func (env *EnvCommand) printEnvironment() error {
 			envMgr.GetEnvironmentFilePath(),
 		},
 		{
+			"iRODS Authentication File",
+			envMgr.GetPasswordFilePath(),
+		},
+		{
 			"iRODS Host",
 			envMgr.Environment.Host,
 		},
