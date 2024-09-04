@@ -2,7 +2,7 @@ class Gocommands < Formula
   desc "Portable command-line toolkit for iRODS data management service"
   homepage "https://github.com/cyverse/gocommands"
   url "https://github.com/cyverse/gocommands/archive/refs/tags/v0.9.14.tar.gz"
-  sha256 "d5558cd419c8d46bdc958064cb97f963d1ea793866414c025906ec15033512ed"
+  sha256 "25037366e77df9368891641e0943cdf22ab546f22bb39201504db3c67cf9fa4e"
   license "BSD-3-Clause"
 
   livecheck do
