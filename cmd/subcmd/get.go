@@ -288,6 +288,11 @@ func (get *GetCommand) hasTransferStatusFile(targetPath string) bool {
 	return err == nil
 }
 
+func (get *GetCommand) deleteTransferStatusFile(targetPath string) {
+	trxStatusFilePath := irodsclient_irodsfs.GetDataObjectTransferStatusFilePath(targetPath)
+	os.RemoveAll(trxStatusFilePath)
+}
+
 func (get *GetCommand) getOne(sourcePath string, targetPath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
@@ -361,10 +366,16 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 				downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
 				notes = append(notes, "icat", "multi-thread", "resume")
 			} else {
+				// delete status file if exists
+				get.deleteTransferStatusFile(downloadPath)
+
 				downloadResult, downloadErr = fs.DownloadFileRedirectToResource(sourceEntry.Path, "", downloadPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
 				notes = append(notes, "redirect-to-resource")
 			}
 		} else if get.parallelTransferFlagValues.Icat {
+			// delete status file if exists
+			get.deleteTransferStatusFile(downloadPath)
+
 			downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
 			notes = append(notes, "icat", "multi-thread")
 		} else {
@@ -375,10 +386,16 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 					downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
 					notes = append(notes, "icat", "multi-thread", "resume")
 				} else {
+					// delete status file if exists
+					get.deleteTransferStatusFile(downloadPath)
+
 					downloadResult, downloadErr = fs.DownloadFileRedirectToResource(sourceEntry.Path, "", downloadPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
 					notes = append(notes, "redirect-to-resource")
 				}
 			} else {
+				// delete status file if exists
+				get.deleteTransferStatusFile(downloadPath)
+
 				downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
 				notes = append(notes, "icat", "multi-thread")
 			}
