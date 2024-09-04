@@ -107,7 +107,7 @@ func NewBputCommand(command *cobra.Command, args []string) (*BputCommand, error)
 		updatedPathMap: map[string]bool{},
 	}
 
-	bput.maxConnectionNum = bput.parallelTransferFlagValues.ThreadNumber + 2 + 2 // 2 for metadata op, 2 for extraction
+	bput.maxConnectionNum = bput.parallelTransferFlagValues.ThreadNumber + 2 // 2 for extraction
 
 	// path
 	bput.targetPath = "./"

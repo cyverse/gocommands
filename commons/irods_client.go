@@ -9,33 +9,43 @@ import (
 
 // GetIRODSFSClient returns a file system client
 func GetIRODSFSClient(account *irodsclient_types.IRODSAccount) (*irodsclient_fs.FileSystem, error) {
-	fsConfig := irodsclient_fs.NewFileSystemConfig(clientProgramName, irodsclient_fs.FileSystemConnectionErrorTimeoutDefault, irodsclient_fs.FileSystemConnectionInitNumberDefault, irodsclient_fs.FileSystemConnectionLifespanDefault,
-		filesystemTimeout, filesystemTimeout, irodsclient_fs.FileSystemConnectionMaxDefault, TcpBufferSizeDefault,
-		irodsclient_fs.FileSystemTimeoutDefault, irodsclient_fs.FileSystemTimeoutDefault, []irodsclient_fs.MetadataCacheTimeoutSetting{}, true, true)
+	fsConfig := irodsclient_fs.NewFileSystemConfig(clientProgramName)
+
+	// set operation time out
+	fsConfig.MetadataConnection.OperationTimeout = filesystemTimeout
+	fsConfig.IOConnection.OperationTimeout = filesystemTimeout
+
+	// set tcp buffer size
+	fsConfig.MetadataConnection.TCPBufferSize = TcpBufferSizeDefault
+	fsConfig.IOConnection.TCPBufferSize = TcpBufferSizeDefault
 
 	return irodsclient_fs.NewFileSystem(account, fsConfig)
 }
 
 // GetIRODSFSClientAdvanced returns a file system client
-func GetIRODSFSClientAdvanced(account *irodsclient_types.IRODSAccount, maxConnection int, tcpBufferSize int) (*irodsclient_fs.FileSystem, error) {
-	if maxConnection < irodsclient_fs.FileSystemConnectionMaxDefault {
-		maxConnection = irodsclient_fs.FileSystemConnectionMaxDefault
-	}
+func GetIRODSFSClientAdvanced(account *irodsclient_types.IRODSAccount, maxIOConnection int, tcpBufferSize int) (*irodsclient_fs.FileSystem, error) {
+	fsConfig := irodsclient_fs.NewFileSystemConfig(clientProgramName)
 
-	if tcpBufferSize < TcpBufferSizeDefault {
-		tcpBufferSize = TcpBufferSizeDefault
-	}
+	// set operation time out
+	fsConfig.MetadataConnection.OperationTimeout = filesystemTimeout
+	fsConfig.IOConnection.OperationTimeout = filesystemTimeout
 
-	fsConfig := irodsclient_fs.NewFileSystemConfig(clientProgramName, irodsclient_fs.FileSystemConnectionErrorTimeoutDefault, irodsclient_fs.FileSystemConnectionInitNumberDefault, irodsclient_fs.FileSystemConnectionLifespanDefault,
-		filesystemTimeout, filesystemTimeout, maxConnection, tcpBufferSize,
-		irodsclient_fs.FileSystemTimeoutDefault, irodsclient_fs.FileSystemTimeoutDefault, []irodsclient_fs.MetadataCacheTimeoutSetting{}, true, true)
+	// max connection for io
+	if maxIOConnection < irodsclient_fs.FileSystemIOConnectionMaxNumberDefault {
+		maxIOConnection = irodsclient_fs.FileSystemIOConnectionMaxNumberDefault
+	}
+	fsConfig.IOConnection.MaxNumber = maxIOConnection
+
+	// set tcp buffer size
+	fsConfig.MetadataConnection.TCPBufferSize = tcpBufferSize
+	fsConfig.IOConnection.TCPBufferSize = tcpBufferSize
 
 	return irodsclient_fs.NewFileSystem(account, fsConfig)
 }
 
 // GetIRODSConnection returns a connection
 func GetIRODSConnection(account *irodsclient_types.IRODSAccount) (*irodsclient_conn.IRODSConnection, error) {
-	conn := irodsclient_conn.NewIRODSConnection(account, connectionTimeout, clientProgramName)
+	conn := irodsclient_conn.NewIRODSConnection(account, filesystemTimeout, clientProgramName)
 	err := conn.Connect()
 	if err != nil {
 		return nil, xerrors.Errorf("failed to connect: %w", err)
