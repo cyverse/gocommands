@@ -200,19 +200,19 @@ func (bput *BputCommand) Process() error {
 	}
 
 	// bundle root path
-	bundleRootPath := "/"
-	bundleRootPath, err = commons.GetCommonRootLocalDirPath(bput.sourcePaths)
+	localBundleRootPath := string(filepath.Separator)
+	localBundleRootPath, err = commons.GetCommonRootLocalDirPath(bput.sourcePaths)
 	if err != nil {
 		return xerrors.Errorf("failed to get a common root directory for source paths: %w", err)
 	}
 
 	if !bput.noRootFlagValues.NoRoot {
 		// use parent dir
-		bundleRootPath = filepath.Dir(bundleRootPath)
+		localBundleRootPath = filepath.Dir(localBundleRootPath)
 	}
 
 	// bundle transfer manager
-	bput.bundleTransferManager = commons.NewBundleTransferManager(bput.filesystem, bput.transferReportManager, bput.targetPath, bundleRootPath, bput.bundleTransferFlagValues.MinFileNum, bput.bundleTransferFlagValues.MaxFileNum, bput.bundleTransferFlagValues.MaxFileSize, bput.parallelTransferFlagValues.SingleThread, bput.parallelTransferFlagValues.ThreadNumber, bput.parallelTransferFlagValues.RedirectToResource, bput.parallelTransferFlagValues.Icat, bput.bundleTransferFlagValues.LocalTempPath, bput.bundleTransferFlagValues.IRODSTempPath, bput.bundleTransferFlagValues.NoBulkRegistration, bput.progressFlagValues.ShowProgress, bput.progressFlagValues.ShowFullPath)
+	bput.bundleTransferManager = commons.NewBundleTransferManager(bput.filesystem, bput.transferReportManager, bput.targetPath, localBundleRootPath, bput.bundleTransferFlagValues.MinFileNum, bput.bundleTransferFlagValues.MaxFileNum, bput.bundleTransferFlagValues.MaxFileSize, bput.parallelTransferFlagValues.SingleThread, bput.parallelTransferFlagValues.ThreadNumber, bput.parallelTransferFlagValues.RedirectToResource, bput.parallelTransferFlagValues.Icat, bput.bundleTransferFlagValues.LocalTempPath, stagingDirPath, bput.bundleTransferFlagValues.NoBulkRegistration, bput.progressFlagValues.ShowProgress, bput.progressFlagValues.ShowFullPath)
 	bput.bundleTransferManager.Start()
 
 	// run

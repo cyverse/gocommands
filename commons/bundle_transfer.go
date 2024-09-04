@@ -130,13 +130,24 @@ func (bundle *Bundle) Add(sourceStat fs.FileInfo, sourcePath string) error {
 }
 
 func (bundle *Bundle) updateBundlePath() error {
+	logger := log.WithFields(log.Fields{
+		"package":  "commons",
+		"struct":   "BundleTransferManager",
+		"function": "updateBundlePath",
+	})
+
 	filename, err := bundle.GetBundleFilename()
 	if err != nil {
 		return xerrors.Errorf("failed to get bundle filename: %w", err)
 	}
 
+	logger.Debugf("bundle local temp path %q, irods temp path %q", bundle.manager.localTempDirPath, bundle.manager.irodsTempDirPath)
+
 	bundle.LocalBundlePath = filepath.Join(bundle.manager.localTempDirPath, filename)
-	bundle.IRODSBundlePath = filepath.Join(bundle.manager.irodsTempDirPath, filename)
+	bundle.IRODSBundlePath = path.Join(bundle.manager.irodsTempDirPath, filename)
+
+	logger.Debugf("bundle local path %q, irods path %q", bundle.LocalBundlePath, bundle.IRODSBundlePath)
+
 	return nil
 }
 
@@ -160,7 +171,7 @@ type BundleTransferManager struct {
 	nextBundleIndex         int64
 	pendingBundles          chan *Bundle
 	bundles                 []*Bundle
-	bundleRootPath          string
+	localBundleRootPath     string
 	minBundleFileNum        int
 	maxBundleFileNum        int
 	maxBundleFileSize       int64
@@ -187,7 +198,7 @@ type BundleTransferManager struct {
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
-func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, transferReportManager *TransferReportManager, irodsDestPath string, bundleRootPath string, minBundleFileNum int, maxBundleFileNum int, maxBundleFileSize int64, singleThreaded bool, uploadThreadNum int, redirectToResource bool, useIcat bool, localTempDirPath string, irodsTempDirPath string, noBulkReg bool, showProgress bool, showFullPath bool) *BundleTransferManager {
+func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, transferReportManager *TransferReportManager, irodsDestPath string, localBundleRootPath string, minBundleFileNum int, maxBundleFileNum int, maxBundleFileSize int64, singleThreaded bool, uploadThreadNum int, redirectToResource bool, useIcat bool, localTempDirPath string, irodsTempDirPath string, noBulkReg bool, showProgress bool, showFullPath bool) *BundleTransferManager {
 	cwd := GetCWD()
 	home := GetHomeDir()
 	zone := GetZone()
@@ -201,7 +212,7 @@ func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, transferReportManag
 		nextBundleIndex:         0,
 		pendingBundles:          make(chan *Bundle, 100),
 		bundles:                 []*Bundle{},
-		bundleRootPath:          "/",
+		localBundleRootPath:     localBundleRootPath,
 		minBundleFileNum:        minBundleFileNum,
 		maxBundleFileNum:        maxBundleFileNum,
 		maxBundleFileSize:       maxBundleFileSize,
@@ -260,9 +271,9 @@ func (manager *BundleTransferManager) progress(name string, processed int64, tot
 }
 
 func (manager *BundleTransferManager) GetTargetPath(localPath string) (string, error) {
-	relPath, err := filepath.Rel(manager.bundleRootPath, localPath)
+	relPath, err := filepath.Rel(manager.localBundleRootPath, localPath)
 	if err != nil {
-		return "", xerrors.Errorf("failed to compute relative path %q to %q: %w", localPath, manager.bundleRootPath, err)
+		return "", xerrors.Errorf("failed to compute relative path %q to %q: %w", localPath, manager.localBundleRootPath, err)
 	}
 
 	return path.Join(manager.irodsDestPath, filepath.ToSlash(relPath)), nil
@@ -841,7 +852,7 @@ func (manager *BundleTransferManager) processBundleTar(bundle *Bundle) error {
 		entries[idx] = entry.LocalPath
 	}
 
-	err := Tar(manager.bundleRootPath, entries, bundle.LocalBundlePath, callbackTar)
+	err := Tar(manager.localBundleRootPath, entries, bundle.LocalBundlePath, callbackTar)
 	if err != nil {
 		manager.progress(progressName, 0, totalFileNum, progress.UnitsDefault, true)
 		return xerrors.Errorf("failed to create a tarball for bundle %d to %q: %w", bundle.Index, bundle.LocalBundlePath, err)
