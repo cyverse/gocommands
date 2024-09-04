@@ -113,7 +113,7 @@ func NewPutCommand(command *cobra.Command, args []string) (*PutCommand, error) {
 		updatedPathMap: map[string]bool{},
 	}
 
-	put.maxConnectionNum = put.parallelTransferFlagValues.ThreadNumber + 2 // 2 for metadata op
+	put.maxConnectionNum = put.parallelTransferFlagValues.ThreadNumber
 
 	// path
 	put.targetPath = "./"

@@ -112,7 +112,7 @@ func NewGetCommand(command *cobra.Command, args []string) (*GetCommand, error) {
 		updatedPathMap: map[string]bool{},
 	}
 
-	get.maxConnectionNum = get.parallelTransferFlagValues.ThreadNumber + 2 // 2 for metadata op
+	get.maxConnectionNum = get.parallelTransferFlagValues.ThreadNumber
 
 	// path
 	get.targetPath = "./"
