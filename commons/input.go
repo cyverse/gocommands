@@ -9,6 +9,10 @@ import (
 	"golang.org/x/term"
 )
 
+var (
+	selectedAll bool = false
+)
+
 func Input(msg string) string {
 	terminalWriter := GetTerminalWriter()
 
@@ -29,13 +33,20 @@ func Input(msg string) string {
 // InputYN inputs Y or N
 // true for Y, false for N
 func InputYN(msg string) bool {
+	if selectedAll {
+		return true
+	}
+
 	for {
-		inputString := Input(fmt.Sprintf("%s [y/n]", msg))
+		inputString := Input(fmt.Sprintf("%s [yes(y)/no(n)/all(a)]", msg))
 		inputString = strings.ToLower(inputString)
 		if inputString == "y" || inputString == "yes" || inputString == "true" {
 			return true
 		} else if inputString == "n" || inputString == "no" || inputString == "false" {
 			return false
+		} else if inputString == "a" || inputString == "all" {
+			selectedAll = true
+			return true
 		}
 	}
 }
