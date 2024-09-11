@@ -288,7 +288,7 @@ func (put *PutCommand) requireEncryption(targetPath string, parentEncryption boo
 		targetEntry, err := put.filesystem.Stat(targetPath)
 		if err != nil {
 			if irodsclient_types.IsFileNotFoundError(err) {
-				targetDir = commons.GetDir(targetEntry.Path)
+				targetDir = commons.GetDir(targetPath)
 			} else {
 				return parentEncryption, parentEncryptionMode
 			}
