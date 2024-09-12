@@ -13,7 +13,7 @@ var (
 )
 
 func SetInitFlags(command *cobra.Command) {
-	command.Flags().IntVar(&initFlagValues.PamTTL, "ttl", 1, "Set the password time to live")
+	command.Flags().IntVar(&initFlagValues.PamTTL, "ttl", 0, "Set the password time to live")
 }
 
 func GetInitFlagValues() *InitFlagValues {

@@ -90,7 +90,7 @@ func (init *InitCommand) Process() error {
 	}
 	defer conn.Disconnect()
 
-	if init.account.AuthenticationScheme == irodsclient_types.AuthSchemePAM {
+	if init.account.AuthenticationScheme.IsPAM() {
 		// update pam token
 		init.environmentManager.PamToken = conn.GetPAMToken()
 	}
