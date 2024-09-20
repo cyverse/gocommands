@@ -164,6 +164,7 @@ func (bundle *Bundle) SetCompleted() {
 }
 
 type BundleTransferManager struct {
+	account                 *irodsclient_types.IRODSAccount
 	filesystem              *irodsclient_fs.FileSystem
 	transferReportManager   *TransferReportManager
 	irodsDestPath           string
@@ -198,13 +199,14 @@ type BundleTransferManager struct {
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
-func NewBundleTransferManager(fs *irodsclient_fs.FileSystem, transferReportManager *TransferReportManager, irodsDestPath string, localBundleRootPath string, minBundleFileNum int, maxBundleFileNum int, maxBundleFileSize int64, singleThreaded bool, uploadThreadNum int, redirectToResource bool, useIcat bool, localTempDirPath string, irodsTempDirPath string, noBulkReg bool, showProgress bool, showFullPath bool) *BundleTransferManager {
+func NewBundleTransferManager(account *irodsclient_types.IRODSAccount, fs *irodsclient_fs.FileSystem, transferReportManager *TransferReportManager, irodsDestPath string, localBundleRootPath string, minBundleFileNum int, maxBundleFileNum int, maxBundleFileSize int64, singleThreaded bool, uploadThreadNum int, redirectToResource bool, useIcat bool, localTempDirPath string, irodsTempDirPath string, noBulkReg bool, showProgress bool, showFullPath bool) *BundleTransferManager {
 	cwd := GetCWD()
 	home := GetHomeDir()
-	zone := GetZone()
+	zone := account.ClientZone
 	irodsDestPath = MakeIRODSPath(cwd, home, zone, irodsDestPath)
 
 	manager := &BundleTransferManager{
+		account:                 account,
 		filesystem:              fs,
 		transferReportManager:   transferReportManager,
 		irodsDestPath:           irodsDestPath,

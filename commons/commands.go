@@ -5,134 +5,61 @@ import (
 	"io"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 
-	irodsclient_icommands "github.com/cyverse/go-irodsclient/icommands"
-	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
-	"github.com/cyverse/go-irodsclient/irods/util"
+	irodsclient_config "github.com/cyverse/go-irodsclient/config"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
-
-	"github.com/jedib0t/go-pretty/v6/table"
 )
 
 var (
-	environmentManager *irodsclient_icommands.ICommandsEnvironmentManager
-	appConfig          *Config
-	account            *irodsclient_types.IRODSAccount
-
-	sessionID int
+	environmentManager *irodsclient_config.ICommandsEnvironmentManager
 )
 
-// GetEnvironmentManager returns environment manager
-func GetEnvironmentManager() *irodsclient_icommands.ICommandsEnvironmentManager {
-	return environmentManager
-}
-
-// GetConfig returns config
-func GetConfig() *Config {
-	return appConfig
-}
-
-// SetDefaultConfigIfEmpty sets default config if empty
-func SetDefaultConfigIfEmpty() {
-	if environmentManager == nil {
-		iCommandsEnvMgr, _ := irodsclient_icommands.CreateIcommandsEnvironmentManager()
-		environmentManager = iCommandsEnvMgr
-	}
-
-	if appConfig == nil {
-		appConfig = GetDefaultConfig()
-		setConfigToICommandsEnvMgr(environmentManager, appConfig)
-	}
-
-	if environmentManager.Environment.LogLevel > 0 {
-		logLevel := getLogrusLogLevel(environmentManager.Environment.LogLevel)
-		log.SetLevel(logLevel)
-	}
-
-	environmentManager.Load(sessionID)
-	setICommandsEnvMgrToConfig(appConfig, environmentManager)
-
-	SyncAccount()
-}
-
-// SetSessionID sets session id
-func SetSessionID(id int) {
-	sessionID = id
-}
-
-// GetSessionID returns session id
-func GetSessionID() int {
-	return sessionID
-}
-
-// SyncAccount syncs irods account
-func SyncAccount() error {
-	newAccount, err := environmentManager.ToIRODSAccount()
+// InitEnvironmentManager initializes envionment manager
+func InitEnvironmentManager() error {
+	manager, err := irodsclient_config.NewICommandsEnvironmentManager()
 	if err != nil {
-		return xerrors.Errorf("failed to get account from iCommands Environment: %w", err)
+		return err
 	}
 
-	if len(appConfig.ClientUsername) > 0 {
-		newAccount.ClientUser = appConfig.ClientUsername
-	}
-
-	if len(appConfig.DefaultResource) > 0 {
-		newAccount.DefaultResource = appConfig.DefaultResource
-	}
-
-	if len(appConfig.DefaultHashScheme) > 0 {
-		newAccount.DefaultHashScheme = appConfig.DefaultHashScheme
-	}
-
-	if len(appConfig.Ticket) > 0 {
-		newAccount.Ticket = appConfig.Ticket
-	}
-
-	account = newAccount
+	environmentManager = manager
 	return nil
 }
 
-// GetAccount returns irods account
-func GetAccount() *irodsclient_types.IRODSAccount {
-	return account
+// GetEnvironmentManager returns environment manager
+func GetEnvironmentManager() *irodsclient_config.ICommandsEnvironmentManager {
+	return environmentManager
+}
+
+// GetSessionConfig returns session configuration
+func GetSessionConfig() *irodsclient_config.Config {
+	session, err := environmentManager.GetSessionConfig()
+	if err != nil {
+		return nil
+	}
+
+	return session
 }
 
 // GetCWD returns current working directory
 func GetCWD() string {
-	session := environmentManager.Session
-	cwd := session.CurrentWorkingDir
-
-	if len(cwd) == 0 {
-		env := environmentManager.Environment
-		cwd = env.CurrentWorkingDir
+	session, err := environmentManager.GetSessionConfig()
+	if err != nil {
+		return GetHomeDir()
 	}
 
-	if len(cwd) > 0 {
-		if !strings.HasPrefix(cwd, "/") {
+	if len(session.CurrentWorkingDir) > 0 {
+		if !strings.HasPrefix(session.CurrentWorkingDir, "/") {
 			// relative path from home
-			currentWorkingDir := path.Join(GetHomeDir(), cwd)
+			currentWorkingDir := path.Join(GetHomeDir(), session.CurrentWorkingDir)
 			return path.Clean(currentWorkingDir)
 		}
 
-		return path.Clean(cwd)
+		return path.Clean(session.CurrentWorkingDir)
 	}
 
 	return GetHomeDir()
-}
-
-// GetZone returns zone
-func GetZone() string {
-	env := environmentManager.Environment
-	return env.Zone
-}
-
-// GetUsername returns username
-func GetUsername() string {
-	env := environmentManager.Environment
-	return env.Username
 }
 
 // GetHomeDir returns home dir
@@ -142,7 +69,7 @@ func GetHomeDir() string {
 		return env.Home
 	}
 
-	return fmt.Sprintf("/%s/home/%s", env.Zone, env.Username)
+	return fmt.Sprintf("/%s/home/%s", env.ClientZoneName, env.ClientUsername)
 }
 
 // SetCWD sets current workding directory
@@ -160,8 +87,8 @@ func SetCWD(cwd string) error {
 
 	session.CurrentWorkingDir = path.Clean(cwd)
 
-	logger.Debugf("save session to file - id %d", sessionID)
-	err := environmentManager.SaveSession(sessionID)
+	logger.Debugf("save session to file - id %d", environmentManager.PPID)
+	err := environmentManager.SaveSession()
 	if err != nil {
 		return xerrors.Errorf("failed to save session: %w", err)
 	}
@@ -170,19 +97,6 @@ func SetCWD(cwd string) error {
 
 // InputMissingFields inputs missing fields
 func InputMissingFields() (bool, error) {
-	if environmentManager == nil {
-		envMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
-		if err != nil {
-			return false, xerrors.Errorf("failed to get new iCommands Environment: %w", err)
-		}
-
-		environmentManager = envMgr
-		err = SyncAccount()
-		if err != nil {
-			return false, xerrors.Errorf("failed to get iCommands Environment: %w", err)
-		}
-	}
-
 	updated := false
 
 	env := environmentManager.Environment
@@ -200,10 +114,10 @@ func InputMissingFields() (bool, error) {
 		updated = true
 	}
 
-	if len(env.Zone) == 0 {
-		env.Zone = Input("iRODS Zone [iplant]")
-		if len(env.Zone) == 0 {
-			env.Zone = "iplant"
+	if len(env.ZoneName) == 0 {
+		env.ZoneName = Input("iRODS Zone [iplant]")
+		if len(env.ZoneName) == 0 {
+			env.ZoneName = "iplant"
 		}
 
 		updated = true
@@ -214,32 +128,20 @@ func InputMissingFields() (bool, error) {
 		updated = true
 	}
 
-	password := environmentManager.Password
-	pamToken := environmentManager.PamToken
+	password := environmentManager.Environment.Password
+	pamToken := environmentManager.Environment.PAMToken
 	if len(password) == 0 && len(pamToken) == 0 && env.Username != "anonymous" {
-		environmentManager.Password = InputPassword("iRODS Password")
+		environmentManager.Environment.Password = InputPassword("iRODS Password")
 		updated = true
 	}
 
-	err := SyncAccount()
-	if err != nil {
-		return updated, xerrors.Errorf("failed to get iCommands Environment: %w", err)
-	}
+	environmentManager.FixAuthConfiguration()
 
 	return updated, nil
 }
 
 // InputMissingFieldsFromStdin inputs missing fields
 func InputMissingFieldsFromStdin() error {
-	if environmentManager == nil {
-		envMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
-		if err != nil {
-			return xerrors.Errorf("failed to get new iCommands Environment: %w", err)
-		}
-
-		environmentManager = envMgr
-	}
-
 	// read from stdin
 	stdinBytes, err := io.ReadAll(os.Stdin)
 	if err != nil {
@@ -251,31 +153,19 @@ func InputMissingFieldsFromStdin() error {
 		return xerrors.Errorf("failed to read missing config values: %w", err)
 	}
 
-	env := environmentManager.Environment
-	env.Host = configTypeIn.Host
-	env.Port = configTypeIn.Port
-	env.Zone = configTypeIn.Zone
-	env.Username = configTypeIn.Username
-	environmentManager.Password = configTypeIn.Password
+	environmentManager.Environment.Host = configTypeIn.Host
+	environmentManager.Environment.Port = configTypeIn.Port
+	environmentManager.Environment.ZoneName = configTypeIn.ZoneName
+	environmentManager.Environment.Username = configTypeIn.Username
+	environmentManager.Environment.Password = configTypeIn.Password
+
+	environmentManager.FixAuthConfiguration()
 
 	return nil
 }
 
 // ReinputFields re-inputs fields
 func ReinputFields() (bool, error) {
-	if environmentManager == nil {
-		envMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
-		if err != nil {
-			return false, xerrors.Errorf("failed to get new iCommands Environment: %w", err)
-		}
-
-		environmentManager = envMgr
-		err = SyncAccount()
-		if err != nil {
-			return false, xerrors.Errorf("failed to get iCommands Environment: %w", err)
-		}
-	}
-
 	updated := false
 
 	env := environmentManager.Environment
@@ -299,13 +189,13 @@ func ReinputFields() (bool, error) {
 		updated = true
 	}
 
-	if len(env.Zone) == 0 {
-		env.Zone = "iplant" // default
+	if len(env.ZoneName) == 0 {
+		env.ZoneName = "iplant" // default
 	}
 
-	newZone := Input(fmt.Sprintf("iRODS Zone [%s]", env.Zone))
-	if len(newZone) > 0 && newZone != env.Zone {
-		env.Zone = newZone
+	newZone := Input(fmt.Sprintf("iRODS Zone [%s]", env.ZoneName))
+	if len(newZone) > 0 && newZone != env.ZoneName {
+		env.ZoneName = newZone
 		updated = true
 	}
 
@@ -330,396 +220,9 @@ func ReinputFields() (bool, error) {
 	newPassword := InputPassword("iRODS Password")
 	updated = true
 
-	environmentManager.Password = newPassword
+	environmentManager.Environment.Password = newPassword
 
-	err := SyncAccount()
-	if err != nil {
-		return updated, xerrors.Errorf("failed to get iCommands Environment: %w", err)
-	}
+	environmentManager.FixAuthConfiguration()
 
 	return updated, nil
-}
-
-func isICommandsEnvDir(dirPath string) bool {
-	realDirPath, err := ResolveSymlink(dirPath)
-	if err != nil {
-		return false
-	}
-
-	st, err := os.Stat(realDirPath)
-	if err != nil {
-		return false
-	}
-
-	if !st.IsDir() {
-		return false
-	}
-
-	entries, err := os.ReadDir(dirPath)
-	if err != nil {
-		return false
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			if strings.HasPrefix(entry.Name(), "irods_environment.json.") {
-				return true
-			} else if entry.Name() == "irods_environment.json" {
-				return true
-			} else if entry.Name() == ".irodsA" {
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-func isYAMLFile(filePath string) bool {
-	st, err := os.Stat(filePath)
-	if err != nil {
-		return false
-	}
-
-	if st.IsDir() {
-		return false
-	}
-
-	ext := filepath.Ext(filePath)
-	return ext == ".yaml" || ext == ".yml"
-}
-
-func setConfigToICommandsEnvMgr(envManager *irodsclient_icommands.ICommandsEnvironmentManager, config *Config) {
-	envManager.Environment.CurrentWorkingDir = config.CurrentWorkingDir
-	envManager.Environment.Host = config.Host
-	envManager.Environment.Port = config.Port
-	envManager.Environment.Username = config.Username
-	envManager.Environment.Zone = config.Zone
-	envManager.Environment.DefaultResource = config.DefaultResource
-	envManager.Environment.DefaultHashScheme = config.DefaultHashScheme
-	envManager.Environment.LogLevel = config.LogLevel
-	envManager.Environment.AuthenticationScheme = config.AuthenticationScheme
-	envManager.Environment.ClientServerNegotiation = config.ClientServerNegotiation
-	envManager.Environment.ClientServerPolicy = config.ClientServerPolicy
-	envManager.Environment.SSLCACertificateFile = config.SSLCACertificateFile
-	envManager.Environment.SSLCACertificatePath = config.SSLCACertificatePath
-	envManager.Environment.SSLVerifyServer = config.SSLVerifyServer
-	envManager.Environment.EncryptionKeySize = config.EncryptionKeySize
-	envManager.Environment.EncryptionAlgorithm = config.EncryptionAlgorithm
-	envManager.Environment.EncryptionSaltSize = config.EncryptionSaltSize
-	envManager.Environment.EncryptionNumHashRounds = config.EncryptionNumHashRounds
-
-	envManager.Password = config.Password
-}
-
-func overwriteConfigToICommandsEnvMgr(envManager *irodsclient_icommands.ICommandsEnvironmentManager, config *Config) {
-	if len(config.CurrentWorkingDir) > 0 {
-		envManager.Environment.CurrentWorkingDir = config.CurrentWorkingDir
-	}
-
-	if len(config.Host) > 0 {
-		envManager.Environment.Host = config.Host
-	}
-
-	if config.Port > 0 {
-		envManager.Environment.Port = config.Port
-	}
-
-	if len(config.Username) > 0 {
-		envManager.Environment.Username = config.Username
-	}
-
-	if len(config.Zone) > 0 {
-		envManager.Environment.Zone = config.Zone
-	}
-
-	if len(config.DefaultResource) > 0 {
-		envManager.Environment.DefaultResource = config.DefaultResource
-	}
-
-	if len(config.DefaultHashScheme) > 0 {
-		envManager.Environment.DefaultHashScheme = config.DefaultHashScheme
-	}
-
-	if config.LogLevel > 0 {
-		envManager.Environment.LogLevel = config.LogLevel
-	}
-
-	if len(config.AuthenticationScheme) > 0 {
-		envManager.Environment.AuthenticationScheme = config.AuthenticationScheme
-	}
-
-	if len(config.ClientServerNegotiation) > 0 {
-		envManager.Environment.ClientServerNegotiation = config.ClientServerNegotiation
-	}
-
-	if len(config.ClientServerPolicy) > 0 {
-		envManager.Environment.ClientServerPolicy = config.ClientServerPolicy
-	}
-
-	if len(config.SSLCACertificateFile) > 0 {
-		envManager.Environment.SSLCACertificateFile = config.SSLCACertificateFile
-	}
-
-	if len(config.SSLCACertificatePath) > 0 {
-		envManager.Environment.SSLCACertificatePath = config.SSLCACertificatePath
-	}
-
-	if len(config.SSLVerifyServer) > 0 {
-		envManager.Environment.SSLVerifyServer = config.SSLVerifyServer
-	}
-
-	if config.EncryptionKeySize > 0 {
-		envManager.Environment.EncryptionKeySize = config.EncryptionKeySize
-	}
-
-	if len(config.EncryptionAlgorithm) > 0 {
-		envManager.Environment.EncryptionAlgorithm = config.EncryptionAlgorithm
-	}
-
-	if config.EncryptionSaltSize > 0 {
-		envManager.Environment.EncryptionSaltSize = config.EncryptionSaltSize
-	}
-
-	if config.EncryptionNumHashRounds > 0 {
-		envManager.Environment.EncryptionNumHashRounds = config.EncryptionNumHashRounds
-	}
-
-	if len(config.Password) > 0 {
-		envManager.Password = config.Password
-	}
-}
-
-func setICommandsEnvMgrToConfig(config *Config, envManager *irodsclient_icommands.ICommandsEnvironmentManager) {
-	config.CurrentWorkingDir = envManager.Environment.CurrentWorkingDir
-	config.Host = envManager.Environment.Host
-	config.Port = envManager.Environment.Port
-	config.Username = envManager.Environment.Username
-	config.Zone = envManager.Environment.Zone
-	config.DefaultResource = envManager.Environment.DefaultResource
-	config.DefaultHashScheme = envManager.Environment.DefaultHashScheme
-	config.LogLevel = envManager.Environment.LogLevel
-	config.AuthenticationScheme = envManager.Environment.AuthenticationScheme
-	config.ClientServerNegotiation = envManager.Environment.ClientServerNegotiation
-	config.ClientServerPolicy = envManager.Environment.ClientServerPolicy
-	config.SSLCACertificateFile = envManager.Environment.SSLCACertificateFile
-	config.SSLCACertificatePath = envManager.Environment.SSLCACertificatePath
-	config.SSLVerifyServer = envManager.Environment.SSLVerifyServer
-	config.EncryptionKeySize = envManager.Environment.EncryptionKeySize
-	config.EncryptionAlgorithm = envManager.Environment.EncryptionAlgorithm
-	config.EncryptionSaltSize = envManager.Environment.EncryptionSaltSize
-	config.EncryptionNumHashRounds = envManager.Environment.EncryptionNumHashRounds
-
-	config.Password = envManager.Password
-}
-
-func getLogrusLogLevel(irodsLogLevel int) log.Level {
-	switch irodsLogLevel {
-	case 0:
-		return log.PanicLevel
-	case 1:
-		return log.FatalLevel
-	case 2, 3:
-		return log.ErrorLevel
-	case 4, 5, 6:
-		return log.WarnLevel
-	case 7:
-		return log.InfoLevel
-	case 8:
-		return log.DebugLevel
-	case 9, 10:
-		return log.TraceLevel
-	}
-
-	if irodsLogLevel < 0 {
-		return log.PanicLevel
-	}
-
-	return log.TraceLevel
-}
-
-func LoadConfigFromFile(configPath string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "commons",
-		"function": "LoadConfigFromFile",
-	})
-
-	configPath, err := ExpandHomeDir(configPath)
-	if err != nil {
-		return xerrors.Errorf("failed to expand home directory for %q: %w", configPath, err)
-	}
-
-	configPath, err = filepath.Abs(configPath)
-	if err != nil {
-		return xerrors.Errorf("failed to compute absolute path for %q: %w", configPath, err)
-	}
-
-	logger.Debugf("reading config path %q", configPath)
-	// check if it is a file or a dir
-	_, err = os.Stat(configPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return irodsclient_types.NewFileNotFoundError(configPath)
-		}
-		return xerrors.Errorf("failed to stat %q: %w", configPath, err)
-	}
-
-	if isYAMLFile(configPath) {
-		logger.Debugf("reading gocommands YAML config file %q", configPath)
-
-		iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
-		if err != nil {
-			return xerrors.Errorf("failed to create iCommands Environment: %w", err)
-		}
-
-		err = iCommandsEnvMgr.SetEnvironmentFilePath(configPath)
-		if err != nil {
-			return xerrors.Errorf("failed to set environment file path %q: %w", configPath, err)
-		}
-
-		// read session
-		sessionFilePath := iCommandsEnvMgr.GetSessionFilePath(sessionID)
-		if util.ExistFile(sessionFilePath) {
-			session, err := irodsclient_icommands.CreateICommandsEnvironmentFromFile(sessionFilePath)
-			if err != nil {
-				return xerrors.Errorf("failed to create icommands environment from file %q: %w", sessionFilePath, err)
-			}
-
-			iCommandsEnvMgr.Session = session
-		}
-
-		// load from YAML
-		yjBytes, err := os.ReadFile(configPath)
-		if err != nil {
-			return xerrors.Errorf("failed to read file %q: %w", configPath, err)
-		}
-
-		defaultConfig := GetDefaultConfig()
-		config, err := NewConfigFromYAML(defaultConfig, yjBytes)
-		if err != nil {
-			return xerrors.Errorf("failed to read config from YAML: %w", err)
-		}
-
-		setConfigToICommandsEnvMgr(iCommandsEnvMgr, config)
-
-		if iCommandsEnvMgr.Environment.LogLevel > 0 {
-			logLevel := getLogrusLogLevel(iCommandsEnvMgr.Environment.LogLevel)
-			log.SetLevel(logLevel)
-		}
-
-		environmentManager = iCommandsEnvMgr
-		appConfig = config
-
-		err = SyncAccount()
-		if err != nil {
-			return xerrors.Errorf("failed to sync account: %w", err)
-		}
-
-		return nil
-	}
-
-	// icommands compatible
-	configFilePath := configPath
-	if isICommandsEnvDir(configPath) {
-		configFilePath = filepath.Join(configPath, "irods_environment.json")
-	}
-
-	logger.Debugf("reading icommands environment file %q", configFilePath)
-
-	iCommandsEnvMgr, err := irodsclient_icommands.CreateIcommandsEnvironmentManager()
-	if err != nil {
-		return xerrors.Errorf("failed to create new iCommands Environment: %w", err)
-	}
-
-	err = iCommandsEnvMgr.SetEnvironmentFilePath(configFilePath)
-	if err != nil {
-		return xerrors.Errorf("failed to set iCommands Environment file %q: %w", configFilePath, err)
-	}
-
-	err = iCommandsEnvMgr.Load(sessionID)
-	if err != nil {
-		return xerrors.Errorf("failed to read iCommands Environment: %w", err)
-	}
-
-	config := GetDefaultConfig()
-
-	setICommandsEnvMgrToConfig(config, iCommandsEnvMgr)
-
-	if iCommandsEnvMgr.Environment.LogLevel > 0 {
-		logLevel := getLogrusLogLevel(iCommandsEnvMgr.Environment.LogLevel)
-		log.SetLevel(logLevel)
-	}
-
-	environmentManager = iCommandsEnvMgr
-	appConfig = config
-
-	err = SyncAccount()
-	if err != nil {
-		return xerrors.Errorf("failed to sync account: %w", err)
-	}
-
-	return nil
-}
-
-// LoadAndOverwriteConfigFromEnv loads config from env and overwrites to existing env
-func LoadAndOverwriteConfigFromEnv() error {
-	logger := log.WithFields(log.Fields{
-		"package":  "commons",
-		"function": "LoadAndOverwriteConfigFromEnv",
-	})
-
-	logger.Debug("reading config from environment variables")
-
-	config, err := NewConfigFromENV()
-	if err != nil {
-		return xerrors.Errorf("failed to get new iCommands Environment: %w", err)
-	}
-
-	overwriteConfigToICommandsEnvMgr(environmentManager, config)
-
-	if environmentManager.Environment.LogLevel > 0 {
-		logLevel := getLogrusLogLevel(environmentManager.Environment.LogLevel)
-		log.SetLevel(logLevel)
-	}
-
-	setICommandsEnvMgrToConfig(appConfig, environmentManager)
-
-	SyncAccount()
-
-	return nil
-}
-
-func PrintAccount() error {
-	envMgr := GetEnvironmentManager()
-	if envMgr == nil {
-		return xerrors.Errorf("environment is not set")
-	}
-
-	t := table.NewWriter()
-	t.SetOutputMirror(os.Stdout)
-
-	t.AppendRows([]table.Row{
-		{
-			"iRODS Host",
-			envMgr.Environment.Host,
-		},
-		{
-			"iRODS Port",
-			envMgr.Environment.Port,
-		},
-		{
-			"iRODS Zone",
-			envMgr.Environment.Zone,
-		},
-		{
-			"iRODS Username",
-			envMgr.Environment.Username,
-		},
-		{
-			"iRODS Authentication Scheme",
-			envMgr.Environment.AuthenticationScheme,
-		},
-	}, table.RowConfig{})
-	t.Render()
-	return nil
 }

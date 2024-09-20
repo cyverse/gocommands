@@ -85,7 +85,7 @@ func (addMeta *AddMetaCommand) Process() error {
 	}
 
 	// Create a file system
-	addMeta.account = commons.GetAccount()
+	addMeta.account = commons.GetSessionConfig().ToIRODSAccount()
 	addMeta.filesystem, err = commons.GetIRODSFSClient(addMeta.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
@@ -125,7 +125,7 @@ func (addMeta *AddMetaCommand) addMetaToPath(targetPath string, attribute string
 
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := addMeta.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	logger.Debugf("add metadata to path %q (attr %q, value %q, unit %q)", targetPath, attribute, value, unit)

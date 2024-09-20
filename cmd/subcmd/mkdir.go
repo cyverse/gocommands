@@ -79,7 +79,7 @@ func (mkDir *MkDirCommand) Process() error {
 	}
 
 	// Create a file system
-	mkDir.account = commons.GetAccount()
+	mkDir.account = commons.GetSessionConfig().ToIRODSAccount()
 	mkDir.filesystem, err = commons.GetIRODSFSClient(mkDir.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
@@ -105,7 +105,7 @@ func (mkDir *MkDirCommand) makeOne(targetPath string) error {
 
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := mkDir.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	connection, err := mkDir.filesystem.GetMetadataConnection()

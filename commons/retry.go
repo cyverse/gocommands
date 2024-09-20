@@ -52,9 +52,9 @@ func runChild() error {
 	configTypeIn := &ConfigTypeIn{
 		Host:     env.Host,
 		Port:     env.Port,
-		Zone:     env.Zone,
+		ZoneName: env.ZoneName,
 		Username: env.Username,
-		Password: envManager.Password,
+		Password: envManager.Environment.Password,
 	}
 
 	configTypeInYamlBytes, err := configTypeIn.ToYAML()

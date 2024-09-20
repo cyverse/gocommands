@@ -89,7 +89,7 @@ func (bun *BunCommand) Process() error {
 	}
 
 	// Create a file system
-	bun.account = commons.GetAccount()
+	bun.account = commons.GetSessionConfig().ToIRODSAccount()
 	bun.filesystem, err = commons.GetIRODSFSClient(bun.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
@@ -150,7 +150,7 @@ func (bun *BunCommand) extractOne(sourcePath string, targetPath string) error {
 
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := bun.account.ClientZone
 	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 

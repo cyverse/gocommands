@@ -1,12 +1,15 @@
 package subcmd
 
 import (
+	"os"
+
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
+	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
 
-	irodsclient_icommands "github.com/cyverse/go-irodsclient/icommands"
+	irodsclient_config "github.com/cyverse/go-irodsclient/config"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 )
 
@@ -43,7 +46,7 @@ type InitCommand struct {
 
 	initFlagValues *flag.InitFlagValues
 
-	environmentManager *irodsclient_icommands.ICommandsEnvironmentManager
+	environmentManager *irodsclient_config.ICommandsEnvironmentManager
 	account            *irodsclient_types.IRODSAccount
 }
 
@@ -92,22 +95,60 @@ func (init *InitCommand) Process() error {
 
 	if init.account.AuthenticationScheme.IsPAM() {
 		// update pam token
-		init.environmentManager.PamToken = conn.GetPAMToken()
+		init.environmentManager.Environment.PAMToken = conn.GetPAMToken()
 	}
 
 	if updated {
 		// save
-		err := commons.GetEnvironmentManager().SaveEnvironment()
+		manager := commons.GetEnvironmentManager()
+		manager.FixAuthConfiguration()
+
+		err := manager.SaveEnvironment()
 		if err != nil {
 			return xerrors.Errorf("failed to save iCommands Environment: %w", err)
 		}
 	} else {
 		commons.Println("gocommands is already configured for following account:")
-		err := commons.PrintAccount()
+		err := init.PrintAccount()
 		if err != nil {
 			return xerrors.Errorf("failed to print account info: %w", err)
 		}
 	}
 
+	return nil
+}
+
+func (init *InitCommand) PrintAccount() error {
+	envMgr := commons.GetEnvironmentManager()
+	if envMgr == nil {
+		return xerrors.Errorf("environment is not set")
+	}
+
+	t := table.NewWriter()
+	t.SetOutputMirror(os.Stdout)
+
+	t.AppendRows([]table.Row{
+		{
+			"iRODS Host",
+			envMgr.Environment.Host,
+		},
+		{
+			"iRODS Port",
+			envMgr.Environment.Port,
+		},
+		{
+			"iRODS Zone",
+			envMgr.Environment.ZoneName,
+		},
+		{
+			"iRODS Username",
+			envMgr.Environment.Username,
+		},
+		{
+			"iRODS Authentication Scheme",
+			envMgr.Environment.AuthenticationScheme,
+		},
+	}, table.RowConfig{})
+	t.Render()
 	return nil
 }

@@ -86,7 +86,7 @@ func (bclean *BcleanCommand) Process() error {
 	}
 
 	// Create a file system
-	bclean.account = commons.GetAccount()
+	bclean.account = commons.GetSessionConfig().ToIRODSAccount()
 	bclean.filesystem, err = commons.GetIRODSFSClient(bclean.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
@@ -124,7 +124,7 @@ func (bclean *BcleanCommand) cleanOne(targetPath string) {
 
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := bclean.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	if commons.IsStagingDirInTargetPath(targetPath) {

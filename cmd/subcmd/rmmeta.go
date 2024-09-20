@@ -80,7 +80,7 @@ func (rmMeta *RmMetaCommand) Process() error {
 	}
 
 	// Create a file system
-	rmMeta.account = commons.GetAccount()
+	rmMeta.account = commons.GetSessionConfig().ToIRODSAccount()
 	rmMeta.filesystem, err = commons.GetIRODSFSClient(rmMeta.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
@@ -187,7 +187,7 @@ func (rmMeta *RmMetaCommand) removeMetaFromPath(targetPath string, avuid int64) 
 
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := rmMeta.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	err := rmMeta.filesystem.DeleteMetadata(targetPath, avuid)
@@ -243,7 +243,7 @@ func (rmMeta *RmMetaCommand) removeMetaFromPathByName(targetPath string, attr st
 
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := rmMeta.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	err := rmMeta.filesystem.DeleteMetadataByName(targetPath, attr)

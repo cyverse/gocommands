@@ -79,7 +79,7 @@ func (lsMeta *LsMetaCommand) Process() error {
 	}
 
 	// Create a file system
-	lsMeta.account = commons.GetAccount()
+	lsMeta.account = commons.GetSessionConfig().ToIRODSAccount()
 	lsMeta.filesystem, err = commons.GetIRODSFSClient(lsMeta.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
@@ -101,7 +101,7 @@ func (lsMeta *LsMetaCommand) Process() error {
 func (lsMeta *LsMetaCommand) listMetaForPath(targetPath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := lsMeta.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	metas, err := lsMeta.filesystem.ListMetadata(targetPath)

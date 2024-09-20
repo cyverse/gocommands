@@ -152,22 +152,6 @@ func (get *GetCommand) Process() error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	// config
-	appConfig := commons.GetConfig()
-	syncAccount := false
-	if len(get.ticketAccessFlagValues.Name) > 0 {
-		logger.Debugf("use ticket %q", get.ticketAccessFlagValues.Name)
-		appConfig.Ticket = get.ticketAccessFlagValues.Name
-		syncAccount = true
-	}
-
-	if syncAccount {
-		err := commons.SyncAccount()
-		if err != nil {
-			return err
-		}
-	}
-
 	// handle retry
 	if get.retryFlagValues.RetryNumber > 0 && !get.retryFlagValues.RetryChild {
 		err := commons.RunWithRetry(get.retryFlagValues.RetryNumber, get.retryFlagValues.RetryIntervalSeconds)
@@ -178,7 +162,13 @@ func (get *GetCommand) Process() error {
 	}
 
 	// Create a file system
-	get.account = commons.GetAccount()
+	get.account = commons.GetSessionConfig().ToIRODSAccount()
+	if len(get.ticketAccessFlagValues.Name) > 0 {
+		logger.Debugf("use ticket: %q", get.ticketAccessFlagValues.Name)
+		get.account.Ticket = get.ticketAccessFlagValues.Name
+	}
+
+	get.account = commons.GetSessionConfig().ToIRODSAccount()
 	get.filesystem, err = commons.GetIRODSFSClientAdvanced(get.account, get.maxConnectionNum, get.parallelTransferFlagValues.TCPBufferSize)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
@@ -296,7 +286,7 @@ func (get *GetCommand) deleteTransferStatusFile(targetPath string) {
 func (get *GetCommand) getOne(sourcePath string, targetPath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := get.account.ClientZone
 	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 	targetPath = commons.MakeLocalPath(targetPath)
 
@@ -531,17 +521,17 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 				// skip
 				now := time.Now()
 				reportFile := &commons.TransferReportFile{
-					Method:         commons.TransferMethodGet,
-					StartAt:        now,
-					EndAt:          now,
-					SourcePath:     sourceEntry.Path,
-					SourceSize:     sourceEntry.Size,
-					SourceChecksum: hex.EncodeToString(sourceEntry.CheckSum),
+					Method:                  commons.TransferMethodGet,
+					StartAt:                 now,
+					EndAt:                   now,
+					SourcePath:              sourceEntry.Path,
+					SourceSize:              sourceEntry.Size,
+					SourceChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
+					SourceChecksum:          hex.EncodeToString(sourceEntry.CheckSum),
 
-					DestPath:          targetPath,
-					DestSize:          targetStat.Size(),
-					ChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
-					Notes:             []string{"differential", "no_hash", "same file size", "skip"},
+					DestPath: targetPath,
+					DestSize: targetStat.Size(),
+					Notes:    []string{"differential", "no_hash", "same file size", "skip"},
 				}
 
 				get.transferReportManager.AddFile(reportFile)
@@ -563,17 +553,18 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 						// skip
 						now := time.Now()
 						reportFile := &commons.TransferReportFile{
-							Method:            commons.TransferMethodGet,
-							StartAt:           now,
-							EndAt:             now,
-							SourcePath:        sourceEntry.Path,
-							SourceSize:        sourceEntry.Size,
-							SourceChecksum:    hex.EncodeToString(sourceEntry.CheckSum),
-							DestPath:          targetPath,
-							DestSize:          targetStat.Size(),
-							DestChecksum:      hex.EncodeToString(localChecksum),
-							ChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
-							Notes:             []string{"differential", "same checksum", "skip"},
+							Method:                  commons.TransferMethodGet,
+							StartAt:                 now,
+							EndAt:                   now,
+							SourcePath:              sourceEntry.Path,
+							SourceSize:              sourceEntry.Size,
+							SourceChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
+							SourceChecksum:          hex.EncodeToString(sourceEntry.CheckSum),
+							DestPath:                targetPath,
+							DestSize:                targetStat.Size(),
+							DestChecksum:            hex.EncodeToString(localChecksum),
+							DestChecksumAlgorithm:   string(sourceEntry.CheckSumAlgorithm),
+							Notes:                   []string{"differential", "same checksum", "skip"},
 						}
 
 						get.transferReportManager.AddFile(reportFile)
@@ -593,16 +584,16 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 				// skip
 				now := time.Now()
 				reportFile := &commons.TransferReportFile{
-					Method:            commons.TransferMethodGet,
-					StartAt:           now,
-					EndAt:             now,
-					SourcePath:        sourceEntry.Path,
-					SourceSize:        sourceEntry.Size,
-					SourceChecksum:    hex.EncodeToString(sourceEntry.CheckSum),
-					DestPath:          targetPath,
-					DestSize:          targetStat.Size(),
-					ChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
-					Notes:             []string{"no_overwrite", "skip"},
+					Method:                  commons.TransferMethodGet,
+					StartAt:                 now,
+					EndAt:                   now,
+					SourcePath:              sourceEntry.Path,
+					SourceSize:              sourceEntry.Size,
+					SourceChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
+					SourceChecksum:          hex.EncodeToString(sourceEntry.CheckSum),
+					DestPath:                targetPath,
+					DestSize:                targetStat.Size(),
+					Notes:                   []string{"no_overwrite", "skip"},
 				}
 
 				get.transferReportManager.AddFile(reportFile)

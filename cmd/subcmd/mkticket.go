@@ -79,7 +79,7 @@ func (mkTicket *MkTicketCommand) Process() error {
 	}
 
 	// Create a file system
-	mkTicket.account = commons.GetAccount()
+	mkTicket.account = commons.GetSessionConfig().ToIRODSAccount()
 	mkTicket.filesystem, err = commons.GetIRODSFSClient(mkTicket.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
@@ -105,7 +105,7 @@ func (mkTicket *MkTicketCommand) makeTicket(ticketName string, ticketType types.
 
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := mkTicket.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	err := mkTicket.filesystem.CreateTicket(ticketName, ticketType, targetPath)

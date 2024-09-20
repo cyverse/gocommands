@@ -163,7 +163,7 @@ func (bput *BputCommand) Process() error {
 	}
 
 	// Create a file system
-	bput.account = commons.GetAccount()
+	bput.account = commons.GetSessionConfig().ToIRODSAccount()
 	bput.filesystem, err = commons.GetIRODSFSClientAdvanced(bput.account, bput.maxConnectionNum, bput.parallelTransferFlagValues.TCPBufferSize)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
@@ -212,7 +212,7 @@ func (bput *BputCommand) Process() error {
 	}
 
 	// bundle transfer manager
-	bput.bundleTransferManager = commons.NewBundleTransferManager(bput.filesystem, bput.transferReportManager, bput.targetPath, localBundleRootPath, bput.bundleTransferFlagValues.MinFileNum, bput.bundleTransferFlagValues.MaxFileNum, bput.bundleTransferFlagValues.MaxFileSize, bput.parallelTransferFlagValues.SingleThread, bput.parallelTransferFlagValues.ThreadNumber, bput.parallelTransferFlagValues.RedirectToResource, bput.parallelTransferFlagValues.Icat, bput.bundleTransferFlagValues.LocalTempPath, stagingDirPath, bput.bundleTransferFlagValues.NoBulkRegistration, bput.progressFlagValues.ShowProgress, bput.progressFlagValues.ShowFullPath)
+	bput.bundleTransferManager = commons.NewBundleTransferManager(bput.account, bput.filesystem, bput.transferReportManager, bput.targetPath, localBundleRootPath, bput.bundleTransferFlagValues.MinFileNum, bput.bundleTransferFlagValues.MaxFileNum, bput.bundleTransferFlagValues.MaxFileSize, bput.parallelTransferFlagValues.SingleThread, bput.parallelTransferFlagValues.ThreadNumber, bput.parallelTransferFlagValues.RedirectToResource, bput.parallelTransferFlagValues.Icat, bput.bundleTransferFlagValues.LocalTempPath, stagingDirPath, bput.bundleTransferFlagValues.NoBulkRegistration, bput.progressFlagValues.ShowProgress, bput.progressFlagValues.ShowFullPath)
 	bput.bundleTransferManager.Start()
 
 	// run
@@ -257,7 +257,7 @@ func (bput *BputCommand) Process() error {
 func (bput *BputCommand) ensureTargetIsDir(targetPath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := bput.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	targetEntry, err := bput.filesystem.Stat(targetPath)
@@ -286,7 +286,7 @@ func (bput *BputCommand) getStagingDir(targetPath string) (string, error) {
 
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := bput.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	if len(bput.bundleTransferFlagValues.IRODSTempPath) > 0 {
@@ -503,10 +503,10 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string) erro
 					SourcePath: sourcePath,
 					SourceSize: sourceStat.Size(),
 
-					DestPath:          targetEntry.Path,
-					DestSize:          targetEntry.Size,
-					ChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
-					Notes:             []string{"differential", "no_hash", "same file size", "skip"},
+					DestPath:              targetEntry.Path,
+					DestSize:              targetEntry.Size,
+					DestChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
+					Notes:                 []string{"differential", "no_hash", "same file size", "skip"},
 				}
 
 				bput.transferReportManager.AddFile(reportFile)
@@ -528,17 +528,18 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string) erro
 						// skip
 						now := time.Now()
 						reportFile := &commons.TransferReportFile{
-							Method:            commons.TransferMethodPut,
-							StartAt:           now,
-							EndAt:             now,
-							SourcePath:        sourcePath,
-							SourceSize:        sourceStat.Size(),
-							SourceChecksum:    hex.EncodeToString(localChecksum),
-							DestPath:          targetEntry.Path,
-							DestSize:          targetEntry.Size,
-							DestChecksum:      hex.EncodeToString(targetEntry.CheckSum),
-							ChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
-							Notes:             []string{"differential", "same checksum", "skip"},
+							Method:                  commons.TransferMethodPut,
+							StartAt:                 now,
+							EndAt:                   now,
+							SourcePath:              sourcePath,
+							SourceSize:              sourceStat.Size(),
+							SourceChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
+							SourceChecksum:          hex.EncodeToString(localChecksum),
+							DestPath:                targetEntry.Path,
+							DestSize:                targetEntry.Size,
+							DestChecksum:            hex.EncodeToString(targetEntry.CheckSum),
+							DestChecksumAlgorithm:   string(targetEntry.CheckSumAlgorithm),
+							Notes:                   []string{"differential", "same checksum", "skip"},
 						}
 
 						bput.transferReportManager.AddFile(reportFile)
@@ -558,16 +559,16 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string) erro
 				// skip
 				now := time.Now()
 				reportFile := &commons.TransferReportFile{
-					Method:            commons.TransferMethodPut,
-					StartAt:           now,
-					EndAt:             now,
-					SourcePath:        sourcePath,
-					SourceSize:        sourceStat.Size(),
-					DestPath:          targetEntry.Path,
-					DestSize:          targetEntry.Size,
-					DestChecksum:      hex.EncodeToString(targetEntry.CheckSum),
-					ChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
-					Notes:             []string{"no_overwrite", "skip"},
+					Method:                commons.TransferMethodPut,
+					StartAt:               now,
+					EndAt:                 now,
+					SourcePath:            sourcePath,
+					SourceSize:            sourceStat.Size(),
+					DestPath:              targetEntry.Path,
+					DestSize:              targetEntry.Size,
+					DestChecksum:          hex.EncodeToString(targetEntry.CheckSum),
+					DestChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
+					Notes:                 []string{"no_overwrite", "skip"},
 				}
 
 				bput.transferReportManager.AddFile(reportFile)
@@ -726,7 +727,7 @@ func (bput *BputCommand) deleteOnSuccess(sourcePath string) error {
 func (bput *BputCommand) deleteExtra(targetPath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := bput.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	return bput.deleteExtraInternal(targetPath)

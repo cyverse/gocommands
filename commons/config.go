@@ -1,6 +1,9 @@
 package commons
 
 import (
+	"os"
+	"path/filepath"
+
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"golang.org/x/xerrors"
 
@@ -13,7 +16,7 @@ const (
 
 	HashSchemeDefault           string = irodsclient_types.HashSchemeDefault
 	AuthenticationSchemeDefault string = string(irodsclient_types.AuthSchemeNative)
-	ClientServerPolicyDefault   string = string(irodsclient_types.CSNegotiationRequireTCP)
+	ClientServerPolicyDefault   string = string(irodsclient_types.CSNegotiationPolicyRequestTCP)
 	EncryptionKeySizeDefault    int    = 32
 	EncryptionAlgorithmDefault  string = "AES-256-CBC"
 	SaltSizeDefault             int    = 8
@@ -27,7 +30,7 @@ type Config struct {
 	Port                    int    `yaml:"irods_port,omitempty" envconfig:"IRODS_PORT"`
 	Username                string `yaml:"irods_user_name,omitempty" envconfig:"IRODS_USER_NAME"`
 	ClientUsername          string `yaml:"irods_client_user_name,omitempty" envconfig:"IRODS_CLIENT_USER_NAME"`
-	Zone                    string `yaml:"irods_zone_name,omitempty" envconfig:"IRODS_ZONE_NAME"`
+	ZoneName                string `yaml:"irods_zone_name,omitempty" envconfig:"IRODS_ZONE_NAME"`
 	DefaultResource         string `yaml:"irods_default_resource,omitempty" envconfig:"IRODS_DEFAULT_RESOURCE"`
 	DefaultHashScheme       string `yaml:"irods_default_hash_scheme,omitempty" envconfig:"IRODS_DEFAULT_HASH_SCHEME"`
 	LogLevel                int    `yaml:"irods_log_level,omitempty" envconfig:"IRODS_LOG_LEVEL"`
@@ -93,10 +96,24 @@ func GetDefaultIRODSConfigPath() string {
 	return irodsConfigPath
 }
 
+func IsYAMLFile(filePath string) bool {
+	st, err := os.Stat(filePath)
+	if err != nil {
+		return false
+	}
+
+	if st.IsDir() {
+		return false
+	}
+
+	ext := filepath.Ext(filePath)
+	return ext == ".yaml" || ext == ".yml"
+}
+
 type ConfigTypeIn struct {
 	Host     string `yaml:"irods_host,omitempty"`
 	Port     int    `yaml:"irods_port,omitempty"`
-	Zone     string `yaml:"irods_zone_name,omitempty"`
+	ZoneName string `yaml:"irods_zone_name,omitempty"`
 	Username string `yaml:"irods_user_name,omitempty"`
 	Password string `yaml:"irods_user_password,omitempty"`
 }

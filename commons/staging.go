@@ -63,6 +63,8 @@ func IsStagingDirInTargetPath(stagingPath string) bool {
 }
 
 func IsSafeStagingDir(stagingPath string) error {
+	sessionConfig := GetSessionConfig()
+
 	dirParts := strings.Split(stagingPath[1:], "/")
 	dirDepth := len(dirParts)
 
@@ -72,7 +74,7 @@ func IsSafeStagingDir(stagingPath string) error {
 	}
 
 	// zone/home/user OR zone/home/shared (public)
-	if dirParts[0] != GetZone() {
+	if dirParts[0] != sessionConfig.ClientZoneName {
 		return xerrors.Errorf("staging path %q is not safe, not in the correct zone", stagingPath)
 	}
 
@@ -80,7 +82,7 @@ func IsSafeStagingDir(stagingPath string) error {
 		return xerrors.Errorf("staging path %q is not safe", stagingPath)
 	}
 
-	if dirParts[2] == GetUsername() {
+	if dirParts[2] == sessionConfig.ClientUsername {
 		if dirDepth <= 3 {
 			// /zone/home/user
 			return xerrors.Errorf("staging path %q is not safe!", stagingPath)

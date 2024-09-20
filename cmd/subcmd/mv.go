@@ -76,7 +76,7 @@ func (mv *MvCommand) Process() error {
 	}
 
 	// Create a file system
-	mv.account = commons.GetAccount()
+	mv.account = commons.GetSessionConfig().ToIRODSAccount()
 	mv.filesystem, err = commons.GetIRODSFSClient(mv.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
@@ -105,7 +105,7 @@ func (mv *MvCommand) Process() error {
 func (mv *MvCommand) ensureTargetIsDir(targetPath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := mv.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	targetEntry, err := mv.filesystem.Stat(targetPath)
@@ -128,7 +128,7 @@ func (mv *MvCommand) ensureTargetIsDir(targetPath string) error {
 func (mv *MvCommand) moveOne(sourcePath string, targetPath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := mv.account.ClientZone
 	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 

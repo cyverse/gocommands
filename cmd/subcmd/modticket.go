@@ -78,7 +78,7 @@ func (modTicket *ModTicketCommand) Process() error {
 	}
 
 	// Create a file system
-	modTicket.account = commons.GetAccount()
+	modTicket.account = commons.GetSessionConfig().ToIRODSAccount()
 	modTicket.filesystem, err = commons.GetIRODSFSClient(modTicket.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	irodsclient_config "github.com/cyverse/go-irodsclient/config"
 	"github.com/cyverse/gocommands/commons"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -73,6 +74,31 @@ func GetCommonFlagValues(command *cobra.Command) *CommonFlagValues {
 	return &commonFlagValues
 }
 
+func getLogrusLogLevel(irodsLogLevel int) log.Level {
+	switch irodsLogLevel {
+	case 0:
+		return log.PanicLevel
+	case 1:
+		return log.FatalLevel
+	case 2, 3:
+		return log.ErrorLevel
+	case 4, 5, 6:
+		return log.WarnLevel
+	case 7:
+		return log.InfoLevel
+	case 8:
+		return log.DebugLevel
+	case 9, 10:
+		return log.TraceLevel
+	}
+
+	if irodsLogLevel < 0 {
+		return log.PanicLevel
+	}
+
+	return log.TraceLevel
+}
+
 func setLogLevel(command *cobra.Command) {
 	myCommonFlagValues := GetCommonFlagValues(command)
 
@@ -108,59 +134,122 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		return false, nil // stop here
 	}
 
-	logger.Debugf("use sessionID - %d", myCommonFlagValues.SessionID)
-	commons.SetSessionID(myCommonFlagValues.SessionID)
+	// init config
+	err := commons.InitEnvironmentManager()
+	if err != nil {
+		return false, xerrors.Errorf("failed to init environment manager: %w", err)
+	}
 
-	readConfig := false
+	environmentManager := commons.GetEnvironmentManager()
+
+	logger.Debugf("use sessionID - %d", myCommonFlagValues.SessionID)
+	environmentManager.SetPPID(myCommonFlagValues.SessionID)
+
+	configFilePath := ""
+
+	// find config file location from env
+	if irodsEnvironmentFileEnvVal, ok := os.LookupEnv(IRODSEnvironmentFileEnvKey); ok {
+		if len(irodsEnvironmentFileEnvVal) > 0 {
+			configFilePath = irodsEnvironmentFileEnvVal
+		}
+	}
+
+	// user defined config file
 	if len(myCommonFlagValues.ConfigFilePath) > 0 {
-		// user defined config file
-		err := commons.LoadConfigFromFile(myCommonFlagValues.ConfigFilePath)
+		configFilePath = myCommonFlagValues.ConfigFilePath
+	}
+
+	// load config
+	if len(configFilePath) > 0 {
+		configFilePath, err = commons.ExpandHomeDir(configFilePath)
 		if err != nil {
-			return false, xerrors.Errorf("failed to load config from file %q: %w", myCommonFlagValues.ConfigFilePath, err) // stop here
+			return false, xerrors.Errorf("failed to expand home directory for %q: %w", configFilePath, err)
 		}
 
-		readConfig = true
-	} else {
-		// read config path from env
-		// then read config
-		if irodsEnvironmentFileEnvVal, ok := os.LookupEnv(IRODSEnvironmentFileEnvKey); ok {
-			if len(irodsEnvironmentFileEnvVal) > 0 {
-				err := commons.LoadConfigFromFile(irodsEnvironmentFileEnvVal)
+		status, err := os.Stat(configFilePath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return false, xerrors.Errorf("config path %q does not exist", configFilePath)
+			}
+
+			return false, xerrors.Errorf("failed to stat %q: %w", configFilePath, err)
+		}
+
+		if status.IsDir() {
+			// config root
+			err = environmentManager.SetEnvironmentDirPath(configFilePath)
+			if err != nil {
+				return false, xerrors.Errorf("failed to set configuration root directory %q: %w", configFilePath, err)
+			}
+
+			// load
+			err = environmentManager.Load()
+			if err != nil {
+				return false, xerrors.Errorf("failed to load configuration file %q: %w", environmentManager.EnvironmentFilePath, err)
+			}
+		} else {
+			// config file
+			if commons.IsYAMLFile(configFilePath) {
+				// yaml
+				yamlConfig, err := irodsclient_config.NewConfigFromYAMLFile(configFilePath)
 				if err != nil {
-					return false, xerrors.Errorf("failed to load config file %q: %w", irodsEnvironmentFileEnvVal, err) // stop here
+					return false, xerrors.Errorf("failed to load YAML config from file %q: %w", configFilePath, err)
 				}
 
-				readConfig = true
-			}
-		}
+				// load
+				err = environmentManager.Load()
+				if err != nil {
+					return false, xerrors.Errorf("failed to load configuration file %q: %w", environmentManager.EnvironmentFilePath, err)
+				}
 
-		// read config from default icommands config path
-		if !readConfig {
-			// auto detect
-			err := commons.LoadConfigFromFile("~/.irods")
-			if err != nil {
-				logger.Debug(err)
-				// ignore error
+				// overwrite
+				environmentManager.Environment = yamlConfig
 			} else {
-				readConfig = true
+				// json
+				jsonConfig, err := irodsclient_config.NewConfigFromJSONFile(configFilePath)
+				if err != nil {
+					return false, xerrors.Errorf("failed to load JSON config from file %q: %w", configFilePath, err)
+				}
+
+				environmentManager.Environment = jsonConfig
+				environmentManager.EnvironmentFilePath = configFilePath
+
+				// load
+				err = environmentManager.Load()
+				if err != nil {
+					return false, xerrors.Errorf("failed to load configuration file %q: %w", environmentManager.EnvironmentFilePath, err)
+				}
 			}
+		}
+	} else {
+		// default
+		// load
+		err = environmentManager.Load()
+		if err != nil {
+			return false, xerrors.Errorf("failed to load configuration file %q: %w", environmentManager.EnvironmentFilePath, err)
 		}
 	}
 
-	// set default config
-	if !readConfig {
-		commons.SetDefaultConfigIfEmpty()
-	}
-
-	// re-configure level
-	setLogLevel(command)
-
-	err := commons.LoadAndOverwriteConfigFromEnv()
+	// load config from env
+	envConfig, err := irodsclient_config.OverwriteConfigFromEnv(environmentManager.Environment)
 	if err != nil {
-		return false, xerrors.Errorf("failed to load config from environment: %w", err) // stop here
+		return false, xerrors.Errorf("failed to load config from environment: %w", err)
 	}
 
-	// re-configure level
+	// overwrite
+	environmentManager.Environment = envConfig
+
+	sessionConfig, err := environmentManager.GetSessionConfig()
+	if err != nil {
+		return false, xerrors.Errorf("failed to get session config: %w", err)
+	}
+
+	if sessionConfig.LogLevel > 0 {
+		// set log level
+		log.SetLevel(getLogrusLogLevel(sessionConfig.LogLevel))
+	}
+
+	// prioritize log level user set via command-line argument
 	setLogLevel(command)
 
 	if retryFlagValues.RetryChild {
@@ -171,20 +260,9 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		}
 	}
 
-	appConfig := commons.GetConfig()
-
-	syncAccount := false
 	if myCommonFlagValues.ResourceUpdated {
-		appConfig.DefaultResource = myCommonFlagValues.Resource
-		logger.Debugf("use default resource server %q", appConfig.DefaultResource)
-		syncAccount = true
-	}
-
-	if syncAccount {
-		err := commons.SyncAccount()
-		if err != nil {
-			return false, err
-		}
+		environmentManager.Environment.DefaultResource = myCommonFlagValues.Resource
+		logger.Debugf("use default resource server %q", myCommonFlagValues.Resource)
 	}
 
 	return true, nil // contiue

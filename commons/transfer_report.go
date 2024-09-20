@@ -37,13 +37,14 @@ type TransferReportFile struct {
 	StartAt time.Time `json:"start_time"`
 	EndAt   time.Time `json:"end_at"`
 
-	SourcePath        string `json:"source_path"`
-	DestPath          string `json:"dest_path"`
-	ChecksumAlgorithm string `json:"checksum_algorithm"`
-	SourceSize        int64  `json:"source_size"`
-	SourceChecksum    string `json:"source_checksum"`
-	DestSize          int64  `json:"dest_size"`
-	DestChecksum      string `json:"dest_checksum"`
+	SourcePath              string `json:"source_path"`
+	DestPath                string `json:"dest_path"`
+	SourceSize              int64  `json:"source_size"`
+	SourceChecksumAlgorithm string `json:"source_checksum_algorithm"`
+	SourceChecksum          string `json:"source_checksum"`
+	DestSize                int64  `json:"dest_size"`
+	DestChecksumAlgorithm   string `json:"dest_checksum_algorithm"`
+	DestChecksum            string `json:"dest_checksum"`
 
 	Error error    `json:"error,omitempty"`
 	Notes []string `json:"notes"` // additional notes
@@ -76,17 +77,18 @@ func NewTransferReportFileFromTransferResult(result *irodsclient_fs.FileTransfer
 			StartAt: result.StartTime,
 			EndAt:   result.EndTime,
 
-			SourcePath:     result.IRODSPath,
-			SourceSize:     result.IRODSSize,
-			SourceChecksum: hex.EncodeToString(result.IRODSCheckSum),
+			SourcePath:              result.IRODSPath,
+			SourceSize:              result.IRODSSize,
+			SourceChecksumAlgorithm: string(result.IRODSCheckSumAlgorithm),
+			SourceChecksum:          hex.EncodeToString(result.IRODSCheckSum),
 
-			DestPath:     result.LocalPath,
-			DestSize:     result.LocalSize,
-			DestChecksum: hex.EncodeToString(result.LocalCheckSum),
+			DestPath:              result.LocalPath,
+			DestSize:              result.LocalSize,
+			DestChecksumAlgorithm: string(result.LocalCheckSumAlgorithm),
+			DestChecksum:          hex.EncodeToString(result.LocalCheckSum),
 
-			ChecksumAlgorithm: string(result.CheckSumAlgorithm),
-			Error:             err,
-			Notes:             notes,
+			Error: err,
+			Notes: notes,
 		}, nil
 	} else if method == TransferMethodPut || method == TransferMethodBput {
 		// put
@@ -96,17 +98,18 @@ func NewTransferReportFileFromTransferResult(result *irodsclient_fs.FileTransfer
 			StartAt: result.StartTime,
 			EndAt:   result.EndTime,
 
-			SourcePath:     result.LocalPath,
-			SourceSize:     result.LocalSize,
-			SourceChecksum: hex.EncodeToString(result.LocalCheckSum),
+			SourcePath:              result.LocalPath,
+			SourceSize:              result.LocalSize,
+			SourceChecksumAlgorithm: string(result.LocalCheckSumAlgorithm),
+			SourceChecksum:          hex.EncodeToString(result.LocalCheckSum),
 
-			DestPath:     result.IRODSPath,
-			DestSize:     result.IRODSSize,
-			DestChecksum: hex.EncodeToString(result.IRODSCheckSum),
+			DestPath:              result.IRODSPath,
+			DestSize:              result.IRODSSize,
+			DestChecksumAlgorithm: string(result.IRODSCheckSumAlgorithm),
+			DestChecksum:          hex.EncodeToString(result.IRODSCheckSum),
 
-			ChecksumAlgorithm: string(result.CheckSumAlgorithm),
-			Error:             err,
-			Notes:             notes,
+			Error: err,
+			Notes: notes,
 		}, nil
 	} else {
 		return nil, xerrors.Errorf("unknown method %q", method)

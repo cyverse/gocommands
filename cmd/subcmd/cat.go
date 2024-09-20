@@ -85,24 +85,13 @@ func (cat *CatCommand) Process() error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	// config
-	appConfig := commons.GetConfig()
-	syncAccount := false
+	// Create a file system
+	cat.account = commons.GetSessionConfig().ToIRODSAccount()
 	if len(cat.ticketAccessFlagValues.Name) > 0 {
 		logger.Debugf("use ticket: %q", cat.ticketAccessFlagValues.Name)
-		appConfig.Ticket = cat.ticketAccessFlagValues.Name
-		syncAccount = true
+		cat.account.Ticket = cat.ticketAccessFlagValues.Name
 	}
 
-	if syncAccount {
-		err := commons.SyncAccount()
-		if err != nil {
-			return err
-		}
-	}
-
-	// Create a file system
-	cat.account = commons.GetAccount()
 	cat.filesystem, err = commons.GetIRODSFSClient(cat.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
@@ -123,7 +112,7 @@ func (cat *CatCommand) Process() error {
 func (cat *CatCommand) catOne(sourcePath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := cat.account.ClientZone
 	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 
 	sourceEntry, err := cat.filesystem.Stat(sourcePath)

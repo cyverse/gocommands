@@ -46,6 +46,7 @@ func NewEnvCommand(command *cobra.Command, args []string) (*EnvCommand, error) {
 
 	return env, nil
 }
+
 func (env *EnvCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(env.command)
 	if err != nil {
@@ -73,81 +74,106 @@ func (env *EnvCommand) printEnvironment() error {
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 
+	sessionConfig, err := envMgr.GetSessionConfig()
+	if err != nil {
+		return err
+	}
+
 	t.AppendRows([]table.Row{
 		{
-			"iRODS Session Environment File",
-			envMgr.GetSessionFilePath(os.Getppid()),
+			"Session Environment File",
+			envMgr.SessionFilePath,
 		},
 		{
-			"iRODS Environment File",
-			envMgr.GetEnvironmentFilePath(),
+			"Environment File",
+			envMgr.EnvironmentFilePath,
 		},
 		{
-			"iRODS Authentication File",
-			envMgr.GetPasswordFilePath(),
+			"Authentication File",
+			envMgr.PasswordFilePath,
 		},
 		{
-			"iRODS Host",
-			envMgr.Environment.Host,
+			"Host",
+			sessionConfig.Host,
 		},
 		{
-			"iRODS Port",
-			envMgr.Environment.Port,
+			"Port",
+			sessionConfig.Port,
 		},
 		{
-			"iRODS Zone",
-			envMgr.Environment.Zone,
+			"Zone",
+			sessionConfig.ZoneName,
 		},
 		{
-			"iRODS Username",
-			envMgr.Environment.Username,
+			"Username",
+			sessionConfig.Username,
 		},
 		{
-			"iRODS Default Resource",
-			envMgr.Environment.DefaultResource,
+			"Client Zone",
+			sessionConfig.ClientZoneName,
 		},
 		{
-			"iRODS Default Hash Scheme",
-			envMgr.Environment.DefaultHashScheme,
+			"Client Username",
+			sessionConfig.ClientUsername,
 		},
 		{
-			"iRODS Authentication Scheme",
-			envMgr.Environment.AuthenticationScheme,
+			"Default Resource",
+			sessionConfig.DefaultResource,
 		},
 		{
-			"iRODS Client Server Negotiation",
+			"Current Working Dir",
+			commons.GetCWD(),
+		},
+		{
+			"Home",
+			commons.GetHomeDir(),
+		},
+		{
+			"Default Hash Scheme",
+			sessionConfig.DefaultHashScheme,
+		},
+		{
+			"Log Level",
+			sessionConfig.LogLevel,
+		},
+		{
+			"Authentication Scheme",
+			sessionConfig.AuthenticationScheme,
+		},
+		{
+			"Client Server Negotiation",
 			envMgr.Environment.ClientServerNegotiation,
 		},
 		{
-			"iRODS Client Server Policy",
+			"Client Server Policy",
 			envMgr.Environment.ClientServerPolicy,
 		},
 		{
-			"iRODS SSL CA Certification File",
+			"SSL CA Certification File",
 			envMgr.Environment.SSLCACertificateFile,
 		},
 		{
-			"iRODS SSL CA Certification Path",
+			"SSL CA Certification Path",
 			envMgr.Environment.SSLCACertificatePath,
 		},
 		{
-			"iRODS SSL Verify Server",
+			"SSL Verify Server",
 			envMgr.Environment.SSLVerifyServer,
 		},
 		{
-			"iRODS SSL Encryption Key Size",
+			"SSL Encryption Key Size",
 			envMgr.Environment.EncryptionKeySize,
 		},
 		{
-			"iRODS SSL Encryption Key Algorithm",
+			"SSL Encryption Key Algorithm",
 			envMgr.Environment.EncryptionAlgorithm,
 		},
 		{
-			"iRODS SSL Encryption Salt Size",
+			"SSL Encryption Salt Size",
 			envMgr.Environment.EncryptionSaltSize,
 		},
 		{
-			"iRODS SSL Encryption Hash Rounds",
+			"SSL Encryption Hash Rounds",
 			envMgr.Environment.EncryptionNumHashRounds,
 		},
 	}, table.RowConfig{})

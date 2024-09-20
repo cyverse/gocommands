@@ -153,22 +153,6 @@ func (put *PutCommand) Process() error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	// config
-	appConfig := commons.GetConfig()
-	syncAccount := false
-	if len(put.ticketAccessFlagValues.Name) > 0 {
-		logger.Debugf("use ticket %q", put.ticketAccessFlagValues.Name)
-		appConfig.Ticket = put.ticketAccessFlagValues.Name
-		syncAccount = true
-	}
-
-	if syncAccount {
-		err := commons.SyncAccount()
-		if err != nil {
-			return err
-		}
-	}
-
 	// handle retry
 	if put.retryFlagValues.RetryNumber > 0 && !put.retryFlagValues.RetryChild {
 		err = commons.RunWithRetry(put.retryFlagValues.RetryNumber, put.retryFlagValues.RetryIntervalSeconds)
@@ -179,7 +163,12 @@ func (put *PutCommand) Process() error {
 	}
 
 	// Create a file system
-	put.account = commons.GetAccount()
+	put.account = commons.GetSessionConfig().ToIRODSAccount()
+	if len(put.ticketAccessFlagValues.Name) > 0 {
+		logger.Debugf("use ticket: %q", put.ticketAccessFlagValues.Name)
+		put.account.Ticket = put.ticketAccessFlagValues.Name
+	}
+
 	put.filesystem, err = commons.GetIRODSFSClientAdvanced(put.account, put.maxConnectionNum, put.parallelTransferFlagValues.TCPBufferSize)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
@@ -252,7 +241,7 @@ func (put *PutCommand) Process() error {
 func (put *PutCommand) ensureTargetIsDir(targetPath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := put.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	targetEntry, err := put.filesystem.Stat(targetPath)
@@ -317,7 +306,7 @@ func (put *PutCommand) requireEncryption(targetPath string, parentEncryption boo
 func (put *PutCommand) putOne(sourcePath string, targetPath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := put.account.ClientZone
 	sourcePath = commons.MakeLocalPath(sourcePath)
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
@@ -537,10 +526,10 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 					SourcePath: sourcePath,
 					SourceSize: sourceStat.Size(),
 
-					DestPath:          targetEntry.Path,
-					DestSize:          targetEntry.Size,
-					ChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
-					Notes:             []string{"differential", "no_hash", "same file size", "skip"},
+					DestPath:              targetEntry.Path,
+					DestSize:              targetEntry.Size,
+					DestChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
+					Notes:                 []string{"differential", "no_hash", "same file size", "skip"},
 				}
 
 				put.transferReportManager.AddFile(reportFile)
@@ -562,17 +551,18 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 						// skip
 						now := time.Now()
 						reportFile := &commons.TransferReportFile{
-							Method:            commons.TransferMethodPut,
-							StartAt:           now,
-							EndAt:             now,
-							SourcePath:        sourcePath,
-							SourceSize:        sourceStat.Size(),
-							SourceChecksum:    hex.EncodeToString(localChecksum),
-							DestPath:          targetEntry.Path,
-							DestSize:          targetEntry.Size,
-							DestChecksum:      hex.EncodeToString(targetEntry.CheckSum),
-							ChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
-							Notes:             []string{"differential", "same checksum", "skip"},
+							Method:                  commons.TransferMethodPut,
+							StartAt:                 now,
+							EndAt:                   now,
+							SourcePath:              sourcePath,
+							SourceSize:              sourceStat.Size(),
+							SourceChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
+							SourceChecksum:          hex.EncodeToString(localChecksum),
+							DestPath:                targetEntry.Path,
+							DestSize:                targetEntry.Size,
+							DestChecksum:            hex.EncodeToString(targetEntry.CheckSum),
+							DestChecksumAlgorithm:   string(targetEntry.CheckSumAlgorithm),
+							Notes:                   []string{"differential", "same checksum", "skip"},
 						}
 
 						put.transferReportManager.AddFile(reportFile)
@@ -592,16 +582,16 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 				// skip
 				now := time.Now()
 				reportFile := &commons.TransferReportFile{
-					Method:            commons.TransferMethodPut,
-					StartAt:           now,
-					EndAt:             now,
-					SourcePath:        sourcePath,
-					SourceSize:        sourceStat.Size(),
-					DestPath:          targetEntry.Path,
-					DestSize:          targetEntry.Size,
-					DestChecksum:      hex.EncodeToString(targetEntry.CheckSum),
-					ChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
-					Notes:             []string{"no_overwrite", "skip"},
+					Method:                commons.TransferMethodPut,
+					StartAt:               now,
+					EndAt:                 now,
+					SourcePath:            sourcePath,
+					SourceSize:            sourceStat.Size(),
+					DestPath:              targetEntry.Path,
+					DestSize:              targetEntry.Size,
+					DestChecksum:          hex.EncodeToString(targetEntry.CheckSum),
+					DestChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
+					Notes:                 []string{"no_overwrite", "skip"},
 				}
 
 				put.transferReportManager.AddFile(reportFile)
@@ -790,7 +780,7 @@ func (put *PutCommand) deleteOnSuccess(sourcePath string) error {
 func (put *PutCommand) deleteExtra(targetPath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := put.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	return put.deleteExtraInternal(targetPath)

@@ -111,24 +111,13 @@ func (ls *LsCommand) Process() error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	// config
-	appConfig := commons.GetConfig()
-	syncAccount := false
-	if len(ls.ticketAccessFlagValues.Name) > 0 {
-		logger.Debugf("use ticket %q", ls.ticketAccessFlagValues.Name)
-		appConfig.Ticket = ls.ticketAccessFlagValues.Name
-		syncAccount = true
-	}
-
-	if syncAccount {
-		err := commons.SyncAccount()
-		if err != nil {
-			return err
-		}
-	}
-
 	// Create a file system
-	ls.account = commons.GetAccount()
+	ls.account = commons.GetSessionConfig().ToIRODSAccount()
+	if len(ls.ticketAccessFlagValues.Name) > 0 {
+		logger.Debugf("use ticket: %q", ls.ticketAccessFlagValues.Name)
+		ls.account.Ticket = ls.ticketAccessFlagValues.Name
+	}
+
 	ls.filesystem, err = commons.GetIRODSFSClient(ls.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
@@ -167,7 +156,7 @@ func (ls *LsCommand) requireDecryption(sourcePath string) bool {
 func (ls *LsCommand) listOne(sourcePath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := ls.account.ClientZone
 	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 
 	sourceEntry, err := ls.filesystem.Stat(sourcePath)

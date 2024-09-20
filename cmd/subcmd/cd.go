@@ -79,7 +79,7 @@ func (cd *CdCommand) Process() error {
 	}
 
 	// Create a file system
-	cd.account = commons.GetAccount()
+	cd.account = commons.GetSessionConfig().ToIRODSAccount()
 	cd.filesystem, err = commons.GetIRODSFSClient(cd.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
@@ -104,7 +104,7 @@ func (cd *CdCommand) changeWorkingDir(collectionPath string) error {
 
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := cd.account.ClientZone
 	collectionPath = commons.MakeIRODSPath(cwd, home, zone, collectionPath)
 
 	connection, err := cd.filesystem.GetMetadataConnection()

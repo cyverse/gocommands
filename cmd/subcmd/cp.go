@@ -139,7 +139,7 @@ func (cp *CpCommand) Process() error {
 	}
 
 	// Create a file system
-	cp.account = commons.GetAccount()
+	cp.account = commons.GetSessionConfig().ToIRODSAccount()
 	cp.filesystem, err = commons.GetIRODSFSClient(cp.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
@@ -195,7 +195,7 @@ func (cp *CpCommand) Process() error {
 func (cp *CpCommand) ensureTargetIsDir(targetPath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := cp.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	targetEntry, err := cp.filesystem.Stat(targetPath)
@@ -218,7 +218,7 @@ func (cp *CpCommand) ensureTargetIsDir(targetPath string) error {
 func (cp *CpCommand) copyOne(sourcePath string, targetPath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := cp.account.ClientZone
 	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
@@ -267,20 +267,21 @@ func (cp *CpCommand) scheduleCopy(sourceEntry *irodsclient_fs.Entry, targetPath 
 
 		now := time.Now()
 		reportFile := &commons.TransferReportFile{
-			Method:         commons.TransferMethodCopy,
-			StartAt:        now,
-			EndAt:          now,
-			SourcePath:     sourceEntry.Path,
-			SourceSize:     sourceEntry.Size,
-			SourceChecksum: hex.EncodeToString(sourceEntry.CheckSum),
-			DestPath:       targetPath,
+			Method:                  commons.TransferMethodCopy,
+			StartAt:                 now,
+			EndAt:                   now,
+			SourcePath:              sourceEntry.Path,
+			SourceSize:              sourceEntry.Size,
+			SourceChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
+			SourceChecksum:          hex.EncodeToString(sourceEntry.CheckSum),
+			DestPath:                targetPath,
 
-			ChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
-			Notes:             []string{},
+			Notes: []string{},
 		}
 
 		if targetEntry != nil {
 			reportFile.DestSize = targetEntry.Size
+			reportFile.DestChecksumAlgorithm = string(targetEntry.CheckSumAlgorithm)
 			reportFile.DestChecksum = hex.EncodeToString(targetEntry.CheckSum)
 		}
 
@@ -382,17 +383,19 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 				// skip
 				now := time.Now()
 				reportFile := &commons.TransferReportFile{
-					Method:            commons.TransferMethodCopy,
-					StartAt:           now,
-					EndAt:             now,
-					SourcePath:        sourceEntry.Path,
-					SourceSize:        sourceEntry.Size,
-					SourceChecksum:    hex.EncodeToString(sourceEntry.CheckSum),
-					DestPath:          targetPath,
-					DestSize:          targetEntry.Size,
-					DestChecksum:      hex.EncodeToString(targetEntry.CheckSum),
-					ChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
-					Notes:             []string{"differential", "no_hash", "same file size", "skip"},
+					Method:                  commons.TransferMethodCopy,
+					StartAt:                 now,
+					EndAt:                   now,
+					SourcePath:              sourceEntry.Path,
+					SourceSize:              sourceEntry.Size,
+					SourceChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
+					SourceChecksum:          hex.EncodeToString(sourceEntry.CheckSum),
+					DestPath:                targetPath,
+					DestSize:                targetEntry.Size,
+					DestChecksumAlgorithm:   string(targetEntry.CheckSumAlgorithm),
+					DestChecksum:            hex.EncodeToString(targetEntry.CheckSum),
+
+					Notes: []string{"differential", "no_hash", "same file size", "skip"},
 				}
 
 				cp.transferReportManager.AddFile(reportFile)
@@ -407,17 +410,18 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 				if len(sourceEntry.CheckSum) > 0 && bytes.Equal(sourceEntry.CheckSum, targetEntry.CheckSum) {
 					now := time.Now()
 					reportFile := &commons.TransferReportFile{
-						Method:            commons.TransferMethodCopy,
-						StartAt:           now,
-						EndAt:             now,
-						SourcePath:        sourceEntry.Path,
-						SourceSize:        sourceEntry.Size,
-						SourceChecksum:    hex.EncodeToString(sourceEntry.CheckSum),
-						DestPath:          targetPath,
-						DestSize:          targetEntry.Size,
-						DestChecksum:      hex.EncodeToString(targetEntry.CheckSum),
-						ChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
-						Notes:             []string{"differential", "same checksum", "skip"},
+						Method:                  commons.TransferMethodCopy,
+						StartAt:                 now,
+						EndAt:                   now,
+						SourcePath:              sourceEntry.Path,
+						SourceSize:              sourceEntry.Size,
+						SourceChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
+						SourceChecksum:          hex.EncodeToString(sourceEntry.CheckSum),
+						DestPath:                targetPath,
+						DestSize:                targetEntry.Size,
+						DestChecksum:            hex.EncodeToString(targetEntry.CheckSum),
+						DestChecksumAlgorithm:   string(targetEntry.CheckSumAlgorithm),
+						Notes:                   []string{"differential", "same checksum", "skip"},
 					}
 
 					cp.transferReportManager.AddFile(reportFile)
@@ -435,17 +439,18 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 			if !overwrite {
 				now := time.Now()
 				reportFile := &commons.TransferReportFile{
-					Method:            commons.TransferMethodCopy,
-					StartAt:           now,
-					EndAt:             now,
-					SourcePath:        sourceEntry.Path,
-					SourceSize:        sourceEntry.Size,
-					SourceChecksum:    hex.EncodeToString(sourceEntry.CheckSum),
-					DestPath:          targetPath,
-					DestSize:          targetEntry.Size,
-					DestChecksum:      hex.EncodeToString(targetEntry.CheckSum),
-					ChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
-					Notes:             []string{"no_overwrite", "skip"},
+					Method:                  commons.TransferMethodCopy,
+					StartAt:                 now,
+					EndAt:                   now,
+					SourcePath:              sourceEntry.Path,
+					SourceSize:              sourceEntry.Size,
+					SourceChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
+					SourceChecksum:          hex.EncodeToString(sourceEntry.CheckSum),
+					DestPath:                targetPath,
+					DestSize:                targetEntry.Size,
+					DestChecksum:            hex.EncodeToString(targetEntry.CheckSum),
+					DestChecksumAlgorithm:   string(targetEntry.CheckSumAlgorithm),
+					Notes:                   []string{"no_overwrite", "skip"},
 				}
 
 				cp.transferReportManager.AddFile(reportFile)
@@ -578,7 +583,7 @@ func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 func (cp *CpCommand) deleteExtra(targetPath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := cp.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	return cp.deleteExtraInternal(targetPath)

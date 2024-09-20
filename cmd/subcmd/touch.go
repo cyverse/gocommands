@@ -77,7 +77,7 @@ func (touch *TouchCommand) Process() error {
 	}
 
 	// Create a file system
-	touch.account = commons.GetAccount()
+	touch.account = commons.GetSessionConfig().ToIRODSAccount()
 	touch.filesystem, err = commons.GetIRODSFSClient(touch.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
@@ -98,7 +98,7 @@ func (touch *TouchCommand) Process() error {
 func (touch *TouchCommand) touchOne(targetPath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := touch.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	err := touch.filesystem.Touch(targetPath, "", touch.noCreateFlagValues.NoCreate)

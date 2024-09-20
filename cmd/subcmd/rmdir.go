@@ -81,7 +81,7 @@ func (rmDir *RmDirCommand) Process() error {
 	}
 
 	// Create a file system
-	rmDir.account = commons.GetAccount()
+	rmDir.account = commons.GetSessionConfig().ToIRODSAccount()
 	rmDir.filesystem, err = commons.GetIRODSFSClient(rmDir.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
@@ -108,7 +108,7 @@ func (rmDir *RmDirCommand) removeOne(targetPath string) error {
 
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
-	zone := commons.GetZone()
+	zone := rmDir.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	targetEntry, err := rmDir.filesystem.Stat(targetPath)
