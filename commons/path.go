@@ -280,7 +280,7 @@ func ExpandHomeDir(p string) (string, error) {
 			return "", xerrors.Errorf("failed to get user home directory: %w", err)
 		}
 
-		return homedir, nil
+		return filepath.Abs(homedir)
 	} else if strings.HasPrefix(p, "~/") {
 		homedir, err := os.UserHomeDir()
 		if err != nil {
@@ -288,10 +288,10 @@ func ExpandHomeDir(p string) (string, error) {
 		}
 
 		p = filepath.Join(homedir, p[2:])
-		return filepath.Clean(p), nil
+		return filepath.Abs(p)
 	}
 
-	return p, nil
+	return filepath.Abs(p)
 }
 
 func ExistFile(p string) bool {

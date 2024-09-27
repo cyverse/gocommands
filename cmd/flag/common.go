@@ -159,6 +159,8 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		configFilePath = myCommonFlagValues.ConfigFilePath
 	}
 
+	environmentManager.Environment = irodsclient_config.GetDefaultConfig()
+
 	// load config
 	if len(configFilePath) > 0 {
 		configFilePath, err = commons.ExpandHomeDir(configFilePath)
@@ -181,45 +183,18 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 			if err != nil {
 				return false, xerrors.Errorf("failed to set configuration root directory %q: %w", configFilePath, err)
 			}
-
-			// load
-			err = environmentManager.Load()
-			if err != nil {
-				return false, xerrors.Errorf("failed to load configuration file %q: %w", environmentManager.EnvironmentFilePath, err)
-			}
 		} else {
 			// config file
-			if commons.IsYAMLFile(configFilePath) {
-				// yaml
-				yamlConfig, err := irodsclient_config.NewConfigFromYAMLFile(configFilePath)
-				if err != nil {
-					return false, xerrors.Errorf("failed to load YAML config from file %q: %w", configFilePath, err)
-				}
-
-				// load
-				err = environmentManager.Load()
-				if err != nil {
-					return false, xerrors.Errorf("failed to load configuration file %q: %w", environmentManager.EnvironmentFilePath, err)
-				}
-
-				// overwrite
-				environmentManager.Environment = yamlConfig
-			} else {
-				// json
-				jsonConfig, err := irodsclient_config.NewConfigFromJSONFile(configFilePath)
-				if err != nil {
-					return false, xerrors.Errorf("failed to load JSON config from file %q: %w", configFilePath, err)
-				}
-
-				environmentManager.Environment = jsonConfig
-				environmentManager.EnvironmentFilePath = configFilePath
-
-				// load
-				err = environmentManager.Load()
-				if err != nil {
-					return false, xerrors.Errorf("failed to load configuration file %q: %w", environmentManager.EnvironmentFilePath, err)
-				}
+			err = environmentManager.SetEnvironmentFilePath(configFilePath)
+			if err != nil {
+				return false, xerrors.Errorf("failed to set configuration root directory %q: %w", configFilePath, err)
 			}
+		}
+
+		// load
+		err = environmentManager.Load()
+		if err != nil {
+			return false, xerrors.Errorf("failed to load configuration file %q: %w", environmentManager.EnvironmentFilePath, err)
 		}
 	} else {
 		// default
@@ -231,7 +206,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	}
 
 	// load config from env
-	envConfig, err := irodsclient_config.OverwriteConfigFromEnv(environmentManager.Environment)
+	envConfig, err := irodsclient_config.NewConfigFromEnv(environmentManager.Environment)
 	if err != nil {
 		return false, xerrors.Errorf("failed to load config from environment: %w", err)
 	}
