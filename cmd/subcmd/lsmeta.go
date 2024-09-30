@@ -5,7 +5,6 @@ import (
 	"sort"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
-	"github.com/cyverse/go-irodsclient/irods/types"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
@@ -80,7 +79,7 @@ func (lsMeta *LsMetaCommand) Process() error {
 
 	// Create a file system
 	lsMeta.account = commons.GetSessionConfig().ToIRODSAccount()
-	lsMeta.filesystem, err = commons.GetIRODSFSClient(lsMeta.account)
+	lsMeta.filesystem, err = commons.GetIRODSFSClientForSingleOperation(lsMeta.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
@@ -145,7 +144,7 @@ func (lsMeta *LsMetaCommand) listMetaForResource(resource string) error {
 	return lsMeta.printMetas(metas)
 }
 
-func (lsMeta *LsMetaCommand) printMetas(metas []*types.IRODSMeta) error {
+func (lsMeta *LsMetaCommand) printMetas(metas []*irodsclient_types.IRODSMeta) error {
 	sort.SliceStable(metas, lsMeta.getMetaSortFunction(metas, lsMeta.listFlagValues.SortOrder, lsMeta.listFlagValues.SortReverse))
 
 	for _, meta := range metas {
@@ -155,7 +154,7 @@ func (lsMeta *LsMetaCommand) printMetas(metas []*types.IRODSMeta) error {
 	return nil
 }
 
-func (lsMeta *LsMetaCommand) printMetaInternal(meta *types.IRODSMeta) {
+func (lsMeta *LsMetaCommand) printMetaInternal(meta *irodsclient_types.IRODSMeta) {
 	createTime := commons.MakeDateTimeString(meta.CreateTime)
 	modTime := commons.MakeDateTimeString(meta.ModifyTime)
 
@@ -197,7 +196,7 @@ func (lsMeta *LsMetaCommand) printMetaInternal(meta *types.IRODSMeta) {
 	}
 }
 
-func (lsMeta *LsMetaCommand) getMetaSortFunction(metas []*types.IRODSMeta, sortOrder commons.ListSortOrder, sortReverse bool) func(i int, j int) bool {
+func (lsMeta *LsMetaCommand) getMetaSortFunction(metas []*irodsclient_types.IRODSMeta, sortOrder commons.ListSortOrder, sortReverse bool) func(i int, j int) bool {
 	if sortReverse {
 		switch sortOrder {
 		case commons.ListSortOrderName:

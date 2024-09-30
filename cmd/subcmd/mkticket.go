@@ -2,7 +2,6 @@ package subcmd
 
 import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
-	"github.com/cyverse/go-irodsclient/irods/types"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
@@ -80,7 +79,7 @@ func (mkTicket *MkTicketCommand) Process() error {
 
 	// Create a file system
 	mkTicket.account = commons.GetSessionConfig().ToIRODSAccount()
-	mkTicket.filesystem, err = commons.GetIRODSFSClient(mkTicket.account)
+	mkTicket.filesystem, err = commons.GetIRODSFSClientForSingleOperation(mkTicket.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
@@ -94,7 +93,7 @@ func (mkTicket *MkTicketCommand) Process() error {
 	return nil
 }
 
-func (mkTicket *MkTicketCommand) makeTicket(ticketName string, ticketType types.TicketType, targetPath string) error {
+func (mkTicket *MkTicketCommand) makeTicket(ticketName string, ticketType irodsclient_types.TicketType, targetPath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "MkTicketCommand",

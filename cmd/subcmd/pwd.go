@@ -1,8 +1,6 @@
 package subcmd
 
 import (
-	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
-	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/spf13/cobra"
@@ -36,9 +34,6 @@ func processPwdCommand(command *cobra.Command, args []string) error {
 
 type PwdCommand struct {
 	command *cobra.Command
-
-	account    *irodsclient_types.IRODSAccount
-	filesystem *irodsclient_fs.FileSystem
 }
 
 func NewPwdCommand(command *cobra.Command, args []string) (*PwdCommand, error) {

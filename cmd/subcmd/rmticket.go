@@ -73,7 +73,7 @@ func (rmTicket *RmTicketCommand) Process() error {
 
 	// Create a file system
 	rmTicket.account = commons.GetSessionConfig().ToIRODSAccount()
-	rmTicket.filesystem, err = commons.GetIRODSFSClient(rmTicket.account)
+	rmTicket.filesystem, err = commons.GetIRODSFSClientForSingleOperation(rmTicket.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}

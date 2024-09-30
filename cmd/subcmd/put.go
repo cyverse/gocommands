@@ -169,7 +169,7 @@ func (put *PutCommand) Process() error {
 		put.account.Ticket = put.ticketAccessFlagValues.Name
 	}
 
-	put.filesystem, err = commons.GetIRODSFSClientAdvanced(put.account, put.maxConnectionNum, put.parallelTransferFlagValues.TCPBufferSize)
+	put.filesystem, err = commons.GetIRODSFSClientForLargeFileIO(put.account, put.maxConnectionNum, put.parallelTransferFlagValues.TCPBufferSize)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
@@ -369,7 +369,7 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 
 		// encrypt
 		if requireDecryption {
-			encrypted, err := put.encryptFile(sourcePath, tempPath, targetPath, encryptionMode)
+			encrypted, err := put.encryptFile(sourcePath, tempPath, encryptionMode)
 			if err != nil {
 				job.Progress(-1, sourceStat.Size(), true)
 				return xerrors.Errorf("failed to decrypt file: %w", err)
@@ -607,7 +607,7 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 	return put.schedulePut(sourceStat, sourcePath, tempPath, targetPath, requireEncryption, encryptionMode)
 }
 
-func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetPath string, parentEncryption bool, parentEncryptionMode commons.EncryptionMode) error {
+func (put *PutCommand) putDir(_ fs.FileInfo, sourcePath string, targetPath string, parentEncryption bool, parentEncryptionMode commons.EncryptionMode) error {
 	commons.MarkPathMap(put.updatedPathMap, targetPath)
 
 	targetEntry, err := put.filesystem.Stat(targetPath)
@@ -903,7 +903,7 @@ func (put *PutCommand) getPathsForEncryption(sourcePath string, targetPath strin
 	return "", targetFilePath, nil
 }
 
-func (put *PutCommand) encryptFile(sourcePath string, encryptedFilePath string, targetPath string, encryptionMode commons.EncryptionMode) (bool, error) {
+func (put *PutCommand) encryptFile(sourcePath string, encryptedFilePath string, encryptionMode commons.EncryptionMode) (bool, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "PutCommand",

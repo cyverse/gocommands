@@ -164,7 +164,7 @@ func (bput *BputCommand) Process() error {
 
 	// Create a file system
 	bput.account = commons.GetSessionConfig().ToIRODSAccount()
-	bput.filesystem, err = commons.GetIRODSFSClientAdvanced(bput.account, bput.maxConnectionNum, bput.parallelTransferFlagValues.TCPBufferSize)
+	bput.filesystem, err = commons.GetIRODSFSClientForLargeFileIO(bput.account, bput.maxConnectionNum, bput.parallelTransferFlagValues.TCPBufferSize)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
@@ -584,7 +584,7 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string) erro
 	return bput.schedulePut(sourceStat, sourcePath)
 }
 
-func (bput *BputCommand) putDir(sourceStat fs.FileInfo, sourcePath string) error {
+func (bput *BputCommand) putDir(_ fs.FileInfo, sourcePath string) error {
 	targetPath, err := bput.bundleTransferManager.GetTargetPath(sourcePath)
 	if err != nil {
 		return xerrors.Errorf("failed to get target path for source %q: %w", sourcePath, err)

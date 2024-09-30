@@ -169,7 +169,7 @@ func (get *GetCommand) Process() error {
 	}
 
 	get.account = commons.GetSessionConfig().ToIRODSAccount()
-	get.filesystem, err = commons.GetIRODSFSClientAdvanced(get.account, get.maxConnectionNum, get.parallelTransferFlagValues.TCPBufferSize)
+	get.filesystem, err = commons.GetIRODSFSClientForLargeFileIO(get.account, get.maxConnectionNum, get.parallelTransferFlagValues.TCPBufferSize)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}

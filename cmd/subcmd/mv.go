@@ -230,5 +230,5 @@ func (mv *MvCommand) moveDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 	}
 
 	// file
-	return xerrors.Errorf("failed to rename a collection %q to a file %q: %w", sourceEntry.Path, targetPath)
+	return xerrors.Errorf("failed to rename a collection %q to a file %q", sourceEntry.Path, targetPath)
 }

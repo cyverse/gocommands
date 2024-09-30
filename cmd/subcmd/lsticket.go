@@ -4,7 +4,6 @@ import (
 	"sort"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
-	"github.com/cyverse/go-irodsclient/irods/types"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
@@ -82,7 +81,7 @@ func (lsTicket *LsTicketCommand) Process() error {
 
 	// Create a file system
 	lsTicket.account = commons.GetSessionConfig().ToIRODSAccount()
-	lsTicket.filesystem, err = commons.GetIRODSFSClient(lsTicket.account)
+	lsTicket.filesystem, err = commons.GetIRODSFSClientForSingleOperation(lsTicket.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
@@ -129,11 +128,11 @@ func (lsTicket *LsTicketCommand) printTicket(ticketName string) error {
 		return xerrors.Errorf("failed to get ticket %q: %w", ticketName, err)
 	}
 
-	tickets := []*types.IRODSTicket{ticket}
+	tickets := []*irodsclient_types.IRODSTicket{ticket}
 	return lsTicket.printTickets(tickets)
 }
 
-func (lsTicket *LsTicketCommand) printTickets(tickets []*types.IRODSTicket) error {
+func (lsTicket *LsTicketCommand) printTickets(tickets []*irodsclient_types.IRODSTicket) error {
 	sort.SliceStable(tickets, lsTicket.getTicketSortFunction(tickets, lsTicket.listFlagValues.SortOrder, lsTicket.listFlagValues.SortReverse))
 
 	for _, ticket := range tickets {
@@ -146,7 +145,7 @@ func (lsTicket *LsTicketCommand) printTickets(tickets []*types.IRODSTicket) erro
 	return nil
 }
 
-func (lsTicket *LsTicketCommand) printTicketInternal(ticket *types.IRODSTicket) error {
+func (lsTicket *LsTicketCommand) printTicketInternal(ticket *irodsclient_types.IRODSTicket) error {
 	commons.Printf("[%s]\n", ticket.Name)
 	commons.Printf("  id: %d\n", ticket.ID)
 	commons.Printf("  name: %s\n", ticket.Name)
@@ -207,7 +206,7 @@ func (lsTicket *LsTicketCommand) printTicketInternal(ticket *types.IRODSTicket) 
 	return nil
 }
 
-func (lsTicket *LsTicketCommand) getTicketSortFunction(tickets []*types.IRODSTicket, sortOrder commons.ListSortOrder, sortReverse bool) func(i int, j int) bool {
+func (lsTicket *LsTicketCommand) getTicketSortFunction(tickets []*irodsclient_types.IRODSTicket, sortOrder commons.ListSortOrder, sortReverse bool) func(i int, j int) bool {
 	if sortReverse {
 		switch sortOrder {
 		case commons.ListSortOrderName:

@@ -69,7 +69,7 @@ func (passwd *PasswdCommand) Process() error {
 
 	// Create a connection
 	passwd.account = commons.GetSessionConfig().ToIRODSAccount()
-	passwd.filesystem, err = commons.GetIRODSFSClient(passwd.account)
+	passwd.filesystem, err = commons.GetIRODSFSClientForSingleOperation(passwd.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}

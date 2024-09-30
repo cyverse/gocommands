@@ -2,7 +2,6 @@ package subcmd
 
 import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
-	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
@@ -80,7 +79,7 @@ func (mkDir *MkDirCommand) Process() error {
 
 	// Create a file system
 	mkDir.account = commons.GetSessionConfig().ToIRODSAccount()
-	mkDir.filesystem, err = commons.GetIRODSFSClient(mkDir.account)
+	mkDir.filesystem, err = commons.GetIRODSFSClientForSingleOperation(mkDir.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
@@ -108,17 +107,11 @@ func (mkDir *MkDirCommand) makeOne(targetPath string) error {
 	zone := mkDir.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	connection, err := mkDir.filesystem.GetMetadataConnection()
+	// dir or not exist
+	logger.Debugf("making a directory %q", targetPath)
+	err := mkDir.filesystem.MakeDir(targetPath, mkDir.parentsFlagValues.MakeParents)
 	if err != nil {
-		return xerrors.Errorf("failed to get connection: %w", err)
-	}
-	defer mkDir.filesystem.ReturnMetadataConnection(connection)
-
-	logger.Debugf("making a collection %q", targetPath)
-
-	err = irodsclient_irodsfs.CreateCollection(connection, targetPath, mkDir.parentsFlagValues.MakeParents)
-	if err != nil {
-		return xerrors.Errorf("failed to create collection %q: %w", targetPath, err)
+		return xerrors.Errorf("failed to create a directory %q: %w", targetPath, err)
 	}
 
 	return nil

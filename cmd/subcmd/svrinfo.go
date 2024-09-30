@@ -71,7 +71,7 @@ func (svrInfo *SvrInfoCommand) Process() error {
 
 	// Create a file system
 	svrInfo.account = commons.GetSessionConfig().ToIRODSAccount()
-	svrInfo.filesystem, err = commons.GetIRODSFSClient(svrInfo.account)
+	svrInfo.filesystem, err = commons.GetIRODSFSClientForSingleOperation(svrInfo.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}

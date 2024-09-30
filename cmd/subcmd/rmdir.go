@@ -82,7 +82,7 @@ func (rmDir *RmDirCommand) Process() error {
 
 	// Create a file system
 	rmDir.account = commons.GetSessionConfig().ToIRODSAccount()
-	rmDir.filesystem, err = commons.GetIRODSFSClient(rmDir.account)
+	rmDir.filesystem, err = commons.GetIRODSFSClientForSingleOperation(rmDir.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
@@ -122,7 +122,7 @@ func (rmDir *RmDirCommand) removeOne(targetPath string) error {
 	}
 
 	// dir
-	logger.Debugf("removing a collection %q", targetPath)
+	logger.Debugf("removing a directory %q", targetPath)
 	err = rmDir.filesystem.RemoveDir(targetPath, rmDir.recursiveFlagValues.Recursive, rmDir.forceFlagValues.Force)
 	if err != nil {
 		return xerrors.Errorf("failed to remove a directory %q: %w", targetPath, err)

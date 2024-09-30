@@ -103,13 +103,18 @@ func (init *InitCommand) Process() error {
 		manager := commons.GetEnvironmentManager()
 		manager.FixAuthConfiguration()
 
-		err := manager.SaveEnvironment()
+		err = manager.SetEnvironmentDirPath(irodsclient_config.GetDefaultEnvironmentDirPath())
+		if err != nil {
+			return xerrors.Errorf("failed to set environment dir path: %w", err)
+		}
+
+		err = manager.SaveEnvironment()
 		if err != nil {
 			return xerrors.Errorf("failed to save iCommands Environment: %w", err)
 		}
 	} else {
 		commons.Println("gocommands is already configured for following account:")
-		err := init.PrintAccount()
+		err = init.PrintAccount()
 		if err != nil {
 			return xerrors.Errorf("failed to print account info: %w", err)
 		}

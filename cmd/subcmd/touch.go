@@ -78,7 +78,7 @@ func (touch *TouchCommand) Process() error {
 
 	// Create a file system
 	touch.account = commons.GetSessionConfig().ToIRODSAccount()
-	touch.filesystem, err = commons.GetIRODSFSClient(touch.account)
+	touch.filesystem, err = commons.GetIRODSFSClientForSingleOperation(touch.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}

@@ -1,6 +1,8 @@
 package commons
 
 import (
+	"time"
+
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_conn "github.com/cyverse/go-irodsclient/irods/connection"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
@@ -22,8 +24,32 @@ func GetIRODSFSClient(account *irodsclient_types.IRODSAccount) (*irodsclient_fs.
 	return irodsclient_fs.NewFileSystem(account, fsConfig)
 }
 
-// GetIRODSFSClientAdvanced returns a file system client
-func GetIRODSFSClientAdvanced(account *irodsclient_types.IRODSAccount, maxIOConnection int, tcpBufferSize int) (*irodsclient_fs.FileSystem, error) {
+// GetIRODSFSClientForSingleOperation returns a file system client for single operation
+func GetIRODSFSClientForSingleOperation(account *irodsclient_types.IRODSAccount) (*irodsclient_fs.FileSystem, error) {
+	fsConfig := irodsclient_fs.NewFileSystemConfig(clientProgramName)
+
+	// set operation time out
+	fsConfig.MetadataConnection.OperationTimeout = filesystemTimeout
+	fsConfig.IOConnection.OperationTimeout = filesystemTimeout
+
+	// set tcp buffer size
+	fsConfig.MetadataConnection.TCPBufferSize = TcpBufferSizeDefault
+	fsConfig.IOConnection.TCPBufferSize = TcpBufferSizeDefault
+
+	// cache timeout
+	// infinite
+	infiniteDuration := 365 * 24 * time.Hour // 1y (almost infinite)
+
+	fsConfig.Cache.Timeout = infiniteDuration
+	fsConfig.Cache.CleanupTime = infiniteDuration
+	fsConfig.Cache.InvalidateParentEntryCacheImmediately = true
+	fsConfig.Cache.StartNewTransaction = false
+
+	return irodsclient_fs.NewFileSystem(account, fsConfig)
+}
+
+// GetIRODSFSClientForLargeFileIO returns a file system client
+func GetIRODSFSClientForLargeFileIO(account *irodsclient_types.IRODSAccount, maxIOConnection int, tcpBufferSize int) (*irodsclient_fs.FileSystem, error) {
 	fsConfig := irodsclient_fs.NewFileSystemConfig(clientProgramName)
 
 	// set operation time out

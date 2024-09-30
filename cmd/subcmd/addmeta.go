@@ -86,7 +86,7 @@ func (addMeta *AddMetaCommand) Process() error {
 
 	// Create a file system
 	addMeta.account = commons.GetSessionConfig().ToIRODSAccount()
-	addMeta.filesystem, err = commons.GetIRODSFSClient(addMeta.account)
+	addMeta.filesystem, err = commons.GetIRODSFSClientForSingleOperation(addMeta.account)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
