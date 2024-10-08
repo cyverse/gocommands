@@ -3,12 +3,11 @@ package commons
 import "time"
 
 const (
-	clientProgramName          string        = "gocommands"
-	filesystemTimeout          time.Duration = 10 * time.Minute
+	ClientProgramName          string        = "gocommands"
+	FilesystemTimeout          time.Duration = 10 * time.Minute
 	TransferThreadNumDefault   int           = 5
 	UploadThreadNumMax         int           = 20
-	TcpBufferSizeDefault       int           = 4 * 1024 * 1024
-	TcpBufferSizeStringDefault string        = "4MB"
-
-	RedirectToResourceMinSize int64 = 1024 * 1024 * 1024 // 1GB
+	TCPBufferSizeDefault       int           = 4 * 1024 * 1024
+	TCPBufferSizeStringDefault string        = "4MB"
+	RedirectToResourceMinSize  int64         = 1024 * 1024 * 1024 // 1GB
 )
