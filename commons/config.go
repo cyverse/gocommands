@@ -16,6 +16,7 @@ func GetDefaultIRODSConfigPath() string {
 	return irodsConfigPath
 }
 
+// ConfigTypeIn stores data that user can input if missing
 type ConfigTypeIn struct {
 	Host     string `yaml:"irods_host,omitempty"`
 	Port     int    `yaml:"irods_port,omitempty"`
@@ -36,6 +37,7 @@ func NewConfigTypeInFromYAML(yamlBytes []byte) (*ConfigTypeIn, error) {
 	return config, nil
 }
 
+// ToYAML converts to YAML bytes
 func (config *ConfigTypeIn) ToYAML() ([]byte, error) {
 	yamlBytes, err := yaml.Marshal(config)
 	if err != nil {

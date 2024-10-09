@@ -38,7 +38,7 @@ func GetIRODSFSClientForSingleOperation(account *irodsclient_types.IRODSAccount)
 
 	// cache timeout
 	// infinite
-	infiniteDuration := 365 * 24 * time.Hour // 1y (almost infinite)
+	infiniteDuration := irodsclient_types.Duration(365 * 24 * time.Hour) // 1y (almost infinite)
 
 	fsConfig.Cache.Timeout = infiniteDuration
 	fsConfig.Cache.CleanupTime = infiniteDuration
@@ -71,7 +71,7 @@ func GetIRODSFSClientForLargeFileIO(account *irodsclient_types.IRODSAccount, max
 
 // GetIRODSConnection returns a connection
 func GetIRODSConnection(account *irodsclient_types.IRODSAccount) (*irodsclient_conn.IRODSConnection, error) {
-	conn := irodsclient_conn.NewIRODSConnection(account, FilesystemTimeout, ClientProgramName)
+	conn := irodsclient_conn.NewIRODSConnection(account, time.Duration(FilesystemTimeout), ClientProgramName)
 	err := conn.Connect()
 	if err != nil {
 		return nil, xerrors.Errorf("failed to connect: %w", err)
