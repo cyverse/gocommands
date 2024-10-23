@@ -1,7 +1,6 @@
 package flag
 
 import (
-	"fmt"
 	"os"
 
 	irodsclient_config "github.com/cyverse/go-irodsclient/config"
@@ -34,7 +33,7 @@ var (
 )
 
 func SetCommonFlags(command *cobra.Command, noResource bool) {
-	command.Flags().StringVarP(&commonFlagValues.ConfigFilePath, "config", "c", "", fmt.Sprintf("Set config file or directory (default %q)", commons.GetDefaultIRODSConfigPath()))
+	command.Flags().StringVarP(&commonFlagValues.ConfigFilePath, "config", "c", commons.GetDefaultIRODSConfigPath(), "Set config file or directory")
 	command.Flags().BoolVarP(&commonFlagValues.ShowVersion, "version", "v", false, "Print version")
 	command.Flags().BoolVarP(&commonFlagValues.ShowHelp, "help", "h", false, "Print help")
 	command.Flags().BoolVarP(&commonFlagValues.DebugMode, "debug", "d", false, "Enable debug mode")

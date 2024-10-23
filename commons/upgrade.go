@@ -18,13 +18,13 @@ func CheckNewRelease() (*selfupdate.Release, error) {
 
 	logger.Infof("checking latest version for %s/%s", runtime.GOOS, runtime.GOARCH)
 
-	latest, found, err := selfupdate.DetectLatest(context.Background(), selfupdate.ParseSlug("cyverse/gocommands"))
+	latest, found, err := selfupdate.DetectLatest(context.Background(), selfupdate.ParseSlug(goCommandsRepoPackagePath))
 	if err != nil {
 		return nil, xerrors.Errorf("error occurred while detecting version: %w", err)
 	}
 
 	if !found {
-		return nil, xerrors.Errorf("latest version for %s/%s could not be found from github repository 'cyverse/gocommands'", runtime.GOOS, runtime.GOARCH)
+		return nil, xerrors.Errorf("latest version for %s/%s is not found from github repository %q", runtime.GOOS, runtime.GOARCH, goCommandsRepoPackagePath)
 	}
 
 	return latest, nil
@@ -38,13 +38,13 @@ func SelfUpgrade() error {
 
 	logger.Infof("checking latest version for %s/%s", runtime.GOOS, runtime.GOARCH)
 
-	latest, found, err := selfupdate.DetectLatest(context.Background(), selfupdate.ParseSlug("cyverse/gocommands"))
+	latest, found, err := selfupdate.DetectLatest(context.Background(), selfupdate.ParseSlug(goCommandsRepoPackagePath))
 	if err != nil {
 		return xerrors.Errorf("error occurred while detecting version: %w", err)
 	}
 
 	if !found {
-		return xerrors.Errorf("latest version for %s/%s could not be found from github repository 'cyverse/gocommands'", runtime.GOOS, runtime.GOARCH)
+		return xerrors.Errorf("latest version for %s/%s could not be found from github repository %q", runtime.GOOS, runtime.GOARCH, goCommandsRepoPackagePath)
 	}
 
 	myVersion := GetClientVersion()
