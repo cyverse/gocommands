@@ -170,23 +170,24 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		status, err := os.Stat(configFilePath)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return false, xerrors.Errorf("config path %q does not exist", configFilePath)
-			}
-
-			return false, xerrors.Errorf("failed to stat %q: %w", configFilePath, err)
-		}
-
-		if status.IsDir() {
-			// config root
-			err = environmentManager.SetEnvironmentDirPath(configFilePath)
-			if err != nil {
-				return false, xerrors.Errorf("failed to set configuration root directory %q: %w", configFilePath, err)
+				//return false, xerrors.Errorf("config path %q does not exist", configFilePath)
+				logger.Debugf("failed to find config path %q as it does not exist", configFilePath)
+			} else {
+				return false, xerrors.Errorf("failed to stat %q: %w", configFilePath, err)
 			}
 		} else {
-			// config file
-			err = environmentManager.SetEnvironmentFilePath(configFilePath)
-			if err != nil {
-				return false, xerrors.Errorf("failed to set configuration root directory %q: %w", configFilePath, err)
+			if status.IsDir() {
+				// config root
+				err = environmentManager.SetEnvironmentDirPath(configFilePath)
+				if err != nil {
+					return false, xerrors.Errorf("failed to set configuration root directory %q: %w", configFilePath, err)
+				}
+			} else {
+				// config file
+				err = environmentManager.SetEnvironmentFilePath(configFilePath)
+				if err != nil {
+					return false, xerrors.Errorf("failed to set configuration root directory %q: %w", configFilePath, err)
+				}
 			}
 		}
 

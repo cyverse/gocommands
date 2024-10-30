@@ -1,6 +1,6 @@
 module github.com/cyverse/gocommands
 
-go 1.18
+go 1.21
 
 require (
 	github.com/creativeprojects/go-selfupdate v1.0.1
