@@ -25,6 +25,7 @@ func AddRmdirCommand(rootCmd *cobra.Command) {
 
 	flag.SetForceFlags(rmdirCmd, false)
 	flag.SetRecursiveFlags(rmdirCmd, false)
+	flag.SetWildcardSearchFlags(rmdirCmd)
 
 	rootCmd.AddCommand(rmdirCmd)
 }
@@ -41,9 +42,10 @@ func processRmdirCommand(command *cobra.Command, args []string) error {
 type RmDirCommand struct {
 	command *cobra.Command
 
-	commonFlagValues    *flag.CommonFlagValues
-	forceFlagValues     *flag.ForceFlagValues
-	recursiveFlagValues *flag.RecursiveFlagValues
+	commonFlagValues         *flag.CommonFlagValues
+	recursiveFlagValues      *flag.RecursiveFlagValues
+	forceFlagValues          *flag.ForceFlagValues
+	wildcardSearchFlagValues *flag.WildcardSearchFlagValues
 
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
@@ -55,9 +57,10 @@ func NewRmDirCommand(command *cobra.Command, args []string) (*RmDirCommand, erro
 	rmDir := &RmDirCommand{
 		command: command,
 
-		commonFlagValues:    flag.GetCommonFlagValues(command),
-		forceFlagValues:     flag.GetForceFlagValues(),
-		recursiveFlagValues: flag.GetRecursiveFlagValues(),
+		commonFlagValues:         flag.GetCommonFlagValues(command),
+		recursiveFlagValues:      flag.GetRecursiveFlagValues(),
+		forceFlagValues:          flag.GetForceFlagValues(),
+		wildcardSearchFlagValues: flag.GetWildcardSearchFlagValues(),
 	}
 
 	// path
@@ -89,6 +92,14 @@ func (rmDir *RmDirCommand) Process() error {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer rmDir.filesystem.Release()
+
+	// Expand wildcards
+	if rmDir.wildcardSearchFlagValues.WildcardSearch {
+		rmDir.targetPaths, err = commons.ExpandWildcards(rmDir.filesystem, rmDir.account, rmDir.targetPaths, true, false)
+		if err != nil {
+			return xerrors.Errorf("failed to expand wildcards:  %w", err)
+		}
+	}
 
 	// rmdir
 	for _, targetPath := range rmDir.targetPaths {

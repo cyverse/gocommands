@@ -98,6 +98,14 @@ func (bun *BunCommand) Process() error {
 	}
 	defer bun.filesystem.Release()
 
+	// Expand wildcards
+	if bun.bundleFlagValues.WildcardExpansion {
+		bun.sourcePaths, err = commons.ExpandWildcards(bun.filesystem, bun.account, bun.sourcePaths, false, true)
+		if err != nil {
+			return xerrors.Errorf("failed to expand wildcards:  %w", err)
+		}
+	}
+
 	// run
 	for _, sourcePath := range bun.sourcePaths {
 		if bun.bundleFlagValues.Extract {

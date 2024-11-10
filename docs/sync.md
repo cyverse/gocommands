@@ -20,6 +20,12 @@ For example, to download a whole directory `/iplant/home/iychoi/test_data` in iR
 gocmd get /iplant/home/iychoi/test_data .
 ```
 
+In order to use wildcards, add the `-w` option. For example, in order to download all CSV files from the `test_data` collection:
+
+```bash
+gocmd get -w '/iplant/home/iychoi/test_data/*.csv' .
+```
+
 Of course, you can use relative path from your iRODS current working directory to locate input. Use `pwd` and `cd` subcommand to display and change iRODS current working directory.
 
 ```bash
