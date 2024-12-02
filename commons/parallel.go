@@ -50,6 +50,10 @@ func newParallelJob(manager *ParallelJobManager, index int64, name string, task 
 }
 
 type ParallelJobManager struct {
+	// moved to top to avoid 64bit alignment issue
+	jobsScheduledCounter int64
+	jobsDoneCounter      int64
+
 	filesystem              *irodsclient_fs.FileSystem
 	nextJobIndex            int64
 	pendingJobs             chan *ParallelJob
@@ -65,9 +69,6 @@ type ParallelJobManager struct {
 	availableThreadWaitCondition *sync.Cond // used for checking available threads
 	scheduleWait                 sync.WaitGroup
 	jobWait                      sync.WaitGroup
-
-	jobsScheduledCounter int64
-	jobsDoneCounter      int64
 }
 
 // NewParallelJobManager creates a new ParallelJobManager

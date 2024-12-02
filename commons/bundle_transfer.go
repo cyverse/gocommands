@@ -164,6 +164,10 @@ func (bundle *Bundle) SetCompleted() {
 }
 
 type BundleTransferManager struct {
+	// moved to top to avoid 64bit alignment issue
+	bundlesScheduledCounter int64
+	bundlesDoneCounter      int64
+
 	account                 *irodsclient_types.IRODSAccount
 	filesystem              *irodsclient_fs.FileSystem
 	transferReportManager   *TransferReportManager
@@ -193,9 +197,6 @@ type BundleTransferManager struct {
 
 	scheduleWait sync.WaitGroup
 	transferWait sync.WaitGroup
-
-	bundlesScheduledCounter int64
-	bundlesDoneCounter      int64
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
