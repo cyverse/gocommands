@@ -73,9 +73,20 @@ func (init *InitCommand) Process() error {
 	init.environmentManager = commons.GetEnvironmentManager()
 
 	// handle local flags
-	updated, err := commons.ReinputFields()
-	if err != nil {
-		return xerrors.Errorf("failed to input fields: %w", err)
+	updated := false
+	if init.command.Flags().Changed("config") {
+		// set config manually
+		_, err = commons.InputMissingFields()
+		if err != nil {
+			return xerrors.Errorf("failed to input missing fields: %w", err)
+		}
+
+		updated = true
+	} else {
+		updated, err = commons.ReinputFields()
+		if err != nil {
+			return xerrors.Errorf("failed to input fields: %w", err)
+		}
 	}
 
 	init.account, err = init.environmentManager.ToIRODSAccount()
