@@ -320,7 +320,7 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 		"function": "copyFile",
 	})
 
-	commons.MarkPathMap(cp.updatedPathMap, targetPath)
+	commons.MarkIRODSPathMap(cp.updatedPathMap, targetPath)
 
 	targetEntry, err := cp.filesystem.Stat(targetPath)
 	if err != nil {
@@ -476,7 +476,7 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 }
 
 func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath string) error {
-	commons.MarkPathMap(cp.updatedPathMap, targetPath)
+	commons.MarkIRODSPathMap(cp.updatedPathMap, targetPath)
 
 	targetEntry, err := cp.filesystem.Stat(targetPath)
 	if err != nil {

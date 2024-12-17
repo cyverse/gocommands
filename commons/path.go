@@ -10,6 +10,7 @@ import (
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
 )
 
@@ -102,7 +103,7 @@ func GetBasename(p string) string {
 	return p[idx2+1:]
 }
 
-// GetParentDirs returns all parent dirs
+// GetParentIRODSDirs returns all parent dirs
 func GetParentIRODSDirs(p string) []string {
 	parents := []string{}
 
@@ -113,6 +114,48 @@ func GetParentIRODSDirs(p string) []string {
 	curPath := p
 	for len(curPath) > 0 && curPath != "/" {
 		curDir := path.Dir(curPath)
+		if len(curDir) > 0 {
+			parents = append(parents, curDir)
+		}
+
+		curPath = curDir
+	}
+
+	// sort
+	sort.Slice(parents, func(i int, j int) bool {
+		return len(parents[i]) < len(parents[j])
+	})
+
+	return parents
+}
+
+// GetParentLocalDirs returns all parent dirs
+func GetParentLocalDirs(p string) []string {
+	logger := log.WithFields(log.Fields{
+		"package":  "commons",
+		"function": "GetParentLocalDirs",
+	})
+
+	parents := []string{}
+
+	if p == string(os.PathSeparator) {
+		return parents
+	}
+
+	absPath, _ := filepath.Abs(p)
+	if filepath.Dir(absPath) == absPath {
+		return parents
+	}
+
+	curPath := absPath
+	logger.Infof("curPath = %s", curPath)
+	for len(curPath) > 0 {
+		curDir := filepath.Dir(curPath)
+		if curDir == curPath {
+			// root
+			break
+		}
+
 		if len(curDir) > 0 {
 			parents = append(parents, curDir)
 		}
@@ -174,32 +217,6 @@ func GetDir(p string) string {
 		return p[:idx1]
 	}
 	return p[:idx2]
-}
-
-// GetParentLocalDirs returns all parent dirs
-func GetParentLocalDirs(p string) []string {
-	parents := []string{}
-
-	if p == string(os.PathSeparator) || p == "." {
-		return parents
-	}
-
-	curPath := p
-	for len(curPath) > 0 && curPath != string(os.PathSeparator) && curPath != "." {
-		curDir := filepath.Dir(curPath)
-		if len(curDir) > 0 && curDir != "." {
-			parents = append(parents, curDir)
-		}
-
-		curPath = curDir
-	}
-
-	// sort
-	sort.Slice(parents, func(i int, j int) bool {
-		return len(parents[i]) < len(parents[j])
-	})
-
-	return parents
 }
 
 func commonPrefix(sep byte, paths ...string) string {
@@ -311,8 +328,19 @@ func ExistFile(p string) bool {
 	return false
 }
 
-func MarkPathMap(pathMap map[string]bool, p string) {
+func MarkLocalPathMap(pathMap map[string]bool, p string) {
+	dirs := GetParentLocalDirs(p)
+
+	for _, dir := range dirs {
+		pathMap[dir] = true
+	}
+
+	pathMap[p] = true
+}
+
+func MarkIRODSPathMap(pathMap map[string]bool, p string) {
 	dirs := GetParentIRODSDirs(p)
+
 	for _, dir := range dirs {
 		pathMap[dir] = true
 	}

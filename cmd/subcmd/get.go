@@ -447,7 +447,7 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 		"function": "getFile",
 	})
 
-	commons.MarkPathMap(get.updatedPathMap, targetPath)
+	commons.MarkLocalPathMap(get.updatedPathMap, targetPath)
 
 	targetStat, err := os.Stat(targetPath)
 	if err != nil {
@@ -617,7 +617,7 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 }
 
 func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath string) error {
-	commons.MarkPathMap(get.updatedPathMap, targetPath)
+	commons.MarkLocalPathMap(get.updatedPathMap, targetPath)
 
 	targetStat, err := os.Stat(targetPath)
 	if err != nil {

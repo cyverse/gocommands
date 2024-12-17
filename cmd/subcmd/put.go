@@ -455,7 +455,7 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 		"function": "putFile",
 	})
 
-	commons.MarkPathMap(put.updatedPathMap, targetPath)
+	commons.MarkIRODSPathMap(put.updatedPathMap, targetPath)
 
 	targetEntry, err := put.filesystem.Stat(targetPath)
 	if err != nil {
@@ -615,7 +615,7 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 }
 
 func (put *PutCommand) putDir(_ fs.FileInfo, sourcePath string, targetPath string, parentEncryption bool, parentEncryptionMode commons.EncryptionMode) error {
-	commons.MarkPathMap(put.updatedPathMap, targetPath)
+	commons.MarkIRODSPathMap(put.updatedPathMap, targetPath)
 
 	targetEntry, err := put.filesystem.Stat(targetPath)
 	if err != nil {

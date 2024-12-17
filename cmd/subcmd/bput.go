@@ -432,7 +432,7 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string) erro
 		return xerrors.Errorf("failed to get target path for source %q: %w", sourcePath, err)
 	}
 
-	commons.MarkPathMap(bput.updatedPathMap, targetPath)
+	commons.MarkIRODSPathMap(bput.updatedPathMap, targetPath)
 
 	targetEntry, err := bput.filesystem.Stat(targetPath)
 	if err != nil {
@@ -596,7 +596,7 @@ func (bput *BputCommand) putDir(_ fs.FileInfo, sourcePath string) error {
 		return xerrors.Errorf("failed to get target path for source %q: %w", sourcePath, err)
 	}
 
-	commons.MarkPathMap(bput.updatedPathMap, targetPath)
+	commons.MarkIRODSPathMap(bput.updatedPathMap, targetPath)
 
 	targetEntry, err := bput.filesystem.Stat(targetPath)
 	if err != nil {
