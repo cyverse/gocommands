@@ -21,7 +21,7 @@ var addmetaCmd = &cobra.Command{
 
 func AddAddmetaCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(addmetaCmd, true)
+	flag.SetCommonFlagsWithoutResource(addmetaCmd)
 
 	flag.SetTargetObjectFlags(addmetaCmd)
 

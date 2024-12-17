@@ -38,7 +38,7 @@ func AddCpCommand(rootCmd *cobra.Command) {
 	flag.SetProgressFlags(cpCmd)
 	flag.SetRetryFlags(cpCmd)
 	flag.SetDifferentialTransferFlags(cpCmd, false)
-	flag.SetChecksumFlags(putCmd, true, true)
+	flag.SetChecksumFlags(cpCmd, true, true)
 	flag.SetNoRootFlags(cpCmd)
 	flag.SetSyncFlags(cpCmd, true)
 	flag.SetHiddenFileFlags(cpCmd)

@@ -23,7 +23,7 @@ var rmmetaCmd = &cobra.Command{
 
 func AddRmmetaCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(rmmetaCmd, true)
+	flag.SetCommonFlagsWithoutResource(rmmetaCmd)
 
 	flag.SetTargetObjectFlags(rmmetaCmd)
 

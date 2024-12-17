@@ -41,7 +41,7 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	flag.SetProgressFlags(bputCmd)
 	flag.SetRetryFlags(bputCmd)
 	flag.SetDifferentialTransferFlags(bputCmd, false)
-	flag.SetChecksumFlags(syncCmd, true, true)
+	flag.SetChecksumFlags(bputCmd, true, true)
 	flag.SetNoRootFlags(bputCmd)
 	flag.SetSyncFlags(bputCmd, true)
 	flag.SetPostTransferFlagValues(bputCmd)

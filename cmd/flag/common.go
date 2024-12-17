@@ -55,6 +55,22 @@ func SetCommonFlags(command *cobra.Command, hideResource bool) {
 	command.MarkFlagsMutuallyExclusive("session", "version")
 }
 
+func SetCommonFlagsWithoutResource(command *cobra.Command) {
+	command.Flags().StringVarP(&commonFlagValues.ConfigFilePath, "config", "c", commons.GetDefaultIRODSConfigPath(), "Set config file or directory")
+	command.Flags().BoolVarP(&commonFlagValues.ShowVersion, "version", "v", false, "Print version")
+	command.Flags().BoolVarP(&commonFlagValues.ShowHelp, "help", "h", false, "Print help")
+	command.Flags().BoolVarP(&commonFlagValues.DebugMode, "debug", "d", false, "Enable debug mode")
+	command.Flags().BoolVarP(&commonFlagValues.Quiet, "quiet", "q", false, "Suppress usual output messages")
+	command.Flags().StringVar(&commonFlagValues.logLevelInput, "log_level", "", "Set log level")
+	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Set session ID")
+
+	command.MarkFlagsMutuallyExclusive("quiet", "version")
+	command.MarkFlagsMutuallyExclusive("log_level", "version")
+	command.MarkFlagsMutuallyExclusive("debug", "quiet", "log_level")
+
+	command.MarkFlagsMutuallyExclusive("session", "version")
+}
+
 func GetCommonFlagValues(command *cobra.Command) *CommonFlagValues {
 	if len(commonFlagValues.logLevelInput) > 0 {
 		lvl, err := log.ParseLevel(commonFlagValues.logLevelInput)
