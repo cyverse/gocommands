@@ -38,6 +38,8 @@ func processRmticketCommand(command *cobra.Command, args []string) error {
 type RmTicketCommand struct {
 	command *cobra.Command
 
+	commonFlagValues *flag.CommonFlagValues
+
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
 
@@ -47,6 +49,8 @@ type RmTicketCommand struct {
 func NewRmTicketCommand(command *cobra.Command, args []string) (*RmTicketCommand, error) {
 	rmTicket := &RmTicketCommand{
 		command: command,
+
+		commonFlagValues: flag.GetCommonFlagValues(command),
 	}
 
 	// tickets

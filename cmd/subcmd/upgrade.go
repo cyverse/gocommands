@@ -38,6 +38,7 @@ func processUpgradeCommand(command *cobra.Command, args []string) error {
 type UpgradeCommand struct {
 	command *cobra.Command
 
+	commonFlagValues       *flag.CommonFlagValues
 	checkVersionFlagValues *flag.CheckVersionFlagValues
 }
 
@@ -45,6 +46,7 @@ func NewUpgradeCommand(command *cobra.Command, args []string) (*UpgradeCommand, 
 	upgrade := &UpgradeCommand{
 		command: command,
 
+		commonFlagValues:       flag.GetCommonFlagValues(command),
 		checkVersionFlagValues: flag.GetCheckVersionFlagValues(),
 	}
 

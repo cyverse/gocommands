@@ -49,6 +49,7 @@ func processCopySftpIdCommand(command *cobra.Command, args []string) error {
 type CopySftpIdCommand struct {
 	command *cobra.Command
 
+	commonFlagValues *flag.CommonFlagValues
 	forceFlagValues  *flag.ForceFlagValues
 	dryRunFlagValues *flag.DryRunFlagValues
 	sftpIDFlagValues *flag.SFTPIDFlagValues
@@ -61,6 +62,7 @@ func NewCopySftpIdCommand(command *cobra.Command, args []string) (*CopySftpIdCom
 	copy := &CopySftpIdCommand{
 		command: command,
 
+		commonFlagValues: flag.GetCommonFlagValues(command),
 		forceFlagValues:  flag.GetForceFlagValues(),
 		dryRunFlagValues: flag.GetDryRunFlagValues(),
 		sftpIDFlagValues: flag.GetSFTPIDFlagValues(),

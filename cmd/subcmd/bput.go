@@ -34,15 +34,17 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(bputCmd, false)
 
-	flag.SetBundleTransferFlags(bputCmd, true)
-	flag.SetParallelTransferFlags(bputCmd, true)
+	flag.SetBundleTransferFlags(bputCmd, false, false)
+	flag.SetParallelTransferFlags(bputCmd, false, false)
 	flag.SetForceFlags(bputCmd, true)
 	flag.SetRecursiveFlags(bputCmd, true)
 	flag.SetProgressFlags(bputCmd)
 	flag.SetRetryFlags(bputCmd)
-	flag.SetDifferentialTransferFlags(bputCmd, true)
+	flag.SetDifferentialTransferFlags(bputCmd, false)
+	flag.SetChecksumFlags(syncCmd, true, true)
 	flag.SetNoRootFlags(bputCmd)
-	flag.SetSyncFlags(bputCmd, false)
+	flag.SetSyncFlags(bputCmd, true)
+	flag.SetPostTransferFlagValues(bputCmd)
 	flag.SetHiddenFileFlags(bputCmd)
 	flag.SetTransferReportFlags(bputCmd)
 
@@ -61,9 +63,11 @@ func processBputCommand(command *cobra.Command, args []string) error {
 type BputCommand struct {
 	command *cobra.Command
 
-	forceFlagValues                *flag.ForceFlagValues
+	commonFlagValues               *flag.CommonFlagValues
 	bundleTransferFlagValues       *flag.BundleTransferFlagValues
 	parallelTransferFlagValues     *flag.ParallelTransferFlagValues
+	forceFlagValues                *flag.ForceFlagValues
+	recursiveFlagValues            *flag.RecursiveFlagValues
 	progressFlagValues             *flag.ProgressFlagValues
 	retryFlagValues                *flag.RetryFlagValues
 	differentialTransferFlagValues *flag.DifferentialTransferFlagValues
@@ -91,9 +95,11 @@ func NewBputCommand(command *cobra.Command, args []string) (*BputCommand, error)
 	bput := &BputCommand{
 		command: command,
 
-		forceFlagValues:                flag.GetForceFlagValues(),
+		commonFlagValues:               flag.GetCommonFlagValues(command),
 		bundleTransferFlagValues:       flag.GetBundleTransferFlagValues(),
 		parallelTransferFlagValues:     flag.GetParallelTransferFlagValues(),
+		forceFlagValues:                flag.GetForceFlagValues(),
+		recursiveFlagValues:            flag.GetRecursiveFlagValues(),
 		progressFlagValues:             flag.GetProgressFlagValues(),
 		retryFlagValues:                flag.GetRetryFlagValues(),
 		differentialTransferFlagValues: flag.GetDifferentialTransferFlagValues(),

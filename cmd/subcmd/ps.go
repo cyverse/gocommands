@@ -45,6 +45,7 @@ func processPsCommand(command *cobra.Command, args []string) error {
 type PsCommand struct {
 	command *cobra.Command
 
+	commonFlagValues        *flag.CommonFlagValues
 	processFilterFlagValues *flag.ProcessFilterFlagValues
 
 	account    *irodsclient_types.IRODSAccount
@@ -55,6 +56,7 @@ func NewPsCommand(command *cobra.Command, args []string) (*PsCommand, error) {
 	ps := &PsCommand{
 		command: command,
 
+		commonFlagValues:        flag.GetCommonFlagValues(command),
 		processFilterFlagValues: flag.GetProcessFilterFlagValues(),
 	}
 

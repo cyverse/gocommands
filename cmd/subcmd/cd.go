@@ -39,6 +39,8 @@ func processCdCommand(command *cobra.Command, args []string) error {
 type CdCommand struct {
 	command *cobra.Command
 
+	commonFlagValues *flag.CommonFlagValues
+
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
 
@@ -48,6 +50,8 @@ type CdCommand struct {
 func NewCdCommand(command *cobra.Command, args []string) (*CdCommand, error) {
 	cd := &CdCommand{
 		command: command,
+
+		commonFlagValues: flag.GetCommonFlagValues(command),
 	}
 
 	// path

@@ -13,12 +13,17 @@ var (
 	checksumFlagValues ChecksumFlagValues
 )
 
-func SetChecksumFlags(command *cobra.Command, addCalculateChecksumFlag bool) {
-	if addCalculateChecksumFlag {
-		command.Flags().BoolVarP(&checksumFlagValues.CalculateChecksum, "checksum", "k", false, "Calculate a checksum on the data server-side")
+func SetChecksumFlags(command *cobra.Command, hideCalculateChecksum bool, hideVerifyChecksum bool) {
+	command.Flags().BoolVarP(&checksumFlagValues.CalculateChecksum, "checksum", "k", false, "Calculate a checksum on the data server-side")
+	command.Flags().BoolVarP(&checksumFlagValues.VerifyChecksum, "verify_checksum", "K", false, "calculate and verify the checksum")
+
+	if hideCalculateChecksum {
+		command.Flags().MarkHidden("checksum")
 	}
 
-	command.Flags().BoolVarP(&checksumFlagValues.VerifyChecksum, "verify_checksum", "K", false, "calculate and verify the checksum")
+	if hideVerifyChecksum {
+		command.Flags().MarkHidden("verify_checksum")
+	}
 }
 
 func GetChecksumFlagValues() *ChecksumFlagValues {

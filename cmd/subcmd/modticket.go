@@ -41,6 +41,7 @@ func processModticketCommand(command *cobra.Command, args []string) error {
 type ModTicketCommand struct {
 	command *cobra.Command
 
+	commonFlagValues       *flag.CommonFlagValues
 	ticketUpdateFlagValues *flag.TicketUpdateFlagValues
 
 	account    *irodsclient_types.IRODSAccount
@@ -53,6 +54,7 @@ func NewModTicketCommand(command *cobra.Command, args []string) (*ModTicketComma
 	modTicket := &ModTicketCommand{
 		command: command,
 
+		commonFlagValues:       flag.GetCommonFlagValues(command),
 		ticketUpdateFlagValues: flag.GetTicketUpdateFlagValues(command),
 	}
 

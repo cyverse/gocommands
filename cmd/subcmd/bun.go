@@ -43,6 +43,7 @@ func processBunCommand(command *cobra.Command, args []string) error {
 type BunCommand struct {
 	command *cobra.Command
 
+	commonFlagValues *flag.CommonFlagValues
 	forceFlagValues  *flag.ForceFlagValues
 	bundleFlagValues *flag.BundleFlagValues
 
@@ -57,6 +58,7 @@ func NewBunCommand(command *cobra.Command, args []string) (*BunCommand, error) {
 	bun := &BunCommand{
 		command: command,
 
+		commonFlagValues: flag.GetCommonFlagValues(command),
 		forceFlagValues:  flag.GetForceFlagValues(),
 		bundleFlagValues: flag.GetBundleFlagValues(),
 	}

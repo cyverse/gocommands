@@ -35,14 +35,15 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(putCmd, false)
 
+	flag.SetBundleTransferFlags(putCmd, true, true)
+	flag.SetParallelTransferFlags(putCmd, false, false)
 	flag.SetForceFlags(putCmd, false)
 	flag.SetRecursiveFlags(putCmd, true)
 	flag.SetTicketAccessFlags(putCmd)
-	flag.SetParallelTransferFlags(putCmd, true)
 	flag.SetProgressFlags(putCmd)
 	flag.SetRetryFlags(putCmd)
 	flag.SetDifferentialTransferFlags(putCmd, true)
-	flag.SetChecksumFlags(putCmd, true)
+	flag.SetChecksumFlags(putCmd, false, false)
 	flag.SetNoRootFlags(putCmd)
 	flag.SetSyncFlags(putCmd, false)
 	flag.SetEncryptionFlags(putCmd)
@@ -65,9 +66,12 @@ func processPutCommand(command *cobra.Command, args []string) error {
 type PutCommand struct {
 	command *cobra.Command
 
-	forceFlagValues                *flag.ForceFlagValues
-	ticketAccessFlagValues         *flag.TicketAccessFlagValues
+	commonFlagValues               *flag.CommonFlagValues
+	bundleTransferFlagValues       *flag.BundleTransferFlagValues
 	parallelTransferFlagValues     *flag.ParallelTransferFlagValues
+	forceFlagValues                *flag.ForceFlagValues
+	recursiveFlagValues            *flag.RecursiveFlagValues
+	ticketAccessFlagValues         *flag.TicketAccessFlagValues
 	progressFlagValues             *flag.ProgressFlagValues
 	retryFlagValues                *flag.RetryFlagValues
 	differentialTransferFlagValues *flag.DifferentialTransferFlagValues
@@ -75,8 +79,8 @@ type PutCommand struct {
 	noRootFlagValues               *flag.NoRootFlagValues
 	syncFlagValues                 *flag.SyncFlagValues
 	encryptionFlagValues           *flag.EncryptionFlagValues
-	postTransferFlagValues         *flag.PostTransferFlagValues
 	hiddenFileFlagValues           *flag.HiddenFileFlagValues
+	postTransferFlagValues         *flag.PostTransferFlagValues
 	transferReportFlagValues       *flag.TransferReportFlagValues
 
 	maxConnectionNum int
@@ -96,9 +100,12 @@ func NewPutCommand(command *cobra.Command, args []string) (*PutCommand, error) {
 	put := &PutCommand{
 		command: command,
 
-		forceFlagValues:                flag.GetForceFlagValues(),
-		ticketAccessFlagValues:         flag.GetTicketAccessFlagValues(),
+		commonFlagValues:               flag.GetCommonFlagValues(command),
+		bundleTransferFlagValues:       flag.GetBundleTransferFlagValues(),
 		parallelTransferFlagValues:     flag.GetParallelTransferFlagValues(),
+		forceFlagValues:                flag.GetForceFlagValues(),
+		recursiveFlagValues:            flag.GetRecursiveFlagValues(),
+		ticketAccessFlagValues:         flag.GetTicketAccessFlagValues(),
 		progressFlagValues:             flag.GetProgressFlagValues(),
 		retryFlagValues:                flag.GetRetryFlagValues(),
 		differentialTransferFlagValues: flag.GetDifferentialTransferFlagValues(),
@@ -106,8 +113,8 @@ func NewPutCommand(command *cobra.Command, args []string) (*PutCommand, error) {
 		noRootFlagValues:               flag.GetNoRootFlagValues(),
 		syncFlagValues:                 flag.GetSyncFlagValues(),
 		encryptionFlagValues:           flag.GetEncryptionFlagValues(command),
-		postTransferFlagValues:         flag.GetPostTransferFlagValues(),
 		hiddenFileFlagValues:           flag.GetHiddenFileFlagValues(),
+		postTransferFlagValues:         flag.GetPostTransferFlagValues(),
 		transferReportFlagValues:       flag.GetTransferReportFlagValues(command),
 
 		updatedPathMap: map[string]bool{},

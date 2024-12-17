@@ -37,11 +37,15 @@ func processEnvCommand(command *cobra.Command, args []string) error {
 
 type EnvCommand struct {
 	command *cobra.Command
+
+	commonFlagValues *flag.CommonFlagValues
 }
 
 func NewEnvCommand(command *cobra.Command, args []string) (*EnvCommand, error) {
 	env := &EnvCommand{
 		command: command,
+
+		commonFlagValues: flag.GetCommonFlagValues(command),
 	}
 
 	return env, nil

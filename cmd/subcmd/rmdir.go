@@ -41,8 +41,9 @@ func processRmdirCommand(command *cobra.Command, args []string) error {
 type RmDirCommand struct {
 	command *cobra.Command
 
-	recursiveFlagValues *flag.RecursiveFlagValues
+	commonFlagValues    *flag.CommonFlagValues
 	forceFlagValues     *flag.ForceFlagValues
+	recursiveFlagValues *flag.RecursiveFlagValues
 
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
@@ -54,8 +55,9 @@ func NewRmDirCommand(command *cobra.Command, args []string) (*RmDirCommand, erro
 	rmDir := &RmDirCommand{
 		command: command,
 
-		recursiveFlagValues: flag.GetRecursiveFlagValues(),
+		commonFlagValues:    flag.GetCommonFlagValues(command),
 		forceFlagValues:     flag.GetForceFlagValues(),
+		recursiveFlagValues: flag.GetRecursiveFlagValues(),
 	}
 
 	// path

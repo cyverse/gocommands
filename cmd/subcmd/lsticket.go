@@ -42,7 +42,8 @@ func processLsticketCommand(command *cobra.Command, args []string) error {
 type LsTicketCommand struct {
 	command *cobra.Command
 
-	listFlagValues *flag.ListFlagValues
+	commonFlagValues *flag.CommonFlagValues
+	listFlagValues   *flag.ListFlagValues
 
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
@@ -54,7 +55,8 @@ func NewLsTicketCommand(command *cobra.Command, args []string) (*LsTicketCommand
 	lsTicket := &LsTicketCommand{
 		command: command,
 
-		listFlagValues: flag.GetListFlagValues(),
+		commonFlagValues: flag.GetCommonFlagValues(command),
+		listFlagValues:   flag.GetListFlagValues(),
 	}
 
 	// tickets

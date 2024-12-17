@@ -31,13 +31,16 @@ func AddCpCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(cpCmd, false)
 
+	flag.SetBundleTransferFlags(cpCmd, true, true)
+	flag.SetParallelTransferFlags(cpCmd, true, true)
 	flag.SetForceFlags(cpCmd, false)
 	flag.SetRecursiveFlags(cpCmd, false)
 	flag.SetProgressFlags(cpCmd)
 	flag.SetRetryFlags(cpCmd)
-	flag.SetDifferentialTransferFlags(cpCmd, true)
+	flag.SetDifferentialTransferFlags(cpCmd, false)
+	flag.SetChecksumFlags(putCmd, true, true)
 	flag.SetNoRootFlags(cpCmd)
-	flag.SetSyncFlags(cpCmd, false)
+	flag.SetSyncFlags(cpCmd, true)
 	flag.SetHiddenFileFlags(cpCmd)
 	flag.SetTransferReportFlags(cpCmd)
 
@@ -57,11 +60,14 @@ type CpCommand struct {
 	command *cobra.Command
 
 	commonFlagValues               *flag.CommonFlagValues
-	recursiveFlagValues            *flag.RecursiveFlagValues
+	bundleTransferFlagValues       *flag.BundleTransferFlagValues
+	parallelTransferFlagValues     *flag.ParallelTransferFlagValues
 	forceFlagValues                *flag.ForceFlagValues
+	recursiveFlagValues            *flag.RecursiveFlagValues
 	progressFlagValues             *flag.ProgressFlagValues
 	retryFlagValues                *flag.RetryFlagValues
 	differentialTransferFlagValues *flag.DifferentialTransferFlagValues
+	checksumFlagValues             *flag.ChecksumFlagValues
 	noRootFlagValues               *flag.NoRootFlagValues
 	syncFlagValues                 *flag.SyncFlagValues
 	hiddenFileFlagValues           *flag.HiddenFileFlagValues
@@ -83,11 +89,14 @@ func NewCpCommand(command *cobra.Command, args []string) (*CpCommand, error) {
 		command: command,
 
 		commonFlagValues:               flag.GetCommonFlagValues(command),
-		recursiveFlagValues:            flag.GetRecursiveFlagValues(),
+		bundleTransferFlagValues:       flag.GetBundleTransferFlagValues(),
+		parallelTransferFlagValues:     flag.GetParallelTransferFlagValues(),
 		forceFlagValues:                flag.GetForceFlagValues(),
+		recursiveFlagValues:            flag.GetRecursiveFlagValues(),
 		progressFlagValues:             flag.GetProgressFlagValues(),
 		retryFlagValues:                flag.GetRetryFlagValues(),
 		differentialTransferFlagValues: flag.GetDifferentialTransferFlagValues(),
+		checksumFlagValues:             flag.GetChecksumFlagValues(),
 		noRootFlagValues:               flag.GetNoRootFlagValues(),
 		syncFlagValues:                 flag.GetSyncFlagValues(),
 		hiddenFileFlagValues:           flag.GetHiddenFileFlagValues(),

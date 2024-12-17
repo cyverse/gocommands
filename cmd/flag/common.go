@@ -32,7 +32,7 @@ var (
 	commonFlagValues CommonFlagValues
 )
 
-func SetCommonFlags(command *cobra.Command, noResource bool) {
+func SetCommonFlags(command *cobra.Command, hideResource bool) {
 	command.Flags().StringVarP(&commonFlagValues.ConfigFilePath, "config", "c", commons.GetDefaultIRODSConfigPath(), "Set config file or directory")
 	command.Flags().BoolVarP(&commonFlagValues.ShowVersion, "version", "v", false, "Print version")
 	command.Flags().BoolVarP(&commonFlagValues.ShowHelp, "help", "h", false, "Print help")
@@ -40,17 +40,16 @@ func SetCommonFlags(command *cobra.Command, noResource bool) {
 	command.Flags().BoolVarP(&commonFlagValues.Quiet, "quiet", "q", false, "Suppress usual output messages")
 	command.Flags().StringVar(&commonFlagValues.logLevelInput, "log_level", "", "Set log level")
 	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Set session ID")
-
-	if !noResource {
-		command.Flags().StringVarP(&commonFlagValues.Resource, "resource", "R", "", "Set resource server")
-	}
+	command.Flags().StringVarP(&commonFlagValues.Resource, "resource", "R", "", "Set resource server")
 
 	command.MarkFlagsMutuallyExclusive("quiet", "version")
 	command.MarkFlagsMutuallyExclusive("log_level", "version")
 	command.MarkFlagsMutuallyExclusive("debug", "quiet", "log_level")
 
-	if !noResource {
+	if !hideResource {
 		command.MarkFlagsMutuallyExclusive("resource", "version")
+	} else {
+		command.Flags().MarkHidden("resource")
 	}
 
 	command.MarkFlagsMutuallyExclusive("session", "version")

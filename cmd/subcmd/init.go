@@ -44,7 +44,8 @@ func processInitCommand(command *cobra.Command, args []string) error {
 type InitCommand struct {
 	command *cobra.Command
 
-	initFlagValues *flag.InitFlagValues
+	commonFlagValues *flag.CommonFlagValues
+	initFlagValues   *flag.InitFlagValues
 
 	environmentManager *irodsclient_config.ICommandsEnvironmentManager
 	account            *irodsclient_types.IRODSAccount
@@ -54,7 +55,8 @@ func NewInitCommand(command *cobra.Command, args []string) (*InitCommand, error)
 	init := &InitCommand{
 		command: command,
 
-		initFlagValues: flag.GetInitFlagValues(),
+		commonFlagValues: flag.GetCommonFlagValues(command),
+		initFlagValues:   flag.GetInitFlagValues(),
 	}
 
 	return init, nil

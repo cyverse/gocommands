@@ -40,6 +40,7 @@ func processAddmetaCommand(command *cobra.Command, args []string) error {
 type AddMetaCommand struct {
 	command *cobra.Command
 
+	commonFlagValues       *flag.CommonFlagValues
 	targetObjectFlagValues *flag.TargetObjectFlagValues
 
 	account    *irodsclient_types.IRODSAccount
@@ -54,6 +55,7 @@ func NewAddMetaCommand(command *cobra.Command, args []string) (*AddMetaCommand, 
 	addMeta := &AddMetaCommand{
 		command: command,
 
+		commonFlagValues:       flag.GetCommonFlagValues(command),
 		targetObjectFlagValues: flag.GetTargetObjectFlagValues(command),
 	}
 

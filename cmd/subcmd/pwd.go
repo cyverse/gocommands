@@ -34,11 +34,15 @@ func processPwdCommand(command *cobra.Command, args []string) error {
 
 type PwdCommand struct {
 	command *cobra.Command
+
+	commonFlagValues *flag.CommonFlagValues
 }
 
 func NewPwdCommand(command *cobra.Command, args []string) (*PwdCommand, error) {
 	pwd := &PwdCommand{
 		command: command,
+
+		commonFlagValues: flag.GetCommonFlagValues(command),
 	}
 
 	return pwd, nil

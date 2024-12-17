@@ -22,8 +22,8 @@ func AddBcleanCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(bcleanCmd, false)
 
-	flag.SetBundleTransferFlags(bcleanCmd, false)
 	flag.SetForceFlags(bcleanCmd, false)
+	flag.SetBundleTransferFlags(bcleanCmd, false, true)
 
 	rootCmd.AddCommand(bcleanCmd)
 }
@@ -40,6 +40,7 @@ func processBcleanCommand(command *cobra.Command, args []string) error {
 type BcleanCommand struct {
 	command *cobra.Command
 
+	commonFlagValues         *flag.CommonFlagValues
 	forceFlagValues          *flag.ForceFlagValues
 	bundleTransferFlagValues *flag.BundleTransferFlagValues
 
@@ -53,6 +54,7 @@ func NewBcleanCommand(command *cobra.Command, args []string) (*BcleanCommand, er
 	bclean := &BcleanCommand{
 		command: command,
 
+		commonFlagValues:         flag.GetCommonFlagValues(command),
 		forceFlagValues:          flag.GetForceFlagValues(),
 		bundleTransferFlagValues: flag.GetBundleTransferFlagValues(),
 	}

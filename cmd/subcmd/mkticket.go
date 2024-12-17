@@ -40,6 +40,7 @@ func processMkticketCommand(command *cobra.Command, args []string) error {
 type MkTicketCommand struct {
 	command *cobra.Command
 
+	commonFlagValues *flag.CommonFlagValues
 	ticketFlagValues *flag.TicketFlagValues
 
 	account    *irodsclient_types.IRODSAccount
@@ -52,6 +53,7 @@ func NewMkTicketCommand(command *cobra.Command, args []string) (*MkTicketCommand
 	mkTicket := &MkTicketCommand{
 		command: command,
 
+		commonFlagValues: flag.GetCommonFlagValues(command),
 		ticketFlagValues: flag.GetTicketFlagValues(),
 	}
 

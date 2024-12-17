@@ -39,6 +39,8 @@ func processPasswdCommand(command *cobra.Command, args []string) error {
 type PasswdCommand struct {
 	command *cobra.Command
 
+	commonFlagValues *flag.CommonFlagValues
+
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
 }
@@ -46,6 +48,8 @@ type PasswdCommand struct {
 func NewPasswdCommand(command *cobra.Command, args []string) (*PasswdCommand, error) {
 	passwd := &PasswdCommand{
 		command: command,
+
+		commonFlagValues: flag.GetCommonFlagValues(command),
 	}
 
 	return passwd, nil

@@ -40,6 +40,8 @@ func processMvCommand(command *cobra.Command, args []string) error {
 type MvCommand struct {
 	command *cobra.Command
 
+	commonFlagValues *flag.CommonFlagValues
+
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
 
@@ -50,6 +52,8 @@ type MvCommand struct {
 func NewMvCommand(command *cobra.Command, args []string) (*MvCommand, error) {
 	mv := &MvCommand{
 		command: command,
+
+		commonFlagValues: flag.GetCommonFlagValues(command),
 	}
 
 	// paths

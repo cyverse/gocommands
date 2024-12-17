@@ -42,6 +42,7 @@ func processCatCommand(command *cobra.Command, args []string) error {
 type CatCommand struct {
 	command *cobra.Command
 
+	commonFlagValues       *flag.CommonFlagValues
 	ticketAccessFlagValues *flag.TicketAccessFlagValues
 
 	account    *irodsclient_types.IRODSAccount
@@ -54,6 +55,7 @@ func NewCatCommand(command *cobra.Command, args []string) (*CatCommand, error) {
 	cat := &CatCommand{
 		command: command,
 
+		commonFlagValues:       flag.GetCommonFlagValues(command),
 		ticketAccessFlagValues: flag.GetTicketAccessFlagValues(),
 	}
 

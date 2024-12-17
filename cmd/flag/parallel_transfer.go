@@ -18,17 +18,26 @@ var (
 	parallelTransferFlagValues ParallelTransferFlagValues
 )
 
-func SetParallelTransferFlags(command *cobra.Command, showSingleThread bool) {
+func SetParallelTransferFlags(command *cobra.Command, hideParallelConfig bool, hideSingleThread bool) {
 	command.Flags().IntVar(&parallelTransferFlagValues.ThreadNumber, "thread_num", commons.TransferThreadNumDefault, "Specify the number of transfer threads")
 	command.Flags().StringVar(&parallelTransferFlagValues.tcpBufferSizeInput, "tcp_buffer_size", commons.TCPBufferSizeStringDefault, "Specify TCP socket buffer size")
 	command.Flags().BoolVar(&parallelTransferFlagValues.RedirectToResource, "redirect", false, "Always redirect to resource server")
 	command.Flags().BoolVar(&parallelTransferFlagValues.Icat, "icat", false, "Always transfer data via iCAT")
+	command.Flags().BoolVar(&parallelTransferFlagValues.SingleThread, "single_threaded", false, "Transfer a file using a single thread")
 
-	if showSingleThread {
-		command.Flags().BoolVar(&parallelTransferFlagValues.SingleThread, "single_threaded", false, "Transfer a file using a single thread")
-		command.MarkFlagsMutuallyExclusive("redirect", "single_threaded")
+	if hideParallelConfig {
+		command.Flags().MarkHidden("thread_num")
+		command.Flags().MarkHidden("tcp_buffer_size")
+		command.Flags().MarkHidden("redirect")
+		command.Flags().MarkHidden("icat")
+		command.Flags().MarkHidden("single_threaded")
 	}
 
+	if hideSingleThread {
+		command.Flags().MarkHidden("single_threaded")
+	}
+
+	command.MarkFlagsMutuallyExclusive("redirect", "single_threaded")
 	command.MarkFlagsMutuallyExclusive("redirect", "icat")
 }
 

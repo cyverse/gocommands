@@ -41,6 +41,8 @@ func processSvrinfoCommand(command *cobra.Command, args []string) error {
 type SvrInfoCommand struct {
 	command *cobra.Command
 
+	commonFlagValues *flag.CommonFlagValues
+
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
 }
@@ -48,6 +50,8 @@ type SvrInfoCommand struct {
 func NewSvrInfoCommand(command *cobra.Command, args []string) (*SvrInfoCommand, error) {
 	svrInfo := &SvrInfoCommand{
 		command: command,
+
+		commonFlagValues: flag.GetCommonFlagValues(command),
 	}
 
 	return svrInfo, nil

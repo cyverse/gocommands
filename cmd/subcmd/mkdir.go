@@ -40,6 +40,7 @@ func processMkdirCommand(command *cobra.Command, args []string) error {
 type MkDirCommand struct {
 	command *cobra.Command
 
+	commonFlagValues  *flag.CommonFlagValues
 	parentsFlagValues *flag.ParentsFlagValues
 
 	account    *irodsclient_types.IRODSAccount
@@ -52,6 +53,7 @@ func NewMkDirCommand(command *cobra.Command, args []string) (*MkDirCommand, erro
 	mkDir := &MkDirCommand{
 		command: command,
 
+		commonFlagValues:  flag.GetCommonFlagValues(command),
 		parentsFlagValues: flag.GetParentsFlagValues(),
 	}
 

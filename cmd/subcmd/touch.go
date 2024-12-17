@@ -39,6 +39,7 @@ func processTouchCommand(command *cobra.Command, args []string) error {
 type TouchCommand struct {
 	command *cobra.Command
 
+	commonFlagValues   *flag.CommonFlagValues
 	noCreateFlagValues *flag.NoCreateFlagValues
 
 	account    *irodsclient_types.IRODSAccount
@@ -51,6 +52,7 @@ func NewTouchCommand(command *cobra.Command, args []string) (*TouchCommand, erro
 	touch := &TouchCommand{
 		command: command,
 
+		commonFlagValues:   flag.GetCommonFlagValues(command),
 		noCreateFlagValues: flag.GetNoCreateFlagValues(),
 	}
 

@@ -34,20 +34,21 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(getCmd, false)
 
+	flag.SetBundleTransferFlags(getCmd, true, true)
+	flag.SetParallelTransferFlags(getCmd, false, false)
 	flag.SetForceFlags(getCmd, false)
 	flag.SetRecursiveFlags(getCmd, true)
 	flag.SetTicketAccessFlags(getCmd)
-	flag.SetParallelTransferFlags(getCmd, false)
 	flag.SetProgressFlags(getCmd)
 	flag.SetRetryFlags(getCmd)
-	flag.SetDifferentialTransferFlags(getCmd, true)
-	flag.SetChecksumFlags(getCmd, false)
-	flag.SetTransferReportFlags(getCmd)
+	flag.SetDifferentialTransferFlags(getCmd, false)
+	flag.SetChecksumFlags(getCmd, true, false)
 	flag.SetNoRootFlags(getCmd)
-	flag.SetSyncFlags(getCmd, false)
+	flag.SetSyncFlags(getCmd, true)
 	flag.SetDecryptionFlags(getCmd)
-	flag.SetHiddenFileFlags(getCmd)
 	flag.SetPostTransferFlagValues(getCmd)
+	flag.SetHiddenFileFlags(getCmd)
+	flag.SetTransferReportFlags(getCmd)
 
 	rootCmd.AddCommand(getCmd)
 }
@@ -64,9 +65,12 @@ func processGetCommand(command *cobra.Command, args []string) error {
 type GetCommand struct {
 	command *cobra.Command
 
-	forceFlagValues                *flag.ForceFlagValues
-	ticketAccessFlagValues         *flag.TicketAccessFlagValues
+	commonFlagValues               *flag.CommonFlagValues
+	bundleTransferFlagValues       *flag.BundleTransferFlagValues
 	parallelTransferFlagValues     *flag.ParallelTransferFlagValues
+	forceFlagValues                *flag.ForceFlagValues
+	recursiveFlagValues            *flag.RecursiveFlagValues
+	ticketAccessFlagValues         *flag.TicketAccessFlagValues
 	progressFlagValues             *flag.ProgressFlagValues
 	retryFlagValues                *flag.RetryFlagValues
 	differentialTransferFlagValues *flag.DifferentialTransferFlagValues
@@ -95,9 +99,12 @@ func NewGetCommand(command *cobra.Command, args []string) (*GetCommand, error) {
 	get := &GetCommand{
 		command: command,
 
-		forceFlagValues:                flag.GetForceFlagValues(),
-		ticketAccessFlagValues:         flag.GetTicketAccessFlagValues(),
+		commonFlagValues:               flag.GetCommonFlagValues(command),
+		bundleTransferFlagValues:       flag.GetBundleTransferFlagValues(),
 		parallelTransferFlagValues:     flag.GetParallelTransferFlagValues(),
+		forceFlagValues:                flag.GetForceFlagValues(),
+		recursiveFlagValues:            flag.GetRecursiveFlagValues(),
+		ticketAccessFlagValues:         flag.GetTicketAccessFlagValues(),
 		progressFlagValues:             flag.GetProgressFlagValues(),
 		retryFlagValues:                flag.GetRetryFlagValues(),
 		differentialTransferFlagValues: flag.GetDifferentialTransferFlagValues(),

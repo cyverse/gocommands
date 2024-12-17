@@ -43,6 +43,7 @@ func processLsmetaCommand(command *cobra.Command, args []string) error {
 type LsMetaCommand struct {
 	command *cobra.Command
 
+	commonFlagValues       *flag.CommonFlagValues
 	listFlagValues         *flag.ListFlagValues
 	targetObjectFlagValues *flag.TargetObjectFlagValues
 
@@ -54,6 +55,7 @@ func NewLsMetaCommand(command *cobra.Command, args []string) (*LsMetaCommand, er
 	lsMeta := &LsMetaCommand{
 		command: command,
 
+		commonFlagValues:       flag.GetCommonFlagValues(command),
 		listFlagValues:         flag.GetListFlagValues(),
 		targetObjectFlagValues: flag.GetTargetObjectFlagValues(command),
 	}

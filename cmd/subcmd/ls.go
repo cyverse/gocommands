@@ -58,8 +58,9 @@ func processLsCommand(command *cobra.Command, args []string) error {
 type LsCommand struct {
 	command *cobra.Command
 
-	ticketAccessFlagValues *flag.TicketAccessFlagValues
+	commonFlagValues       *flag.CommonFlagValues
 	listFlagValues         *flag.ListFlagValues
+	ticketAccessFlagValues *flag.TicketAccessFlagValues
 	decryptionFlagValues   *flag.DecryptionFlagValues
 	hiddenFileFlagValues   *flag.HiddenFileFlagValues
 
@@ -73,8 +74,9 @@ func NewLsCommand(command *cobra.Command, args []string) (*LsCommand, error) {
 	ls := &LsCommand{
 		command: command,
 
-		ticketAccessFlagValues: flag.GetTicketAccessFlagValues(),
+		commonFlagValues:       flag.GetCommonFlagValues(command),
 		listFlagValues:         flag.GetListFlagValues(),
+		ticketAccessFlagValues: flag.GetTicketAccessFlagValues(),
 		decryptionFlagValues:   flag.GetDecryptionFlagValues(command),
 		hiddenFileFlagValues:   flag.GetHiddenFileFlagValues(),
 	}

@@ -24,14 +24,15 @@ func AddSyncCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(syncCmd, false)
 
-	flag.SetBundleTransferFlags(syncCmd, true)
-	flag.SetParallelTransferFlags(syncCmd, true)
+	flag.SetBundleTransferFlags(syncCmd, false, false)
+	flag.SetParallelTransferFlags(syncCmd, false, false)
 	flag.SetForceFlags(syncCmd, true)
 	flag.SetProgressFlags(syncCmd)
 	flag.SetRetryFlags(syncCmd)
 	flag.SetDifferentialTransferFlags(syncCmd, false)
+	flag.SetChecksumFlags(syncCmd, false, false)
 	flag.SetNoRootFlags(syncCmd)
-	flag.SetSyncFlags(syncCmd, true)
+	flag.SetSyncFlags(syncCmd, false)
 
 	rootCmd.AddCommand(syncCmd)
 }
@@ -48,8 +49,9 @@ func processSyncCommand(command *cobra.Command, args []string) error {
 type SyncCommand struct {
 	command *cobra.Command
 
-	retryFlagValues *flag.RetryFlagValues
-	syncFlagValues  *flag.SyncFlagValues
+	commonFlagValues *flag.CommonFlagValues
+	retryFlagValues  *flag.RetryFlagValues
+	syncFlagValues   *flag.SyncFlagValues
 
 	sourcePaths []string
 	targetPath  string
@@ -59,8 +61,9 @@ func NewSyncCommand(command *cobra.Command, args []string) (*SyncCommand, error)
 	sync := &SyncCommand{
 		command: command,
 
-		retryFlagValues: flag.GetRetryFlagValues(),
-		syncFlagValues:  flag.GetSyncFlagValues(),
+		commonFlagValues: flag.GetCommonFlagValues(command),
+		retryFlagValues:  flag.GetRetryFlagValues(),
+		syncFlagValues:   flag.GetSyncFlagValues(),
 	}
 
 	// path

@@ -14,16 +14,16 @@ var (
 	syncFlagValues SyncFlagValues
 )
 
-func SetSyncFlags(command *cobra.Command, addPutOptionFlag bool) {
+func SetSyncFlags(command *cobra.Command, hideBulkUpload bool) {
 	command.Flags().BoolVar(&syncFlagValues.Delete, "delete", false, "Delete extra files in dest dir")
-
-	if addPutOptionFlag {
-		command.Flags().BoolVar(&syncFlagValues.BulkUpload, "bulk_upload", false, "Use bulk upload")
-	}
-
-	// this is hidden
+	command.Flags().BoolVar(&syncFlagValues.BulkUpload, "bulk_upload", false, "Use bulk upload")
 	command.Flags().BoolVar(&syncFlagValues.Sync, "sync", false, "Set this for sync")
+
 	command.Flags().MarkHidden("sync")
+
+	if hideBulkUpload {
+		command.Flags().MarkHidden("bulk_upload")
+	}
 }
 
 func GetSyncFlagValues() *SyncFlagValues {

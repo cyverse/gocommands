@@ -42,6 +42,7 @@ func processRmmetaCommand(command *cobra.Command, args []string) error {
 type RmMetaCommand struct {
 	command *cobra.Command
 
+	commonFlagValues       *flag.CommonFlagValues
 	targetObjectFlagValues *flag.TargetObjectFlagValues
 
 	account    *irodsclient_types.IRODSAccount
@@ -54,6 +55,7 @@ func NewRmMetaCommand(command *cobra.Command, args []string) (*RmMetaCommand, er
 	rmMeta := &RmMetaCommand{
 		command: command,
 
+		commonFlagValues:       flag.GetCommonFlagValues(command),
 		targetObjectFlagValues: flag.GetTargetObjectFlagValues(command),
 	}
 
