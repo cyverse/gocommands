@@ -371,7 +371,7 @@ func (manager *BundleTransferManager) Wait() error {
 	}
 
 	if manager.bundlesDoneCounter != manager.bundlesScheduledCounter {
-		return xerrors.Errorf("bundles '%d/%d' were not completed!", manager.bundlesDoneCounter, manager.bundlesScheduledCounter)
+		return xerrors.Errorf("%d bundles were done out of %d! Some bundles failed!", manager.bundlesDoneCounter, manager.bundlesScheduledCounter)
 	}
 
 	return nil
@@ -387,7 +387,11 @@ func (manager *BundleTransferManager) CleanUpBundles() {
 	logger.Debugf("clearing bundle files in %q", manager.irodsTempDirPath)
 
 	err := CleanUpOldIRODSBundles(manager.filesystem, manager.irodsTempDirPath, true, true)
-	logger.WithError(err).Warnf("failed to clear up staging directory %q", manager.irodsTempDirPath)
+	if err != nil {
+		logger.WithError(err).Warnf("failed to clear staging directory %q", manager.irodsTempDirPath)
+	} else {
+		logger.WithError(err).Debugf("cleared staging directory %q", manager.irodsTempDirPath)
+	}
 }
 
 func (manager *BundleTransferManager) startProgress() {
@@ -790,7 +794,7 @@ func (manager *BundleTransferManager) processBundleRemoveFilesAndMakeDirs(bundle
 		if err != nil {
 			if !irodsclient_types.IsFileNotFoundError(err) {
 				manager.progress(progressName, processedFiles, totalFileNum, progress.UnitsDefault, true)
-				return xerrors.Errorf("failed to stat data object or collection %q", bundleEntry.IRODSPath)
+				return xerrors.Errorf("failed to stat data object or collection %q: %w", bundleEntry.IRODSPath, err)
 			}
 		}
 
@@ -801,7 +805,7 @@ func (manager *BundleTransferManager) processBundleRemoveFilesAndMakeDirs(bundle
 					err := manager.filesystem.RemoveDir(bundleEntry.IRODSPath, true, true)
 					if err != nil {
 						manager.progress(progressName, processedFiles, totalFileNum, progress.UnitsDefault, true)
-						return xerrors.Errorf("failed to delete existing collection %q", bundleEntry.IRODSPath)
+						return xerrors.Errorf("failed to delete existing collection %q: %w", bundleEntry.IRODSPath, err)
 					}
 				}
 			} else {
@@ -811,7 +815,7 @@ func (manager *BundleTransferManager) processBundleRemoveFilesAndMakeDirs(bundle
 				err := manager.filesystem.RemoveFile(bundleEntry.IRODSPath, true)
 				if err != nil {
 					manager.progress(progressName, processedFiles, totalFileNum, progress.UnitsDefault, true)
-					return xerrors.Errorf("failed to delete existing data object %q", bundleEntry.IRODSPath)
+					return xerrors.Errorf("failed to delete existing data object %q: %w", bundleEntry.IRODSPath, err)
 				}
 			}
 		}
@@ -1077,22 +1081,21 @@ func (manager *BundleTransferManager) processBundleExtract(bundle *Bundle) error
 
 	manager.progress(progressName, 0, totalFileNum, progress.UnitsDefault, false)
 
-	if !bundle.RequireTar() {
+	if bundle.RequireTar() {
+		err := manager.filesystem.ExtractStructFile(bundle.IRODSBundlePath, manager.irodsDestPath, "", irodsclient_types.TAR_FILE_DT, true, !manager.noBulkRegistration)
+		if err != nil {
+			manager.progress(progressName, 0, totalFileNum, progress.UnitsDefault, true)
+			return xerrors.Errorf("failed to extract bundle %d at %q to %q: %w", bundle.Index, bundle.IRODSBundlePath, manager.irodsDestPath, err)
+		}
+
+		// remove irods bundle file
+		logger.Debugf("removing bundle %d at %q", bundle.Index, bundle.IRODSBundlePath)
+		manager.filesystem.RemoveFile(bundle.IRODSBundlePath, true)
+	} else {
 		// no tar, so pass this step
 		manager.progress(progressName, totalFileNum, totalFileNum, progress.UnitsDefault, false)
 		logger.Debugf("skip extracting bundle %d at %q", bundle.Index, bundle.IRODSBundlePath)
-		return nil
 	}
-
-	err := manager.filesystem.ExtractStructFile(bundle.IRODSBundlePath, manager.irodsDestPath, "", irodsclient_types.TAR_FILE_DT, true, !manager.noBulkRegistration)
-	if err != nil {
-		manager.progress(progressName, 0, totalFileNum, progress.UnitsDefault, true)
-		return xerrors.Errorf("failed to extract bundle %d at %q to %q: %w", bundle.Index, bundle.IRODSBundlePath, manager.irodsDestPath, err)
-	}
-
-	// remove irods bundle file
-	logger.Debugf("removing bundle %d at %q", bundle.Index, bundle.IRODSBundlePath)
-	manager.filesystem.RemoveFile(bundle.IRODSBundlePath, true)
 
 	manager.progress(progressName, totalFileNum, totalFileNum, progress.UnitsDefault, false)
 

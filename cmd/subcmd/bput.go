@@ -187,13 +187,13 @@ func (bput *BputCommand) Process() error {
 	// target must be a dir
 	err = bput.ensureTargetIsDir(bput.targetPath)
 	if err != nil {
-		return err
+		return xerrors.Errorf("target path %q is not a directory: %w", bput.targetPath, err)
 	}
 
 	// get staging path
 	stagingDirPath, err := bput.getStagingDir(bput.targetPath)
 	if err != nil {
-		return err
+		return xerrors.Errorf("failed to get staging path for target path %q: %w", bput.targetPath, err)
 	}
 
 	// clear old irods bundles
@@ -261,6 +261,12 @@ func (bput *BputCommand) Process() error {
 }
 
 func (bput *BputCommand) ensureTargetIsDir(targetPath string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"struct":   "BputCommand",
+		"function": "ensureTargetIsDir",
+	})
+
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := bput.account.ClientZone
@@ -270,7 +276,8 @@ func (bput *BputCommand) ensureTargetIsDir(targetPath string) error {
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
 			// not exist
-			return commons.NewNotDirError(targetPath)
+			logger.Debugf("creating a target directory %q", targetPath)
+			return bput.filesystem.MakeDir(targetPath, true)
 		}
 
 		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
