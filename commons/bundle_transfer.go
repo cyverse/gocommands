@@ -866,6 +866,7 @@ func (manager *BundleTransferManager) processBundleTar(bundle *Bundle) error {
 	}
 
 	manager.progress(progressName, totalFileNum, totalFileNum, progress.UnitsDefault, false)
+
 	logger.Debugf("created a tarball for bundle %d to %q", bundle.Index, bundle.LocalBundlePath)
 	return nil
 }
@@ -928,7 +929,7 @@ func (manager *BundleTransferManager) processBundleUploadWithTar(bundle *Bundle)
 		}
 	}
 
-	logger.Debugf("uploading bundle %d to %q", bundle.Index, bundle.IRODSBundlePath)
+	logger.Debugf("uploading bundle %d to %q, size %d", bundle.Index, bundle.IRODSBundlePath, localBundleStat.Size())
 
 	// determine how to download
 	if manager.singleThreaded || manager.uploadThreadNum == 1 {

@@ -64,10 +64,9 @@ func Tar(baseDir string, sources []string, target string, callback TrackerCallBa
 						return xerrors.Errorf("failed to compute relative path %q to %q: %w", pdir, baseDir, err)
 					}
 
-					logger.Infof("adding a dir %q", relDir)
 					entry := NewTarEntry(pdir, filepath.ToSlash(relDir))
 					entries = append(entries, entry)
-					logger.Infof("added a dir %q in a tarball %q", entry.source, target)
+					logger.Infof("added a dir %q ==> %q in a tarball %q", entry.source, entry.target, target)
 				}
 
 				createdDirs[pdir] = true
