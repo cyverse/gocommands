@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
 )
 
@@ -25,11 +26,20 @@ func NewTarEntry(source string, target string) *TarEntry {
 }
 
 func Tar(baseDir string, sources []string, target string, callback TrackerCallBack) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "commons",
+		"function": "Tar",
+	})
+
+	logger.Infof("creating a tarball %q", target)
+
 	entries := []*TarEntry{}
 
 	createdDirs := map[string]bool{}
 
 	for _, source := range sources {
+		logger.Infof("adding a source %q to a tarball %q", source, target)
+
 		sourceStat, err := os.Stat(source)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -47,9 +57,18 @@ func Tar(baseDir string, sources []string, target string, callback TrackerCallBa
 		pdirs := GetParentLocalDirs(rel)
 		for _, pdir := range pdirs {
 			if _, ok := createdDirs[pdir]; !ok {
-				// make entries for dir
-				entry := NewTarEntry(filepath.Join(baseDir, pdir), filepath.ToSlash(pdir))
-				entries = append(entries, entry)
+				if len(pdir) > len(baseDir) {
+					// make entries for dir
+					relDir, err := filepath.Rel(baseDir, pdir)
+					if err != nil {
+						return xerrors.Errorf("failed to compute relative path %q to %q: %w", pdir, baseDir, err)
+					}
+
+					logger.Infof("adding a dir %q", relDir)
+					entry := NewTarEntry(pdir, filepath.ToSlash(relDir))
+					entries = append(entries, entry)
+					logger.Infof("added a dir %q in a tarball %q", entry.source, target)
+				}
 
 				createdDirs[pdir] = true
 			}
@@ -57,7 +76,9 @@ func Tar(baseDir string, sources []string, target string, callback TrackerCallBa
 
 		// make entries for file
 		entry := NewTarEntry(source, filepath.ToSlash(rel))
+
 		entries = append(entries, entry)
+		logger.Infof("added a source %q ==> %q in a tarball %q", entry.source, entry.target, target)
 
 		if sourceStat.IsDir() {
 			createdDirs[rel] = true

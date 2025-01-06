@@ -862,7 +862,7 @@ func (manager *BundleTransferManager) processBundleTar(bundle *Bundle) error {
 	err := Tar(manager.localBundleRootPath, entries, bundle.LocalBundlePath, callbackTar)
 	if err != nil {
 		manager.progress(progressName, 0, totalFileNum, progress.UnitsDefault, true)
-		return xerrors.Errorf("failed to create a tarball for bundle %d to %q: %w", bundle.Index, bundle.LocalBundlePath, err)
+		return xerrors.Errorf("failed to create a tarball for bundle %d to %q (bundle root %q): %w", bundle.Index, bundle.LocalBundlePath, bundle.manager.localBundleRootPath, err)
 	}
 
 	manager.progress(progressName, totalFileNum, totalFileNum, progress.UnitsDefault, false)
