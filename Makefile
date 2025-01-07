@@ -6,6 +6,8 @@ LDFLAGS?="-X '${PKG}/commons.clientVersion=${VERSION}' -X '${PKG}/commons.gitCom
 GO111MODULE=on
 GOPROXY=direct
 GOPATH=$(shell go env GOPATH)
+DOCKER_IMAGE=cyverse/gocmd
+DOCKERFILE=docker/Dockerfile
 
 .EXPORT_ALL_VARIABLES:
 
@@ -23,3 +25,12 @@ version:
 thirdparty_licenses:
 	go-licenses report ./cmd --template thirdparty_licenses.template
 	
+.PHONY: image
+image:
+	docker build --build-arg="GOCOMMANDS_VER=${VERSION}" -t $(DOCKER_IMAGE):${VERSION} -f $(DOCKERFILE) .
+	docker tag $(DOCKER_IMAGE):${VERSION} $(DOCKER_IMAGE):latest
+
+.PHONY: push
+push: image
+	docker push $(DOCKER_IMAGE):${VERSION}
+	docker push $(DOCKER_IMAGE):latest
