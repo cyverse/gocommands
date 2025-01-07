@@ -1,0 +1,12 @@
+version: "3.8"
+services:
+  gocmd:
+    image: cyverse/gocmd:v0.10.9
+    environment:
+      - IRODS_AUTHENTICATION_SCHEME=native
+      - IRODS_HOST=$IRODS_HOST
+      - IRODS_PORT=$IRODS_PORT
+      - IRODS_ZONE_NAME=$IRODS_ZONE_NAME
+      - IRODS_USER_NAME=$IRODS_USER_NAME
+      - IRODS_USER_PASSWORD=$IRODS_USER_PASSWORD
+
