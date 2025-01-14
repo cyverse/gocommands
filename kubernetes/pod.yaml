@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gocmd
+spec:
+  containers:
+  - name: gocmd
+    image: cyverse/gocmd:v0.10.9
+    args: ["put", "-d", "$(SOURCE_PATH)", "$(TARGET_PATH)"]
+    volumeMounts:
+    - name: home-dir
+      mountPath: /home/iychoi
+    env:
+    - name: SOURCE_PATH
+      value: "/home/iychoi/test_upload.yaml"
+    - name: TARGET_PATH
+      value: "/iplant/home/iychoi"
+    - name: IRODS_AUTHENTICATION_SCHEME
+      valueFrom:
+        secretKeyRef:
+          name: gocmd-secrets
+          key: IRODS_AUTHENTICATION_SCHEME
+    - name: IRODS_HOST
+      valueFrom:
+        secretKeyRef:
+          name: gocmd-secrets
+          key: IRODS_HOST
+    - name: IRODS_PORT
+      valueFrom:
+        secretKeyRef:
+          name: gocmd-secrets
+          key: IRODS_PORT
+    - name: IRODS_ZONE_NAME
+      valueFrom:
+        secretKeyRef:
+          name: gocmd-secrets
+          key: IRODS_ZONE_NAME
+    - name: IRODS_USER_NAME
+      valueFrom:
+        secretKeyRef:
+          name: gocmd-secrets
+          key: IRODS_USER_NAME
+    - name: IRODS_USER_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: gocmd-secrets
+          key: IRODS_USER_PASSWORD
+  restartPolicy: Never
+  volumes:
+  - name: home-dir
+    hostPath:
+      path: /home/iychoi
+      type: Directory
