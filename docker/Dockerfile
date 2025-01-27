@@ -20,6 +20,10 @@ RUN arch=$(arch | sed s/aarch64/arm64/ | sed s/x86_64/amd64/ | sed s/i386/386/ |
 # Fix libc dependency issue in alpine
 RUN mkdir /lib64 && ln -s /lib/libc.musl-x86_64.so.1 /lib64/ld-linux-x86-64.so.2
 
-WORKDIR /
+# Setup User
+RUN addgroup gocmd && adduser -G gocmd -D gocmd
+
+USER gocmd
+WORKDIR /home/gocmd
 
 ENTRYPOINT ["/usr/bin/gocmd"]
