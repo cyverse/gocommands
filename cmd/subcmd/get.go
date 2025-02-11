@@ -49,6 +49,7 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	flag.SetPostTransferFlagValues(getCmd)
 	flag.SetHiddenFileFlags(getCmd)
 	flag.SetTransferReportFlags(getCmd)
+	flag.SetWildcardSearchFlags(getCmd)
 
 	rootCmd.AddCommand(getCmd)
 }
@@ -81,6 +82,7 @@ type GetCommand struct {
 	postTransferFlagValues         *flag.PostTransferFlagValues
 	hiddenFileFlagValues           *flag.HiddenFileFlagValues
 	transferReportFlagValues       *flag.TransferReportFlagValues
+	wildcardSearchFlagValues       *flag.WildcardSearchFlagValues
 
 	maxConnectionNum int
 
@@ -115,6 +117,7 @@ func NewGetCommand(command *cobra.Command, args []string) (*GetCommand, error) {
 		postTransferFlagValues:         flag.GetPostTransferFlagValues(),
 		hiddenFileFlagValues:           flag.GetHiddenFileFlagValues(),
 		transferReportFlagValues:       flag.GetTransferReportFlagValues(command),
+		wildcardSearchFlagValues:       flag.GetWildcardSearchFlagValues(),
 
 		updatedPathMap: map[string]bool{},
 	}
@@ -204,6 +207,14 @@ func (get *GetCommand) Process() error {
 		err = get.ensureTargetIsDir(get.targetPath)
 		if err != nil {
 			return err
+		}
+	}
+
+	// Expand wildcards
+	if get.wildcardSearchFlagValues.WildcardSearch {
+		get.sourcePaths, err = commons.ExpandWildcards(get.filesystem, get.account, get.sourcePaths, true, true)
+		if err != nil {
+			return xerrors.Errorf("failed to expand wildcards:  %w", err)
 		}
 	}
 

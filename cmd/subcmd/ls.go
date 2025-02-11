@@ -131,6 +131,15 @@ func (ls *LsCommand) Process() error {
 		ls.decryptionFlagValues.Key = ls.account.Password
 	}
 
+	// Expand wildcards
+	if ls.listFlagValues.WildcardExpansion {
+		expanded_results, err := commons.ExpandWildcards(ls.filesystem, ls.account, ls.sourcePaths, true, true)
+		if err != nil {
+			return xerrors.Errorf("failed to expand wildcards:  %w", err)
+		}
+		ls.sourcePaths = expanded_results
+	}
+
 	// run
 	for _, sourcePath := range ls.sourcePaths {
 		err = ls.listOne(sourcePath)
