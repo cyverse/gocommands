@@ -86,6 +86,30 @@ func GetFileExtension(p string) string {
 	return p
 }
 
+func GetIRODSPathDirname(path string) string {
+	p := strings.TrimRight(path, "/")
+	idx := strings.LastIndex(p, "/")
+
+	if idx < 0 {
+		return p
+	} else if idx == 0 {
+		return "/"
+	} else {
+		return p[:idx]
+	}
+}
+
+func GetIRODSPathBasename(path string) string {
+	p := strings.TrimRight(path, "/")
+	idx := strings.LastIndex(p, "/")
+
+	if idx < 0 {
+		return p
+	} else {
+		return p[idx+1:]
+	}
+}
+
 func GetBasename(p string) string {
 	p = strings.TrimRight(p, string(os.PathSeparator))
 	p = strings.TrimRight(p, "/")

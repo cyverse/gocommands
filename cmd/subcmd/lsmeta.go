@@ -119,7 +119,7 @@ func (lsMeta *LsMetaCommand) listMetaForPath(targetPath string) error {
 }
 
 func (lsMeta *LsMetaCommand) listMetaForUser(username string) error {
-	metas, err := lsMeta.filesystem.ListUserMetadata(username)
+	metas, err := lsMeta.filesystem.ListUserMetadata(username, lsMeta.account.ClientZone)
 	if err != nil {
 		return xerrors.Errorf("failed to list meta for user %q: %w", username, err)
 	}

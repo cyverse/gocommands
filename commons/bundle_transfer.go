@@ -933,18 +933,18 @@ func (manager *BundleTransferManager) processBundleUploadWithTar(bundle *Bundle)
 
 	// determine how to download
 	if manager.singleThreaded || manager.uploadThreadNum == 1 {
-		_, err = manager.filesystem.UploadFile(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", false, true, true, callbackPut)
+		_, err = manager.filesystem.UploadFile(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", false, true, true, false, callbackPut)
 	} else if manager.redirectToResource {
-		_, err = manager.filesystem.UploadFileParallelRedirectToResource(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, true, true, callbackPut)
+		_, err = manager.filesystem.UploadFileParallelRedirectToResource(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, true, true, false, callbackPut)
 	} else if manager.useIcat {
-		_, err = manager.filesystem.UploadFileParallel(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, true, true, callbackPut)
+		_, err = manager.filesystem.UploadFileParallel(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, true, true, false, callbackPut)
 	} else {
 		// auto
 		if bundle.Size >= RedirectToResourceMinSize {
 			// redirect-to-resource
-			_, err = manager.filesystem.UploadFileParallelRedirectToResource(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, true, true, callbackPut)
+			_, err = manager.filesystem.UploadFileParallelRedirectToResource(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, true, true, false, callbackPut)
 		} else {
-			_, err = manager.filesystem.UploadFileParallel(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, false, false, callbackPut)
+			_, err = manager.filesystem.UploadFileParallel(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, false, false, false, callbackPut)
 		}
 	}
 
@@ -1028,22 +1028,22 @@ func (manager *BundleTransferManager) processBundleUploadWithoutTar(bundle *Bund
 		// determine how to download
 		var err error
 		if manager.singleThreaded || manager.uploadThreadNum == 1 {
-			uploadResult, err = manager.filesystem.UploadFile(file.LocalPath, file.IRODSPath, "", false, true, true, callbackPut)
+			uploadResult, err = manager.filesystem.UploadFile(file.LocalPath, file.IRODSPath, "", false, true, true, false, callbackPut)
 			notes = append(notes, "icat", "single-thread")
 		} else if manager.redirectToResource {
-			uploadResult, err = manager.filesystem.UploadFileParallelRedirectToResource(file.LocalPath, file.IRODSPath, "", 0, false, true, true, callbackPut)
+			uploadResult, err = manager.filesystem.UploadFileParallelRedirectToResource(file.LocalPath, file.IRODSPath, "", 0, false, true, true, false, callbackPut)
 			notes = append(notes, "redirect-to-resource")
 		} else if manager.useIcat {
-			uploadResult, err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, true, true, callbackPut)
+			uploadResult, err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, true, true, false, callbackPut)
 			notes = append(notes, "icat", "multi-thread")
 		} else {
 			// auto
 			if bundle.Size >= RedirectToResourceMinSize {
 				// redirect-to-resource
-				uploadResult, err = manager.filesystem.UploadFileParallelRedirectToResource(file.LocalPath, file.IRODSPath, "", 0, false, true, true, callbackPut)
+				uploadResult, err = manager.filesystem.UploadFileParallelRedirectToResource(file.LocalPath, file.IRODSPath, "", 0, false, true, true, false, callbackPut)
 				notes = append(notes, "redirect-to-resource")
 			} else {
-				uploadResult, err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, true, true, callbackPut)
+				uploadResult, err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, true, true, false, callbackPut)
 				notes = append(notes, "icat", "multi-thread")
 			}
 		}

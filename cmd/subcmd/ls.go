@@ -42,6 +42,7 @@ func AddLsCommand(rootCmd *cobra.Command) {
 	flag.SetTicketAccessFlags(lsCmd)
 	flag.SetDecryptionFlags(lsCmd)
 	flag.SetHiddenFileFlags(lsCmd)
+	flag.SetWildcardSearchFlags(lsCmd)
 
 	rootCmd.AddCommand(lsCmd)
 }
@@ -58,11 +59,12 @@ func processLsCommand(command *cobra.Command, args []string) error {
 type LsCommand struct {
 	command *cobra.Command
 
-	commonFlagValues       *flag.CommonFlagValues
-	listFlagValues         *flag.ListFlagValues
-	ticketAccessFlagValues *flag.TicketAccessFlagValues
-	decryptionFlagValues   *flag.DecryptionFlagValues
-	hiddenFileFlagValues   *flag.HiddenFileFlagValues
+	commonFlagValues         *flag.CommonFlagValues
+	listFlagValues           *flag.ListFlagValues
+	ticketAccessFlagValues   *flag.TicketAccessFlagValues
+	decryptionFlagValues     *flag.DecryptionFlagValues
+	hiddenFileFlagValues     *flag.HiddenFileFlagValues
+	wildcardSearchFlagValues *flag.WildcardSearchFlagValues
 
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
@@ -74,11 +76,12 @@ func NewLsCommand(command *cobra.Command, args []string) (*LsCommand, error) {
 	ls := &LsCommand{
 		command: command,
 
-		commonFlagValues:       flag.GetCommonFlagValues(command),
-		listFlagValues:         flag.GetListFlagValues(),
-		ticketAccessFlagValues: flag.GetTicketAccessFlagValues(),
-		decryptionFlagValues:   flag.GetDecryptionFlagValues(command),
-		hiddenFileFlagValues:   flag.GetHiddenFileFlagValues(),
+		commonFlagValues:         flag.GetCommonFlagValues(command),
+		listFlagValues:           flag.GetListFlagValues(),
+		ticketAccessFlagValues:   flag.GetTicketAccessFlagValues(),
+		decryptionFlagValues:     flag.GetDecryptionFlagValues(command),
+		hiddenFileFlagValues:     flag.GetHiddenFileFlagValues(),
+		wildcardSearchFlagValues: flag.GetWildcardSearchFlagValues(),
 	}
 
 	// path
@@ -131,9 +134,25 @@ func (ls *LsCommand) Process() error {
 		ls.decryptionFlagValues.Key = ls.account.Password
 	}
 
+	// Expand wildcards
+	if ls.wildcardSearchFlagValues.WildcardSearch {
+		expanded_results, err := commons.ExpandWildcards(ls.filesystem, ls.account, ls.sourcePaths, true, true)
+		if err != nil {
+			return xerrors.Errorf("failed to expand wildcards:  %w", err)
+		}
+		ls.sourcePaths = expanded_results
+	}
+
 	// run
 	for _, sourcePath := range ls.sourcePaths {
-		err = ls.listOne(sourcePath)
+		err = ls.listDataObject(sourcePath)
+		if err != nil {
+			return xerrors.Errorf("failed to list path %q: %w", sourcePath, err)
+		}
+	}
+
+	for _, sourcePath := range ls.sourcePaths {
+		err = ls.listCollection(sourcePath)
 		if err != nil {
 			return xerrors.Errorf("failed to list path %q: %w", sourcePath, err)
 		}
@@ -155,7 +174,61 @@ func (ls *LsCommand) requireDecryption(sourcePath string) bool {
 	return mode != commons.EncryptionModeUnknown
 }
 
-func (ls *LsCommand) listOne(sourcePath string) error {
+func (ls *LsCommand) listCollection(sourcePath string) error {
+	cwd := commons.GetCWD()
+	home := commons.GetHomeDir()
+	zone := ls.account.ClientZone
+	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
+
+	sourceEntry, err := ls.filesystem.Stat(sourcePath)
+	if err != nil {
+		if !irodsclient_types.IsFileNotFoundError(err) {
+			return xerrors.Errorf("failed to find data-object/collection %q: %w", sourcePath, err)
+		}
+
+		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
+	}
+
+	connection, err := ls.filesystem.GetMetadataConnection()
+	if err != nil {
+		return xerrors.Errorf("failed to get connection: %w", err)
+	}
+	defer ls.filesystem.ReturnMetadataConnection(connection)
+
+	if !sourceEntry.IsDir() {
+		// data object
+		return nil
+	}
+
+	// collection
+	ls.printCurrentCollection(sourcePath)
+
+	collection, err := irodsclient_irodsfs.GetCollection(connection, sourcePath)
+	if err != nil {
+		return xerrors.Errorf("failed to get collection %q: %w", sourcePath, err)
+	}
+
+	colls, err := irodsclient_irodsfs.ListSubCollections(connection, sourcePath)
+	if err != nil {
+		return xerrors.Errorf("failed to list sub-collections in %q: %w", sourcePath, err)
+	}
+
+	objs, err := irodsclient_irodsfs.ListDataObjects(connection, collection)
+	if err != nil {
+		return xerrors.Errorf("failed to list data-objects in %q: %w", sourcePath, err)
+	}
+
+	// filter out hidden files
+	filtered_colls := ls.filterHiddenCollections(colls)
+	filtered_objs := ls.filterHiddenDataObjects(objs)
+
+	ls.printDataObjects(filtered_objs, false)
+	ls.printCollections(filtered_colls)
+
+	return nil
+}
+
+func (ls *LsCommand) listDataObject(sourcePath string) error {
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := ls.account.ClientZone
@@ -178,28 +251,6 @@ func (ls *LsCommand) listOne(sourcePath string) error {
 
 	if sourceEntry.IsDir() {
 		// collection
-		collection, err := irodsclient_irodsfs.GetCollection(connection, sourcePath)
-		if err != nil {
-			return xerrors.Errorf("failed to get collection %q: %w", sourcePath, err)
-		}
-
-		colls, err := irodsclient_irodsfs.ListSubCollections(connection, sourcePath)
-		if err != nil {
-			return xerrors.Errorf("failed to list sub-collections in %q: %w", sourcePath, err)
-		}
-
-		objs, err := irodsclient_irodsfs.ListDataObjects(connection, collection)
-		if err != nil {
-			return xerrors.Errorf("failed to list data-objects in %q: %w", sourcePath, err)
-		}
-
-		// filter out hidden files
-		filtered_colls := ls.filterHiddenCollections(colls)
-		filtered_objs := ls.filterHiddenDataObjects(objs)
-
-		ls.printDataObjects(filtered_objs)
-		ls.printCollections(filtered_colls)
-
 		return nil
 	}
 
@@ -210,7 +261,7 @@ func (ls *LsCommand) listOne(sourcePath string) error {
 	}
 
 	entries := []*irodsclient_types.IRODSDataObject{entry}
-	ls.printDataObjects(entries)
+	ls.printDataObjects(entries, true)
 
 	return nil
 }
@@ -249,6 +300,10 @@ func (ls *LsCommand) filterHiddenDataObjects(entries []*irodsclient_types.IRODSD
 	return filteredEntries
 }
 
+func (ls *LsCommand) printCurrentCollection(sourcePath string) {
+	commons.Printf("\n%s:\n", sourcePath)
+}
+
 func (ls *LsCommand) printCollections(entries []*irodsclient_types.IRODSCollection) {
 	sort.SliceStable(entries, ls.getCollectionSortFunction(entries, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
 	for _, entry := range entries {
@@ -256,11 +311,11 @@ func (ls *LsCommand) printCollections(entries []*irodsclient_types.IRODSCollecti
 	}
 }
 
-func (ls *LsCommand) printDataObjects(entries []*irodsclient_types.IRODSDataObject) {
+func (ls *LsCommand) printDataObjects(entries []*irodsclient_types.IRODSDataObject, showFullPath bool) {
 	if ls.listFlagValues.Format == commons.ListFormatNormal {
 		sort.SliceStable(entries, ls.getDataObjectSortFunction(entries, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
 		for _, entry := range entries {
-			ls.printDataObjectShort(entry)
+			ls.printDataObjectShort(entry, showFullPath)
 		}
 	} else {
 		replicas := ls.flattenReplicas(entries)
@@ -418,7 +473,7 @@ func (ls *LsCommand) getDataObjectModifyTime(object *irodsclient_types.IRODSData
 	return maxTime
 }
 
-func (ls *LsCommand) printDataObjectShort(entry *irodsclient_types.IRODSDataObject) {
+func (ls *LsCommand) printDataObjectShort(entry *irodsclient_types.IRODSDataObject, showFullPath bool) {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "LsCommand",
@@ -426,6 +481,9 @@ func (ls *LsCommand) printDataObjectShort(entry *irodsclient_types.IRODSDataObje
 	})
 
 	newName := entry.Name
+	if showFullPath {
+		newName = entry.Path
+	}
 
 	if ls.requireDecryption(entry.Path) {
 		// need to decrypt

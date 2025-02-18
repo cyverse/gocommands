@@ -149,7 +149,7 @@ func (addMeta *AddMetaCommand) addMetaToUser(username string, attribute string, 
 
 	logger.Debugf("add metadata to user %q (attr %q, value %q, unit %q)", username, attribute, value, unit)
 
-	err := addMeta.filesystem.AddUserMetadata(username, attribute, value, unit)
+	err := addMeta.filesystem.AddUserMetadata(username, addMeta.account.ClientZone, attribute, value, unit)
 	if err != nil {
 		return xerrors.Errorf("failed to add metadata to user %q (attr %q, value %q, unit %q): %w", username, attribute, value, unit, err)
 	}
@@ -166,7 +166,7 @@ func (addMeta *AddMetaCommand) addMetaToResource(resource string, attribute stri
 
 	logger.Debugf("add metadata to resource %q (attr %q, value %q, unit %q)", resource, attribute, value, unit)
 
-	err := addMeta.filesystem.AddUserMetadata(resource, attribute, value, unit)
+	err := addMeta.filesystem.AddUserMetadata(resource, addMeta.account.ClientZone, attribute, value, unit)
 	if err != nil {
 		return xerrors.Errorf("failed to add metadata to resource %q (attr %q, value %q, unit %q): %w", resource, attribute, value, unit, err)
 	}

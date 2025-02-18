@@ -24,6 +24,7 @@ var mvCmd = &cobra.Command{
 func AddMvCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(mvCmd, false)
+	flag.SetWildcardSearchFlags(mvCmd)
 
 	rootCmd.AddCommand(mvCmd)
 }
@@ -38,7 +39,8 @@ func processMvCommand(command *cobra.Command, args []string) error {
 }
 
 type MvCommand struct {
-	command *cobra.Command
+	command                  *cobra.Command
+	wildcardSearchFlagValues *flag.WildcardSearchFlagValues
 
 	commonFlagValues *flag.CommonFlagValues
 
@@ -51,9 +53,9 @@ type MvCommand struct {
 
 func NewMvCommand(command *cobra.Command, args []string) (*MvCommand, error) {
 	mv := &MvCommand{
-		command: command,
-
-		commonFlagValues: flag.GetCommonFlagValues(command),
+		command:                  command,
+		commonFlagValues:         flag.GetCommonFlagValues(command),
+		wildcardSearchFlagValues: flag.GetWildcardSearchFlagValues(),
 	}
 
 	// paths
@@ -93,6 +95,14 @@ func (mv *MvCommand) Process() error {
 		err = mv.ensureTargetIsDir(mv.targetPath)
 		if err != nil {
 			return err
+		}
+	}
+
+	// Expand wildcards
+	if mv.wildcardSearchFlagValues.WildcardSearch {
+		mv.sourcePaths, err = commons.ExpandWildcards(mv.filesystem, mv.account, mv.sourcePaths, true, true)
+		if err != nil {
+			return xerrors.Errorf("failed to expand wildcards:  %w", err)
 		}
 	}
 
