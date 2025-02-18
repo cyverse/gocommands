@@ -10,7 +10,6 @@ type ListFlagValues struct {
 	longFormatInput     bool
 	veryLongFormatInput bool
 	HumanReadableSizes  bool
-	WildcardExpansion   bool
 
 	SortOrder      commons.ListSortOrder
 	sortOrderInput string
@@ -27,7 +26,6 @@ func SetListFlags(command *cobra.Command) {
 	command.Flags().BoolVarP(&listFlagValues.HumanReadableSizes, "human_readable", "H", false, "Display sizes in human-readable format")
 	command.Flags().BoolVar(&listFlagValues.SortReverse, "reverse_sort", false, "Sort in reverse order")
 	command.Flags().StringVarP(&listFlagValues.sortOrderInput, "sort", "S", "name", "Sort on name, size, time or ext")
-	command.Flags().BoolVarP(&listFlagValues.WildcardExpansion, "wildcard", "w", false, "Enable wildcard expansion")
 }
 
 func GetListFlagValues() *ListFlagValues {

@@ -27,6 +27,7 @@ func AddBunCommand(rootCmd *cobra.Command) {
 
 	flag.SetForceFlags(bunCmd, false)
 	flag.SetBundleFlags(bunCmd)
+	flag.SetWildcardSearchFlags(bunCmd)
 
 	rootCmd.AddCommand(bunCmd)
 }
@@ -43,9 +44,10 @@ func processBunCommand(command *cobra.Command, args []string) error {
 type BunCommand struct {
 	command *cobra.Command
 
-	commonFlagValues *flag.CommonFlagValues
-	forceFlagValues  *flag.ForceFlagValues
-	bundleFlagValues *flag.BundleFlagValues
+	commonFlagValues         *flag.CommonFlagValues
+	forceFlagValues          *flag.ForceFlagValues
+	bundleFlagValues         *flag.BundleFlagValues
+	wildcardSearchFlagValues *flag.WildcardSearchFlagValues
 
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
@@ -58,9 +60,10 @@ func NewBunCommand(command *cobra.Command, args []string) (*BunCommand, error) {
 	bun := &BunCommand{
 		command: command,
 
-		commonFlagValues: flag.GetCommonFlagValues(command),
-		forceFlagValues:  flag.GetForceFlagValues(),
-		bundleFlagValues: flag.GetBundleFlagValues(),
+		commonFlagValues:         flag.GetCommonFlagValues(command),
+		forceFlagValues:          flag.GetForceFlagValues(),
+		bundleFlagValues:         flag.GetBundleFlagValues(),
+		wildcardSearchFlagValues: flag.GetWildcardSearchFlagValues(),
 	}
 
 	// path
@@ -99,10 +102,10 @@ func (bun *BunCommand) Process() error {
 	defer bun.filesystem.Release()
 
 	// Expand wildcards
-	if bun.bundleFlagValues.WildcardExpansion {
+	if bun.wildcardSearchFlagValues.WildcardSearch {
 		bun.sourcePaths, err = commons.ExpandWildcards(bun.filesystem, bun.account, bun.sourcePaths, false, true)
 		if err != nil {
-			return xerrors.Errorf("failed to expand wildcards:  %w", err)
+			return xerrors.Errorf("failed to expand wildcards: %w", err)
 		}
 	}
 

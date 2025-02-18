@@ -4,8 +4,7 @@ go 1.21
 
 require (
 	github.com/creativeprojects/go-selfupdate v1.0.1
-	github.com/cyverse/go-irodsclient v0.15.8
-	github.com/dlclark/regexp2 v1.11.4
+	github.com/cyverse/go-irodsclient v0.16.4
 	github.com/dustin/go-humanize v1.0.1
 	github.com/gliderlabs/ssh v0.3.5
 	github.com/jedib0t/go-pretty/v6 v6.3.1
@@ -25,6 +24,7 @@ require (
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
 	github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-github/v30 v30.1.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect

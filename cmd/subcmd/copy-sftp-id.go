@@ -312,7 +312,7 @@ func (copy *CopySftpIdCommand) copySftpId(identityFiles []string) error {
 
 		logger.Debugf("writing authorized_keys %q on iRODS for user %q", authorizedKeyPath, copy.account.ClientUser)
 
-		_, err := copy.filesystem.UploadFileFromBuffer(&contentBuf, authorizedKeyPath, "", false, true, true, nil)
+		_, err := copy.filesystem.UploadFileFromBuffer(&contentBuf, authorizedKeyPath, "", false, true, true, false, nil)
 		if err != nil {
 			return xerrors.Errorf("failed to update keys in %q: %w", authorizedKeyPath, err)
 		}

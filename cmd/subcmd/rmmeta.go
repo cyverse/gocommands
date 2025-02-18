@@ -209,7 +209,7 @@ func (rmMeta *RmMetaCommand) removeMetaFromUser(username string, avuid int64) er
 
 	logger.Debugf("remove metadata %d from user %q", avuid, username)
 
-	err := rmMeta.filesystem.DeleteUserMetadata(username, avuid)
+	err := rmMeta.filesystem.DeleteUserMetadata(username, rmMeta.account.ClientZone, avuid)
 	if err != nil {
 		return xerrors.Errorf("failed to delete metadata %d from user %q: %w", avuid, username, err)
 	}
@@ -265,7 +265,7 @@ func (rmMeta *RmMetaCommand) removeMetaFromUserByName(username string, attr stri
 
 	logger.Debugf("remove metadata %q from user %q by name", attr, username)
 
-	err := rmMeta.filesystem.DeleteUserMetadataByName(username, attr)
+	err := rmMeta.filesystem.DeleteUserMetadataByName(username, rmMeta.account.ClientZone, attr)
 	if err != nil {
 		return xerrors.Errorf("failed to delete metadata %q from user %q by name: %w", attr, username, err)
 	}

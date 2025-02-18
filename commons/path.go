@@ -41,30 +41,6 @@ func MakeIRODSPath(cwd string, homedir string, zone string, irodsPath string) st
 	return path.Clean(newPath)
 }
 
-func getIRODSPathDirname(path string) string {
-	p := strings.TrimRight(path, "/")
-	idx := strings.LastIndex(p, "/")
-
-	if idx < 0 {
-		return p
-	} else if idx == 0 {
-		return "/"
-	} else {
-		return p[:idx]
-	}
-}
-
-func getIRODSPathBasename(path string) string {
-	p := strings.TrimRight(path, "/")
-	idx := strings.LastIndex(p, "/")
-
-	if idx < 0 {
-		return p
-	} else {
-		return p[idx+1:]
-	}
-}
-
 func MakeLocalPath(localPath string) string {
 	absLocalPath, err := filepath.Abs(localPath)
 	if err != nil {
@@ -108,6 +84,30 @@ func GetFileExtension(p string) string {
 		return p[idx:]
 	}
 	return p
+}
+
+func GetIRODSPathDirname(path string) string {
+	p := strings.TrimRight(path, "/")
+	idx := strings.LastIndex(p, "/")
+
+	if idx < 0 {
+		return p
+	} else if idx == 0 {
+		return "/"
+	} else {
+		return p[:idx]
+	}
+}
+
+func GetIRODSPathBasename(path string) string {
+	p := strings.TrimRight(path, "/")
+	idx := strings.LastIndex(p, "/")
+
+	if idx < 0 {
+		return p
+	} else {
+		return p[idx+1:]
+	}
 }
 
 func GetBasename(p string) string {
