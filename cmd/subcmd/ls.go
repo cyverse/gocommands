@@ -225,6 +225,8 @@ func (ls *LsCommand) listCollection(sourcePath string) error {
 	ls.printDataObjects(filtered_objs, false)
 	ls.printCollections(filtered_colls)
 
+	commons.Print("\n")
+
 	return nil
 }
 
@@ -301,7 +303,7 @@ func (ls *LsCommand) filterHiddenDataObjects(entries []*irodsclient_types.IRODSD
 }
 
 func (ls *LsCommand) printCurrentCollection(sourcePath string) {
-	commons.Printf("\n%s:\n", sourcePath)
+	commons.Printf("%s:\n", sourcePath)
 }
 
 func (ls *LsCommand) printCollections(entries []*irodsclient_types.IRODSCollection) {
