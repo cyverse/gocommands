@@ -84,10 +84,10 @@ func (sync *SyncCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
-	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
-	}
+	//_, err = commons.InputMissingFields()
+	//if err != nil {
+	//	return xerrors.Errorf("failed to input missing fields: %w", err)
+	//}
 
 	// handle retry
 	if sync.retryFlagValues.RetryNumber > 0 && !sync.retryFlagValues.RetryChild {
