@@ -42,7 +42,7 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	flag.SetTicketAccessFlags(putCmd)
 	flag.SetProgressFlags(putCmd)
 	flag.SetRetryFlags(putCmd)
-	flag.SetDifferentialTransferFlags(putCmd, true)
+	flag.SetDifferentialTransferFlags(putCmd, false)
 	flag.SetChecksumFlags(putCmd, false, false)
 	flag.SetNoRootFlags(putCmd)
 	flag.SetSyncFlags(putCmd, false)
