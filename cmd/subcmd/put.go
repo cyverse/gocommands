@@ -397,7 +397,7 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 			uploadResult, uploadErr = fs.UploadFile(uploadSourcePath, targetPath, "", false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
 			notes = append(notes, "icat", "single-thread")
 		} else if put.parallelTransferFlagValues.RedirectToResource {
-			uploadResult, uploadErr = fs.UploadFileParallelRedirectToResource(uploadSourcePath, targetPath, "", 0, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
+			uploadResult, uploadErr = fs.UploadFileRedirectToResource(uploadSourcePath, targetPath, "", 0, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
 			notes = append(notes, "redirect-to-resource")
 		} else if put.parallelTransferFlagValues.Icat {
 			uploadResult, uploadErr = fs.UploadFileParallel(uploadSourcePath, targetPath, "", 0, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
@@ -406,7 +406,7 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 			// auto
 			if sourceStat.Size() >= commons.RedirectToResourceMinSize {
 				// redirect-to-resource
-				uploadResult, uploadErr = fs.UploadFileParallelRedirectToResource(uploadSourcePath, targetPath, "", 0, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
+				uploadResult, uploadErr = fs.UploadFileRedirectToResource(uploadSourcePath, targetPath, "", 0, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
 				notes = append(notes, "redirect-to-resource")
 			} else {
 				uploadResult, uploadErr = fs.UploadFileParallel(uploadSourcePath, targetPath, "", 0, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
