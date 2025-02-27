@@ -392,6 +392,15 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 			uploadSourcePath = tempPath
 		}
 
+		parentTargetPath := commons.GetDir(targetPath)
+		if !fs.ExistsDir(parentTargetPath) {
+			err := fs.MakeDir(parentTargetPath, true)
+			if err != nil {
+				job.Progress(-1, sourceStat.Size(), true)
+				return xerrors.Errorf("failed to make a collection %q: %w", parentTargetPath, err)
+			}
+		}
+
 		// determine how to upload
 		if put.parallelTransferFlagValues.SingleThread || put.parallelTransferFlagValues.ThreadNumber == 1 {
 			uploadResult, uploadErr = fs.UploadFile(uploadSourcePath, targetPath, "", false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)

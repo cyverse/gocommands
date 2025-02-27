@@ -435,7 +435,7 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 			}
 		}
 
-		err := get.transferReportManager.AddTransfer(downloadResult, commons.TransferMethodGet, downloadErr, notes)
+		err = get.transferReportManager.AddTransfer(downloadResult, commons.TransferMethodGet, downloadErr, notes)
 		if err != nil {
 			job.Progress(-1, sourceEntry.Size, true)
 			return xerrors.Errorf("failed to add transfer report: %w", err)
