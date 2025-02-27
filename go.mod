@@ -2,8 +2,6 @@ module github.com/cyverse/gocommands
 
 go 1.22
 
-toolchain go1.22.10
-
 require (
 	github.com/creativeprojects/go-selfupdate v1.0.1
 	github.com/cyverse/go-irodsclient v0.16.5
