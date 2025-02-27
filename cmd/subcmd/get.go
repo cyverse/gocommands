@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -363,6 +364,13 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 		downloadPath := targetPath
 		if len(tempPath) > 0 {
 			downloadPath = tempPath
+		}
+
+		parentDownloadPath := filepath.Dir(downloadPath)
+		err := os.MkdirAll(parentDownloadPath, 0766)
+		if err != nil {
+			job.Progress(-1, sourceEntry.Size, true)
+			return xerrors.Errorf("failed to make a directory %q: %w", parentDownloadPath, err)
 		}
 
 		// determine how to download
