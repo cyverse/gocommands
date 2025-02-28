@@ -5,7 +5,7 @@ You can build `Gocommands` from source by yourself if you need.
 You will need following softwares to build `Gocommands`.
 
 - make
-- go (1.18+)
+- go (1.22+)
 
 Use `make` to build `gocommands`.
 
