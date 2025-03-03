@@ -345,6 +345,8 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 		"function": "scheduleGet",
 	})
 
+	threadsRequired := get.parallelJobManager.CalculateThreadForTransfer(sourceEntry.Size)
+
 	getTask := func(job *commons.ParallelJob) error {
 		manager := job.GetManager()
 		fs := manager.GetFilesystem()
@@ -379,40 +381,40 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 			notes = append(notes, "icat", "single-thread")
 		} else if get.parallelTransferFlagValues.RedirectToResource {
 			if resume {
-				downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
+				downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, callbackGet)
 				notes = append(notes, "icat", "multi-thread", "resume")
 			} else {
 				// delete status file if exists
 				get.deleteTransferStatusFile(downloadPath)
 
-				downloadResult, downloadErr = fs.DownloadFileRedirectToResource(sourceEntry.Path, "", downloadPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
+				downloadResult, downloadErr = fs.DownloadFileRedirectToResource(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, callbackGet)
 				notes = append(notes, "redirect-to-resource")
 			}
 		} else if get.parallelTransferFlagValues.Icat {
 			// delete status file if exists
 			get.deleteTransferStatusFile(downloadPath)
 
-			downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
+			downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, callbackGet)
 			notes = append(notes, "icat", "multi-thread")
 		} else {
 			// auto
 			if sourceEntry.Size >= commons.RedirectToResourceMinSize {
 				// redirect-to-resource
 				if resume {
-					downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
+					downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, callbackGet)
 					notes = append(notes, "icat", "multi-thread", "resume")
 				} else {
 					// delete status file if exists
 					get.deleteTransferStatusFile(downloadPath)
 
-					downloadResult, downloadErr = fs.DownloadFileRedirectToResource(sourceEntry.Path, "", downloadPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
+					downloadResult, downloadErr = fs.DownloadFileRedirectToResource(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, callbackGet)
 					notes = append(notes, "redirect-to-resource")
 				}
 			} else {
 				// delete status file if exists
 				get.deleteTransferStatusFile(downloadPath)
 
-				downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, 0, get.checksumFlagValues.VerifyChecksum, callbackGet)
+				downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, callbackGet)
 				notes = append(notes, "icat", "multi-thread")
 			}
 		}
@@ -448,13 +450,12 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 		return nil
 	}
 
-	threadsRequired := irodsclient_util.GetNumTasksForParallelTransfer(sourceEntry.Size)
 	err := get.parallelJobManager.Schedule(sourceEntry.Path, getTask, threadsRequired, progress.UnitsBytes)
 	if err != nil {
 		return xerrors.Errorf("failed to schedule download %q to %q: %w", sourceEntry.Path, targetPath, err)
 	}
 
-	logger.Debugf("scheduled a data object download %q to %q", sourceEntry.Path, targetPath)
+	logger.Debugf("scheduled a data object download %q to %q, %d threads", sourceEntry.Path, targetPath, threadsRequired)
 
 	return nil
 }

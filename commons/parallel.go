@@ -5,9 +5,14 @@ import (
 	"sync/atomic"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
+)
+
+const (
+	minSizePrioritizedTransfer int64 = 1024 * 1024 * 1024
 )
 
 type ParallelJobTask func(job *ParallelJob) error
@@ -312,4 +317,32 @@ func (manager *ParallelJobManager) Start() {
 		}
 		manager.jobWait.Wait()
 	}()
+}
+
+func (manager *ParallelJobManager) CalculateThreadForTransfer(fileSize int64) int {
+	if manager.maxThreads <= 0 {
+		return 1
+	}
+
+	defaultThreadsRequired := irodsclient_util.GetNumTasksForParallelTransfer(fileSize)
+	if defaultThreadsRequired > manager.maxThreads {
+		return manager.maxThreads
+	}
+
+	threadsRequired := defaultThreadsRequired
+
+	// if file is large enough to be prioritized, use max threads
+	if fileSize >= minSizePrioritizedTransfer {
+		factor := fileSize / minSizePrioritizedTransfer
+		if factor >= 10 {
+			threadsRequired = defaultThreadsRequired * 4 // max 16
+		} else {
+			threadsRequired = defaultThreadsRequired * 2 // 8
+		}
+	}
+
+	if threadsRequired > manager.maxThreads {
+		return manager.maxThreads
+	}
+	return threadsRequired
 }

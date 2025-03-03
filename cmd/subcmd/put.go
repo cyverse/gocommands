@@ -358,6 +358,15 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 		"function": "schedulePut",
 	})
 
+	threadsRequired := put.parallelJobManager.CalculateThreadForTransfer(sourceStat.Size())
+	if put.parallelTransferFlagValues.SingleThread {
+		threadsRequired = 1
+	}
+
+	if !put.filesystem.SupportParallelUpload() {
+		threadsRequired = 1
+	}
+
 	putTask := func(job *commons.ParallelJob) error {
 		manager := job.GetManager()
 		fs := manager.GetFilesystem()
@@ -406,19 +415,19 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 			uploadResult, uploadErr = fs.UploadFile(uploadSourcePath, targetPath, "", false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
 			notes = append(notes, "icat", "single-thread")
 		} else if put.parallelTransferFlagValues.RedirectToResource {
-			uploadResult, uploadErr = fs.UploadFileRedirectToResource(uploadSourcePath, targetPath, "", 0, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
+			uploadResult, uploadErr = fs.UploadFileRedirectToResource(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
 			notes = append(notes, "redirect-to-resource")
 		} else if put.parallelTransferFlagValues.Icat {
-			uploadResult, uploadErr = fs.UploadFileParallel(uploadSourcePath, targetPath, "", 0, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
+			uploadResult, uploadErr = fs.UploadFileParallel(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
 			notes = append(notes, "icat", "multi-thread")
 		} else {
 			// auto
 			if sourceStat.Size() >= commons.RedirectToResourceMinSize {
 				// redirect-to-resource
-				uploadResult, uploadErr = fs.UploadFileRedirectToResource(uploadSourcePath, targetPath, "", 0, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
+				uploadResult, uploadErr = fs.UploadFileRedirectToResource(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
 				notes = append(notes, "redirect-to-resource")
 			} else {
-				uploadResult, uploadErr = fs.UploadFileParallel(uploadSourcePath, targetPath, "", 0, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
+				uploadResult, uploadErr = fs.UploadFileParallel(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
 				notes = append(notes, "icat", "multi-thread")
 			}
 		}
@@ -446,13 +455,12 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 		return nil
 	}
 
-	threadsRequired := put.computeThreadsRequired(sourceStat.Size())
 	err := put.parallelJobManager.Schedule(sourcePath, putTask, threadsRequired, progress.UnitsBytes)
 	if err != nil {
 		return xerrors.Errorf("failed to schedule upload %q to %q: %w", sourcePath, targetPath, err)
 	}
 
-	logger.Debugf("scheduled a file upload %q to %q", sourcePath, targetPath)
+	logger.Debugf("scheduled a file upload %q to %q, %d threads", sourcePath, targetPath, threadsRequired)
 
 	return nil
 }
@@ -761,23 +769,6 @@ func (put *PutCommand) putDir(_ fs.FileInfo, sourcePath string, targetPath strin
 	}
 
 	return nil
-}
-
-func (put *PutCommand) computeThreadsRequired(size int64) int {
-	if put.parallelTransferFlagValues.SingleThread {
-		return 1
-	}
-
-	if put.filesystem.SupportParallelUpload() {
-		numTasks := irodsclient_util.GetNumTasksForParallelTransfer(size)
-		if put.parallelTransferFlagValues.ThreadNumber < numTasks {
-			return put.parallelTransferFlagValues.ThreadNumber
-		}
-
-		return numTasks
-	}
-
-	return 1
 }
 
 func (put *PutCommand) deleteOnSuccess(sourcePath string) error {
