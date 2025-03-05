@@ -66,6 +66,9 @@ func NewSyncCommand(command *cobra.Command, args []string) (*SyncCommand, error)
 		syncFlagValues:   flag.GetSyncFlagValues(),
 	}
 
+	// mark this is sync command
+	sync.syncFlagValues.Sync = true
+
 	// path
 	sync.sourcePaths = args[:len(args)-1]
 	sync.targetPath = args[len(args)-1]
