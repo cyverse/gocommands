@@ -5,7 +5,6 @@ import (
 	"sync/atomic"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
-	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
@@ -73,7 +72,7 @@ type ParallelJobManager struct {
 
 	availableThreadWaitCondition *sync.Cond // used for checking available threads
 	scheduleWait                 sync.WaitGroup
-	jobWait                      sync.WaitGroup
+	processWait                  sync.WaitGroup
 }
 
 // NewParallelJobManager creates a new ParallelJobManager
@@ -91,7 +90,7 @@ func NewParallelJobManager(fs *irodsclient_fs.FileSystem, maxThreads int, showPr
 		lastError:               nil,
 		mutex:                   sync.RWMutex{},
 		scheduleWait:            sync.WaitGroup{},
-		jobWait:                 sync.WaitGroup{},
+		processWait:             sync.WaitGroup{},
 
 		jobsScheduledCounter: 0,
 		jobsDoneCounter:      0,
@@ -135,7 +134,7 @@ func (manager *ParallelJobManager) Schedule(name string, task ParallelJobTask, t
 	manager.mutex.Unlock()
 
 	manager.pendingJobs <- job
-	manager.jobWait.Add(1)
+	manager.processWait.Add(1)
 	atomic.AddInt64(&manager.jobsScheduledCounter, 1)
 
 	return nil
@@ -156,7 +155,7 @@ func (manager *ParallelJobManager) Wait() error {
 	logger.Debug("waiting schedule-wait")
 	manager.scheduleWait.Wait()
 	logger.Debug("waiting job-wait")
-	manager.jobWait.Wait()
+	manager.processWait.Wait()
 
 	manager.mutex.RLock()
 	defer manager.mutex.RUnlock()
@@ -281,6 +280,8 @@ func (manager *ParallelJobManager) Start() {
 				logger.Debugf("# threads : %d, max %d", currentThreads, manager.maxThreads)
 
 				go func(pjob *ParallelJob) {
+					defer manager.processWait.Done()
+
 					logger.Debugf("Run job %d, %q", pjob.index, pjob.name)
 
 					err := pjob.task(pjob)
@@ -295,54 +296,23 @@ func (manager *ParallelJobManager) Start() {
 						// don't stop here
 					}
 
+					manager.mutex.Lock()
 					currentThreads -= pjob.threadsRequired
+					manager.availableThreadWaitCondition.Broadcast()
+					manager.mutex.Unlock()
+
 					logger.Debugf("# threads : %d, max %d", currentThreads, manager.maxThreads)
 
 					if pjob.done {
 						// increase jobs done counter
 						atomic.AddInt64(&manager.jobsDoneCounter, 1)
 					}
-
-					manager.jobWait.Done()
-
-					manager.mutex.Lock()
-					manager.availableThreadWaitCondition.Broadcast()
-					manager.mutex.Unlock()
 				}(job)
 
 				manager.mutex.Unlock()
 			} else {
-				manager.jobWait.Done()
+				manager.processWait.Done()
 			}
 		}
-		manager.jobWait.Wait()
 	}()
-}
-
-func (manager *ParallelJobManager) CalculateThreadForTransfer(fileSize int64) int {
-	if manager.maxThreads <= 0 {
-		return 1
-	}
-
-	defaultThreadsRequired := irodsclient_util.GetNumTasksForParallelTransfer(fileSize)
-	if defaultThreadsRequired > manager.maxThreads {
-		return manager.maxThreads
-	}
-
-	threadsRequired := defaultThreadsRequired
-
-	// if file is large enough to be prioritized, use max threads
-	if fileSize >= minSizePrioritizedTransfer {
-		factor := fileSize / minSizePrioritizedTransfer
-		if factor >= 10 {
-			threadsRequired = defaultThreadsRequired * 4 // max 16
-		} else {
-			threadsRequired = defaultThreadsRequired * 2 // 8
-		}
-	}
-
-	if threadsRequired > manager.maxThreads {
-		return manager.maxThreads
-	}
-	return threadsRequired
 }

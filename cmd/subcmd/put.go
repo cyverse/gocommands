@@ -358,14 +358,7 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 		"function": "schedulePut",
 	})
 
-	threadsRequired := put.parallelJobManager.CalculateThreadForTransfer(sourceStat.Size())
-	if put.parallelTransferFlagValues.SingleThread {
-		threadsRequired = 1
-	}
-
-	if !put.filesystem.SupportParallelUpload() {
-		threadsRequired = 1
-	}
+	threadsRequired := put.calculateThreadForTransferJob(sourceStat.Size())
 
 	putTask := func(job *commons.ParallelJob) error {
 		manager := job.GetManager()
@@ -931,4 +924,24 @@ func (put *PutCommand) encryptFile(sourcePath string, encryptedFilePath string, 
 	}
 
 	return false, nil
+}
+
+func (put *PutCommand) calculateThreadForTransferJob(size int64) int {
+	threads := commons.CalculateThreadForTransferJob(size, put.parallelTransferFlagValues.ThreadNumber)
+
+	// determine how to upload
+	if put.parallelTransferFlagValues.SingleThread || put.parallelTransferFlagValues.ThreadNumber == 1 {
+		return 1
+	} else if put.parallelTransferFlagValues.Icat && !put.filesystem.SupportParallelUpload() {
+		return 1
+	} else if put.parallelTransferFlagValues.RedirectToResource || put.parallelTransferFlagValues.Icat {
+		return threads
+	}
+
+	if size < commons.RedirectToResourceMinSize && !put.filesystem.SupportParallelUpload() {
+		// icat
+		return 1
+	}
+
+	return threads
 }

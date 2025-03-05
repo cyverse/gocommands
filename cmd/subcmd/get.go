@@ -345,7 +345,7 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 		"function": "scheduleGet",
 	})
 
-	threadsRequired := get.parallelJobManager.CalculateThreadForTransfer(sourceEntry.Size)
+	threadsRequired := get.calculateThreadForTransferJob(sourceEntry.Size)
 
 	getTask := func(job *commons.ParallelJob) error {
 		manager := job.GetManager()
@@ -935,4 +935,15 @@ func (get *GetCommand) decryptFile(sourcePath string, encryptedFilePath string, 
 	}
 
 	return false, nil
+}
+
+func (get *GetCommand) calculateThreadForTransferJob(size int64) int {
+	threads := commons.CalculateThreadForTransferJob(size, commons.CalculateThreadForTransferJob(size, get.parallelTransferFlagValues.ThreadNumber))
+
+	// determine how to download
+	if get.parallelTransferFlagValues.SingleThread || get.parallelTransferFlagValues.ThreadNumber == 1 {
+		return 1
+	}
+
+	return threads
 }

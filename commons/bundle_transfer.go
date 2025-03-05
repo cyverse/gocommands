@@ -27,7 +27,7 @@ const (
 )
 
 const (
-	BundleTaskNameRemoveFilesAndMakeDirs string = "Cleaning & making dirs"
+	BundleTaskNameRemoveFilesAndMakeDirs string = "Preparing target"
 	BundleTaskNameTar                    string = "Bundling"
 	BundleTaskNameUpload                 string = "Uploading"
 	BundleTaskNameExtract                string = "Extracting"
@@ -46,12 +46,16 @@ type Bundle struct {
 	Index             int64
 	Entries           []*BundleEntry
 	Size              int64
+	ThreadsRequired   int
 	LocalBundlePath   string
 	IRODSBundlePath   string
 	LastError         error
 	LastErrorTaskName string
 
-	Completed bool
+	CreatedTarball   bool
+	Uploaded         bool
+	MadeDir          bool
+	ExtractedTarball bool
 }
 
 func newBundle(manager *BundleTransferManager) (*Bundle, error) {
@@ -65,7 +69,10 @@ func newBundle(manager *BundleTransferManager) (*Bundle, error) {
 		LastError:         nil,
 		LastErrorTaskName: "",
 
-		Completed: false,
+		CreatedTarball:   false,
+		Uploaded:         false,
+		MadeDir:          false,
+		ExtractedTarball: false,
 	}
 
 	err := bundle.updateBundlePath()
@@ -159,48 +166,44 @@ func (bundle *Bundle) RequireTar() bool {
 	return len(bundle.Entries) >= bundle.manager.minBundleFileNum
 }
 
-func (bundle *Bundle) SetCompleted() {
-	bundle.Completed = true
-}
-
 type BundleTransferManager struct {
 	// moved to top to avoid 64bit alignment issue
 	bundlesScheduledCounter int64
 	bundlesDoneCounter      int64
 
-	account                 *irodsclient_types.IRODSAccount
-	filesystem              *irodsclient_fs.FileSystem
-	transferReportManager   *TransferReportManager
-	irodsDestPath           string
-	currentBundle           *Bundle
-	nextBundleIndex         int64
-	pendingBundles          chan *Bundle
-	bundles                 []*Bundle
-	localBundleRootPath     string
-	minBundleFileNum        int
-	maxBundleFileNum        int
-	maxBundleFileSize       int64
-	singleThreaded          bool
-	uploadThreadNum         int
-	redirectToResource      bool
-	useIcat                 bool
-	localTempDirPath        string
-	irodsTempDirPath        string
-	noBulkRegistration      bool
-	showProgress            bool
-	showFullPath            bool
-	progressWriter          progress.Writer
-	progressTrackers        map[string]*progress.Tracker
-	progressTrackerCallback ProgressTrackerCallback
-	lastError               error
-	mutex                   sync.RWMutex
+	account                      *irodsclient_types.IRODSAccount
+	filesystem                   *irodsclient_fs.FileSystem
+	transferReportManager        *TransferReportManager
+	irodsDestPath                string
+	currentBundle                *Bundle
+	nextBundleIndex              int64
+	pendingBundles               chan *Bundle
+	bundles                      []*Bundle
+	localBundleRootPath          string
+	minBundleFileNum             int
+	maxBundleFileNum             int
+	maxBundleFileSize            int64
+	maxUploadThreads             int
+	redirectToResource           bool
+	icat                         bool
+	localTempDirPath             string
+	irodsTempDirPath             string
+	noBulkRegistration           bool
+	showProgress                 bool
+	showFullPath                 bool
+	progressWriter               progress.Writer
+	progressTrackers             map[string]*progress.Tracker
+	progressTrackerCallback      ProgressTrackerCallback
+	lastError                    error
+	mutex                        sync.RWMutex
+	availableThreadWaitCondition *sync.Cond // used for checking available threads
 
 	scheduleWait sync.WaitGroup
-	transferWait sync.WaitGroup
+	processWait  sync.WaitGroup
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
-func NewBundleTransferManager(account *irodsclient_types.IRODSAccount, fs *irodsclient_fs.FileSystem, transferReportManager *TransferReportManager, irodsDestPath string, localBundleRootPath string, minBundleFileNum int, maxBundleFileNum int, maxBundleFileSize int64, singleThreaded bool, uploadThreadNum int, redirectToResource bool, useIcat bool, localTempDirPath string, irodsTempDirPath string, noBulkReg bool, showProgress bool, showFullPath bool) *BundleTransferManager {
+func NewBundleTransferManager(account *irodsclient_types.IRODSAccount, fs *irodsclient_fs.FileSystem, transferReportManager *TransferReportManager, irodsDestPath string, localBundleRootPath string, minBundleFileNum int, maxBundleFileNum int, maxBundleFileSize int64, maxUploadThreads int, redirectToResource bool, useIcat bool, localTempDirPath string, irodsTempDirPath string, noBulkReg bool, showProgress bool, showFullPath bool) *BundleTransferManager {
 	cwd := GetCWD()
 	home := GetHomeDir()
 	zone := account.ClientZone
@@ -219,10 +222,9 @@ func NewBundleTransferManager(account *irodsclient_types.IRODSAccount, fs *irods
 		minBundleFileNum:        minBundleFileNum,
 		maxBundleFileNum:        maxBundleFileNum,
 		maxBundleFileSize:       maxBundleFileSize,
-		singleThreaded:          singleThreaded,
-		uploadThreadNum:         uploadThreadNum,
+		maxUploadThreads:        maxUploadThreads,
 		redirectToResource:      redirectToResource,
-		useIcat:                 useIcat,
+		icat:                    useIcat,
 		localTempDirPath:        localTempDirPath,
 		irodsTempDirPath:        irodsTempDirPath,
 		noBulkRegistration:      noBulkReg,
@@ -234,11 +236,13 @@ func NewBundleTransferManager(account *irodsclient_types.IRODSAccount, fs *irods
 		lastError:               nil,
 		mutex:                   sync.RWMutex{},
 		scheduleWait:            sync.WaitGroup{},
-		transferWait:            sync.WaitGroup{},
+		processWait:             sync.WaitGroup{},
 
 		bundlesScheduledCounter: 0,
 		bundlesDoneCounter:      0,
 	}
+
+	manager.availableThreadWaitCondition = sync.NewCond(&manager.mutex)
 
 	if manager.maxBundleFileNum <= 0 {
 		manager.maxBundleFileNum = MaxBundleFileNumDefault
@@ -246,10 +250,6 @@ func NewBundleTransferManager(account *irodsclient_types.IRODSAccount, fs *irods
 
 	if manager.minBundleFileNum <= 0 {
 		manager.minBundleFileNum = MinBundleFileNumDefault
-	}
-
-	if manager.uploadThreadNum > UploadThreadNumMax {
-		manager.uploadThreadNum = UploadThreadNumMax
 	}
 
 	manager.scheduleWait.Add(1)
@@ -308,7 +308,6 @@ func (manager *BundleTransferManager) Schedule(sourceStat fs.FileInfo, sourcePat
 
 			manager.mutex.Lock()
 			manager.currentBundle = nil
-			manager.transferWait.Add(1)
 			atomic.AddInt64(&manager.bundlesScheduledCounter, 1)
 		}
 	}
@@ -336,7 +335,6 @@ func (manager *BundleTransferManager) DoneScheduling() {
 		manager.pendingBundles <- manager.currentBundle
 		manager.bundles = append(manager.bundles, manager.currentBundle)
 		manager.currentBundle = nil
-		manager.transferWait.Add(1)
 		atomic.AddInt64(&manager.bundlesScheduledCounter, 1)
 	}
 	manager.mutex.Unlock()
@@ -359,7 +357,7 @@ func (manager *BundleTransferManager) Wait() error {
 	logger.Debug("waiting schedule-wait")
 	manager.scheduleWait.Wait()
 	logger.Debug("waiting transfer-wait")
-	manager.transferWait.Wait()
+	manager.processWait.Wait()
 
 	manager.CleanUpBundles()
 
@@ -459,12 +457,27 @@ func (manager *BundleTransferManager) endProgress() {
 	}
 }
 
-func (manager *BundleTransferManager) Start() {
+func (manager *BundleTransferManager) Start() error {
 	logger := log.WithFields(log.Fields{
 		"package":  "commons",
 		"struct":   "BundleTransferManager",
 		"function": "Start",
 	})
+
+	// prepare
+	if !manager.filesystem.ExistsDir(manager.irodsDestPath) {
+		err := manager.filesystem.MakeDir(manager.irodsDestPath, true)
+		if err != nil {
+			return xerrors.Errorf("failed to create destination directory %q: %w", manager.irodsDestPath, err)
+		}
+	}
+
+	if !manager.filesystem.ExistsDir(manager.irodsTempDirPath) {
+		err := manager.filesystem.MakeDir(manager.irodsTempDirPath, true)
+		if err != nil {
+			return xerrors.Errorf("failed to create temporary directory %q: %w", manager.irodsTempDirPath, err)
+		}
+	}
 
 	processBundleTarChan := make(chan *Bundle, 1)
 	processBundleRemoveFilesAndMakeDirsChan := make(chan *Bundle, 5)
@@ -477,6 +490,8 @@ func (manager *BundleTransferManager) Start() {
 	// bundle --> tar --> upload                   --> extract
 	//        --> remove old files & make dirs ------>
 
+	manager.processWait.Add(1) // waits for extract thread to complete
+
 	go func() {
 		logger.Debug("start input thread")
 		defer logger.Debug("exit input thread")
@@ -484,37 +499,13 @@ func (manager *BundleTransferManager) Start() {
 		defer close(processBundleTarChan)
 		defer close(processBundleRemoveFilesAndMakeDirsChan)
 
-		if !manager.filesystem.ExistsDir(manager.irodsDestPath) {
-			err := manager.filesystem.MakeDir(manager.irodsDestPath, true)
-			if err != nil {
-				// mark error
-				manager.mutex.Lock()
-				manager.lastError = err
-				manager.mutex.Unlock()
-
-				logger.Error(err)
-				// don't stop here
-			}
-		}
-
-		if !manager.filesystem.ExistsDir(manager.irodsTempDirPath) {
-			err := manager.filesystem.MakeDir(manager.irodsTempDirPath, true)
-			if err != nil {
-				// mark error
-				manager.mutex.Lock()
-				manager.lastError = err
-				manager.mutex.Unlock()
-
-				logger.Error(err)
-				// don't stop here
-			}
-		}
-
 		for bundle := range manager.pendingBundles {
+			// init
+			bundle.ThreadsRequired = manager.calculateThreadForBundleTransfer(bundle.Size)
+
 			// send to tar and remove
 			processBundleTarChan <- bundle
 			processBundleRemoveFilesAndMakeDirsChan <- bundle
-			// don't stop here
 		}
 	}()
 
@@ -534,7 +525,7 @@ func (manager *BundleTransferManager) Start() {
 			}
 			manager.mutex.RUnlock()
 
-			if cont && len(bundle.Entries) > 0 {
+			if cont {
 				err := manager.processBundleTar(bundle)
 				if err != nil {
 					// mark error
@@ -547,6 +538,8 @@ func (manager *BundleTransferManager) Start() {
 
 					logger.Error(err)
 					// don't stop here
+				} else {
+					bundle.CreatedTarball = true
 				}
 			}
 
@@ -555,61 +548,81 @@ func (manager *BundleTransferManager) Start() {
 	}()
 
 	// process bundle - upload
-	funcAsyncUpload := func(id int, wg *sync.WaitGroup) {
-		logger.Debugf("start transfer thread %d", id)
-		defer logger.Debugf("exit transfer thread %d", id)
+	go func() {
+		logger.Debug("start transfer thread")
+		defer logger.Debug("exit transfer thread")
 
-		defer wg.Done()
+		currentUploadThreads := 0
 
-		for {
-			bundle, ok := <-processBundleUploadChan
-			if ok {
-				cont := true
+		defer close(processBundleExtractChan1)
 
-				manager.mutex.RLock()
-				if manager.lastError != nil {
-					cont = false
+		threadWaiter := sync.WaitGroup{}
+
+		for bundle := range processBundleUploadChan {
+			cont := true
+
+			manager.mutex.RLock()
+			if manager.lastError != nil {
+				cont = false
+			}
+			manager.mutex.RUnlock()
+
+			if cont {
+				manager.mutex.Lock()
+				if currentUploadThreads > 0 {
+					for currentUploadThreads+bundle.ThreadsRequired > manager.maxUploadThreads {
+						// exceed max threads, wait
+						logger.Debugf("waiting for other transfers to complete - current %d, max %d", currentUploadThreads, manager.maxUploadThreads)
+
+						manager.availableThreadWaitCondition.Wait()
+					}
 				}
-				manager.mutex.RUnlock()
 
-				if cont && len(bundle.Entries) > 0 {
-					err := manager.processBundleUpload(bundle)
+				threadWaiter.Add(1)
+
+				currentUploadThreads += bundle.ThreadsRequired
+				logger.Debugf("# threads : %d, max %d", currentUploadThreads, manager.maxUploadThreads)
+
+				go func(pbundle *Bundle) {
+					defer threadWaiter.Done()
+
+					err := manager.processBundleUpload(pbundle)
 					if err != nil {
 						// mark error
 						manager.mutex.Lock()
 						manager.lastError = err
 						manager.mutex.Unlock()
 
-						bundle.LastError = err
-						bundle.LastErrorTaskName = BundleTaskNameUpload
+						pbundle.LastError = err
+						pbundle.LastErrorTaskName = BundleTaskNameUpload
 
 						logger.Error(err)
 						// don't stop here
+					} else {
+						pbundle.Uploaded = true
 					}
-				}
 
-				processBundleExtractChan1 <- bundle
-			} else {
-				return
+					manager.mutex.Lock()
+					currentUploadThreads -= bundle.ThreadsRequired
+					manager.availableThreadWaitCondition.Broadcast()
+					manager.mutex.Unlock()
+
+					logger.Debugf("# threads : %d, max %d", currentUploadThreads, manager.maxUploadThreads)
+
+					processBundleExtractChan1 <- pbundle
+				}(bundle)
+
+				manager.mutex.Unlock()
 			}
 		}
-	}
 
-	waitAsyncUpload := sync.WaitGroup{}
-	for i := 0; i < manager.uploadThreadNum; i++ {
-		waitAsyncUpload.Add(1)
-		go funcAsyncUpload(i, &waitAsyncUpload)
-	}
-
-	go func() {
-		waitAsyncUpload.Wait()
-		close(processBundleExtractChan1)
+		threadWaiter.Wait()
 	}()
 
 	// process bundle - remove stale files and create new dirs
 	go func() {
-		logger.Debug("start stale file remove and directory create thread")
-		defer logger.Debug("exit stale file remove and directory create thread")
+		logger.Debug("start directory create thread")
+		defer logger.Debug("exit directory create thread")
 
 		defer close(processBundleExtractChan2)
 
@@ -622,7 +635,7 @@ func (manager *BundleTransferManager) Start() {
 			}
 			manager.mutex.RUnlock()
 
-			if cont && len(bundle.Entries) > 0 {
+			if cont {
 				err := manager.processBundleRemoveFilesAndMakeDirs(bundle)
 				if err != nil {
 					// mark error
@@ -635,6 +648,8 @@ func (manager *BundleTransferManager) Start() {
 
 					logger.Error(err)
 					// don't stop here
+				} else {
+					bundle.MadeDir = true
 				}
 			}
 
@@ -643,35 +658,28 @@ func (manager *BundleTransferManager) Start() {
 	}()
 
 	// process bundle - extract
-	// order may be different
-	removeTaskCompleted := map[int64]int{}
-	removeTaskCompletedMutex := sync.Mutex{}
+	go func() {
+		logger.Debug("start extract thread")
+		defer logger.Debug("exit extract thread")
 
-	funcAsyncExtract := func(id int, wg *sync.WaitGroup) {
-		logger.Debugf("start extract thread %d", id)
-		defer logger.Debugf("exit extract thread %d", id)
-
-		defer wg.Done()
+		processBundleExtractChan1Closed := false
+		processBundleExtractChan2Closed := false
 
 		for {
 			select {
 			case bundle1, ok1 := <-processBundleExtractChan1:
 				if bundle1 != nil {
-					removeTaskCompletedMutex.Lock()
-					if _, ok := removeTaskCompleted[bundle1.Index]; ok {
-						// has it
-						delete(removeTaskCompleted, bundle1.Index)
-						removeTaskCompletedMutex.Unlock()
+					cont := true
 
-						cont := true
+					manager.mutex.RLock()
+					if manager.lastError != nil {
+						cont = false
+					}
+					manager.mutex.RUnlock()
 
-						manager.mutex.RLock()
-						if manager.lastError != nil {
-							cont = false
-						}
-						manager.mutex.RUnlock()
-
-						if cont && len(bundle1.Entries) > 0 {
+					if cont {
+						if bundle1.MadeDir && bundle1.Uploaded {
+							// ready to extract
 							err := manager.processBundleExtract(bundle1)
 							if err != nil {
 								// mark error
@@ -684,43 +692,30 @@ func (manager *BundleTransferManager) Start() {
 
 								logger.Error(err)
 								// don't stop here
-							}
-
-						} else {
-							if bundle1.RequireTar() {
-								// remove irods bundle file
-								manager.filesystem.RemoveFile(bundle1.IRODSBundlePath, true)
+							} else {
+								atomic.AddInt64(&manager.bundlesDoneCounter, 1)
+								bundle1.ExtractedTarball = true
 							}
 						}
-
-						manager.transferWait.Done()
-					} else {
-						removeTaskCompleted[bundle1.Index] = 1
-						removeTaskCompletedMutex.Unlock()
 					}
 				}
 
 				if !ok1 {
-					processBundleExtractChan1 = nil
+					processBundleExtractChan1Closed = true
 				}
-
 			case bundle2, ok2 := <-processBundleExtractChan2:
 				if bundle2 != nil {
-					removeTaskCompletedMutex.Lock()
-					if _, ok := removeTaskCompleted[bundle2.Index]; ok {
-						// has it
-						delete(removeTaskCompleted, bundle2.Index)
-						removeTaskCompletedMutex.Unlock()
+					cont := true
 
-						cont := true
+					manager.mutex.RLock()
+					if manager.lastError != nil {
+						cont = false
+					}
+					manager.mutex.RUnlock()
 
-						manager.mutex.RLock()
-						if manager.lastError != nil {
-							cont = false
-						}
-						manager.mutex.RUnlock()
-
-						if cont && len(bundle2.Entries) > 0 {
+					if cont {
+						if bundle2.MadeDir && bundle2.Uploaded {
+							// ready to extract
 							err := manager.processBundleExtract(bundle2)
 							if err != nil {
 								// mark error
@@ -733,43 +728,32 @@ func (manager *BundleTransferManager) Start() {
 
 								logger.Error(err)
 								// don't stop here
-							}
-						} else {
-							if bundle2.RequireTar() {
-								// remove irods bundle file
-								manager.filesystem.RemoveFile(bundle2.IRODSBundlePath, true)
+							} else {
+								atomic.AddInt64(&manager.bundlesDoneCounter, 1)
+								bundle2.ExtractedTarball = true
 							}
 						}
-
-						manager.transferWait.Done()
-					} else {
-						removeTaskCompleted[bundle2.Index] = 1
-						removeTaskCompletedMutex.Unlock()
 					}
 				}
 
 				if !ok2 {
-					processBundleExtractChan2 = nil
+					processBundleExtractChan2Closed = true
 				}
 			}
 
-			if processBundleExtractChan1 == nil && processBundleExtractChan2 == nil {
+			if processBundleExtractChan1Closed && processBundleExtractChan2Closed {
+				manager.processWait.Done()
 				return
 			}
 		}
-	}
-
-	waitAsyncExtract := sync.WaitGroup{}
-	for i := 0; i < 3; i++ {
-		waitAsyncExtract.Add(1)
-		go funcAsyncExtract(i, &waitAsyncExtract)
-	}
+	}()
 
 	go func() {
-		waitAsyncExtract.Wait()
-
-		manager.endProgress()
+		defer manager.endProgress()
+		manager.processWait.Wait()
 	}()
+
+	return nil
 }
 
 func (manager *BundleTransferManager) processBundleRemoveFilesAndMakeDirs(bundle *Bundle) error {
@@ -778,6 +762,11 @@ func (manager *BundleTransferManager) processBundleRemoveFilesAndMakeDirs(bundle
 		"struct":   "BundleTransferManager",
 		"function": "processBundleRemoveFilesAndMakeDirs",
 	})
+
+	if len(bundle.Entries) == 0 {
+		logger.Debugf("skip removing files and making dirs in the bundle %d, empty bundle", bundle.Index)
+		return nil
+	}
 
 	// remove files in the bundle if they exist in iRODS
 	logger.Debugf("deleting exising data objects and creating new collections in the bundle %d", bundle.Index)
@@ -835,6 +824,11 @@ func (manager *BundleTransferManager) processBundleTar(bundle *Bundle) error {
 		"function": "processBundleTar",
 	})
 
+	if len(bundle.Entries) == 0 {
+		logger.Debugf("skip creating a tarball for bundle %d, empty bundle", bundle.Index)
+		return nil
+	}
+
 	logger.Debugf("creating a tarball for bundle %d to %q", bundle.Index, bundle.LocalBundlePath)
 
 	progressName := manager.getProgressName(bundle, BundleTaskNameTar)
@@ -877,6 +871,11 @@ func (manager *BundleTransferManager) processBundleUpload(bundle *Bundle) error 
 		"struct":   "BundleTransferManager",
 		"function": "processBundleUpload",
 	})
+
+	if len(bundle.Entries) == 0 {
+		logger.Debugf("skip uploading bundle %d, empty bundle", bundle.Index)
+		return nil
+	}
 
 	logger.Debugf("uploading bundle %d to %q", bundle.Index, bundle.IRODSBundlePath)
 
@@ -932,11 +931,11 @@ func (manager *BundleTransferManager) processBundleUploadWithTar(bundle *Bundle)
 	logger.Debugf("uploading bundle %d to %q, size %d", bundle.Index, bundle.IRODSBundlePath, localBundleStat.Size())
 
 	// determine how to download
-	if manager.singleThreaded || manager.uploadThreadNum == 1 {
+	if manager.maxUploadThreads == 1 {
 		_, err = manager.filesystem.UploadFile(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", false, true, true, false, callbackPut)
 	} else if manager.redirectToResource {
 		_, err = manager.filesystem.UploadFileRedirectToResource(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, true, true, false, callbackPut)
-	} else if manager.useIcat {
+	} else if manager.icat {
 		_, err = manager.filesystem.UploadFileParallel(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, true, true, false, callbackPut)
 	} else {
 		// auto
@@ -1027,13 +1026,13 @@ func (manager *BundleTransferManager) processBundleUploadWithoutTar(bundle *Bund
 
 		// determine how to download
 		var err error
-		if manager.singleThreaded || manager.uploadThreadNum == 1 {
+		if manager.maxUploadThreads == 1 {
 			uploadResult, err = manager.filesystem.UploadFile(file.LocalPath, file.IRODSPath, "", false, true, true, false, callbackPut)
 			notes = append(notes, "icat", "single-thread")
 		} else if manager.redirectToResource {
 			uploadResult, err = manager.filesystem.UploadFileRedirectToResource(file.LocalPath, file.IRODSPath, "", 0, false, true, true, false, callbackPut)
 			notes = append(notes, "redirect-to-resource")
-		} else if manager.useIcat {
+		} else if manager.icat {
 			uploadResult, err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, true, true, false, callbackPut)
 			notes = append(notes, "icat", "multi-thread")
 		} else {
@@ -1074,6 +1073,11 @@ func (manager *BundleTransferManager) processBundleExtract(bundle *Bundle) error
 		"function": "processBundleExtract",
 	})
 
+	if len(bundle.Entries) == 0 {
+		logger.Debugf("skip extracting bundle %d, empty bundle", bundle.Index)
+		return nil
+	}
+
 	logger.Debugf("extracting bundle %d at %q", bundle.Index, bundle.IRODSBundlePath)
 
 	progressName := manager.getProgressName(bundle, BundleTaskNameExtract)
@@ -1100,10 +1104,6 @@ func (manager *BundleTransferManager) processBundleExtract(bundle *Bundle) error
 
 	manager.progress(progressName, totalFileNum, totalFileNum, progress.UnitsDefault, false)
 
-	// set it done
-	bundle.SetCompleted()
-	atomic.AddInt64(&manager.bundlesDoneCounter, 1)
-
 	now := time.Now()
 
 	for _, file := range bundle.Entries {
@@ -1128,6 +1128,26 @@ func (manager *BundleTransferManager) processBundleExtract(bundle *Bundle) error
 
 func (manager *BundleTransferManager) getProgressName(bundle *Bundle, taskName string) string {
 	return fmt.Sprintf("bundle %d - %q", bundle.Index, taskName)
+}
+
+func (manager *BundleTransferManager) calculateThreadForBundleTransfer(size int64) int {
+	threads := CalculateThreadForTransferJob(size, manager.maxUploadThreads)
+
+	// determine how to upload
+	if manager.maxUploadThreads == 1 {
+		return 1
+	} else if manager.icat && !manager.filesystem.SupportParallelUpload() {
+		return 1
+	} else if manager.redirectToResource || manager.icat {
+		return threads
+	}
+
+	if size < RedirectToResourceMinSize && !manager.filesystem.SupportParallelUpload() {
+		// icat
+		return 1
+	}
+
+	return threads
 }
 
 func CleanUpOldLocalBundles(localTempDirPath string, force bool) {

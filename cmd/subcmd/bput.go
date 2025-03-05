@@ -218,8 +218,16 @@ func (bput *BputCommand) Process() error {
 	}
 
 	// bundle transfer manager
-	bput.bundleTransferManager = commons.NewBundleTransferManager(bput.account, bput.filesystem, bput.transferReportManager, bput.targetPath, localBundleRootPath, bput.bundleTransferFlagValues.MinFileNum, bput.bundleTransferFlagValues.MaxFileNum, bput.bundleTransferFlagValues.MaxFileSize, bput.parallelTransferFlagValues.SingleThread, bput.parallelTransferFlagValues.ThreadNumber, bput.parallelTransferFlagValues.RedirectToResource, bput.parallelTransferFlagValues.Icat, bput.bundleTransferFlagValues.LocalTempPath, stagingDirPath, bput.bundleTransferFlagValues.NoBulkRegistration, bput.progressFlagValues.ShowProgress, bput.progressFlagValues.ShowFullPath)
-	bput.bundleTransferManager.Start()
+	transferThreadNum := bput.parallelTransferFlagValues.ThreadNumber
+	if bput.parallelTransferFlagValues.SingleThread {
+		transferThreadNum = 1
+	}
+
+	bput.bundleTransferManager = commons.NewBundleTransferManager(bput.account, bput.filesystem, bput.transferReportManager, bput.targetPath, localBundleRootPath, bput.bundleTransferFlagValues.MinFileNum, bput.bundleTransferFlagValues.MaxFileNum, bput.bundleTransferFlagValues.MaxFileSize, transferThreadNum, bput.parallelTransferFlagValues.RedirectToResource, bput.parallelTransferFlagValues.Icat, bput.bundleTransferFlagValues.LocalTempPath, stagingDirPath, bput.bundleTransferFlagValues.NoBulkRegistration, bput.progressFlagValues.ShowProgress, bput.progressFlagValues.ShowFullPath)
+	err = bput.bundleTransferManager.Start()
+	if err != nil {
+		return xerrors.Errorf("failed to start bundle transfer manager: %w", err)
+	}
 
 	// run
 	for _, sourcePath := range bput.sourcePaths {
