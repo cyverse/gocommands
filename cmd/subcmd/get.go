@@ -469,6 +469,54 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 
 	commons.MarkLocalPathMap(get.updatedPathMap, targetPath)
 
+	if get.hiddenFileFlagValues.Exclude {
+		// exclude hidden
+		if strings.HasPrefix(sourceEntry.Name, ".") {
+			// skip
+			now := time.Now()
+			reportFile := &commons.TransferReportFile{
+				Method:     commons.TransferMethodGet,
+				StartAt:    now,
+				EndAt:      now,
+				SourcePath: sourceEntry.Path,
+				SourceSize: sourceEntry.Size,
+				DestPath:   targetPath,
+				Notes:      []string{"hidden", "skip"},
+			}
+
+			get.transferReportManager.AddFile(reportFile)
+
+			commons.Printf("skip downloading a file %q to %q. The file is hidden!\n", sourceEntry.Path, targetPath)
+			logger.Debugf("skip downloading a file %q to %q. The file is hidden!!", sourceEntry.Path, targetPath)
+			return nil
+		}
+	}
+
+	if get.syncFlagValues.Age > 0 {
+		// exclude old
+		age := time.Since(sourceEntry.ModifyTime)
+		maxAge := time.Duration(get.syncFlagValues.Age) * time.Minute
+		if age > maxAge {
+			// skip
+			now := time.Now()
+			reportFile := &commons.TransferReportFile{
+				Method:     commons.TransferMethodGet,
+				StartAt:    now,
+				EndAt:      now,
+				SourcePath: sourceEntry.Path,
+				SourceSize: sourceEntry.Size,
+				DestPath:   targetPath,
+				Notes:      []string{"age", "skip"},
+			}
+
+			get.transferReportManager.AddFile(reportFile)
+
+			commons.Printf("skip downloading a file %q to %q. The file is too old (%s > %s)!\n", sourceEntry.Path, targetPath, age, maxAge)
+			logger.Debugf("skip downloading a file %q to %q. The file is too old (%s > %s)!", sourceEntry.Path, targetPath, age, maxAge)
+			return nil
+		}
+	}
+
 	targetStat, err := os.Stat(targetPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -637,7 +685,36 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 }
 
 func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"struct":   "GetCommand",
+		"function": "getDir",
+	})
+
 	commons.MarkLocalPathMap(get.updatedPathMap, targetPath)
+
+	if get.hiddenFileFlagValues.Exclude {
+		// exclude hidden
+		if strings.HasPrefix(sourceEntry.Name, ".") {
+			// skip
+			now := time.Now()
+			reportFile := &commons.TransferReportFile{
+				Method:     commons.TransferMethodGet,
+				StartAt:    now,
+				EndAt:      now,
+				SourcePath: sourceEntry.Path,
+				SourceSize: sourceEntry.Size,
+				DestPath:   targetPath,
+				Notes:      []string{"hidden", "skip"},
+			}
+
+			get.transferReportManager.AddFile(reportFile)
+
+			commons.Printf("skip downloading a dir %q to %q. The dir is hidden!\n", sourceEntry.Path, targetPath)
+			logger.Debugf("skip downloading a dir %q to %q. The dir is hidden!!", sourceEntry.Path, targetPath)
+			return nil
+		}
+	}
 
 	targetStat, err := os.Stat(targetPath)
 	if err != nil {
@@ -727,12 +804,6 @@ func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath stri
 	}
 
 	for _, entry := range entries {
-		if get.hiddenFileFlagValues.Exclude {
-			if strings.HasPrefix(entry.Name, ".") {
-				continue
-			}
-		}
-
 		newEntryPath := commons.MakeTargetLocalFilePath(entry.Path, targetPath)
 
 		if entry.IsDir() {

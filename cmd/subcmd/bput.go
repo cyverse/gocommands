@@ -449,6 +449,54 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string) erro
 
 	commons.MarkIRODSPathMap(bput.updatedPathMap, targetPath)
 
+	if bput.hiddenFileFlagValues.Exclude {
+		// exclude hidden
+		if strings.HasPrefix(sourceStat.Name(), ".") {
+			// skip
+			now := time.Now()
+			reportFile := &commons.TransferReportFile{
+				Method:     commons.TransferMethodBput,
+				StartAt:    now,
+				EndAt:      now,
+				SourcePath: sourcePath,
+				SourceSize: sourceStat.Size(),
+				DestPath:   targetPath,
+				Notes:      []string{"hidden", "skip"},
+			}
+
+			bput.transferReportManager.AddFile(reportFile)
+
+			commons.Printf("skip uploading a file %q to %q. The file is hidden!\n", sourcePath, targetPath)
+			logger.Debugf("skip uploading a file %q to %q. The file is hidden!", sourcePath, targetPath)
+			return nil
+		}
+	}
+
+	if bput.syncFlagValues.Age > 0 {
+		// check age
+		age := time.Since(sourceStat.ModTime())
+		maxAge := time.Duration(bput.syncFlagValues.Age) * time.Minute
+		if age > maxAge {
+			// skip
+			now := time.Now()
+			reportFile := &commons.TransferReportFile{
+				Method:     commons.TransferMethodBput,
+				StartAt:    now,
+				EndAt:      now,
+				SourcePath: sourcePath,
+				SourceSize: sourceStat.Size(),
+				DestPath:   targetPath,
+				Notes:      []string{"age", "skip"},
+			}
+
+			bput.transferReportManager.AddFile(reportFile)
+
+			commons.Printf("skip uploading a file %q to %q. The file is too old (%s > %s)!\n", sourcePath, targetPath, age, maxAge)
+			logger.Debugf("skip uploading a file %q to %q. The file is too old (%s > %s)!", sourcePath, targetPath, age, maxAge)
+			return nil
+		}
+	}
+
 	targetEntry, err := bput.filesystem.Stat(targetPath)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
@@ -518,7 +566,7 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string) erro
 				// skip
 				now := time.Now()
 				reportFile := &commons.TransferReportFile{
-					Method:     commons.TransferMethodPut,
+					Method:     commons.TransferMethodBput,
 					StartAt:    now,
 					EndAt:      now,
 					SourcePath: sourcePath,
@@ -549,7 +597,7 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string) erro
 						// skip
 						now := time.Now()
 						reportFile := &commons.TransferReportFile{
-							Method:                  commons.TransferMethodPut,
+							Method:                  commons.TransferMethodBput,
 							StartAt:                 now,
 							EndAt:                   now,
 							SourcePath:              sourcePath,
@@ -580,7 +628,7 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string) erro
 				// skip
 				now := time.Now()
 				reportFile := &commons.TransferReportFile{
-					Method:                commons.TransferMethodPut,
+					Method:                commons.TransferMethodBput,
 					StartAt:               now,
 					EndAt:                 now,
 					SourcePath:            sourcePath,
@@ -605,13 +653,42 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string) erro
 	return bput.schedulePut(sourceStat, sourcePath)
 }
 
-func (bput *BputCommand) putDir(_ fs.FileInfo, sourcePath string) error {
+func (bput *BputCommand) putDir(sourceStat fs.FileInfo, sourcePath string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"struct":   "BputCommand",
+		"function": "putDir",
+	})
+
 	targetPath, err := bput.bundleTransferManager.GetTargetPath(sourcePath)
 	if err != nil {
 		return xerrors.Errorf("failed to get target path for source %q: %w", sourcePath, err)
 	}
 
 	commons.MarkIRODSPathMap(bput.updatedPathMap, targetPath)
+
+	if bput.hiddenFileFlagValues.Exclude {
+		// exclude hidden
+		if strings.HasPrefix(sourceStat.Name(), ".") {
+			// skip
+			now := time.Now()
+			reportFile := &commons.TransferReportFile{
+				Method:     commons.TransferMethodBput,
+				StartAt:    now,
+				EndAt:      now,
+				SourcePath: sourcePath,
+				SourceSize: sourceStat.Size(),
+				DestPath:   targetPath,
+				Notes:      []string{"hidden", "skip"},
+			}
+
+			bput.transferReportManager.AddFile(reportFile)
+
+			commons.Printf("skip uploading a dir %q to %q. The dir is hidden!\n", sourcePath, targetPath)
+			logger.Debugf("skip uploading a dir %q to %q. The dir is hidden!", sourcePath, targetPath)
+			return nil
+		}
+	}
 
 	targetEntry, err := bput.filesystem.Stat(targetPath)
 	if err != nil {
@@ -624,7 +701,7 @@ func (bput *BputCommand) putDir(_ fs.FileInfo, sourcePath string) error {
 
 			now := time.Now()
 			reportFile := &commons.TransferReportFile{
-				Method:     commons.TransferMethodPut,
+				Method:     commons.TransferMethodBput,
 				StartAt:    now,
 				EndAt:      now,
 				SourcePath: sourcePath,
@@ -697,12 +774,6 @@ func (bput *BputCommand) putDir(_ fs.FileInfo, sourcePath string) error {
 	}
 
 	for _, entry := range entries {
-		if bput.hiddenFileFlagValues.Exclude {
-			if strings.HasPrefix(entry.Name(), ".") {
-				continue
-			}
-		}
-
 		entryPath := filepath.Join(sourcePath, entry.Name())
 
 		entryStat, err := os.Stat(entryPath)

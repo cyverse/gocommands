@@ -333,6 +333,54 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 
 	commons.MarkIRODSPathMap(cp.updatedPathMap, targetPath)
 
+	if cp.hiddenFileFlagValues.Exclude {
+		// exclude hidden
+		if strings.HasPrefix(sourceEntry.Name, ".") {
+			// skip
+			now := time.Now()
+			reportFile := &commons.TransferReportFile{
+				Method:     commons.TransferMethodCopy,
+				StartAt:    now,
+				EndAt:      now,
+				SourcePath: sourceEntry.Path,
+				SourceSize: sourceEntry.Size,
+				DestPath:   targetPath,
+				Notes:      []string{"hidden", "skip"},
+			}
+
+			cp.transferReportManager.AddFile(reportFile)
+
+			commons.Printf("skip copying a file %q to %q. The file is hidden!\n", sourceEntry.Path, targetPath)
+			logger.Debugf("skip copying a file %q to %q. The file is hidden!", sourceEntry.Path, targetPath)
+			return nil
+		}
+	}
+
+	if cp.syncFlagValues.Age > 0 {
+		// check age
+		age := time.Since(sourceEntry.ModifyTime)
+		maxAge := time.Duration(cp.syncFlagValues.Age) * time.Minute
+		if age > maxAge {
+			// skip
+			now := time.Now()
+			reportFile := &commons.TransferReportFile{
+				Method:     commons.TransferMethodCopy,
+				StartAt:    now,
+				EndAt:      now,
+				SourcePath: sourceEntry.Path,
+				SourceSize: sourceEntry.Size,
+				DestPath:   targetPath,
+				Notes:      []string{"age", "skip"},
+			}
+
+			cp.transferReportManager.AddFile(reportFile)
+
+			commons.Printf("skip copying a file %q to %q. The file is too old (%s > %s)!\n", sourceEntry.Path, targetPath, age, maxAge)
+			logger.Debugf("skip copying a file %q to %q. The file is too old (%s > %s)!", sourceEntry.Path, targetPath, age, maxAge)
+			return nil
+		}
+	}
+
 	targetEntry, err := cp.filesystem.Stat(targetPath)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
@@ -487,7 +535,36 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 }
 
 func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"struct":   "CpCommand",
+		"function": "copyDir",
+	})
+
 	commons.MarkIRODSPathMap(cp.updatedPathMap, targetPath)
+
+	if cp.hiddenFileFlagValues.Exclude {
+		// exclude hidden
+		if strings.HasPrefix(sourceEntry.Name, ".") {
+			// skip
+			now := time.Now()
+			reportFile := &commons.TransferReportFile{
+				Method:     commons.TransferMethodCopy,
+				StartAt:    now,
+				EndAt:      now,
+				SourcePath: sourceEntry.Path,
+				SourceSize: sourceEntry.Size,
+				DestPath:   targetPath,
+				Notes:      []string{"hidden", "skip"},
+			}
+
+			cp.transferReportManager.AddFile(reportFile)
+
+			commons.Printf("skip copying a dir %q to %q. The dir is hidden!\n", sourceEntry.Path, targetPath)
+			logger.Debugf("skip copying a dir %q to %q. The dir is hidden!", sourceEntry.Path, targetPath)
+			return nil
+		}
+	}
 
 	targetEntry, err := cp.filesystem.Stat(targetPath)
 	if err != nil {
@@ -574,12 +651,6 @@ func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 	}
 
 	for _, entry := range entries {
-		if cp.hiddenFileFlagValues.Exclude {
-			if strings.HasPrefix(entry.Name, ".") {
-				continue
-			}
-		}
-
 		newEntryPath := commons.MakeTargetIRODSFilePath(cp.filesystem, entry.Path, targetPath)
 
 		if entry.IsDir() {

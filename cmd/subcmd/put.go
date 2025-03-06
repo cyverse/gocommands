@@ -467,6 +467,54 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 
 	commons.MarkIRODSPathMap(put.updatedPathMap, targetPath)
 
+	if put.hiddenFileFlagValues.Exclude {
+		// exclude hidden
+		if strings.HasPrefix(sourceStat.Name(), ".") {
+			// skip
+			now := time.Now()
+			reportFile := &commons.TransferReportFile{
+				Method:     commons.TransferMethodPut,
+				StartAt:    now,
+				EndAt:      now,
+				SourcePath: sourcePath,
+				SourceSize: sourceStat.Size(),
+				DestPath:   targetPath,
+				Notes:      []string{"hidden", "skip"},
+			}
+
+			put.transferReportManager.AddFile(reportFile)
+
+			commons.Printf("skip uploading a file %q to %q. The file is hidden!\n", sourcePath, targetPath)
+			logger.Debugf("skip uploading a file %q to %q. The file is hidden!", sourcePath, targetPath)
+			return nil
+		}
+	}
+
+	if put.syncFlagValues.Age > 0 {
+		// exclude old
+		age := time.Since(sourceStat.ModTime())
+		maxAge := time.Duration(put.syncFlagValues.Age) * time.Minute
+		if age > maxAge {
+			// skip
+			now := time.Now()
+			reportFile := &commons.TransferReportFile{
+				Method:     commons.TransferMethodPut,
+				StartAt:    now,
+				EndAt:      now,
+				SourcePath: sourcePath,
+				SourceSize: sourceStat.Size(),
+				DestPath:   targetPath,
+				Notes:      []string{"age", "skip"},
+			}
+
+			put.transferReportManager.AddFile(reportFile)
+
+			commons.Printf("skip uploading a file %q to %q. The file is too old (%s > %s)!\n", sourcePath, targetPath, age, maxAge)
+			logger.Debugf("skip uploading a file %q to %q. The file is too old (%s > %s)!", sourcePath, targetPath, age, maxAge)
+			return nil
+		}
+	}
+
 	targetEntry, err := put.filesystem.Stat(targetPath)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
@@ -624,8 +672,37 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 	return put.schedulePut(sourceStat, sourcePath, tempPath, targetPath, requireEncryption, encryptionMode)
 }
 
-func (put *PutCommand) putDir(_ fs.FileInfo, sourcePath string, targetPath string, parentEncryption bool, parentEncryptionMode commons.EncryptionMode) error {
+func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetPath string, parentEncryption bool, parentEncryptionMode commons.EncryptionMode) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"struct":   "PutCommand",
+		"function": "putDir",
+	})
+
 	commons.MarkIRODSPathMap(put.updatedPathMap, targetPath)
+
+	if put.hiddenFileFlagValues.Exclude {
+		// exclude hidden
+		if strings.HasPrefix(sourceStat.Name(), ".") {
+			// skip
+			now := time.Now()
+			reportFile := &commons.TransferReportFile{
+				Method:     commons.TransferMethodPut,
+				StartAt:    now,
+				EndAt:      now,
+				SourcePath: sourcePath,
+				SourceSize: sourceStat.Size(),
+				DestPath:   targetPath,
+				Notes:      []string{"hidden", "skip"},
+			}
+
+			put.transferReportManager.AddFile(reportFile)
+
+			commons.Printf("skip uploading a dir %q to %q. The dir is hidden!\n", sourcePath, targetPath)
+			logger.Debugf("skip uploading a dir %q to %q. The dir is hidden!", sourcePath, targetPath)
+			return nil
+		}
+	}
 
 	targetEntry, err := put.filesystem.Stat(targetPath)
 	if err != nil {
@@ -714,12 +791,6 @@ func (put *PutCommand) putDir(_ fs.FileInfo, sourcePath string, targetPath strin
 	}
 
 	for _, entry := range entries {
-		if put.hiddenFileFlagValues.Exclude {
-			if strings.HasPrefix(entry.Name(), ".") {
-				continue
-			}
-		}
-
 		newEntryPath := commons.MakeTargetIRODSFilePath(put.filesystem, entry.Name(), targetPath)
 
 		entryPath := filepath.Join(sourcePath, entry.Name())
