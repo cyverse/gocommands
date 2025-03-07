@@ -102,6 +102,8 @@ func main() {
 	subcmd.AddMkticketCommand(rootCmd)
 	subcmd.AddModticketCommand(rootCmd)
 	subcmd.AddBcleanCommand(rootCmd)
+	subcmd.AddChmodCommand(rootCmd)
+	subcmd.AddChmodinheritCommand(rootCmd)
 	subcmd.AddUpgradeCommand(rootCmd)
 
 	err := Execute()
