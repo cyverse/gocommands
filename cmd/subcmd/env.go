@@ -1,8 +1,6 @@
 package subcmd
 
 import (
-	"os"
-
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -76,7 +74,7 @@ func (env *EnvCommand) printEnvironment() error {
 	}
 
 	t := table.NewWriter()
-	t.SetOutputMirror(os.Stdout)
+	t.SetOutputMirror(commons.GetTerminalWriter())
 
 	sessionConfig, err := envMgr.GetSessionConfig()
 	if err != nil {

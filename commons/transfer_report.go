@@ -10,6 +10,7 @@ import (
 	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
+	"github.com/jedib0t/go-pretty/v6/table"
 	"golang.org/x/xerrors"
 )
 
@@ -180,8 +181,33 @@ func (manager *TransferReportManager) AddFile(file *TransferReportFile) error {
 
 	lineOutput := ""
 	if manager.reportToStdout {
-		// line print
-		Printf("[%s]\t%s\t%s\t%s\t%d\t%s\t%s\t%d\t%s\n", file.Method, file.StartAt, file.EndAt, file.SourcePath, file.SourceSize, file.SourceChecksum, file.DestPath, file.DestSize, file.DestChecksum)
+		sourceChecksum := file.SourceChecksum
+		if len(sourceChecksum) > 0 {
+			sourceChecksum += " (" + file.SourceChecksumAlgorithm + ")"
+		}
+
+		destChecksum := file.DestChecksum
+		if len(destChecksum) > 0 {
+			destChecksum += " (" + file.DestChecksumAlgorithm + ")"
+		}
+
+		t := table.NewWriter()
+		t.SetOutputMirror(GetTerminalWriter())
+
+		t.AppendRows([]table.Row{
+			{"Method", file.Method},
+			{"Start Time", file.StartAt.Format("2006-01-02 15:04:05 MST")},
+			{"End Time", file.EndAt.Format("2006-01-02 15:04:05 MST")},
+			{"Source Path", file.SourcePath},
+			{"Source Size", file.SourceSize},
+			{"Source Checksum", sourceChecksum},
+			{"Dest Path", file.DestPath},
+			{"Dest Size", file.DestSize},
+			{"Dest Checksum", destChecksum},
+			{"Notes", strings.Join(file.Notes, ", ")},
+			{"Error", file.Error},
+		}, table.RowConfig{})
+		t.Render()
 	} else {
 		// json
 		fileBytes, err := json.Marshal(file)
