@@ -47,7 +47,7 @@ func GetProgressWriter(displayPath bool) progress.Writer {
 	progressWriter.SetOutputWriter(GetTerminalWriter())
 	progressWriter.SetAutoStop(false)
 	progressWriter.SetTrackerLength(progressTrackerLength)
-	progressWriter.SetMessageWidth(getProgressMessageWidth(displayPath))
+	progressWriter.SetMessageLength(getProgressMessageWidth(displayPath))
 	progressWriter.SetStyle(progress.StyleDefault)
 	progressWriter.SetTrackerPosition(progress.PositionRight)
 	progressWriter.SetUpdateFrequency(time.Millisecond * 100)

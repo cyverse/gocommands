@@ -314,5 +314,7 @@ func (manager *ParallelJobManager) Start() {
 				manager.processWait.Done()
 			}
 		}
+
+		manager.processWait.Wait()
 	}()
 }
