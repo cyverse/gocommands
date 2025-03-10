@@ -137,12 +137,7 @@ func GetResourceServers(fs *irodsclient_fs.FileSystem, targetDir string) ([]stri
 	}
 
 	// data object
-	collection, err := irodsclient_irodsfs.GetCollection(connection, targetDir)
-	if err != nil {
-		return nil, xerrors.Errorf("failed to get collection %q: %w", targetDir, err)
-	}
-
-	entry, err := irodsclient_irodsfs.GetDataObject(connection, collection, path.Base(testFilePath))
+	entry, err := irodsclient_irodsfs.GetDataObject(connection, testFilePath)
 	if err != nil {
 		return nil, xerrors.Errorf("failed to get data-object %q: %w", testFilePath, err)
 	}

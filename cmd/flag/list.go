@@ -9,6 +9,7 @@ type ListFlagValues struct {
 	Format              commons.ListFormat
 	longFormatInput     bool
 	veryLongFormatInput bool
+	Access              bool
 	HumanReadableSizes  bool
 
 	SortOrder      commons.ListSortOrder
@@ -24,6 +25,7 @@ func SetListFlags(command *cobra.Command) {
 	command.Flags().BoolVarP(&listFlagValues.longFormatInput, "long", "l", false, "Display in a long format")
 	command.Flags().BoolVarP(&listFlagValues.veryLongFormatInput, "verylong", "L", false, "Display in a very long format")
 	command.Flags().BoolVarP(&listFlagValues.HumanReadableSizes, "human_readable", "H", false, "Display sizes in human-readable format")
+	command.Flags().BoolVarP(&listFlagValues.Access, "access", "A", false, "Display access control lists")
 	command.Flags().BoolVar(&listFlagValues.SortReverse, "reverse_sort", false, "Sort in reverse order")
 	command.Flags().StringVarP(&listFlagValues.sortOrderInput, "sort", "S", "name", "Sort on name, size, time or ext")
 }

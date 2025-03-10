@@ -201,11 +201,21 @@ func (ls *LsCommand) listCollection(sourcePath string) error {
 	}
 
 	// collection
-	ls.printCurrentCollection(sourcePath)
+	if ls.listFlagValues.Access {
+		// get access
+		accesses, err := irodsclient_irodsfs.ListCollectionAccesses(connection, sourcePath)
+		if err != nil {
+			return xerrors.Errorf("failed to get access for collection %q: %w", sourcePath, err)
+		}
 
-	collection, err := irodsclient_irodsfs.GetCollection(connection, sourcePath)
-	if err != nil {
-		return xerrors.Errorf("failed to get collection %q: %w", sourcePath, err)
+		inherit, err := irodsclient_irodsfs.GetCollectionAccessInheritance(connection, sourcePath)
+		if err != nil {
+			return xerrors.Errorf("failed to get access inheritance for collection %q: %w", sourcePath, err)
+		}
+
+		ls.printCurrentCollection(sourcePath, accesses, inherit)
+	} else {
+		ls.printCurrentCollection(sourcePath, nil, nil)
 	}
 
 	colls, err := irodsclient_irodsfs.ListSubCollections(connection, sourcePath)
@@ -213,7 +223,7 @@ func (ls *LsCommand) listCollection(sourcePath string) error {
 		return xerrors.Errorf("failed to list sub-collections in %q: %w", sourcePath, err)
 	}
 
-	objs, err := irodsclient_irodsfs.ListDataObjects(connection, collection)
+	objs, err := irodsclient_irodsfs.ListDataObjects(connection, sourcePath)
 	if err != nil {
 		return xerrors.Errorf("failed to list data-objects in %q: %w", sourcePath, err)
 	}
@@ -222,7 +232,17 @@ func (ls *LsCommand) listCollection(sourcePath string) error {
 	filtered_colls := ls.filterHiddenCollections(colls)
 	filtered_objs := ls.filterHiddenDataObjects(objs)
 
-	ls.printDataObjects(filtered_objs, false)
+	if ls.listFlagValues.Access {
+		// get access
+		accesses, err := irodsclient_irodsfs.ListAccessesForDataObjectsInCollection(connection, sourcePath)
+		if err != nil {
+			return xerrors.Errorf("failed to get access for data-object %q: %w", sourcePath, err)
+		}
+
+		ls.printDataObjects(filtered_objs, accesses, false)
+	} else {
+		ls.printDataObjects(filtered_objs, nil, false)
+	}
 	ls.printCollections(filtered_colls)
 
 	commons.Print("\n")
@@ -257,13 +277,24 @@ func (ls *LsCommand) listDataObject(sourcePath string) error {
 	}
 
 	// data object
-	entry, err := irodsclient_irodsfs.GetDataObjectWithoutCollection(connection, sourcePath)
+	entry, err := irodsclient_irodsfs.GetDataObject(connection, sourcePath)
 	if err != nil {
 		return xerrors.Errorf("failed to get data-object %q: %w", sourcePath, err)
 	}
 
 	entries := []*irodsclient_types.IRODSDataObject{entry}
-	ls.printDataObjects(entries, true)
+
+	if ls.listFlagValues.Access {
+		// get access
+		accesses, err := irodsclient_irodsfs.ListDataObjectAccessesWithoutCollection(connection, sourcePath)
+		if err != nil {
+			return xerrors.Errorf("failed to get access for data-object %q: %w", sourcePath, err)
+		}
+
+		ls.printDataObjects(entries, accesses, true)
+	} else {
+		ls.printDataObjects(entries, nil, true)
+	}
 
 	return nil
 }
@@ -302,8 +333,15 @@ func (ls *LsCommand) filterHiddenDataObjects(entries []*irodsclient_types.IRODSD
 	return filteredEntries
 }
 
-func (ls *LsCommand) printCurrentCollection(sourcePath string) {
+func (ls *LsCommand) printCurrentCollection(sourcePath string, accesses []*irodsclient_types.IRODSAccess, inherit *irodsclient_types.IRODSAccessInheritance) {
 	commons.Printf("%s:\n", sourcePath)
+	if len(accesses) > 0 {
+		ls.printAccesses(accesses)
+	}
+
+	if inherit != nil {
+		ls.printInheritance(inherit)
+	}
 }
 
 func (ls *LsCommand) printCollections(entries []*irodsclient_types.IRODSCollection) {
@@ -313,16 +351,23 @@ func (ls *LsCommand) printCollections(entries []*irodsclient_types.IRODSCollecti
 	}
 }
 
-func (ls *LsCommand) printDataObjects(entries []*irodsclient_types.IRODSDataObject, showFullPath bool) {
+func (ls *LsCommand) printDataObjects(entries []*irodsclient_types.IRODSDataObject, accesses []*irodsclient_types.IRODSAccess, showFullPath bool) {
+	// access is optional
 	if ls.listFlagValues.Format == commons.ListFormatNormal {
 		sort.SliceStable(entries, ls.getDataObjectSortFunction(entries, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
 		for _, entry := range entries {
-			ls.printDataObjectShort(entry, showFullPath)
+			accessesForEntry := []*irodsclient_types.IRODSAccess{}
+			for _, access := range accesses {
+				if access.Path == entry.Path {
+					accessesForEntry = append(accessesForEntry, access)
+				}
+			}
+			ls.printDataObjectShort(entry, accessesForEntry, showFullPath)
 		}
 	} else {
 		replicas := ls.flattenReplicas(entries)
 		sort.SliceStable(replicas, ls.getFlatReplicaSortFunction(replicas, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
-		ls.printReplicas(replicas)
+		ls.printReplicas(replicas, accesses)
 	}
 }
 
@@ -475,7 +520,7 @@ func (ls *LsCommand) getDataObjectModifyTime(object *irodsclient_types.IRODSData
 	return maxTime
 }
 
-func (ls *LsCommand) printDataObjectShort(entry *irodsclient_types.IRODSDataObject, showFullPath bool) {
+func (ls *LsCommand) printDataObjectShort(entry *irodsclient_types.IRODSDataObject, accesses []*irodsclient_types.IRODSAccess, showFullPath bool) {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "LsCommand",
@@ -504,11 +549,60 @@ func (ls *LsCommand) printDataObjectShort(entry *irodsclient_types.IRODSDataObje
 	}
 
 	commons.Printf("  %s\n", newName)
+	if len(accesses) > 0 {
+		ls.printAccesses(accesses)
+	}
 }
 
-func (ls *LsCommand) printReplicas(flatReplicas []*FlatReplica) {
+func (ls *LsCommand) printAccesses(accesses []*irodsclient_types.IRODSAccess) {
+	commons.Print("        ACL - ")
+
+	// group first then user
+	first := true
+	for _, access := range accesses {
+		if access.UserType == irodsclient_types.IRODSUserRodsGroup {
+			if first {
+				first = false
+			} else {
+				commons.Print("\t")
+			}
+
+			commons.Printf("g:%s#%s:%s", access.UserName, access.UserZone, access.AccessLevel)
+		}
+	}
+
+	for _, access := range accesses {
+		if access.UserType != irodsclient_types.IRODSUserRodsGroup {
+			if first {
+				first = false
+			} else {
+				commons.Print("\t")
+			}
+
+			commons.Printf("%s#%s:%s", access.UserName, access.UserZone, access.AccessLevel)
+		}
+	}
+	commons.Print("\n")
+}
+
+func (ls *LsCommand) printInheritance(inherit *irodsclient_types.IRODSAccessInheritance) {
+	inheritance := "Disabled"
+	if inherit.Inheritance {
+		inheritance = "Enabled"
+	}
+
+	commons.Printf("        Inheritance - %s\n", inheritance)
+}
+
+func (ls *LsCommand) printReplicas(flatReplicas []*FlatReplica, accesses []*irodsclient_types.IRODSAccess) {
 	for _, flatReplica := range flatReplicas {
-		ls.printReplica(*flatReplica)
+		accessesForEntry := []*irodsclient_types.IRODSAccess{}
+		for _, access := range accesses {
+			if access.Path == flatReplica.DataObject.Path {
+				accessesForEntry = append(accessesForEntry, access)
+			}
+		}
+		ls.printReplica(*flatReplica, accessesForEntry)
 	}
 }
 
@@ -525,7 +619,7 @@ func (ls *LsCommand) getEncryptionManagerForDecryption(mode commons.EncryptionMo
 	return manager
 }
 
-func (ls *LsCommand) printReplica(flatReplica FlatReplica) {
+func (ls *LsCommand) printReplica(flatReplica FlatReplica, accesses []*irodsclient_types.IRODSAccess) {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "LsCommand",
@@ -569,6 +663,10 @@ func (ls *LsCommand) printReplica(flatReplica FlatReplica) {
 		commons.Printf("    %s\t%s\n", flatReplica.Replica.Checksum.IRODSChecksumString, flatReplica.Replica.Path)
 	default:
 		commons.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
+	}
+
+	if len(accesses) > 0 {
+		ls.printAccesses(accesses)
 	}
 }
 

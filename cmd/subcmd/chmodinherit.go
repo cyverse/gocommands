@@ -1,6 +1,8 @@
 package subcmd
 
 import (
+	"strings"
+
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
@@ -61,9 +63,11 @@ func NewChModInheritCommand(command *cobra.Command, args []string) (*ChModInheri
 	if len(args) >= 2 {
 		chModInherit.targetPaths = args[1:]
 
-		if args[0] == "inherit" {
+		flag := strings.ToLower(args[0])
+
+		if flag == "inherit" || flag == "true" || flag == "yes" || flag == "enabled" || flag == "on" || flag == "enable" {
 			chModInherit.inherit = true
-		} else if args[0] == "noinherit" || args[0] == "no_inherit" || args[0] == "no-inherit" {
+		} else if flag == "noinherit" || flag == "no_inherit" || flag == "no-inherit" || flag == "false" || flag == "no" || flag == "disabled" || flag == "off" || flag == "disable" {
 			chModInherit.inherit = false
 		} else {
 			return nil, xerrors.Errorf("invalid inherit flag: %s", args[0])
@@ -126,13 +130,13 @@ func (chModInherit *ChModInheritCommand) changeOne(targetPath string) error {
 		return xerrors.Errorf("target %q is not a collection", targetPath)
 	}
 
-	conn, err := chModInherit.filesystem.GetMetadataConnection()
+	connection, err := chModInherit.filesystem.GetMetadataConnection()
 	if err != nil {
 		return xerrors.Errorf("failed to get metadata connection: %w", err)
 	}
-	defer chModInherit.filesystem.ReturnMetadataConnection(conn)
+	defer chModInherit.filesystem.ReturnMetadataConnection(connection)
 
-	err = irodsclient_irodsfs.ChangeAccessInherit(conn, targetPath, chModInherit.inherit, chModInherit.recursiveFlagValues.Recursive, false)
+	err = irodsclient_irodsfs.ChangeAccessInherit(connection, targetPath, chModInherit.inherit, chModInherit.recursiveFlagValues.Recursive, false)
 	if err != nil {
 		return xerrors.Errorf("failed to set access inherit %t to %q (recurse: %t): %w", chModInherit.inherit, targetPath, chModInherit.recursiveFlagValues.Recursive, err)
 	}

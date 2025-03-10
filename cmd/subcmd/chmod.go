@@ -127,18 +127,18 @@ func (chMod *ChModCommand) changeOne(targetPath string) error {
 		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
 	}
 
-	conn, err := chMod.filesystem.GetMetadataConnection()
+	connection, err := chMod.filesystem.GetMetadataConnection()
 	if err != nil {
 		return xerrors.Errorf("failed to get metadata connection: %w", err)
 	}
-	defer chMod.filesystem.ReturnMetadataConnection(conn)
+	defer chMod.filesystem.ReturnMetadataConnection(connection)
 
 	zoneName := chMod.zoneName
 	if len(zoneName) == 0 {
 		zoneName = chMod.account.ClientZone
 	}
 
-	err = irodsclient_irodsfs.ChangeAccess(conn, targetPath, chMod.accessLevel, chMod.username, zoneName, chMod.recursiveFlagValues.Recursive, false)
+	err = irodsclient_irodsfs.ChangeAccess(connection, targetPath, chMod.accessLevel, chMod.username, zoneName, chMod.recursiveFlagValues.Recursive, false)
 	if err != nil {
 		return xerrors.Errorf("failed to change access: %w", err)
 	}
