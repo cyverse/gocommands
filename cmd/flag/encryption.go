@@ -36,17 +36,17 @@ func SetEncryptionFlags(command *cobra.Command) {
 	command.Flags().BoolVar(&encryptionFlagValues.NoEncryption, "no_encrypt", false, "Disable encryption forcefully")
 	command.Flags().BoolVar(&encryptionFlagValues.IgnoreMeta, "ignore_meta", false, "Ignore encryption config via metadata")
 	command.Flags().StringVar(&encryptionFlagValues.modeInput, "encrypt_mode", "ssh", "Specify encryption mode ('winscp', 'pgp', or 'ssh')")
-	command.Flags().StringVar(&encryptionFlagValues.Key, "encrypt_key", "", "Specify encryption key for 'winscp' and 'pgp' mode")
-	command.Flags().StringVar(&encryptionFlagValues.PublicPrivateKeyPath, "encrypt_pub_key", commons.GetDefaultPublicKeyPath(), "Specify encryption public (or private) key for 'ssh' mode")
-	command.Flags().StringVar(&encryptionFlagValues.TempPath, "encrypt_temp", os.TempDir(), "Specify temporary directory path for encryption")
+	command.Flags().StringVar(&encryptionFlagValues.Key, "encrypt_key", "", "Encryption key for 'winscp' and 'pgp' mode")
+	command.Flags().StringVar(&encryptionFlagValues.PublicPrivateKeyPath, "encrypt_pub_key", commons.GetDefaultPublicKeyPath(), "Encryption public (or private) key for 'ssh' mode")
+	command.Flags().StringVar(&encryptionFlagValues.TempPath, "encrypt_temp", os.TempDir(), "Specify a temporary directory path for encrypting files")
 }
 
 func SetDecryptionFlags(command *cobra.Command) {
 	command.Flags().BoolVar(&decryptionFlagValues.Decryption, "decrypt", true, "Decrypt files")
 	command.Flags().BoolVar(&decryptionFlagValues.NoDecryption, "no_decrypt", false, "Disable decryption forcefully")
-	command.Flags().StringVar(&decryptionFlagValues.Key, "decrypt_key", "", "Specify decryption key for 'winscp' and 'pgp' mode")
-	command.Flags().StringVar(&decryptionFlagValues.PrivateKeyPath, "decrypt_priv_key", commons.GetDefaultPrivateKeyPath(), "Specify decryption private key for 'ssh' mode")
-	command.Flags().StringVar(&decryptionFlagValues.TempPath, "decrypt_temp", os.TempDir(), "Specify temporary directory path for decryption")
+	command.Flags().StringVar(&decryptionFlagValues.Key, "decrypt_key", "", "Decryption key for 'winscp' and 'pgp' mode")
+	command.Flags().StringVar(&decryptionFlagValues.PrivateKeyPath, "decrypt_priv_key", commons.GetDefaultPrivateKeyPath(), "Decryption private key for 'ssh' mode")
+	command.Flags().StringVar(&decryptionFlagValues.TempPath, "decrypt_temp", os.TempDir(), "Specify a temporary directory path for decrypting files")
 }
 
 func GetEncryptionFlagValues(command *cobra.Command) *EncryptionFlagValues {

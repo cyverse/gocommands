@@ -2,9 +2,9 @@
 
 When working with iRODS, you can transfer data between your local machine and iRODS using three primary commands: `get`, `put`, and `bput`.
 
-## Downloading Data from iRODS to Local Machine (`get`)
+## Downloading Data from iRODS to a Local Machine (`get`)
 
-The `get` command is used to retrieve data stored in iRODS and download it to a local directory.
+The `get` command retrieves data stored in iRODS and downloads it to a local directory.
 
 ### Syntax:
 ```sh
@@ -22,7 +22,7 @@ You can also provide multiple source iRODS paths to download multiple files at o
 gocmd get /myZone/home/myUser/myData1.obj /myZone/home/myUser/myData2.obj .
 ```
 
-You can also omit the local destination path if you want to store the file in the current working directory:
+If you want to store the file in the current working directory, you can omit the local destination path:
 ```sh
 gocmd get /myZone/home/myUser/myData1.obj
 ```
@@ -32,21 +32,20 @@ gocmd get /myZone/home/myUser/myData1.obj
 ### Transfer Mode
 | Flag | Description |
 |------|-------------|
-| `--icat` | Transfer files via iCAT |
-| `--redirect` | Redirect transfer to resource server |
-| `-R, --resource` string | Set resource server to download files from |
+| `--icat` | Transfer data via iCAT |
+| `--redirect` | Redirect transfer to the resource server |
 
 ### Parallel Transfer
 | Flag | Description |
 |------|-------------|
-| `--single_threaded` | Transfer files using a single thread |
-| `--thread_num` int | Specify the number of transfer threads (default 5) |
+| `--single_threaded` | Transfer a file using a single thread |
+| `--thread_num` int | Specify the number of transfer threads (default: 5) |
 
 ### Differential Transfer
 | Flag | Description |
 |------|-------------|
 | `--diff` | Transfer files with different content |
-| `--no_hash` | Compare files without using hash, works with `--diff` |
+| `--no_hash` | Compare files without using a hash (works with `--diff`) |
 
 ### Data Verification
 | Flag | Description |
@@ -56,35 +55,37 @@ gocmd get /myZone/home/myUser/myData1.obj
 ### File Management
 | Flag | Description |
 |------|-------------|
-| `--delete` | Delete extra files in destination directory |
-| `--delete_on_success` | Delete source file on success |
-| `--report` string | Create a transfer report, specify path for file output; empty string or `-` outputs to stdout |
+| `--delete` | Delete extra files in the destination directory |
+| `--delete_on_success` | Delete the source file upon successful transfer |
+| `--report` string | Create a transfer report; specify the output file path. An empty string or `-` outputs to stdout |
 
 ### User Interface and Display
 | Flag | Description |
 |------|-------------|
 | `--progress` | Display progress bars |
-| `--show_path` | Display full path for progress bars, works with `--progress` |
-| `-f, --force` | Run forcefully (do not ask any prompt) |
-| `--no_root` | Do not create root target directory |
+| `--show_path` | Display the full path for progress bars (works with `--progress`) |
+| `-f, --force` | Run forcefully without prompting for confirmation |
+| `--no_root` | Do not create a root target directory |
 
 ### Source File Filters
 | Flag | Description |
 |------|-------------|
-| `--exclude_hidden_files` | Exclude hidden files (starting with `.`) |
-| `-w, --wildcard` | Enable wildcard expansion to search source files |
-| `--age` int | Set the maximum age of the source in minutes |
+| `--exclude_hidden_files` | Exclude hidden files (files starting with `.`) |
+| `-w, --wildcard` | Enable wildcard expansion to search for source files |
+| `--age` int | Exclude files older than the specified age in minutes |
 
 ### Decryption Options
 | Flag | Description |
 |------|-------------|
-| `--decrypt` | Decrypt files (default true) |
-| `--decrypt_key` string | Specify decryption key for 'winscp' and 'pgp' mode |
-| `--decrypt_priv_key` string | Specify decryption private key for 'ssh' mode (default `/home/iychoi/.ssh/id_rsa`) |
-| `--decrypt_temp` string | Specify temporary directory path for decryption (default `/tmp`) |
+| `--decrypt` | Decrypt files (default: true) |
+| `--decrypt_key` string | Decryption key for 'winscp' and 'pgp' modes |
+| `--decrypt_priv_key` string | Decryption private key for 'ssh' mode (default: `/home/iychoi/.ssh/id_rsa`) |
+| `--decrypt_temp` string | Specify a temporary directory for decrypting files (default: `/tmp`) |
 
 ### Low-level Transfer Options
 | Flag | Description |
 |------|-------------|
-| `--tcp_buffer_size` string | Specify TCP socket buffer size (default `1MB`) |
+| `--tcp_buffer_size` string | Specify TCP socket buffer size (default: `1MB`) |
+
+Stay tuned for additional sections on the `put` and `bput` commands!
 
