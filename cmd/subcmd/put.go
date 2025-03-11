@@ -45,7 +45,7 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	flag.SetDifferentialTransferFlags(putCmd, false)
 	flag.SetChecksumFlags(putCmd, false, false)
 	flag.SetNoRootFlags(putCmd)
-	flag.SetSyncFlags(putCmd, false)
+	flag.SetSyncFlags(putCmd, true)
 	flag.SetEncryptionFlags(putCmd)
 	flag.SetHiddenFileFlags(putCmd)
 	flag.SetPostTransferFlagValues(putCmd)
