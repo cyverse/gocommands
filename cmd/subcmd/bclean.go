@@ -11,7 +11,7 @@ import (
 )
 
 var bcleanCmd = &cobra.Command{
-	Use:     "bclean [collection]",
+	Use:     "bclean",
 	Aliases: []string{"bundle_clean"},
 	Short:   "Clean bundle staging directories",
 	Long:    `This cleans bundle files created by 'bput' or 'sync' for uploading data to the given iRODS collection.`,
