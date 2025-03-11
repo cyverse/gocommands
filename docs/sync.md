@@ -1,170 +1,114 @@
-# Sync your data using Gocommands
+# Syncing Data Between Local and iRODS
 
-You can sync your local data with iRODS (or reverse) using `Gocommands`.
+The `sync` command keeps datasets synchronized between local and iRODS by transferring only new or modified files. It runs `get`, `put`, `bput`, and `cp` commands automatically to sync data.
 
-You can use `get`, `put`, `bput`, `cp`, and `sync` subcommands for moving data.
-
-## Get (Download) data from iRODS to local
-
-`get` subcommand allows you to download data stored in iRODS.
-
-To download a file or an entire directory:
-
-```bash
-gocmd get [irods_source] [local_destination]
+## Syntax:
+```sh
+gocmd sync <source_path> <destination_path>
 ```
 
-For example, to download a whole directory `/iplant/home/iychoi/test_data` in iRODS to the current directory at local:
+Source and destination paths can be either local or iRODS paths.
+Use `i:<path>` to specify an iRODS path. Local paths do not require a prefix.
 
-```bash
-gocmd get /iplant/home/iychoi/test_data .
-```
+Syncing between two local directories is not supported.
 
-In order to use wildcards, add the `-w` option. For example, in order to download all CSV files from the `test_data` collection:
+## Example Usage:
 
-```bash
-gocmd get -w '/iplant/home/iychoi/test_data/*.csv' .
-```
+1. **Sync a local directory to iRODS**:
+   ```sh
+   gocmd sync /local/dir i:/myZone/home/myUser/dir
+   ```
 
-Of course, you can use relative path from your iRODS current working directory to locate input. Use `pwd` and `cd` subcommand to display and change iRODS current working directory.
+2. **Sync a directory from iRODS to local**:
+   ```sh
+   gocmd sync i:/myZone/home/myUser/dir /local/dir
+   ```
 
-```bash
-gocmd pwd
-> /iplant/home/iychoi
+3. **Sync two directories in iRODS**:
+   ```sh
+   gocmd sync i:/myZone/home/myUser/dir1 i:/myZone/home/myUser/dir2
+   ```
 
-gocmd get test_data .
-```
+## Available Flags for `sync`
 
-### Useful flags
+### Transfer Mode
+| Flag | Description |
+|------|-------------|
+| `--icat` | Transfer data via iCAT |
+| `--redirect` | Redirect transfer to the resource server |
 
-- `--progress`: Displays progress bars.
-- `--diff`: Does not download a file if the file exists at local. Overwrites if the local file has different `size` or file `hash`.
-- `--no_hash`: Works with `--diff`. Does not use file `hash` in file comparisons. This is a lot faster than using `hash` and useful if you don't change file content (like image files).
-- `-f`: Downloads data in iRODS to local forcefully. Existing files at local will be overwritten.
-- `--retry <num_retry>`: Retries the same command with given retry number if something goes wrong, like network failure. 
-- `--retry_interval <seconds>`: Sets interval between each retry.
+### Parallel Transfer
+| Flag | Description |
+|------|-------------|
+| `--single_threaded` | Use a single thread for file transfer |
+| `--bulk_upload` | Use bundle upload for file transfer (for local to iRODS sync) |
+| `--thread_num` int | Specify the number of threads for bundle upload (default: 5) |
 
+### Bundle Transfer
+| Flag | Description |
+|------|-------------|
+| `--clear` | Clear stale bundle files before upload (only for bundle upload) |
+| `--irods_temp` string | Specify an iRODS temporary path for uploading bundle files (for bundle upload) |
+| `--local_temp` string | Specify a local temporary path for creating bundle files (for bundle upload) |
+| `--max_file_num` int | Specify the maximum number of files per bundle (for bundle upload, default: 50)  |
+| `--min_file_num` int | Specify the minimum number of files per bundle (for bundle upload, default: 3) |
+| `--max_file_size` string | Specify the maximum file size per bundle (for bundle upload, default: 2GB) |
+| `--no_bulk_reg` | Disable bulk registration (for bundle upload) |
 
-## Put (Upload) data from local to iRODS
+### Differential Transfer
+| Flag | Description |
+|------|-------------|
+| `--diff` | Transfer only files with different content (always on) |
+| `--no_hash` | Compare files without using a hash (works with `--diff`) |
 
-`put` subcommand allows you to upload data to iRODS.
+### Data Verification
+| Flag | Description |
+|------|-------------|
+| `-k` | Require the data server to calculate a checksum (for local to iRODS sync) |
+| `-K, --verify_checksum` | Verify the checksum after transfer |
 
-To upload a file or an entire directory:
+### File Management
+| Flag | Description |
+|------|-------------|
+| `--delete` | Remove extra files from the source directory after upload |
+| `--delete_on_success` | Delete local files upon successful transfer |
+| `--report` string | Generate a transfer report (output to a specified file or `stdout` if empty or `-`) |
 
-```bash
-gocmd put [local_source] [irods_destination]
-```
+### User Interface and Display
+| Flag | Description |
+|------|-------------|
+| `--progress` | Display progress bars during transfer |
+| `--show_path` | Display the full path in progress bars (requires `--progress`) |
+| `--no_root` | Do not create a root target directory in iRODS |
 
-For example, to upload a whole directory `test_data` at local to iRODS path `/iplant/home/iychoi/test_data`:
+### Source File Filters
+| Flag | Description |
+|------|-------------|
+| `--exclude_hidden_files` | Exclude hidden files (those starting with `.`) |
+| `--age` int | Exclude files older than the specified age (in minutes) |
 
-```bash
-gocmd put test_data /iplant/home/iychoi/test_data
-```
+### Low-Level Transfer Options
+| Flag | Description |
+|------|-------------|
+| `--tcp_buffer_size` string | Specify the TCP socket buffer size (default: `1MB`) |
 
-Of course, you can use relative path from your iRODS current working directory to locate output. Use `pwd` and `cd` subcommand to display and change iRODS current working directory.
+## Useful Tips
+The `sync` command works in the same way as `get`, `put`, `bput`, and `cp` commands.
 
-```bash
-gocmd pwd
-> /iplant/home/iychoi
+- `gocmd sync <local_source> i:<irods_destination>` is equivalent to:
+  ```sh
+  gocmd put --diff <local_source> <irods_destination>
+  ```
+- `gocmd sync --bulk_upload <local_source> i:<irods_destination>` is equivalent to:
+  ```sh
+  gocmd bput --diff <local_source> <irods_destination>
+  ```
+- `gocmd sync i:<irods_source> <local_destination>` is equivalent to:  
+  ```sh
+  gocmd get --diff <irods_source> <local_destination>
+  ```
+- `gocmd sync i:<irods_source> i:<irods_destination>` is equivalent to:  
+  ```sh
+  gocmd cp --diff <irods_source> <irods_destination>
+  ```
 
-gocmd put test_data .
-```
-
-### Useful flags
-
-- `--progress`: Displays progress bars.
-- `--diff`: Does not upload a file if the file exists in iRODS. Overwrites if the iRODS file has different `size` or file `hash`.
-- `--no_hash`: Works with `--diff`. Does not use file `hash` in file comparisons. This is a lot faster than using `hash` and useful if you don't change file content (like image files).
-- `-f`: Uploads data at local to iRODS forcefully. Existing files in iRODS will be overwritten.
-- `--no_replication`: Does not trigger iRODS data replication. Use this only if you know what this is.
-- `--retry <num_retry>`: Retries the same command with given retry number if something goes wrong, like network failure. 
-- `--retry_interval <seconds>`: Sets interval between each retry.
-
-### Note
-
-Parallel data upload is only available in iRODS 4.2.11+. So you will see that `Gocommands` does not use bandwidth efficiently for uploading files when the server runs lower versions of iRODS (like CyVerse Data Store). If you want to upload many small data, try `bput` subcommand to be explained below.
-
-
-
-## Bulk put (Upload) data from local to iRODS
-
-`bput` subcommand allows you to upload large datasets to iRODS.
-
-The key ideas behind `bput` are:
-
-- Creating `tar` bundles to combine small many files into large bundle files to make transfer more efficient.
-- Transferring large bundles in parallel.
-- Unbundling in iRODS server-side.
-
-
-To upload a file or an entire directory:
-
-```bash
-gocmd bput [local_source] [irods_destination]
-```
-
-For example, to upload a whole directory `test_data` at local to iRODS path `/iplant/home/iychoi/test_data`:
-
-```bash
-gocmd bput test_data /iplant/home/iychoi/test_data
-```
-
-Of course, you can use relative path from your iRODS current working directory to locate output. Use `pwd` and `cd` subcommand to display and change iRODS current working directory.
-
-```bash
-gocmd pwd
-> /iplant/home/iychoi
-
-gocmd bput test_data .
-```
-
-### Useful flags
-
-- `--progress`: Displays progress bars.
-- `--diff`: Does not upload a file if the file exists in iRODS. Overwrites if the iRODS file has different `size` or file `hash`.
-- `--no_hash`: Works with `--diff`. Does not use file `hash` in file comparisons. This is a lot faster than using `hash` and useful if you don't change file content (like image files).
-- `-f`: Uploads data at local to iRODS forcefully. Existing files in iRODS will be overwritten.
-- `--max_file_num`: Specifies the maximum number of files in a bundle. Default is 50.
-- `--max_file_size`: Specifies the size threshold of a bundle. Default is 1GB.
-- `--local_temp`: Specifies the local temporary directory to be used in creating bundle files. Default is `/tmp`.
-- `--retry <num_retry>`: Retries the same command with given retry number if something goes wrong, like network failure. 
-- `--retry_interval <seconds>`: Sets interval between each retry.
-
-
-## Sync data between local and iRODS
-
-`sync` subcommand allows you to sync datasets between local and iRODS. `sync` will transfers files only when they are not present or differet.
-
-Input and output path arguments of `sync` can be either for local or iRODS. Paths with `i:` prefix are considered as iRODS paths. Paths with no prefix are considered as local paths.
-
-To sync (upload) a file or an entire directory to iRODS:
-
-```bash
-gocmd sync [local_source] i:[irods_destination]
-```
-
-To sync (download) a file or an entire directory in iRODS to local:
-
-```bash
-gocmd sync i:[irods_source] [local_destination]
-```
-
-
-### Useful flags
-
-- `--progress`: Displays progress bars.
-- `--no_hash`: Does not use file `hash` in file comparisons. This is a lot faster than using `hash` and useful if you don't change file content (like image files).
-- `-f`: Uploads data at local to iRODS forcefully. Existing files in iRODS will be overwritten.
-- `--max_file_num`: Specifies the maximum number of files in a bundle. Default is 50.
-- `--max_file_size`: Specifies the size threshold of a bundle. Default is 1GB.
-- `--local_temp`: Specifies the local temporary directory to be used in creating bundle files. Default is `/tmp`.
-- `--retry <num_retry>`: Retries the same command with given retry number if something goes wrong, like network failure. 
-- `--retry_interval <seconds>`: Sets interval between each retry.
-
-### Note
-
-`sync` works exactly same as `get`, `bput`, and `copy`.
-
-- `gocmd sync [local_source] i:[irods_destination]` works exactly same as `gocmd bput --diff [local_source] [irods_destination]`
-- `gocmd sync i:[irods_source] [local_destination]` works exactly same as `gocmd get --diff [irods_source] [local_destination]`
-- `gocmd sync i:[irods_source] i:[irods_destination]` works exactly same as `gocmd sync --diff [irods_source] [irods_destination]`
