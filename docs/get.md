@@ -32,13 +32,14 @@ gocmd get /myZone/home/myUser/myData1.obj
 ### Transfer Mode
 | Flag | Description |
 |------|-------------|
-| `--icat` | Transfer data via iCAT |
+| `--icat` | Transfer files via iCAT |
 | `--redirect` | Redirect transfer to resource server |
+| `-R, --resource` string | Set resource server to download files from |
 
 ### Parallel Transfer
 | Flag | Description |
 |------|-------------|
-| `--single_threaded` | Transfer a file using a single thread |
+| `--single_threaded` | Transfer files using a single thread |
 | `--thread_num` int | Specify the number of transfer threads (default 5) |
 
 ### Differential Transfer
@@ -78,9 +79,9 @@ gocmd get /myZone/home/myUser/myData1.obj
 | Flag | Description |
 |------|-------------|
 | `--decrypt` | Decrypt files (default true) |
-| `--decrypt_key` string | Decryption key for 'winscp' and 'pgp' mode |
-| `--decrypt_priv_key` string | Decryption private key for 'ssh' mode (default `/home/iychoi/.ssh/id_rsa`) |
-| `--decrypt_temp` string | Specify temp directory path for decrypting files (default `/tmp`) |
+| `--decrypt_key` string | Specify decryption key for 'winscp' and 'pgp' mode |
+| `--decrypt_priv_key` string | Specify decryption private key for 'ssh' mode (default `/home/iychoi/.ssh/id_rsa`) |
+| `--decrypt_temp` string | Specify temporary directory path for decryption (default `/tmp`) |
 
 ### Low-level Transfer Options
 | Flag | Description |

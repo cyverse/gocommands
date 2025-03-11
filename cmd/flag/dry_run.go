@@ -13,7 +13,7 @@ var (
 )
 
 func SetDryRunFlags(command *cobra.Command) {
-	command.Flags().BoolVar(&dryRunFlagValues.DryRun, "dry_run", false, "Do not actually change")
+	command.Flags().BoolVar(&dryRunFlagValues.DryRun, "dry_run", false, "Reherse execution")
 }
 
 func GetDryRunFlagValues() *DryRunFlagValues {

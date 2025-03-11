@@ -15,7 +15,7 @@ var (
 
 func SetChecksumFlags(command *cobra.Command, hideCalculateChecksum bool, hideVerifyChecksum bool) {
 	command.Flags().BoolVarP(&checksumFlagValues.CalculateChecksum, "checksum", "k", false, "Calculate a checksum on the data server-side")
-	command.Flags().BoolVarP(&checksumFlagValues.VerifyChecksum, "verify_checksum", "K", false, "calculate and verify the checksum")
+	command.Flags().BoolVarP(&checksumFlagValues.VerifyChecksum, "verify_checksum", "K", false, "Calculate and verify the checksum after transfer")
 
 	if hideCalculateChecksum {
 		command.Flags().MarkHidden("checksum")

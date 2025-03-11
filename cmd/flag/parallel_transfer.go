@@ -21,9 +21,9 @@ var (
 func SetParallelTransferFlags(command *cobra.Command, hideParallelConfig bool, hideSingleThread bool) {
 	command.Flags().IntVar(&parallelTransferFlagValues.ThreadNumber, "thread_num", commons.TransferThreadNumDefault, "Specify the number of transfer threads")
 	command.Flags().StringVar(&parallelTransferFlagValues.tcpBufferSizeInput, "tcp_buffer_size", commons.TCPBufferSizeStringDefault, "Specify TCP socket buffer size")
-	command.Flags().BoolVar(&parallelTransferFlagValues.RedirectToResource, "redirect", false, "Always redirect to resource server")
-	command.Flags().BoolVar(&parallelTransferFlagValues.Icat, "icat", false, "Always transfer data via iCAT")
-	command.Flags().BoolVar(&parallelTransferFlagValues.SingleThread, "single_threaded", false, "Transfer a file using a single thread")
+	command.Flags().BoolVar(&parallelTransferFlagValues.RedirectToResource, "redirect", false, "Redirect transfer to resource server")
+	command.Flags().BoolVar(&parallelTransferFlagValues.Icat, "icat", false, "Transfer files via iCAT")
+	command.Flags().BoolVar(&parallelTransferFlagValues.SingleThread, "single_threaded", false, "Transfer files with a single thread")
 
 	if hideParallelConfig {
 		command.Flags().MarkHidden("thread_num")

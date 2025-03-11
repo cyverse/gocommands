@@ -15,7 +15,7 @@ var (
 )
 
 func SetTransferReportFlags(command *cobra.Command) {
-	command.Flags().StringVar(&transferReportFlagValues.ReportPath, "report", "", "Create a transfer report, give path to create a file, empty string or '-' will output to stdout")
+	command.Flags().StringVar(&transferReportFlagValues.ReportPath, "report", "", "Create a transfer report, specify path for file output; empty string or '-' outputs to stdout")
 }
 
 func GetTransferReportFlagValues(command *cobra.Command) *TransferReportFlagValues {
