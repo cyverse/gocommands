@@ -29,7 +29,7 @@ func AddSyncCommand(rootCmd *cobra.Command) {
 	flag.SetForceFlags(syncCmd, true)
 	flag.SetProgressFlags(syncCmd)
 	flag.SetRetryFlags(syncCmd)
-	flag.SetDifferentialTransferFlags(syncCmd, false)
+	flag.SetDifferentialTransferFlags(syncCmd, true)
 	flag.SetChecksumFlags(syncCmd, false, false)
 	flag.SetNoRootFlags(syncCmd)
 	flag.SetSyncFlags(syncCmd, false)
