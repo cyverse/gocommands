@@ -1,28 +1,30 @@
 # Configuring GoCommands for iRODS
 
-## Using the iCommands Configuration
+## Using the `init` command
 
-GoCommands can automatically detect and use existing iCommands configuration files located under `~/.irods`. Additionally, GoCommands creates its own configuration files under `~/.irods`, allowing users to work with both iCommands and GoCommands interchangeably.
-
-
-### Steps to Create iCommands Configuration File
-1. Run the following command to initialize the configuration file under `~/.irods`:
+1. Run the following command to configure GoCommands. Enter your iRODS account credentials when prompted. This will create the configuration file under `~/.irods`:
    ```
    gocmd init
    ```
-2. To check which configuration files are being loaded, use:
+2. To verify the current environment, use:
    ```
    gocmd env
    ```
    This will display the current configurations.
+3. Execute GoCommands for your task:
+   ```
+   gocmd ls
+   ```
 
+## Using iCommands Configuration
+
+GoCommands is compatible with iCommands' configuration files. It can automatically detect and use the existing iCommands configuration files located in `~/.irods`. Additionally, GoCommands creates its own configuration files in this directory, allowing users to work with both iCommands and GoCommands interchangeably.
 
 ## Using an External Configuration File (YAML or JSON)
 
-GoCommands can read configurations from YAML or JSON formatted files.
+GoCommands can read configurations from YAML or JSON files.
 
-
-### Creating a YAML Configuration File
+### Using an External YAML Configuration File without `init`
 1. Create a file named `config.yaml` using your preferred text editor.
 2. Add the following content:
    ```
@@ -36,18 +38,22 @@ GoCommands can read configurations from YAML or JSON formatted files.
    ```
    gocmd -c config.yaml env
    ```
-4. If you prefer not to include sensitive fields like `irods_user_password`, omit them. GoCommands will prompt you to enter missing values during runtime.
+4. Execute GoCommands for your task:
+   ```
+   gocmd -c config.yaml ls
+   ```
+5. You can omit sensitive fields like `irods_user_password`, and GoCommands will prompt you for the missing values during runtime.
 
 
-### Creating iCommands Configuration Based on External File
-You can also initialize `~/.irods` based on the content of your external file:
+### Creating Configuration from an External File
+To configure GoCommands using an external file:
 ```
 gocmd -c config.yaml init
 ```
 
 ## Using Environmental Variables
 
-GoCommands can read configuration directly from environmental variables, which take precedence over other sources.
+GoCommands can read configuration directly from environmental variables, which take precedence over other configuration sources.
 
 ### Setting Environmental Variables
 1. Export the required variables in your terminal:
@@ -62,12 +68,26 @@ GoCommands can read configuration directly from environmental variables, which t
    ```
    gocmd env
    ```
-3. Similar to YAML/JSON configurations, sensitive fields like `IRODS_USER_PASSWORD` can be omitted, and GoCommands will prompt for missing values during runtime.
+3. Execute GoCommands for your task:
+   ```
+   gocmd ls
+   ```
+4. Similar to YAML/JSON configurations, you can omit sensitive fields like `IRODS_USER_PASSWORD`, and GoCommands will prompt for missing values during runtime.
+
+
+### Creating Configuration from Environmental Variables
+
+To configure GoCommands using environmental variables:
+```
+gocmd init
+```
+
+GoCommands will prompt you to input only the missing fields.
 
 
 ## Full List of Supported Configuration Fields
 
-Below is a comprehensive list of supported fields and their corresponding names in JSON, YAML, and environmental variables:
+Below is a comprehensive list of supported fields, along with their corresponding names in JSON, YAML, and environmental variables:
 
 | Field Name                     | JSON/YAML Key                     | Environmental Variable              | Default Value                    |
 |--------------------------------|------------------------------------|-------------------------------------|---------------------------------|
