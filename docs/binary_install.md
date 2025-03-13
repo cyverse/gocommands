@@ -1,9 +1,5 @@
 # Installing GoCommands from Pre-built Binaries
 
-<figure markdown>
-  ![!ds](../assets/ds/datastore_plchldr.png){ width="200" }
-</figure>
-
 GoCommands provides pre-built binaries for various operating systems and architectures. Choose the appropriate command for your system to install the latest version.
 
 ## macOS  
@@ -80,30 +76,48 @@ Windows primarily runs on Intel/AMD CPU architectures. Most modern systems use 6
 
 Windows includes two main terminal applications: `Command Prompt (CMD)` and `PowerShell`. Follow the appropriate installation instructions based on your processor type and preferred terminal.
 
-### Intel/AMD 64-bit
+### Command Prompt (CMD)
 
-#### Command Prompt
+If you're unsure which CPU architecture your system is using, run the following command in the Command Prompt (CMD):
+
+```
+echo %PROCESSOR_ARCHITECTURE%
+```
+
+This command will return the architecture type, such as `AMD64` for 64-bit Intel/AMD processors or `x86` for 32-bit Intel/AMD processors.
+
+#### Intel/AMD 64-bit
 
 ```cmd
 curl -L -s -o gocmdv.txt https://raw.githubusercontent.com/cyverse/gocommands/main/VERSION.txt && set /p GOCMD_VER=<gocmdv.txt
 curl -L -s -o gocmd.zip https://github.com/cyverse/gocommands/releases/download/%GOCMD_VER%/gocmd-%GOCMD_VER%-windows-amd64.zip && tar zxvf gocmd.zip && del gocmd.zip gocmdv.txt
 ```
 
-#### PowerShell
-
-```powershell
-curl -o gocmdv.txt https://raw.githubusercontent.com/cyverse/gocommands/main/VERSION.txt ; $env:GOCMD_VER = (Get-Content gocmdv.txt)
-curl -o gocmd.zip https://github.com/cyverse/gocommands/releases/download/$env:GOCMD_VER/gocmd-$env:GOCMD_VER-windows-amd64.zip ; tar zxvf gocmd.zip ; del gocmd.zip ; del gocmdv.txt
-```
-
-### Intel/AMD 32-bit
+#### Intel/AMD 32-bit
 
 ```cmd
 curl -L -s -o gocmdv.txt https://raw.githubusercontent.com/cyverse/gocommands/main/VERSION.txt && set /p GOCMD_VER=<gocmdv.txt
 curl -L -s -o gocmd.zip https://github.com/cyverse/gocommands/releases/download/%GOCMD_VER%/gocmd-%GOCMD_VER%-windows-386.zip && tar zxvf gocmd.zip && del gocmd.zip gocmdv.txt
 ```
 
-#### PowerShell
+### PowerShell
+
+If you're unsure which CPU architecture your system is using, run the following command in the PowerShell:
+
+```
+$env:PROCESSOR_ARCHITECTURE
+```
+
+This command will return the architecture type, such as `AMD64` for 64-bit Intel/AMD processors or `x86` for 32-bit Intel/AMD processors.
+
+#### Intel/AMD 64-bit
+
+```powershell
+curl -o gocmdv.txt https://raw.githubusercontent.com/cyverse/gocommands/main/VERSION.txt ; $env:GOCMD_VER = (Get-Content gocmdv.txt)
+curl -o gocmd.zip https://github.com/cyverse/gocommands/releases/download/$env:GOCMD_VER/gocmd-$env:GOCMD_VER-windows-amd64.zip ; tar zxvf gocmd.zip ; del gocmd.zip ; del gocmdv.txt
+```
+
+#### Intel/AMD 32-bit
 
 ```powershell
 curl -o gocmdv.txt https://raw.githubusercontent.com/cyverse/gocommands/main/VERSION.txt ; $env:GOCMD_VER = (Get-Content gocmdv.txt)
