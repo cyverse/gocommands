@@ -11,10 +11,10 @@ import (
 )
 
 var addmetaCmd = &cobra.Command{
-	Use:     "addmeta [attribute name] [attribute value] [attribute unit (optional)]",
+	Use:     "addmeta <attribute-name> <attribute-value> [attribute-unit (optional)]",
 	Aliases: []string{"add_meta", "add_metadata"},
-	Short:   "Add a metadata",
-	Long:    `This adds a metadata to the given collection, data object, user, or a resource.`,
+	Short:   "Add metadata to a specified iRODS object",
+	Long:    `This command allows you to add metadata to a specified iRODS object, such as a collection, data object, user, or resource. The metadata consists of an attribute name, value, and optionally a unit.`,
 	RunE:    processAddmetaCommand,
 	Args:    cobra.RangeArgs(2, 3),
 }

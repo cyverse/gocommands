@@ -33,14 +33,14 @@ var (
 )
 
 func SetCommonFlags(command *cobra.Command, hideResource bool) {
-	command.Flags().StringVarP(&commonFlagValues.ConfigFilePath, "config", "c", commons.GetDefaultIRODSConfigPath(), "Set config file or directory")
-	command.Flags().BoolVarP(&commonFlagValues.ShowVersion, "version", "v", false, "Print version")
-	command.Flags().BoolVarP(&commonFlagValues.ShowHelp, "help", "h", false, "Print help")
-	command.Flags().BoolVarP(&commonFlagValues.DebugMode, "debug", "d", false, "Enable debug mode")
-	command.Flags().BoolVarP(&commonFlagValues.Quiet, "quiet", "q", false, "Suppress usual output messages")
-	command.Flags().StringVar(&commonFlagValues.logLevelInput, "log_level", "", "Set log level")
-	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Set session ID")
-	command.Flags().StringVarP(&commonFlagValues.Resource, "resource", "R", "", "Set resource server")
+	command.Flags().StringVarP(&commonFlagValues.ConfigFilePath, "config", "c", commons.GetDefaultIRODSConfigPath(), "Specify custom iRODS configuration file or directory path")
+	command.Flags().BoolVarP(&commonFlagValues.ShowVersion, "version", "v", false, "Display version information")
+	command.Flags().BoolVarP(&commonFlagValues.ShowHelp, "help", "h", false, "Display help information about available commands and options")
+	command.Flags().BoolVarP(&commonFlagValues.DebugMode, "debug", "d", false, "Enable verbose debug output for troubleshooting")
+	command.Flags().BoolVarP(&commonFlagValues.Quiet, "quiet", "q", false, "Suppress all non-error output messages")
+	command.Flags().StringVar(&commonFlagValues.logLevelInput, "log_level", "", "Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG)")
+	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Specify session identifier for tracking operations")
+	command.Flags().StringVarP(&commonFlagValues.Resource, "resource", "R", "", "Target specific iRODS resource server for operations")
 
 	command.MarkFlagsMutuallyExclusive("quiet", "version")
 	command.MarkFlagsMutuallyExclusive("log_level", "version")
@@ -149,7 +149,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	}
 
 	// init config
-	err := commons.InitEnvironmentManager()
+	err := commons.InitEnvironmentManagerFromSystemConfig()
 	if err != nil {
 		return false, xerrors.Errorf("failed to init environment manager: %w", err)
 	}
@@ -172,8 +172,6 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	if len(myCommonFlagValues.ConfigFilePath) > 0 {
 		configFilePath = myCommonFlagValues.ConfigFilePath
 	}
-
-	environmentManager.Environment = irodsclient_config.GetDefaultConfig()
 
 	// load config
 	if len(configFilePath) > 0 {

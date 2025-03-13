@@ -11,10 +11,10 @@ import (
 )
 
 var mkticketCmd = &cobra.Command{
-	Use:     "mkticket [collection|data object]",
+	Use:     "mkticket <collection|data-object>",
 	Aliases: []string{"mk_ticket", "make_ticket"},
-	Short:   "Make a ticket",
-	Long:    `This makes a ticket for given collection or data object.`,
+	Short:   "Create a ticket for a collection or data object",
+	Long:    `This command creates a ticket for the specified collection or data object in iRODS.`,
 	RunE:    processMkticketCommand,
 	Args:    cobra.ExactArgs(1),
 }

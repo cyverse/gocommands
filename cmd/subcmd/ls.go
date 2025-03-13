@@ -26,10 +26,10 @@ type FlatReplica struct {
 }
 
 var lsCmd = &cobra.Command{
-	Use:     "ls [collection1] [collection2] ...",
+	Use:     "ls <data-object-or-collection>...",
 	Aliases: []string{"ils", "list"},
-	Short:   "List entries in iRODS collections",
-	Long:    `This lists data objects and collections in iRODS collections.`,
+	Short:   "List data objects or entries in iRODS collections",
+	Long:    `This command lists data objects and collections within the specified iRODS collections.`,
 	RunE:    processLsCommand,
 	Args:    cobra.ArbitraryArgs,
 }

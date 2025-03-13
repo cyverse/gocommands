@@ -13,10 +13,10 @@ import (
 )
 
 var chmodinheritCmd = &cobra.Command{
-	Use:     "chmodinherit [inherit | noinherit] [data-object or collection]",
+	Use:     "chmodinherit <inherit|noinherit> <collection>",
 	Aliases: []string{"ch_mod_inherit", "ch_inherit", "change_inherit", "change_mod_inherit", "modify_inherit", "modify_mod_inherit", "update_inherit", "update_mod_inherit"},
-	Short:   "Modify access inherit",
-	Long:    `This modifies access inherit to data-objects or collections.`,
+	Short:   "Modify access inheritance for iRODS collections",
+	Long:    `This command modifies the access inheritance setting for the specified iRODS collections.`,
 	RunE:    processChmodinheritCommand,
 	Args:    cobra.MinimumNArgs(2),
 }

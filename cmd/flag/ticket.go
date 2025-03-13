@@ -49,7 +49,7 @@ var (
 )
 
 func SetTicketAccessFlags(command *cobra.Command) {
-	command.Flags().StringVarP(&ticketAccessFlagValues.Name, "ticket", "T", "", "Set ticket")
+	command.Flags().StringVarP(&ticketAccessFlagValues.Name, "ticket", "T", "", "Specify the name of the ticket")
 }
 
 func GetTicketAccessFlagValues() *TicketAccessFlagValues {
@@ -57,8 +57,8 @@ func GetTicketAccessFlagValues() *TicketAccessFlagValues {
 }
 
 func SetTicketFlags(command *cobra.Command) {
-	command.Flags().StringVarP(&ticketFlagValues.Name, "name", "n", "", "Specify ticket name")
-	command.Flags().StringVarP(&ticketFlagValues.typeInput, "type", "t", "read", "Specify ticket type (read|write)")
+	command.Flags().StringVarP(&ticketFlagValues.Name, "name", "n", "", "Specify the name of the ticket")
+	command.Flags().StringVarP(&ticketFlagValues.typeInput, "type", "t", "read", "Specify the ticket type (read or write)")
 }
 
 func GetTicketFlagValues() *TicketFlagValues {
@@ -79,20 +79,20 @@ func GetTicketFlagValues() *TicketFlagValues {
 }
 
 func SetTicketUpdateFlags(command *cobra.Command) {
-	command.Flags().Int64Var(&ticketUpdateFlagValues.UseLimit, "ulimit", 0, "Set uses limit, 0 to clear limit")
-	command.Flags().BoolVar(&ticketUpdateFlagValues.clearUseLimitInput, "clear_ulimit", false, "Clear uses limit")
-	command.Flags().Int64Var(&ticketUpdateFlagValues.WriteFileLimit, "wflimit", 0, "Set write file limit")
-	command.Flags().BoolVar(&ticketUpdateFlagValues.clearWriteFileLimitInput, "clear_wflimit", false, "Clear write file limit")
-	command.Flags().Int64Var(&ticketUpdateFlagValues.WriteByteLimit, "wblimit", 0, "Set write byte limit")
-	command.Flags().BoolVar(&ticketUpdateFlagValues.clearWriteByteLimitInput, "clear_wblimit", false, "Clear write byte limit")
-	command.Flags().StringVar(&ticketUpdateFlagValues.expirationTimeInput, "expiry", "0", "Set expiration time [YYYY:MM:DD HH:mm:SS]")
-	command.Flags().BoolVar(&ticketUpdateFlagValues.clearExpirationTimeInput, "clear_expiry", false, "Clear expiration time")
-	command.Flags().StringSliceVar(&ticketUpdateFlagValues.AddAllowedUsers, "add_user", []string{}, "Add an allowed user")
-	command.Flags().StringSliceVar(&ticketUpdateFlagValues.AddAllowedGroups, "add_group", []string{}, "Add an allowed group")
-	command.Flags().StringSliceVar(&ticketUpdateFlagValues.AddAllowedHosts, "add_host", []string{}, "Add an allowed host")
-	command.Flags().StringSliceVar(&ticketUpdateFlagValues.RemoveAllwedUsers, "rm_user", []string{}, "Remove an allowed user")
-	command.Flags().StringSliceVar(&ticketUpdateFlagValues.RemoveAllowedGroups, "rm_group", []string{}, "Remove an allowed group")
-	command.Flags().StringSliceVar(&ticketUpdateFlagValues.RemoveAllowedHosts, "rm_host", []string{}, "Remove an allowed host")
+	command.Flags().Int64Var(&ticketUpdateFlagValues.UseLimit, "ulimit", 0, "Set the usage limit")
+	command.Flags().BoolVar(&ticketUpdateFlagValues.clearUseLimitInput, "clear_ulimit", false, "Clear the usage limit")
+	command.Flags().Int64Var(&ticketUpdateFlagValues.WriteFileLimit, "wflimit", 0, "Set the write file limit")
+	command.Flags().BoolVar(&ticketUpdateFlagValues.clearWriteFileLimitInput, "clear_wflimit", false, "Clear the write file limit")
+	command.Flags().Int64Var(&ticketUpdateFlagValues.WriteByteLimit, "wblimit", 0, "Set the write byte limit")
+	command.Flags().BoolVar(&ticketUpdateFlagValues.clearWriteByteLimitInput, "clear_wblimit", false, "Clear the write byte limit")
+	command.Flags().StringVar(&ticketUpdateFlagValues.expirationTimeInput, "expiry", "0", "Set the expiration time [YYYY:MM:DD HH:mm:SS]")
+	command.Flags().BoolVar(&ticketUpdateFlagValues.clearExpirationTimeInput, "clear_expiry", false, "Clear the expiration time")
+	command.Flags().StringSliceVar(&ticketUpdateFlagValues.AddAllowedUsers, "add_user", []string{}, "Add users to the allowed list")
+	command.Flags().StringSliceVar(&ticketUpdateFlagValues.AddAllowedGroups, "add_group", []string{}, "Add groups to the allowed list")
+	command.Flags().StringSliceVar(&ticketUpdateFlagValues.AddAllowedHosts, "add_host", []string{}, "Add hosts to the allowed list")
+	command.Flags().StringSliceVar(&ticketUpdateFlagValues.RemoveAllwedUsers, "rm_user", []string{}, "Remove users from the allowed list")
+	command.Flags().StringSliceVar(&ticketUpdateFlagValues.RemoveAllowedGroups, "rm_group", []string{}, "Remove groups from the allowed list")
+	command.Flags().StringSliceVar(&ticketUpdateFlagValues.RemoveAllowedHosts, "rm_host", []string{}, "Remove hosts from the allowed list")
 
 	command.MarkFlagsMutuallyExclusive("ulimit", "clear_ulimit")
 	command.MarkFlagsMutuallyExclusive("wflimit", "clear_wflimit")

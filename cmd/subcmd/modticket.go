@@ -12,10 +12,10 @@ import (
 )
 
 var modticketCmd = &cobra.Command{
-	Use:     "modticket [ticket_name]",
+	Use:     "modticket <ticket-name-or-id>",
 	Aliases: []string{"mod_ticket", "modify_ticket", "update_ticket"},
-	Short:   "Modify a ticket",
-	Long:    `This modifies a ticket.`,
+	Short:   "Modify an existing ticket",
+	Long:    `This command allows modification of an existing ticket.`,
 	RunE:    processModticketCommand,
 	Args:    cobra.MinimumNArgs(1),
 }

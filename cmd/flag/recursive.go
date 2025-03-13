@@ -13,7 +13,7 @@ var (
 )
 
 func SetRecursiveFlags(command *cobra.Command, hideRecursive bool) {
-	command.Flags().BoolVarP(&recursiveFlagValues.Recursive, "recursive", "r", false, "Run recursively")
+	command.Flags().BoolVarP(&recursiveFlagValues.Recursive, "recursive", "r", false, "Recursively process operations for collections and their contents")
 
 	if hideRecursive {
 		command.Flags().MarkHidden("recursive")

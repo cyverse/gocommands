@@ -13,7 +13,7 @@ var (
 )
 
 func SetPostTransferFlagValues(command *cobra.Command) {
-	command.Flags().BoolVar(&postTransferFlagValues.DeleteOnSuccess, "delete_on_success", false, "Delete source file on success")
+	command.Flags().BoolVar(&postTransferFlagValues.DeleteOnSuccess, "delete_on_success", false, "Delete the source file after a successful transfer")
 }
 
 func GetPostTransferFlagValues() *PostTransferFlagValues {

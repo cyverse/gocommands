@@ -11,10 +11,10 @@ import (
 )
 
 var rmCmd = &cobra.Command{
-	Use:     "rm [data-object1] [data-object2] [collection1] ...",
+	Use:     "rm <data-object-or-collection>...",
 	Aliases: []string{"irm", "del", "remove"},
 	Short:   "Remove iRODS data-objects or collections",
-	Long:    `This removes iRODS data-objects or collections.`,
+	Long:    `This command removes iRODS data-objects or collections.`,
 	RunE:    processRmCommand,
 	Args:    cobra.MinimumNArgs(1),
 }

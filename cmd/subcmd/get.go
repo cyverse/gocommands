@@ -23,10 +23,10 @@ import (
 )
 
 var getCmd = &cobra.Command{
-	Use:     "get [data-object1] [data-object2] [collection1] ... [local dir]",
+	Use:     "get <data-object-or-collection>... <dest-local-file-or-dir>",
 	Aliases: []string{"iget", "download"},
-	Short:   "Download iRODS data-objects or collections",
-	Long:    `This downloads iRODS data-objects or collections to the given local path.`,
+	Short:   "Download iRODS data objects or collections to a local file or directory",
+	Long:    `This command downloads iRODS data objects or collections to the specified local file or directory.`,
 	RunE:    processGetCommand,
 	Args:    cobra.MinimumNArgs(1),
 }
@@ -376,10 +376,9 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 		}
 
 		// determine how to download
-		if get.parallelTransferFlagValues.SingleThread || get.parallelTransferFlagValues.ThreadNumber == 1 {
-			downloadResult, downloadErr = fs.DownloadFileResumable(sourceEntry.Path, "", downloadPath, get.checksumFlagValues.VerifyChecksum, callbackGet)
-			notes = append(notes, "icat", "single-thread")
-		} else if get.parallelTransferFlagValues.RedirectToResource {
+		transferMode := get.determineTransferMode(sourceEntry.Size)
+		switch transferMode {
+		case commons.TransferModeRedirect:
 			if resume {
 				downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, callbackGet)
 				notes = append(notes, "icat", "multi-thread", "resume")
@@ -390,33 +389,17 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 				downloadResult, downloadErr = fs.DownloadFileRedirectToResource(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, callbackGet)
 				notes = append(notes, "redirect-to-resource")
 			}
-		} else if get.parallelTransferFlagValues.Icat {
+		case commons.TransferModeSingleThread:
+			downloadResult, downloadErr = fs.DownloadFileResumable(sourceEntry.Path, "", downloadPath, get.checksumFlagValues.VerifyChecksum, callbackGet)
+			notes = append(notes, "icat", "single-thread")
+		case commons.TransferModeICAT:
+			fallthrough
+		default:
 			// delete status file if exists
 			get.deleteTransferStatusFile(downloadPath)
 
 			downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, callbackGet)
 			notes = append(notes, "icat", "multi-thread")
-		} else {
-			// auto
-			if sourceEntry.Size >= commons.RedirectToResourceMinSize {
-				// redirect-to-resource
-				if resume {
-					downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, callbackGet)
-					notes = append(notes, "icat", "multi-thread", "resume")
-				} else {
-					// delete status file if exists
-					get.deleteTransferStatusFile(downloadPath)
-
-					downloadResult, downloadErr = fs.DownloadFileRedirectToResource(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, callbackGet)
-					notes = append(notes, "redirect-to-resource")
-				}
-			} else {
-				// delete status file if exists
-				get.deleteTransferStatusFile(downloadPath)
-
-				downloadResult, downloadErr = fs.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, callbackGet)
-				notes = append(notes, "icat", "multi-thread")
-			}
 		}
 
 		if downloadErr != nil {
@@ -1009,7 +992,7 @@ func (get *GetCommand) decryptFile(sourcePath string, encryptedFilePath string, 
 }
 
 func (get *GetCommand) calculateThreadForTransferJob(size int64) int {
-	threads := commons.CalculateThreadForTransferJob(size, commons.CalculateThreadForTransferJob(size, get.parallelTransferFlagValues.ThreadNumber))
+	threads := commons.CalculateThreadForTransferJob(size, get.parallelTransferFlagValues.ThreadNumber)
 
 	// determine how to download
 	if get.parallelTransferFlagValues.SingleThread || get.parallelTransferFlagValues.ThreadNumber == 1 {
@@ -1017,4 +1000,35 @@ func (get *GetCommand) calculateThreadForTransferJob(size int64) int {
 	}
 
 	return threads
+}
+
+func (get *GetCommand) determineTransferMode(size int64) commons.TransferMode {
+	threadsRequired := get.calculateThreadForTransferJob(size)
+
+	if threadsRequired == 1 {
+		return commons.TransferModeSingleThread
+	}
+
+	if get.parallelTransferFlagValues.SingleThread || get.parallelTransferFlagValues.ThreadNumber == 1 {
+		return commons.TransferModeSingleThread
+	} else if get.parallelTransferFlagValues.RedirectToResource {
+		return commons.TransferModeRedirect
+	} else if get.parallelTransferFlagValues.Icat {
+		return commons.TransferModeICAT
+	}
+
+	// sysconfig
+	systemConfig := commons.GetSystemConfig()
+	if systemConfig != nil && systemConfig.AdditionalConfig != nil {
+		if systemConfig.AdditionalConfig.TransferMode.Valid() {
+			return systemConfig.AdditionalConfig.TransferMode
+		}
+	}
+
+	// auto
+	if size >= commons.RedirectToResourceMinSize {
+		return commons.TransferModeRedirect
+	}
+
+	return commons.TransferModeICAT
 }

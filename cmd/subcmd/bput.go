@@ -22,10 +22,10 @@ import (
 )
 
 var bputCmd = &cobra.Command{
-	Use:     "bput [local file1] [local file2] [local dir1] ... [collection]",
+	Use:     "bput <local-file-or-dir>... <target-collection>",
 	Aliases: []string{"bundle_put"},
-	Short:   "Bundle-upload files or directories",
-	Long:    `This uploads files or directories to the given iRODS collection. The files or directories are bundled with TAR to maximize data transfer bandwidth, then extracted in the iRODS.`,
+	Short:   "Bundle-upload files or directories to iRODS",
+	Long:    `This command uploads files or directories to the specified iRODS collection. The files or directories are first bundled with TAR to optimize data transfer bandwidth and then extracted in iRODS after upload.`,
 	RunE:    processBputCommand,
 	Args:    cobra.MinimumNArgs(1),
 }
@@ -41,7 +41,7 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	flag.SetProgressFlags(bputCmd)
 	flag.SetRetryFlags(bputCmd)
 	flag.SetDifferentialTransferFlags(bputCmd, false)
-	flag.SetChecksumFlags(bputCmd, true, true)
+	flag.SetChecksumFlags(bputCmd, true, false)
 	flag.SetNoRootFlags(bputCmd)
 	flag.SetSyncFlags(bputCmd, true)
 	flag.SetPostTransferFlagValues(bputCmd)
@@ -223,7 +223,7 @@ func (bput *BputCommand) Process() error {
 		transferThreadNum = 1
 	}
 
-	bput.bundleTransferManager = commons.NewBundleTransferManager(bput.account, bput.filesystem, bput.transferReportManager, bput.targetPath, localBundleRootPath, bput.bundleTransferFlagValues.MinFileNum, bput.bundleTransferFlagValues.MaxFileNum, bput.bundleTransferFlagValues.MaxFileSize, transferThreadNum, bput.parallelTransferFlagValues.RedirectToResource, bput.parallelTransferFlagValues.Icat, bput.bundleTransferFlagValues.LocalTempPath, stagingDirPath, bput.bundleTransferFlagValues.NoBulkRegistration, bput.progressFlagValues.ShowProgress, bput.progressFlagValues.ShowFullPath)
+	bput.bundleTransferManager = commons.NewBundleTransferManager(bput.account, bput.filesystem, bput.transferReportManager, bput.targetPath, localBundleRootPath, bput.bundleTransferFlagValues.MinFileNum, bput.bundleTransferFlagValues.MaxFileNum, bput.bundleTransferFlagValues.MaxFileSize, transferThreadNum, bput.parallelTransferFlagValues.RedirectToResource, bput.parallelTransferFlagValues.Icat, bput.bundleTransferFlagValues.LocalTempPath, stagingDirPath, bput.bundleTransferFlagValues.NoBulkRegistration, bput.checksumFlagValues.VerifyChecksum, bput.progressFlagValues.ShowProgress, bput.progressFlagValues.ShowFullPath)
 	err = bput.bundleTransferManager.Start()
 	if err != nil {
 		return xerrors.Errorf("failed to start bundle transfer manager: %w", err)

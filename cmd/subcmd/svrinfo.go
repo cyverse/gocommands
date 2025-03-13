@@ -16,8 +16,8 @@ import (
 var svrinfoCmd = &cobra.Command{
 	Use:     "svrinfo",
 	Aliases: []string{"server_info"},
-	Short:   "Display server information",
-	Long:    `This displays server information, such as version.`,
+	Short:   "Display information about the iRODS server",
+	Long:    `This command displays information about the iRODS server, such as its version and configuration.`,
 	RunE:    processSvrinfoCommand,
 	Args:    cobra.NoArgs,
 }

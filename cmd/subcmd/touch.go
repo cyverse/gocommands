@@ -10,10 +10,10 @@ import (
 )
 
 var touchCmd = &cobra.Command{
-	Use:     "touch [data-object]",
+	Use:     "touch <data-object>",
 	Aliases: []string{"itouch"},
-	Short:   "Create an empty iRODS data-object or update timestamp of existing data-object",
-	Long:    `Create an empty iRODS data-object or update timestamp of existing data-object.`,
+	Short:   "Create an empty iRODS data-object or update its timestamp",
+	Long:    `This command creates an empty iRODS data-object or updates the timestamp of an existing data-object.`,
 	RunE:    processTouchCommand,
 	Args:    cobra.MinimumNArgs(1),
 }

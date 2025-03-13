@@ -27,8 +27,8 @@ var (
 func SetProcessFilterFlags(command *cobra.Command) {
 	command.Flags().BoolVar(&processFilterFlagValues.groupByUserInput, "groupbyuser", false, "Group processes by user")
 	command.Flags().BoolVar(&processFilterFlagValues.groupByProgramInput, "groupbyprog", false, "Group processes by client program")
-	command.Flags().StringVar(&processFilterFlagValues.Zone, "zone", "", "Filter by zone")
-	command.Flags().StringVar(&processFilterFlagValues.Address, "address", "", "Filter by address")
+	command.Flags().StringVar(&processFilterFlagValues.Zone, "zone", "", "Display processes from the specified zone")
+	command.Flags().StringVar(&processFilterFlagValues.Address, "address", "", "Display processes from the specified address")
 }
 
 func GetProcessFilterFlagValues() *ProcessFilterFlagValues {

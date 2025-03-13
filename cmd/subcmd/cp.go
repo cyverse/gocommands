@@ -19,10 +19,10 @@ import (
 )
 
 var cpCmd = &cobra.Command{
-	Use:     "cp [data-object1] [data-object2] [collection1] ... [target collection]",
+	Use:     "cp <data-object-or-collection>... <target-data-object-or-collection>",
 	Aliases: []string{"icp", "copy"},
-	Short:   "Copy iRODS data-objects or collections to target collection",
-	Long:    `This copies iRODS data-objects or collections to the given target collection.`,
+	Short:   "Copy iRODS data objects or collections to a target data object or collection",
+	Long:    `This command copies iRODS data objects or collections to the specified target data object or collection.`,
 	RunE:    processCpCommand,
 	Args:    cobra.MinimumNArgs(2),
 }

@@ -15,8 +15,8 @@ import (
 var lsmetaCmd = &cobra.Command{
 	Use:     "lsmeta",
 	Aliases: []string{"ls_meta", "ls_metadata", "list_meta", "list_metadata"},
-	Short:   "List metadata",
-	Long:    `This lists metadata for the given collection, data object, user, or a resource.`,
+	Short:   "List metadata for iRODS collections, data objects, users, or resources",
+	Long:    `This command lists the metadata associated with the given collection, data object, user, or resource in iRODS.`,
 	RunE:    processLsmetaCommand,
 	Args:    cobra.NoArgs,
 }

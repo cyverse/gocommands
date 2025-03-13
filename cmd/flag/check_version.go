@@ -13,7 +13,7 @@ var (
 )
 
 func SetCheckVersionFlags(command *cobra.Command) {
-	command.Flags().BoolVar(&checkVersionFlagValues.Check, "check", false, "Check the latest version only")
+	command.Flags().BoolVar(&checkVersionFlagValues.Check, "check", false, "Only check for the latest version without performing any updates")
 }
 
 func GetCheckVersionFlagValues() *CheckVersionFlagValues {

@@ -13,7 +13,7 @@ var (
 )
 
 func SetWildcardSearchFlags(command *cobra.Command) {
-	command.Flags().BoolVarP(&wildcardSearchFlagValues.WildcardSearch, "wildcard", "w", false, "Enable wildcard expansion to search source files")
+	command.Flags().BoolVarP(&wildcardSearchFlagValues.WildcardSearch, "wildcard", "w", false, "Enable wildcard expansion to search for source files")
 }
 
 func GetWildcardSearchFlagValues() *WildcardSearchFlagValues {

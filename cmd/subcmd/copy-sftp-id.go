@@ -21,7 +21,7 @@ var copySftpIdCmd = &cobra.Command{
 	Use:     "copy-sftp-id",
 	Aliases: []string{"copy_sftp_id"},
 	Short:   "Copy SSH public key to iRODS for SFTP access",
-	Long:    `This copies SSH public key to iRODS for SFTP access.`,
+	Long:    `This command copies an SSH public key to iRODS to enable public-key authentication for SFTP access.`,
 	RunE:    processCopySftpIdCommand,
 	Args:    cobra.NoArgs,
 }

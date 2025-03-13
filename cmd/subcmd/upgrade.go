@@ -12,8 +12,8 @@ import (
 
 var upgradeCmd = &cobra.Command{
 	Use:   "upgrade",
-	Short: "Upgrade Gocommands to the latest version available",
-	Long:  `This upgrades Gocommands to the latest version available.`,
+	Short: "Upgrade Gocommands to the latest available version",
+	Long:  `This command upgrades Gocommands to the latest version available.`,
 	RunE:  processUpgradeCommand,
 	Args:  cobra.NoArgs,
 }

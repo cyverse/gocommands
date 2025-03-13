@@ -189,6 +189,7 @@ type BundleTransferManager struct {
 	localTempDirPath             string
 	irodsTempDirPath             string
 	noBulkRegistration           bool
+	verifyChecksum               bool
 	showProgress                 bool
 	showFullPath                 bool
 	progressWriter               progress.Writer
@@ -203,7 +204,7 @@ type BundleTransferManager struct {
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
-func NewBundleTransferManager(account *irodsclient_types.IRODSAccount, fs *irodsclient_fs.FileSystem, transferReportManager *TransferReportManager, irodsDestPath string, localBundleRootPath string, minBundleFileNum int, maxBundleFileNum int, maxBundleFileSize int64, maxUploadThreads int, redirectToResource bool, useIcat bool, localTempDirPath string, irodsTempDirPath string, noBulkReg bool, showProgress bool, showFullPath bool) *BundleTransferManager {
+func NewBundleTransferManager(account *irodsclient_types.IRODSAccount, fs *irodsclient_fs.FileSystem, transferReportManager *TransferReportManager, irodsDestPath string, localBundleRootPath string, minBundleFileNum int, maxBundleFileNum int, maxBundleFileSize int64, maxUploadThreads int, redirectToResource bool, useIcat bool, localTempDirPath string, irodsTempDirPath string, noBulkReg bool, verifyChecksum bool, showProgress bool, showFullPath bool) *BundleTransferManager {
 	cwd := GetCWD()
 	home := GetHomeDir()
 	zone := account.ClientZone
@@ -228,6 +229,7 @@ func NewBundleTransferManager(account *irodsclient_types.IRODSAccount, fs *irods
 		localTempDirPath:        localTempDirPath,
 		irodsTempDirPath:        irodsTempDirPath,
 		noBulkRegistration:      noBulkReg,
+		verifyChecksum:          verifyChecksum,
 		showProgress:            showProgress,
 		showFullPath:            showFullPath,
 		progressWriter:          nil,
@@ -930,26 +932,49 @@ func (manager *BundleTransferManager) processBundleUploadWithTar(bundle *Bundle)
 
 	logger.Debugf("uploading bundle %d to %q, size %d", bundle.Index, bundle.IRODSBundlePath, localBundleStat.Size())
 
-	// determine how to download
-	if manager.maxUploadThreads == 1 {
-		_, err = manager.filesystem.UploadFile(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", false, true, true, false, callbackPut)
-	} else if manager.redirectToResource {
-		_, err = manager.filesystem.UploadFileRedirectToResource(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, true, true, false, callbackPut)
-	} else if manager.icat {
-		_, err = manager.filesystem.UploadFileParallel(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, true, true, false, callbackPut)
-	} else {
-		// auto
-		if bundle.Size >= RedirectToResourceMinSize {
-			// redirect-to-resource
-			_, err = manager.filesystem.UploadFileRedirectToResource(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, true, true, false, callbackPut)
-		} else {
-			_, err = manager.filesystem.UploadFileParallel(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, false, false, false, callbackPut)
-		}
+	notes := []string{}
+
+	// determine how to upload
+	startTime := time.Now()
+	transferMode := manager.determineTransferMode(bundle.Size)
+	switch transferMode {
+	case TransferModeRedirect:
+		_, err = manager.filesystem.UploadFileRedirectToResource(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, manager.verifyChecksum, manager.verifyChecksum, false, callbackPut)
+		notes = append(notes, "redirect-to-resource", "bundle")
+	case TransferModeSingleThread:
+		_, err = manager.filesystem.UploadFile(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", false, manager.verifyChecksum, manager.verifyChecksum, false, callbackPut)
+		notes = append(notes, "icat", "single-thread", "bundle")
+	case TransferModeICAT:
+		fallthrough
+	default:
+		_, err = manager.filesystem.UploadFileParallel(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, manager.verifyChecksum, manager.verifyChecksum, false, callbackPut)
+		notes = append(notes, "icat", "multi-thread", "bundle")
 	}
 
 	if err != nil {
 		manager.progress(progressName, 0, bundle.Size, progress.UnitsBytes, true)
 		return xerrors.Errorf("failed to upload bundle %d to %q: %w", bundle.Index, bundle.IRODSBundlePath, err)
+	}
+
+	endTime := time.Now()
+	notes = append(notes, fmt.Sprintf("bundle_idx:%d", bundle.Index))
+	notes = append(notes, fmt.Sprintf("bundle_path:%s", bundle.IRODSBundlePath))
+
+	for _, bundleEntry := range bundle.Entries {
+		uploadResult := irodsclient_fs.FileTransferResult{
+			IRODSPath: bundleEntry.IRODSPath,
+			IRODSSize: bundleEntry.Size,
+			LocalPath: bundleEntry.LocalPath,
+			LocalSize: bundleEntry.Size,
+			StartTime: startTime,
+			EndTime:   endTime,
+		}
+
+		err = manager.transferReportManager.AddTransfer(&uploadResult, TransferMethodBput, err, notes)
+		if err != nil {
+			manager.progress(progressName, 0, bundle.Size, progress.UnitsBytes, true)
+			return xerrors.Errorf("failed to add transfer report: %w", err)
+		}
 	}
 
 	// remove local bundle file
@@ -1023,28 +1048,22 @@ func (manager *BundleTransferManager) processBundleUploadWithoutTar(bundle *Bund
 
 		var uploadResult *irodsclient_fs.FileTransferResult
 		notes := []string{}
-
-		// determine how to download
 		var err error
-		if manager.maxUploadThreads == 1 {
-			uploadResult, err = manager.filesystem.UploadFile(file.LocalPath, file.IRODSPath, "", false, true, true, false, callbackPut)
-			notes = append(notes, "icat", "single-thread")
-		} else if manager.redirectToResource {
+
+		// determine how to upload
+		transferMode := manager.determineTransferMode(bundle.Size)
+		switch transferMode {
+		case TransferModeRedirect:
 			uploadResult, err = manager.filesystem.UploadFileRedirectToResource(file.LocalPath, file.IRODSPath, "", 0, false, true, true, false, callbackPut)
-			notes = append(notes, "redirect-to-resource")
-		} else if manager.icat {
+			notes = append(notes, "redirect-to-resource", "no-bundle")
+		case TransferModeSingleThread:
+			uploadResult, err = manager.filesystem.UploadFile(file.LocalPath, file.IRODSPath, "", false, true, true, false, callbackPut)
+			notes = append(notes, "icat", "single-thread", "no-bundle")
+		case TransferModeICAT:
+			fallthrough
+		default:
 			uploadResult, err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, true, true, false, callbackPut)
-			notes = append(notes, "icat", "multi-thread")
-		} else {
-			// auto
-			if bundle.Size >= RedirectToResourceMinSize {
-				// redirect-to-resource
-				uploadResult, err = manager.filesystem.UploadFileRedirectToResource(file.LocalPath, file.IRODSPath, "", 0, false, true, true, false, callbackPut)
-				notes = append(notes, "redirect-to-resource")
-			} else {
-				uploadResult, err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, true, true, false, callbackPut)
-				notes = append(notes, "icat", "multi-thread")
-			}
+			notes = append(notes, "icat", "multi-thread", "no-bundle")
 		}
 
 		if err != nil {
@@ -1052,7 +1071,9 @@ func (manager *BundleTransferManager) processBundleUploadWithoutTar(bundle *Bund
 			return xerrors.Errorf("failed to upload file %q in bundle %d to %q: %w", file.LocalPath, bundle.Index, file.IRODSPath, err)
 		}
 
-		err = manager.transferReportManager.AddTransfer(uploadResult, TransferMethodPut, err, notes)
+		notes = append(notes, fmt.Sprintf("bundle_idx:%d", bundle.Index))
+
+		err = manager.transferReportManager.AddTransfer(uploadResult, TransferMethodBput, err, notes)
 		if err != nil {
 			manager.progress(progressName, 0, bundle.Size, progress.UnitsBytes, true)
 			return xerrors.Errorf("failed to add transfer report: %w", err)
@@ -1108,7 +1129,7 @@ func (manager *BundleTransferManager) processBundleExtract(bundle *Bundle) error
 
 	for _, file := range bundle.Entries {
 		reportFile := &TransferReportFile{
-			Method:     TransferMethodPut,
+			Method:     TransferMethodBput,
 			StartAt:    now,
 			EndAt:      now,
 			SourcePath: file.LocalPath,
@@ -1148,6 +1169,37 @@ func (manager *BundleTransferManager) calculateThreadForBundleTransfer(size int6
 	}
 
 	return threads
+}
+
+func (manager *BundleTransferManager) determineTransferMode(size int64) TransferMode {
+	threadsRequired := manager.calculateThreadForBundleTransfer(size)
+
+	if threadsRequired == 1 {
+		return TransferModeSingleThread
+	}
+
+	if manager.maxUploadThreads == 1 {
+		return TransferModeSingleThread
+	} else if manager.redirectToResource {
+		return TransferModeRedirect
+	} else if manager.icat {
+		return TransferModeICAT
+	}
+
+	// sysconfig
+	systemConfig := GetSystemConfig()
+	if systemConfig != nil && systemConfig.AdditionalConfig != nil {
+		if systemConfig.AdditionalConfig.TransferMode.Valid() {
+			return systemConfig.AdditionalConfig.TransferMode
+		}
+	}
+
+	// auto
+	if size >= RedirectToResourceMinSize {
+		return TransferModeRedirect
+	}
+
+	return TransferModeICAT
 }
 
 func CleanUpOldLocalBundles(localTempDirPath string, force bool) {

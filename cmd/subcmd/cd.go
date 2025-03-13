@@ -12,10 +12,10 @@ import (
 )
 
 var cdCmd = &cobra.Command{
-	Use:     "cd [collection1]",
+	Use:     "cd <collection>",
 	Aliases: []string{"icd"},
-	Short:   "Change current working iRODS collection",
-	Long:    `This changes current working iRODS collection.`,
+	Short:   "Change the current working iRODS collection",
+	Long:    `This command changes the current working iRODS collection.`,
 	RunE:    processCdCommand,
 	Args:    cobra.MaximumNArgs(1),
 }

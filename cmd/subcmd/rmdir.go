@@ -11,10 +11,10 @@ import (
 )
 
 var rmdirCmd = &cobra.Command{
-	Use:     "rmdir [collection1] [collection2] ...",
+	Use:     "rmdir <collection>...",
 	Aliases: []string{"irmdir"},
 	Short:   "Remove iRODS collections",
-	Long:    `This removes iRODS collections.`,
+	Long:    `This command removes iRODS collections.`,
 	RunE:    processRmdirCommand,
 	Args:    cobra.MinimumNArgs(1),
 }

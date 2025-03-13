@@ -18,9 +18,9 @@ var (
 )
 
 func SetTargetObjectFlags(command *cobra.Command) {
-	command.Flags().StringVarP(&targetObjectFlagValues.Path, "path", "P", "", "Set a data object or collection as a target")
-	command.Flags().StringVarP(&targetObjectFlagValues.Resource, "resource", "R", "", "Set a resource as a target")
-	command.Flags().StringVarP(&targetObjectFlagValues.User, "user", "U", "", "Set a user as a target")
+	command.Flags().StringVarP(&targetObjectFlagValues.Path, "path", "P", "", "Specify a data object or collection as the target")
+	command.Flags().StringVarP(&targetObjectFlagValues.Resource, "resource", "R", "", "Specify a resource as the target")
+	command.Flags().StringVarP(&targetObjectFlagValues.User, "user", "U", "", "Specify a user as the target")
 
 	command.MarkFlagsMutuallyExclusive("path", "resource", "user")
 }

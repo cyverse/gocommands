@@ -13,10 +13,10 @@ import (
 )
 
 var chmodCmd = &cobra.Command{
-	Use:     "chmod [access_level] [user or group (#zone)] [data-object or collection]",
-	Aliases: []string{"ch_mod", "change_mod", "update_mod", "ch_access", "change_access", "update_access"},
-	Short:   "Modify access",
-	Long:    `This modifies access to data-objects or collections.`,
+	Use:     "chmod <access-level> <user-or-group(#zone)> <data-object-or-collection>",
+	Aliases: []string{"ichmod", "ch_mod", "change_mod", "update_mod", "ch_access", "change_access", "update_access"},
+	Short:   "Modify access to iRODS data objects or collections",
+	Long:    `This command modifies access permissions for the specified iRODS data objects or collections.`,
 	RunE:    processChmodCommand,
 	Args:    cobra.MinimumNArgs(3),
 }

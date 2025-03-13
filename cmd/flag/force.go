@@ -13,7 +13,7 @@ var (
 )
 
 func SetForceFlags(command *cobra.Command, hideForce bool) {
-	command.Flags().BoolVarP(&forceFlagValues.Force, "force", "f", false, "Run forcefully")
+	command.Flags().BoolVarP(&forceFlagValues.Force, "force", "f", false, "Run operation forcefully, bypassing safety checks")
 
 	if hideForce {
 		command.Flags().MarkHidden("force")

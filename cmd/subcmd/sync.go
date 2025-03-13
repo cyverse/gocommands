@@ -12,10 +12,10 @@ import (
 )
 
 var syncCmd = &cobra.Command{
-	Use:     "sync i:[collection] [local dir] or sync [local dir] i:[collection]",
+	Use:     "sync <local-dir> i:[collection] | sync i:[collection] <local-dir> | sync i:[collection] i:[collection]",
 	Aliases: []string{"isync"},
-	Short:   "Sync local directory with iRODS collection",
-	Long:    `This synchronizes a local directory with the given iRODS collection.`,
+	Short:   "Sync local directory with an iRODS collection",
+	Long:    `This command synchronizes the contents of a local directory with the specified iRODS collection. It supports bidirectional sync: uploading a local directory to iRODS, downloading from iRODS to a local directory, or syncing between two iRODS collections.`,
 	RunE:    processSyncCommand,
 	Args:    cobra.MinimumNArgs(2),
 }
@@ -214,7 +214,21 @@ func (sync *SyncCommand) syncLocalToIRODS() error {
 		return xerrors.Errorf("failed to get new command args for retry: %w", err)
 	}
 
+	useBput := false
+
 	if sync.syncFlagValues.BulkUpload {
+		useBput = true
+	} else {
+		// sysconfig
+		systemConfig := commons.GetSystemConfig()
+		if systemConfig != nil && systemConfig.AdditionalConfig != nil {
+			if systemConfig.AdditionalConfig.BputForSync {
+				useBput = true
+			}
+		}
+	}
+
+	if useBput {
 		// run bput
 		logger.Debugf("run bput with args: %v", newArgs)
 		bputCmd.ParseFlags(newArgs)

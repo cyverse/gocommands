@@ -10,8 +10,8 @@ import (
 var pwdCmd = &cobra.Command{
 	Use:     "pwd",
 	Aliases: []string{"ipwd"},
-	Short:   "Print current working iRODS collection",
-	Long:    `This prints current working iRODS collection.`,
+	Short:   "Print the current working iRODS collection",
+	Long:    `This command prints the current working iRODS collection.`,
 	RunE:    processPwdCommand,
 	Args:    cobra.NoArgs,
 }

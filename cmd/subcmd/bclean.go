@@ -13,8 +13,8 @@ import (
 var bcleanCmd = &cobra.Command{
 	Use:     "bclean",
 	Aliases: []string{"bundle_clean"},
-	Short:   "Clean bundle staging directories",
-	Long:    `This cleans bundle files created by 'bput' or 'sync' for uploading data to the given iRODS collection.`,
+	Short:   "Clean up local bundle creation and iRODS bundle staging directories",
+	Long:    `This command removes the bundle files created during 'bput' or 'sync' operations for uploading data to an iRODS collection. It helps free up space by cleaning both local bundle creation directories and temporary staging areas in iRODS.`,
 	RunE:    processBcleanCommand,
 }
 

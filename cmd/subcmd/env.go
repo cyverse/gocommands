@@ -11,8 +11,8 @@ import (
 var envCmd = &cobra.Command{
 	Use:     "env",
 	Aliases: []string{"ienv"},
-	Short:   "Print current irods environment",
-	Long:    `This prints out current irods environment.`,
+	Short:   "Print the current iRODS environment",
+	Long:    `This command prints the current iRODS environment settings.`,
 	RunE:    processEnvCommand,
 	Args:    cobra.NoArgs,
 }

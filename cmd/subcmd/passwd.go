@@ -15,7 +15,7 @@ var passwdCmd = &cobra.Command{
 	Use:     "passwd",
 	Aliases: []string{"ipasswd"},
 	Short:   "Change iRODS user password",
-	Long:    `This changes iRODS user password.`,
+	Long:    `This command changes the iRODS user password.`,
 	RunE:    processPasswdCommand,
 	Args:    cobra.NoArgs,
 }

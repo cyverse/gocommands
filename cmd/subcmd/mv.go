@@ -13,10 +13,10 @@ import (
 )
 
 var mvCmd = &cobra.Command{
-	Use:     "mv [data-object1] [data-object2] [collection1] ... [target collection]",
+	Use:     "mv <data-object-or-collection>... <target-data-object-or-collection>",
 	Aliases: []string{"imv", "move"},
-	Short:   "Move iRODS data-objects or collections to target collection, or rename data-object or collection",
-	Long:    `This moves iRODS data-objects or collections to the given target collection, or rename a single data-object or collection.`,
+	Short:   "Move iRODS data-objects or collections to a target collection, or rename data-object/collection",
+	Long:    `This command moves iRODS data-objects or collections to the specified target collection, or renames a single data-object or collection.`,
 	RunE:    processMvCommand,
 	Args:    cobra.MinimumNArgs(2),
 }

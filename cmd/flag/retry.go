@@ -15,9 +15,9 @@ var (
 )
 
 func SetRetryFlags(command *cobra.Command) {
-	command.Flags().IntVar(&retryFlagValues.RetryNumber, "retry", 0, "Retry if fails")
-	command.Flags().IntVar(&retryFlagValues.RetryIntervalSeconds, "retry_interval", 60, "Retry interval in seconds")
-	command.Flags().BoolVar(&retryFlagValues.RetryChild, "retry_child", false, "Set this to retry child process")
+	command.Flags().IntVar(&retryFlagValues.RetryNumber, "retry", 0, "Set the number of retry attempts")
+	command.Flags().IntVar(&retryFlagValues.RetryIntervalSeconds, "retry_interval", 60, "Set the interval between retry attempts in seconds")
+	command.Flags().BoolVar(&retryFlagValues.RetryChild, "retry_child", false, "")
 
 	command.Flags().MarkHidden("retry_child")
 }

@@ -13,7 +13,7 @@ var (
 )
 
 func SetParentsFlags(command *cobra.Command) {
-	command.Flags().BoolVarP(&parentsFlagValues.MakeParents, "parents", "p", false, "Make parent collections")
+	command.Flags().BoolVarP(&parentsFlagValues.MakeParents, "parents", "p", false, "Create parent collections if they do not exist")
 
 }
 

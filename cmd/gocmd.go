@@ -14,9 +14,9 @@ import (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:           "gocmd [subcommand]",
-	Short:         "Gocommands, a command-line iRODS client",
-	Long:          `Gocommands, a command-line iRODS client.`,
+	Use:           "gocmd <subcommand> [flags]",
+	Short:         "GoCommands: A command-line interface for interacting with iRODS",
+	Long:          `Gocommands is a powerful command-line tool for interacting with iRODS (Integrated Rule-Oriented Data System). It allows users to manage data objects, collections, and more within iRODS from the terminal.`,
 	RunE:          processCommand,
 	SilenceUsage:  true,
 	SilenceErrors: true,
@@ -69,6 +69,11 @@ func main() {
 		"function": "main",
 	})
 
+	err := commons.InitSystemConfig()
+	if err != nil {
+		logger.Debugf("failed to init system config: %v", err)
+	}
+
 	// attach common flags
 	flag.SetCommonFlags(rootCmd, true)
 
@@ -106,7 +111,7 @@ func main() {
 	subcmd.AddChmodinheritCommand(rootCmd)
 	subcmd.AddUpgradeCommand(rootCmd)
 
-	err := Execute()
+	err = Execute()
 	if err != nil {
 		logger.Errorf("%+v", err)
 

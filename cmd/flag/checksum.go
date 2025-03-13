@@ -1,6 +1,7 @@
 package flag
 
 import (
+	"github.com/cyverse/gocommands/commons"
 	"github.com/spf13/cobra"
 )
 
@@ -14,8 +15,8 @@ var (
 )
 
 func SetChecksumFlags(command *cobra.Command, hideCalculateChecksum bool, hideVerifyChecksum bool) {
-	command.Flags().BoolVarP(&checksumFlagValues.CalculateChecksum, "checksum", "k", false, "Calculate a checksum on the data server-side")
-	command.Flags().BoolVarP(&checksumFlagValues.VerifyChecksum, "verify_checksum", "K", false, "Calculate and verify the checksum after transfer")
+	command.Flags().BoolVarP(&checksumFlagValues.CalculateChecksum, "checksum", "k", commons.GetDefaultVerifyChecksum(), "Generate checksum on the server side after data upload")
+	command.Flags().BoolVarP(&checksumFlagValues.VerifyChecksum, "verify_checksum", "K", commons.GetDefaultVerifyChecksum(), "Calculate and verify checksums to ensure data integrity after transfer")
 
 	if hideCalculateChecksum {
 		command.Flags().MarkHidden("checksum")

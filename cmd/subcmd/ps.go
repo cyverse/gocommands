@@ -18,8 +18,8 @@ import (
 var psCmd = &cobra.Command{
 	Use:     "ps",
 	Aliases: []string{"ips"},
-	Short:   "List processes",
-	Long:    `This lists processes for iRODS connections establisted in iRODS server.`,
+	Short:   "List iRODS processes",
+	Long:    `This command lists the processes for iRODS connections established on the iRODS server.`,
 	RunE:    processPsCommand,
 	Args:    cobra.NoArgs,
 }

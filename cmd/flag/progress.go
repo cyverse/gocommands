@@ -14,8 +14,8 @@ var (
 )
 
 func SetProgressFlags(command *cobra.Command) {
-	command.Flags().BoolVar(&progressFlagValues.ShowProgress, "progress", false, "Display progress bars")
-	command.Flags().BoolVar(&progressFlagValues.ShowFullPath, "show_path", false, "Display full path for progress bars")
+	command.Flags().BoolVar(&progressFlagValues.ShowProgress, "progress", false, "Show progress bars during transfer")
+	command.Flags().BoolVar(&progressFlagValues.ShowFullPath, "show_path", false, "Show full file paths in progress bars")
 }
 
 func GetProgressFlagValues() *ProgressFlagValues {

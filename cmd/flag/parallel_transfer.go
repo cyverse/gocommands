@@ -19,11 +19,11 @@ var (
 )
 
 func SetParallelTransferFlags(command *cobra.Command, hideParallelConfig bool, hideSingleThread bool) {
-	command.Flags().IntVar(&parallelTransferFlagValues.ThreadNumber, "thread_num", commons.TransferThreadNumDefault, "Specify the number of transfer threads")
-	command.Flags().StringVar(&parallelTransferFlagValues.tcpBufferSizeInput, "tcp_buffer_size", commons.TCPBufferSizeStringDefault, "Specify TCP socket buffer size")
-	command.Flags().BoolVar(&parallelTransferFlagValues.RedirectToResource, "redirect", false, "Redirect transfer to resource server")
-	command.Flags().BoolVar(&parallelTransferFlagValues.Icat, "icat", false, "Transfer files via iCAT")
-	command.Flags().BoolVar(&parallelTransferFlagValues.SingleThread, "single_threaded", false, "Transfer files with a single thread")
+	command.Flags().IntVar(&parallelTransferFlagValues.ThreadNumber, "thread_num", commons.GetDefaultTransferThreadNum(), "Set the number of transfer threads")
+	command.Flags().StringVar(&parallelTransferFlagValues.tcpBufferSizeInput, "tcp_buffer_size", commons.GetDefaultTCPBufferSizeString(), "Set the TCP socket buffer size")
+	command.Flags().BoolVar(&parallelTransferFlagValues.RedirectToResource, "redirect", false, "Enable transfer redirection to the resource server")
+	command.Flags().BoolVar(&parallelTransferFlagValues.Icat, "icat", false, "Use iCAT for file transfers")
+	command.Flags().BoolVar(&parallelTransferFlagValues.SingleThread, "single_threaded", false, "Force single-threaded file transfer")
 
 	if hideParallelConfig {
 		command.Flags().MarkHidden("thread_num")

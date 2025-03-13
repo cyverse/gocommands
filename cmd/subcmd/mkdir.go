@@ -11,10 +11,10 @@ import (
 )
 
 var mkdirCmd = &cobra.Command{
-	Use:     "mkdir [collection1] [collection2] ...",
+	Use:     "mkdir <collection>...",
 	Aliases: []string{"imkdir"},
-	Short:   "Make iRODS collections",
-	Long:    `This makes iRODS collections.`,
+	Short:   "Create iRODS collections",
+	Long:    `This command creates the specified iRODS collections.`,
 	RunE:    processMkdirCommand,
 	Args:    cobra.MinimumNArgs(1),
 }

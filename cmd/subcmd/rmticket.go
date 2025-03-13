@@ -11,10 +11,10 @@ import (
 )
 
 var rmticketCmd = &cobra.Command{
-	Use:     "rmticket [ticket_string1] [ticket_string2] ...",
+	Use:     "rmticket <ticket-name-or-id>...",
 	Aliases: []string{"rm_ticket", "remove_ticket"},
-	Short:   "Remove tickets for the user",
-	Long:    `This removes tickets for the user.`,
+	Short:   "Remove tickets for a user",
+	Long:    `This command removes one or more tickets for the specified user.`,
 	RunE:    processRmticketCommand,
 	Args:    cobra.MinimumNArgs(1),
 }

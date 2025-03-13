@@ -13,7 +13,7 @@ var (
 )
 
 func SetHiddenFileFlags(command *cobra.Command) {
-	command.Flags().BoolVar(&hiddenFileFlagValues.Exclude, "exclude_hidden_files", false, "Exclude hidden files (starting with '.')")
+	command.Flags().BoolVar(&hiddenFileFlagValues.Exclude, "exclude_hidden_files", false, "Skip files and directories that start with '.'")
 }
 
 func GetHiddenFileFlagValues() *HiddenFileFlagValues {

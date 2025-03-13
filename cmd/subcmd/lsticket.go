@@ -13,10 +13,10 @@ import (
 )
 
 var lsticketCmd = &cobra.Command{
-	Use:     "lsticket [ticket_string1] [ticket_string2] ...",
+	Use:     "lsticket <ticket-name-or-id>...",
 	Aliases: []string{"ls_ticket", "list_ticket"},
 	Short:   "List tickets for the user",
-	Long:    `This lists tickets for the user.`,
+	Long:    `This command lists the tickets associated with the user in iRODS.`,
 	RunE:    processLsticketCommand,
 	Args:    cobra.ArbitraryArgs,
 }

@@ -13,10 +13,10 @@ import (
 )
 
 var rmmetaCmd = &cobra.Command{
-	Use:     "rmmeta [AVU ID|attribute name] ...",
+	Use:     "rmmeta <AVU-ID-or-attribute-name>...",
 	Aliases: []string{"rm_meta", "remove_meta", "rm_metadata", "remove_metadata", "delete_meta", "delete_metadata"},
-	Short:   "Remove metadatas for the user",
-	Long:    `This removes metadata of the given collection, data object, user, or a resource.`,
+	Short:   "Remove metadata for a collection, data object, user, or resource",
+	Long:    `This command removes metadata for the specified collection, data object, user, or resource.`,
 	RunE:    processRmmetaCommand,
 	Args:    cobra.MinimumNArgs(1),
 }

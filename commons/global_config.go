@@ -13,8 +13,23 @@ import (
 )
 
 var (
+	systemConfig       *SystemConfig
 	environmentManager *irodsclient_config.ICommandsEnvironmentManager
 )
+
+func InitSystemConfig() error {
+	sysConfig, err := NewSystemConfig()
+	if err != nil {
+		return err
+	}
+
+	systemConfig = sysConfig
+	return nil
+}
+
+func GetSystemConfig() *SystemConfig {
+	return systemConfig
+}
 
 // InitEnvironmentManager initializes envionment manager
 func InitEnvironmentManager() error {
@@ -24,6 +39,21 @@ func InitEnvironmentManager() error {
 	}
 
 	environmentManager = manager
+	return nil
+}
+
+// InitEnvironmentManagerFromSystemConfig initializes envionment manager
+func InitEnvironmentManagerFromSystemConfig() error {
+	err := InitEnvironmentManager()
+	if err != nil {
+		return err
+	}
+
+	if systemConfig != nil {
+		environmentManager.Environment = systemConfig.GetIRODSConfig()
+	} else {
+		environmentManager.Environment = irodsclient_config.GetDefaultConfig()
+	}
 	return nil
 }
 

@@ -13,9 +13,9 @@ var (
 )
 
 func SetBundleFlags(command *cobra.Command) {
-	command.Flags().BoolVarP(&bundleFlagValues.Extract, "extract", "x", false, "Extract")
-	command.Flags().BoolVarP(&bundleFlagValues.BulkRegistration, "bulk", "b", false, "Enable bulk registration")
-	command.Flags().StringVarP(&bundleFlagValues.DataType, "data_type", "D", "", "Set data type (tar, zip ...)")
+	command.Flags().BoolVarP(&bundleFlagValues.Extract, "extract", "x", false, "Extract contents from the bundle file")
+	command.Flags().BoolVarP(&bundleFlagValues.BulkRegistration, "bulk", "b", false, "Enable bulk registration mode for processing multiple items simultaneously")
+	command.Flags().StringVarP(&bundleFlagValues.DataType, "data_type", "D", "", "Specify archive format type (e.g., tar, zip, gz) for processing")
 }
 
 func GetBundleFlagValues() *BundleFlagValues {

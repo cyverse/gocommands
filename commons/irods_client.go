@@ -18,8 +18,8 @@ func GetIRODSFSClient(account *irodsclient_types.IRODSAccount) (*irodsclient_fs.
 	fsConfig.IOConnection.OperationTimeout = FilesystemTimeout
 
 	// set tcp buffer size
-	fsConfig.MetadataConnection.TCPBufferSize = TCPBufferSizeDefault
-	fsConfig.IOConnection.TCPBufferSize = TCPBufferSizeDefault
+	fsConfig.MetadataConnection.TCPBufferSize = GetDefaultTCPBufferSize()
+	fsConfig.IOConnection.TCPBufferSize = GetDefaultTCPBufferSize()
 
 	return irodsclient_fs.NewFileSystem(account, fsConfig)
 }
@@ -33,8 +33,8 @@ func GetIRODSFSClientForSingleOperation(account *irodsclient_types.IRODSAccount)
 	fsConfig.IOConnection.OperationTimeout = FilesystemTimeout
 
 	// set tcp buffer size
-	fsConfig.MetadataConnection.TCPBufferSize = TCPBufferSizeDefault
-	fsConfig.IOConnection.TCPBufferSize = TCPBufferSizeDefault
+	fsConfig.MetadataConnection.TCPBufferSize = GetDefaultTCPBufferSize()
+	fsConfig.IOConnection.TCPBufferSize = GetDefaultTCPBufferSize()
 
 	// cache timeout
 	// infinite

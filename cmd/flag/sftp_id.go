@@ -13,7 +13,7 @@ var (
 )
 
 func SetSFTPIDFlags(command *cobra.Command) {
-	command.Flags().StringVarP(&sftpIDFlagValues.IdentityFilePath, "identity_file", "i", "", "Specify identity file path")
+	command.Flags().StringVarP(&sftpIDFlagValues.IdentityFilePath, "identity_file", "i", "", "Specify the path to the SSH private key file")
 }
 
 func GetSFTPIDFlagValues() *SFTPIDFlagValues {

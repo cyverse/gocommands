@@ -13,7 +13,7 @@ var (
 )
 
 func SetNoRootFlags(command *cobra.Command) {
-	command.Flags().BoolVar(&noRootFlagValues.NoRoot, "no_root", false, "Do not create root directory")
+	command.Flags().BoolVar(&noRootFlagValues.NoRoot, "no_root", false, "Avoid creating the root directory at the destination during operation")
 }
 
 func GetNoRootFlagValues() *NoRootFlagValues {

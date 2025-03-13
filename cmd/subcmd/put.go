@@ -23,10 +23,10 @@ import (
 )
 
 var putCmd = &cobra.Command{
-	Use:     "put [local file1] [local file2] [local dir1] ... [collection]",
+	Use:     "put <local-file-or-dir>... <dest-data-object-or-collection>",
 	Aliases: []string{"iput", "upload"},
-	Short:   "Upload files or directories",
-	Long:    `This uploads files or directories to the given iRODS collection.`,
+	Short:   "Upload files or directories to an iRODS data-object or collection",
+	Long:    `This command uploads files or directories to the specified iRODS data-object or collection.`,
 	RunE:    processPutCommand,
 	Args:    cobra.MinimumNArgs(1),
 }
@@ -404,25 +404,19 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 		}
 
 		// determine how to upload
-		if put.parallelTransferFlagValues.SingleThread || put.parallelTransferFlagValues.ThreadNumber == 1 {
-			uploadResult, uploadErr = fs.UploadFile(uploadSourcePath, targetPath, "", false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
-			notes = append(notes, "icat", "single-thread")
-		} else if put.parallelTransferFlagValues.RedirectToResource {
+		transferMode := put.determineTransferMode(sourceStat.Size())
+		switch transferMode {
+		case commons.TransferModeRedirect:
 			uploadResult, uploadErr = fs.UploadFileRedirectToResource(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
 			notes = append(notes, "redirect-to-resource")
-		} else if put.parallelTransferFlagValues.Icat {
+		case commons.TransferModeSingleThread:
+			uploadResult, uploadErr = fs.UploadFile(uploadSourcePath, targetPath, "", false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
+			notes = append(notes, "icat", "single-thread")
+		case commons.TransferModeICAT:
+			fallthrough
+		default:
 			uploadResult, uploadErr = fs.UploadFileParallel(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
 			notes = append(notes, "icat", "multi-thread")
-		} else {
-			// auto
-			if sourceStat.Size() >= commons.RedirectToResourceMinSize {
-				// redirect-to-resource
-				uploadResult, uploadErr = fs.UploadFileRedirectToResource(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
-				notes = append(notes, "redirect-to-resource")
-			} else {
-				uploadResult, uploadErr = fs.UploadFileParallel(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
-				notes = append(notes, "icat", "multi-thread")
-			}
 		}
 
 		if uploadErr != nil {
@@ -1015,4 +1009,35 @@ func (put *PutCommand) calculateThreadForTransferJob(size int64) int {
 	}
 
 	return threads
+}
+
+func (put *PutCommand) determineTransferMode(size int64) commons.TransferMode {
+	threadsRequired := put.calculateThreadForTransferJob(size)
+
+	if threadsRequired == 1 {
+		return commons.TransferModeSingleThread
+	}
+
+	if put.parallelTransferFlagValues.SingleThread || put.parallelTransferFlagValues.ThreadNumber == 1 {
+		return commons.TransferModeSingleThread
+	} else if put.parallelTransferFlagValues.RedirectToResource {
+		return commons.TransferModeRedirect
+	} else if put.parallelTransferFlagValues.Icat {
+		return commons.TransferModeICAT
+	}
+
+	// sysconfig
+	systemConfig := commons.GetSystemConfig()
+	if systemConfig != nil && systemConfig.AdditionalConfig != nil {
+		if systemConfig.AdditionalConfig.TransferMode.Valid() {
+			return systemConfig.AdditionalConfig.TransferMode
+		}
+	}
+
+	// auto
+	if size >= commons.RedirectToResourceMinSize {
+		return commons.TransferModeRedirect
+	}
+
+	return commons.TransferModeICAT
 }
