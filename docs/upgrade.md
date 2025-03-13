@@ -1,15 +1,15 @@
 # Upgrading GoCommands
 
-Upgrading GoCommands to the latest release is straightforward:
+Keeping GoCommands up to date ensures you have the latest features and bug fixes. To upgrade to the latest version, follow these steps:  
 
-1. Run the upgrade command:
+1. Run the upgrade command:  
    ```bash
    gocmd upgrade
-   ```
+   ```  
 
-2. You will need appropriate permissions to overwrite the existing GoCommands binary. On Unix-like systems, you might need to use `sudo` if GoCommands is installed in a system directory:
+2. If GoCommands is installed in a system directory, you may need administrative privileges. On Unix-like systems, use:  
    ```bash
    sudo gocmd upgrade
-   ```
+   ```  
 
-This command will automatically fetch the latest release and update your installation.
+This command automatically downloads and installs the latest release.
