@@ -639,7 +639,7 @@ func (ls *LsCommand) printReplica(flatReplica FlatReplica, accesses []*irodsclie
 				logger.Debugf("%+v", err)
 				newName = fmt.Sprintf("%s\tdecryption_failed", newName)
 			} else {
-				newName = fmt.Sprintf("%s\t(encrypted: %q", newName, decryptedFilename)
+				newName = fmt.Sprintf("%s\t(encrypted: %q)", newName, decryptedFilename)
 			}
 		}
 	}
