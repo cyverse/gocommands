@@ -76,7 +76,7 @@ gocmd put <local_source_path> <iRODS_destination_path>
 |------|-------------|
 | `--encrypt` | Enable file encryption (default: true) |
 | `--encrypt_key` string | Specify the encryption key for 'winscp' or 'pgp' modes |
-| `--encrypt_priv_key` string | Provide the encryption private key for 'ssh' mode (default: `/home/iychoi/.ssh/id_rsa`) |
+| `--encrypt_priv_key` string | Provide the encryption private key for 'ssh' mode (default: `/home/myUser/.ssh/id_rsa`) |
 | `--encrypt_temp` string | Set a temporary directory for file encryption (default: `/tmp`) |
 
 ### Low-Level Transfer Options

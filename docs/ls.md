@@ -165,9 +165,9 @@ gocmd ls <data-object-or-collection>... [flags]
       banana.txt
       orange.txt
       watermelon.txt
-      C- /iplant/home/iychoi/mydata_sort/Radish
-      C- /iplant/home/iychoi/mydata_sort/cabbage
-      C- /iplant/home/iychoi/mydata_sort/zucchini
+      C- /myZone/home/myUser/mydata_sort/Radish
+      C- /myZone/home/myUser/mydata_sort/cabbage
+      C- /myZone/home/myUser/mydata_sort/zucchini
     ```
 
     - Capital letters appear before lowercase letters in the ASCII table, so they are displayed first in the sorted list.
@@ -192,9 +192,9 @@ gocmd ls <data-object-or-collection>... [flags]
       banana.txt
       apple.txt
       Date.txt
-      C- /iplant/home/iychoi/mydata_sort/zucchini
-      C- /iplant/home/iychoi/mydata_sort/cabbage
-      C- /iplant/home/iychoi/mydata_sort/Radish
+      C- /myZone/home/myUser/mydata_sort/zucchini
+      C- /myZone/home/myUser/mydata_sort/cabbage
+      C- /myZone/home/myUser/mydata_sort/Radish
     ```
 
 7. `-w`, `--wildcard`: Enable wildcard expansion to search for source files.
@@ -204,14 +204,14 @@ gocmd ls <data-object-or-collection>... [flags]
 
     The command above lists data objects and collections within `/myZone/home/myUser/mydata_sort` that contain the letter `a` in their names.
     ```sh
-      /iplant/home/iychoi/mydata_sort/Date.txt
-      /iplant/home/iychoi/mydata_sort/apple.txt
-      /iplant/home/iychoi/mydata_sort/banana.txt
-      /iplant/home/iychoi/mydata_sort/orange.txt
-      /iplant/home/iychoi/mydata_sort/watermelon.txt
-    /iplant/home/iychoi/mydata_sort/Radish:
+      /myZone/home/myUser/mydata_sort/Date.txt
+      /myZone/home/myUser/mydata_sort/apple.txt
+      /myZone/home/myUser/mydata_sort/banana.txt
+      /myZone/home/myUser/mydata_sort/orange.txt
+      /myZone/home/myUser/mydata_sort/watermelon.txt
+    /myZone/home/myUser/mydata_sort/Radish:
 
-    /iplant/home/iychoi/mydata_sort/cabbage:
+    /myZone/home/myUser/mydata_sort/cabbage:
 
     ```
 
@@ -228,11 +228,11 @@ gocmd ls <data-object-or-collection>... [flags]
 | Flag                                | Description                                                                 |
 |-------------------------------------|-----------------------------------------------------------------------------|
 | `-A, --access`                      | Display access control lists for data-objects and collections               |
-| `-c, --config string`               | Specify custom iRODS configuration file or directory path (default `"/home/iychoi/.irods"`) |
+| `-c, --config string`               | Specify custom iRODS configuration file or directory path (default `"/home/myUser/.irods"`) |
 | `-d, --debug`                       | Enable verbose debug output for troubleshooting                             |
 | `--decrypt`                         | Enable file decryption (default true)                                       |
 | `--decrypt_key string`              | Specify the decryption key for 'winscp' or 'pgp' modes                      |
-| `--decrypt_priv_key string`         | Provide the decryption private key for 'ssh' mode (default `"/home/iychoi/.ssh/id_rsa"`) |
+| `--decrypt_priv_key string`         | Provide the decryption private key for 'ssh' mode (default `"/home/myUser/.ssh/id_rsa"`) |
 | `--decrypt_temp string`             | Set a temporary directory for file decryption (default `"/tmp"`)            |
 | `--exclude_hidden_files`            | Skip files and directories that start with '.'                              |
 | `-h, --help`                        | Display help information about available commands and options               |

@@ -76,7 +76,7 @@ gocmd get <iRODS_source_path> <local_destination>
 |------|-------------|
 | `--decrypt` | Enable file decryption (default: true) |
 | `--decrypt_key` string | Specify the decryption key for 'winscp' or 'pgp' modes |
-| `--decrypt_priv_key` string | Provide the decryption private key for 'ssh' mode (default: `/home/iychoi/.ssh/id_rsa`) |
+| `--decrypt_priv_key` string | Provide the decryption private key for 'ssh' mode (default: `/home/myUser/.ssh/id_rsa`) |
 | `--decrypt_temp` string | Set a temporary directory for file decryption (default: `/tmp`) |
 
 ### Low-Level Transfer Options

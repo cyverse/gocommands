@@ -60,7 +60,7 @@ gocmd get --decrypt --decrypt_priv_key id_rsa XXXXXXXXXXXXXXXXXXXXXXXXX.rsaaesct
 |----------------------------|-----------------------------------------------|-----------------------------------|
 | `--encrypt_key` string      | Encryption key for `'winscp'`/`'pgp'` modes. | *None*                            |
 | `--encrypt_mode` string    | Encryption mode (`'winscp'`, `'pgp'`, `'ssh'`). | `"ssh"`                         |
-| `--encrypt_pub_key` string  | Public key for `'ssh'` mode.                  | `/home/iychoi/.ssh/id_rsa.pub`    |
+| `--encrypt_pub_key` string  | Public key for `'ssh'` mode.                  | `/home/myUser/.ssh/id_rsa.pub`    |
 | `--encrypt_temp` string    |  Temp directory for encryption.                | `"/tmp"`                          |
 
 ### Flags for `get` (Downloading Files)
@@ -68,7 +68,7 @@ gocmd get --decrypt --decrypt_priv_key id_rsa XXXXXXXXXXXXXXXXXXXXXXXXX.rsaaesct
 |----------------------------|-----------------------------------------------|-----------------------------------|
 | `--decrypt`                | Enables decryption.                          | `true`                            |
 | `--decrypt_key` string     | Decryption key for `'winscp'`/`'pgp'`.       | *None*                            |
-| `--decrypt_priv_key` string | Private key for `'ssh'`.                      | `/home/iychoi/.ssh/id_rsa`        |
+| `--decrypt_priv_key` string | Private key for `'ssh'`.                      | `/home/myUser/.ssh/id_rsa`        |
 | `--decrypt_temp` string     | Temp directory for decryption.               | `"/tmp"`                          |
 
 ### Flags for `ls` (Listing Directories)
@@ -76,7 +76,7 @@ gocmd get --decrypt --decrypt_priv_key id_rsa XXXXXXXXXXXXXXXXXXXXXXXXX.rsaaesct
 |----------------------------|-----------------------------------------------|-----------------------------------|
 | `--decrypt`                | Enables decryption of filenames.             | `true`                            |
 | `--decrypt_key` string     | Decryption key for `'winscp'`/`'pgp'`.       | *None*                            |
-| `--decrypt_priv_key` string | Private key for `'ssh'`.                      | `/home/iychoi/.ssh/id_rsa`        |
+| `--decrypt_priv_key` string | Private key for `'ssh'`.                      | `/home/myUser/.ssh/id_rsa`        |
 | `--decrypt_temp` string    | Temp directory for decryption.               | `"/tmp"`                          |
 
 ---

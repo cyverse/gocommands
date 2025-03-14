@@ -1,8 +1,12 @@
 # Current Working Collection (Directory) in iRODS
 
+In iRODS, the **current working collection** is equivalent to the concept of a current working directory in traditional file systems. You can display or change your current working collection using GoCommands.
+
+---
+
 ## Display the Current Working Collection
 
-To display the current working collection (directory) in iRODS, you can use the `pwd` command. This command is similar to the Unix `pwd` command but is adapted for iRODS.
+To display the current working collection in iRODS, use the `pwd` command. This command is similar to the Unix `pwd` command but tailored for iRODS.
 
 ### Syntax
 ```sh
@@ -14,57 +18,78 @@ gocmd pwd
 gocmd pwd
 ```
 
-This command displays your current working collection in iRODS, like this:
+This command will output your current working collection, such as:
 ```sh
 /myZone/home/myUser
 ```
 
-After configuring GoCommands, your current working collection will be set to your home directory. Your home directory is `/<zone>/home/<username>`.
+By default, after configuring GoCommands, your current working collection is set to your **home directory**, which is typically located at:
+```sh
+//home/
+```
+
+---
 
 ## Change the Current Working Collection
 
-If you need to change the current working collection, you can use the `cd` command. This command allows you to navigate through iRODS collections by specifying the target collection path.
+To navigate to a different collection (directory) in iRODS, use the `cd` command. This allows you to move to a specific collection by specifying its path.
 
 ### Syntax
 ```sh
-gocmd cd <collection>
+gocmd cd 
 ```
 
 ### Example Usage
-```sh
-gocmd cd /myZone/home/myUser/mydata
-```
 
-This command changes your current working collection in iRODS to `/myZone/home/myUser/mydata`. You can also use a relative path to the destination from the current working collection:
-```sh
-gocmd cd mydata
-```
+1. To change to a specific collection:
+    ```sh
+    gocmd cd /myZone/home/myUser/mydata
+    ```
 
-After changing the current working collection to `/myZone/home/myUser/mydata`, the `pwd` command will display the updated path:
-```sh
-$ gocmd pwd
-/myZone/home/myUser/mydata
-```
+    This changes your current working collection to `/myZone/home/myUser/mydata`.
 
-### Tips
-To change the current working collection back to your home directory, you have several options:
-1. **Using the full path:**
-```sh
-gocmd cd /myZone/home/myUser
-```
+2. To use a relative path from your current location:
+    ```sh
+    gocmd cd mydata
+    ```
 
-2. **Using the relative path:**
-```sh
-gocmd cd ..
-```
+3. After changing the collection, you can confirm it with the `pwd` command:
+    ```sh
+    $ gocmd pwd
+    /myZone/home/myUser/mydata
+    ```
 
-3. **Using home path expansion with `~`:**
-```sh
-gocmd cd "~"
-```
-- **Note:** The `~` is quoted to prevent shell expansion. Without the quotes, shell expansion will replace `~` with your home path on your local machine.
+### Tips for Navigating Collections
 
-4. **Passing no argument:**
-```sh
-gocmd cd
-```
+1. **Return to Your Home Directory**
+
+   - Using the full path:
+     ```sh
+     gocmd cd /myZone/home/myUser
+     ```
+
+   - Using no argument (defaults to home directory):
+     ```sh
+     gocmd cd
+     ```
+
+   - Using home path expansion with `~`:
+     ```sh
+     gocmd cd "~"
+     ```
+     > **Note:** The `~` must be quoted to prevent shell expansion by your local shell. Without quotes, it will expand to your local machine's home directory instead of your iRODS home directory.
+
+2. **Move Up One Level**
+
+   To move up one level in the directory tree:
+   ```sh
+   gocmd cd ..
+   ```
+
+3. **Navigate Using Absolute Paths**
+
+   Always use absolute paths (e.g., `/myZone/home/myUser/target`) when you are unsure of your current location, as this ensures you navigate correctly.
+
+4. **Check Your Current Location**
+
+   Use `pwd` frequently to verify your current working collection before performing operations like uploading, downloading, or deleting files.

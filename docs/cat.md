@@ -2,12 +2,12 @@
 
 To display the content of a data object in iRODS using GoCommands, you can use the `cat` command. This is similar to how you would use the `cat` command in a Unix-like environment to view the contents of a file.
 
-### Syntax
+## Syntax
 ```sh
 gocmd cat <data-object>
 ```
 
-### Example Usage
+## Example Usage
 ```sh
 gocmd cat /myZone/home/myUser/hello.txt
 ```
@@ -16,3 +16,17 @@ This command will display the content of the specified data object. For instance
 ```sh
 HELLO WORLD!
 ```
+
+## All Available Flags
+
+| Flag                                | Description                                                                 |
+|-------------------------------------|-----------------------------------------------------------------------------|
+| `-c, --config string`               | Specify custom iRODS configuration file or directory path (default "/home/myUser/.irods"). |
+| `-d, --debug`                        | Enable verbose debug output for troubleshooting.                           |
+| `-h, --help`                         | Display help information about available commands and options.             |
+| `--log_level string`                 | Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG).              |
+| `-q, --quiet`                        | Suppress all non-error output messages.                                    |
+| `-R, --resource string`              | Target specific iRODS resource server for operations.                     |
+| `-s, --session int`                  | Specify session identifier for tracking operations (default 42938).        |
+| `-T, --ticket string`                | Specify the name of the ticket.                                            |
+| `-v, --version`                      | Display version information.                                                |
