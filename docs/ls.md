@@ -1,12 +1,13 @@
 # List Data Objects (Files) and Collections (directories) in iRODS
 
+To list data objects (files) and collections (directories) in iRODS using GoCommands, you can use the `ls` command. This command is similar to the Unix `ls` command but is adapted for use with iRODS.
 
-## Syntax:
-```
+## Syntax
+```sh
 gocmd ls <data-object-or-collection>... [flags]
 ```
 
-## Example Usage:
+## Example Usage
 
 1. List the contents of a collection, `/myZone/home/myUser/mydata`:
     ```sh

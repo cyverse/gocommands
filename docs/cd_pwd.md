@@ -1,6 +1,15 @@
 # Current Working Collection (Directory) in iRODS
 
 ## Display the Current Working Collection
+
+To display the current working collection (directory) in iRODS, you can use the `pwd` command. This command is similar to the Unix `pwd` command but is adapted for iRODS.
+
+### Syntax
+```sh
+gocmd pwd
+```
+
+### Example Usage
 ```sh
 gocmd pwd
 ```
@@ -13,6 +22,15 @@ This command displays your current working collection in iRODS, like this:
 After configuring GoCommands, your current working collection will be set to your home directory. Your home directory is `/<zone>/home/<username>`.
 
 ## Change the Current Working Collection
+
+If you need to change the current working collection, you can use the `cd` command. This command allows you to navigate through iRODS collections by specifying the target collection path.
+
+### Syntax
+```sh
+gocmd cd <collection>
+```
+
+### Example Usage
 ```sh
 gocmd cd /myZone/home/myUser/mydata
 ```
@@ -28,6 +46,7 @@ $ gocmd pwd
 /myZone/home/myUser/mydata
 ```
 
+### Tips
 To change the current working collection back to your home directory, you have several options:
 1. **Using the full path:**
 ```sh
