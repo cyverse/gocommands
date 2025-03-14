@@ -31,7 +31,7 @@ GoCommands can read configurations from YAML or JSON files.
    irods_host: "data.cyverse.org"
    irods_port: 1247
    irods_user_name: "your username"
-   irods_zone_name: "iplant"
+   irods_zone_name: "myZone"
    irods_user_password: "your password"
    ```
 3. To use this configuration file, provide its path with the `-c` flag when running GoCommands:
@@ -61,7 +61,7 @@ GoCommands can read configuration directly from environmental variables, which t
    export IRODS_HOST="data.cyverse.org"
    export IRODS_PORT=1247
    export IRODS_USER_NAME="your username"
-   export IRODS_ZONE_NAME="iplant"
+   export IRODS_ZONE_NAME="myZone"
    export IRODS_USER_PASSWORD="your password"
    ```
 2. Run GoCommands to verify the environment settings:
