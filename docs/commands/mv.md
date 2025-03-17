@@ -4,7 +4,7 @@ The `mv` command allows you to move or rename data objects and collections in iR
 
 ## Syntax
 ```sh
-gocmd mv <data-object-or-collection>... <target-data-object-or-collection> [flags]
+gocmd mv [flags] <data-object-or-collection>... <target-data-object-or-collection>
 ```
 
 ## Example Usage

@@ -4,7 +4,7 @@ The `mkdir` command allows you to create a new collection (directory) in iRODS. 
 
 ## Syntax
 ```sh
-gocmd mkdir [flags] 
+gocmd mkdir [flags] <new-collection>
 ```
 
 ## Example Usage
@@ -20,6 +20,23 @@ gocmd mkdir [flags]
     ```
     This command creates the `newCollection` along with its parent collection `parentCollection` if it does not already exist.
 
+
+## Important Notes
+
+1. **Permissions:** Ensure you have the necessary write permissions in the parent collection where you want to create the new collection. Use the following command to check permissions:
+    ```sh
+    gocmd ls -A
+    ```
+
+2. **Parent Collections:** If the parent collections do not exist and you do not use the `-p` flag, the command will fail.
+
+3. **Relative and Absolute Paths:** You can specify either an absolute path or a relative path based on your current working collection.
+
+4. **Error Handling:** If you encounter an error while creating a collection, verify that:
+   - The specified path is correct.
+   - You have sufficient permissions to create collections in the target location.
+
+
 ## All Available Flags
 
 | Flag                  | Description                                                                 |
@@ -33,18 +50,3 @@ gocmd mkdir [flags]
 | `-R, --resource string` | Target specific iRODS resource server for operations.                     |
 | `-s, --session int`   | Specify session identifier for tracking operations (default 42938).         |
 | `-v, --version`       | Display version information.                                                |
-
-## Important Notes
-
-1. **Permissions:** Ensure you have the necessary write permissions in the parent collection where you want to create the new collection. Use the following command to check permissions:
-    ```sh
-    gocmd ils -A
-    ```
-
-2. **Parent Collections:** If the parent collections do not exist and you do not use the `-p` flag, the command will fail.
-
-3. **Relative and Absolute Paths:** You can specify either an absolute path or a relative path based on your current working collection.
-
-4. **Error Handling:** If you encounter an error while creating a collection, verify that:
-   - The specified path is correct.
-   - You have sufficient permissions to create collections in the target location.

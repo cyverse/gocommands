@@ -4,7 +4,7 @@ To list data objects (files) and collections (directories) in iRODS using GoComm
 
 ## Syntax
 ```sh
-gocmd ls <data-object-or-collection>... [flags]
+gocmd ls [flags] <data-object-or-collection>...
 ```
 
 ## Example Usage
@@ -67,9 +67,7 @@ gocmd ls <data-object-or-collection>... [flags]
       C- /myZone/home/myUser/mydata_sort
     ```
 
-## Useful Flags
-
-1. **`-A`, `--access`: Display access control lists for data-objects and collections**
+5. **List the contents of a collection with their access control lists:**
     ```sh
     gocmd ls -A /myZone/home/myUser/mydata
     ```
@@ -93,7 +91,7 @@ gocmd ls <data-object-or-collection>... [flags]
         - `modify_object`: Allows modification (write) of the data object or collection.
         - `own`: Grants ownership of the data object or collection.
 
-2. **`-l`, `--long`: Display results in long format with additional details**
+6. **List the contents of a collection in long format with additional details:**
     ```sh
     gocmd ls -l /myZone/home/myUser/mydata
     ```
@@ -115,7 +113,7 @@ gocmd ls <data-object-or-collection>... [flags]
         - `X`: Stale
         - `?`: Unknown
 
-3. **`-L`, `--verylong`: Display results in very long format with comprehensive information**
+7. **List the contents of a collection in very long format with comprehensive information:**
     ```sh
     gocmd ls -L /myZone/home/myUser/mydata
     ```
@@ -137,7 +135,7 @@ gocmd ls <data-object-or-collection>... [flags]
     - The flag adds a new output line for each replica, displaying its checksum and physical location in the iRODS resource server.
     - The checksum can be generated using various hash algorithms, such as `MD5` or `SHA256`. If the algorithm used is not `MD5`, the checksum string will include the algorithm as a prefix. For example: `sha256:84bae6e26c2d40fc02a0dd266dccac0c34a2023d1a2ba8fea59dd11693445828`.
 
-4. **`-H`, `--human_readable`: Display data object sizes in human-readable units (KB, MB, GB).**
+8. **List the contents of a collection with data object sizes in human-readable units (KB, MB, GB):**
     This flag must be used with the `-l` or `-L` flags, as they display data object sizes.
     ```sh
     gocmd ls -H -l /myZone/home/myUser/mydata_large
@@ -152,7 +150,7 @@ gocmd ls <data-object-or-collection>... [flags]
       myUser	1	demoRes2;rs2	5.0 GB  2025-02-19.10:32	&	large_file2.bin
     ```
 
-5. **`-S`, `--sort`: Sort data objects and collections in ascending order by `name`, `size`, `time`, or `ext`.**
+9. **List the contents of a collection with sorting in ascending order by `name`, `size`, `time`, or `ext`:**
     ```sh
     gocmd -S name /myZone/home/myUser/mydata_sort
     ```
@@ -178,7 +176,7 @@ gocmd ls <data-object-or-collection>... [flags]
       - `time`: Sort by creation time first, with modification time as a secondary criterion.
       - `ext`: Sort by file extension.
 
-6. **`--reverse_sort`: Sort data objects and collections in reverse order.**
+10. **List the contents of a collection with sorting in reverse order:**
     This flag is often used with the `-S` flag.
     ```sh
     gocmd ls -S name --reverse_sort /myZone/home/myUser/mydata_sort
@@ -197,7 +195,7 @@ gocmd ls <data-object-or-collection>... [flags]
       C- /myZone/home/myUser/mydata_sort/Radish
     ```
 
-7. **`-w`, `--wildcard`: Enable wildcard expansion to search for source files.**
+10. **List the contents of a collection with wildcard expansion to search.**
     ```sh
     gocmd ls -w /myZone/home/myUser/mydata_sort/*a*
     ```

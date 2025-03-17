@@ -23,6 +23,7 @@ The output of the `svrinfo` command may look like this:
 +-----------------+-----------+
 ```
 
+
 ## Available Flags
 
 | Flag                  | Description                                                                 |

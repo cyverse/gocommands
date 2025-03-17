@@ -4,7 +4,7 @@ To display the content of a data object in iRODS using GoCommands, you can use t
 
 ## Syntax
 ```sh
-gocmd cat <data-object>
+gocmd cat [flags] <data-object>
 ```
 
 ## Example Usage

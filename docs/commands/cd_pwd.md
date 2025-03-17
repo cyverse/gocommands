@@ -10,7 +10,7 @@ To display the current working collection in iRODS, use the `pwd` command. This 
 
 ### Syntax
 ```sh
-gocmd pwd
+gocmd pwd [flags]
 ```
 
 ### Example Usage

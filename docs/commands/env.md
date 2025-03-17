@@ -4,7 +4,7 @@ To display the current configuration of GoCommands, you can use the `env` comman
 
 ## Syntax
 ```sh
-gocmd env
+gocmd env [flags]
 ```
 
 ## Example Usage

@@ -4,7 +4,7 @@ The `cp` command allows you to copy data objects and collections in iRODS. This 
 
 ## Syntax
 ```sh
-gocmd cp <source-data-object-or-collection>... <target-data-object-or-collection> [flags]
+gocmd cp [flags] <source-data-object-or-collection>... <target-data-object-or-collection>
 ```
 
 ## Example Usage
@@ -24,25 +24,20 @@ gocmd cp <source-data-object-or-collection>... <target-data-object-or-collection
     gocmd cp -r /myZone/home/myUser/sourcecollection /myZone/home/myUser/destcollection
     ```
 
+    This command will copy the entire `sourcecollection` and all its contents (including subdirectories and files) to `destcollection`.
+
 4. **Copy multiple data objects:**
     ```sh
     gocmd cp /myZone/home/myUser/file1.txt /myZone/home/myUser/file2.txt /myZone/home/myUser/targetcollection/
     ```
 
-## Useful Flags
-1. **`-f`, `--force`: Run operation forcefully, bypassing safety checks.**
+5. **Copy a data object forcefully, overwriting existing data object at destination:**
     ```sh
     gocmd cp -f /myZone/home/myUser/sourcefile.txt /myZone/home/myUser/destfile.txt
     ```
-    
-    The command above will overwrite the data object `/myZone/home/myUser/destfile.txt` with the content of `/myZone/home/myUser/sourcefile.txt` if already exists.
 
-2. **`-r, --recursive`: Recursively process operations for collections and their contents.**
-    ```sh
-    gocmd cp -r /myZone/home/myUser/sourcecollection /myZone/home/myUser/destcollection
-    ```
+    This command copies `sourcefile.txt` to `destfile.txt`, overwriting the destination without prompting for confirmation.
 
-    This command will copy the entire `sourcecollection` and all its contents (including subdirectories and files) to `destcollection`.
 
 ## Important Notes
 

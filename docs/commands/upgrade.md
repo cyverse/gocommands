@@ -16,7 +16,7 @@ gocmd upgrade [flags]
 
    This command automatically downloads and installs the latest release.
 
-   - If GoCommands is installed in a system directory, you may need administrative privileges. On Unix-like systems, use:
+   > **Note:** If GoCommands is installed in a system directory, you may need administrative privileges. On Unix-like systems, use:
       ```bash
       sudo gocmd upgrade
       ```
@@ -26,15 +26,6 @@ gocmd upgrade [flags]
    gocmd upgrade --check
    ```
 
-## Useful Flags
-
-1. **`--check`: Only check for the latest version without performing any updates.**
-   ```sh
-   gocmd upgrade --check
-   ```
-
-   This command checks for the latest available version of GoCommands without actually performing an upgrade. It provides information about the current installed version and the latest release version available.
-
    Example output:
    ```sh
    Current cilent version installed: v0.10.18
@@ -43,12 +34,13 @@ gocmd upgrade [flags]
    Current client version installed is up-to-date [v0.10.18]
    ```
 
+
 ## All Available Flags
 
 | Flag                  | Description                                                                 |
 |-----------------------|-----------------------------------------------------------------------------|
 | `--check`             | Only check for the latest version without performing any updates.           |
-| `-c, --config string` | Specify custom iRODS configuration file or directory path (default "/home/iychoi/.irods"). |
+| `-c, --config string` | Specify custom iRODS configuration file or directory path (default "/home/myUser/.irods"). |
 | `-d, --debug`         | Enable verbose debug output for troubleshooting.                            |
 | `-h, --help`          | Display help information about available commands and options.              |
 | `--log_level string`  | Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG).               |
