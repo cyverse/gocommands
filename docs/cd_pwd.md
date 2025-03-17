@@ -41,34 +41,32 @@ gocmd cd
 
 ### Example Usage
 
-1. To change to a specific collection:
+1. **Change to a specific collection using an absolute path:**
     ```sh
     gocmd cd /myZone/home/myUser/mydata
     ```
 
     This changes your current working collection to `/myZone/home/myUser/mydata`.
 
-2. To use a relative path from your current location:
+2. **Use a relative path from your current location:**
+   Assuming your current working collection is `/myZone/home/myUser`:
     ```sh
     gocmd cd mydata
     ```
 
-3. After changing the collection, you can confirm it with the `pwd` command:
+3. **Confirm your current collection with the `pwd` command:**
     ```sh
     $ gocmd pwd
     /myZone/home/myUser/mydata
     ```
 
-### Tips for Navigating Collections
-
-1. **Return to Your Home Directory**
-
+4. **Return to your home collection:**
    - Using the full path:
      ```sh
      gocmd cd /myZone/home/myUser
      ```
 
-   - Using no argument (defaults to home directory):
+   - Using no argument (defaults to home collection):
      ```sh
      gocmd cd
      ```
@@ -79,17 +77,19 @@ gocmd cd
      ```
      > **Note:** The `~` must be quoted to prevent shell expansion by your local shell. Without quotes, it will expand to your local machine's home directory instead of your iRODS home directory.
 
-2. **Move Up One Level**
-
-   To move up one level in the directory tree:
+5. **Move up one level:**
    ```sh
    gocmd cd ..
    ```
 
-3. **Navigate Using Absolute Paths**
+## All Available Flags
 
-   Always use absolute paths (e.g., `/myZone/home/myUser/target`) when you are unsure of your current location, as this ensures you navigate correctly.
-
-4. **Check Your Current Location**
-
-   Use `pwd` frequently to verify your current working collection before performing operations like uploading, downloading, or deleting files.
+| Flag                                | Description                                                                 |
+|-------------------------------------|-----------------------------------------------------------------------------|
+| `-c, --config string`               | Specify custom iRODS configuration file or directory path (default "/home/myUser/.irods"). |
+| `-d, --debug`                        | Enable verbose debug output for troubleshooting.                           |
+| `-h, --help`                         | Display help information about available commands and options.             |
+| `--log_level string`                 | Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG).              |
+| `-q, --quiet`                        | Suppress all non-error output messages.                                    |
+| `-s, --session int`                  | Specify session identifier for tracking operations (default 42938).        |
+| `-v, --version`                      | Display version information.                                                |

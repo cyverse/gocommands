@@ -9,21 +9,38 @@ gocmd upgrade [flags]
 
 ## Example Usage
 
-1. Run the upgrade command:  
+1. **Run the upgrade command:**
    ```bash
    gocmd upgrade
    ```  
 
    This command automatically downloads and installs the latest release.
 
-2. If GoCommands is installed in a system directory, you may need administrative privileges. On Unix-like systems, use:
-   ```bash
-   sudo gocmd upgrade
-   ```
+   - If GoCommands is installed in a system directory, you may need administrative privileges. On Unix-like systems, use:
+      ```bash
+      sudo gocmd upgrade
+      ```
 
-3. Check for the latest version available online without performing an update:
+2. **Check for the latest version available online without performing an update:**
    ```bash
    gocmd upgrade --check
+   ```
+
+## Useful Flags
+
+1. **`--check`: Only check for the latest version without performing any updates.**
+   ```sh
+   gocmd upgrade --check
+   ```
+
+   This command checks for the latest available version of GoCommands without actually performing an upgrade. It provides information about the current installed version and the latest release version available.
+
+   Example output:
+   ```sh
+   Current cilent version installed: v0.10.18
+   Latest release version available for linux/amd64: v0.10.18
+   Latest release URL: https://github.com/cyverse/gocommands/releases/tag/v0.10.18
+   Current client version installed is up-to-date [v0.10.18]
    ```
 
 ## All Available Flags

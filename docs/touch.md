@@ -21,7 +21,8 @@ gocmd touch [flags]
     ```
     This command updates the modification time of the existing data object `oldfile.txt`. If the specified data object does not exist, the command will fail without creating a new one.
 
-## Available Flags
+
+## All Available Flags
 
 | Flag                  | Description                                                                 |
 |-----------------------|-----------------------------------------------------------------------------|
@@ -29,7 +30,7 @@ gocmd touch [flags]
 | `-d, --debug`         | Enable verbose debug output for troubleshooting.                            |
 | `-h, --help`          | Display help information about available commands and options.              |
 | `--log_level string`  | Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG).               |
-| `--no_create`         | Do not create a new data object if it does not exist; only update the modification time of an existing one. |
+| `--no_create`         | Skip creation of the data object. |
 | `-q, --quiet`         | Suppress all non-error output messages.                                     |
 | `-R, --resource string` | Target specific iRODS resource server for operations.                     |
 | `-s, --session int`   | Specify session identifier for tracking operations (default 42938).         |

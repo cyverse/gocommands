@@ -8,8 +8,6 @@ gocmd svrinfo [flags]
 ```
 
 ## Example Usage
-
-Display iRODS server information:
 ```sh
 gocmd svrinfo
 ```

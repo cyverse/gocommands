@@ -14,17 +14,17 @@ Syncing between two local directories is not supported.
 
 ## Example Usage:
 
-1. **Sync a local directory to iRODS**:
+1. **Sync a local directory to iRODS:**
    ```sh
    gocmd sync /local/dir i:/myZone/home/myUser/dir
    ```
 
-2. **Sync a directory from iRODS to local**:
+2. **Sync a directory from iRODS to local:**
    ```sh
    gocmd sync i:/myZone/home/myUser/dir /local/dir
    ```
 
-3. **Sync two directories in iRODS**:
+3. **Sync two directories in iRODS:**
    ```sh
    gocmd sync i:/myZone/home/myUser/dir1 i:/myZone/home/myUser/dir2
    ```

@@ -9,25 +9,40 @@ gocmd cp <source-data-object-or-collection>... <target-data-object-or-collection
 
 ## Example Usage
 
-1. To copy a data object:
+1. **Copy a data object:**
     ```sh
     gocmd cp /myZone/home/myUser/sourcefile.txt /myZone/home/myUser/destfile.txt
     ```
 
-2. To copy a data object to a different collection:
+2. **Copy a data object to a different collection:**
     ```sh
     gocmd cp /myZone/home/myUser/file.txt /myZone/home/myUser/subcollection/
     ```
 
-3. To copy a collection:
+3. **Copy a collection:**
     ```sh
     gocmd cp -r /myZone/home/myUser/sourcecollection /myZone/home/myUser/destcollection
     ```
 
-4. To copy multiple data objects:
+4. **Copy multiple data objects:**
     ```sh
     gocmd cp /myZone/home/myUser/file1.txt /myZone/home/myUser/file2.txt /myZone/home/myUser/targetcollection/
     ```
+
+## Useful Flags
+1. **`-f`, `--force`: Run operation forcefully, bypassing safety checks.**
+    ```sh
+    gocmd cp -f /myZone/home/myUser/sourcefile.txt /myZone/home/myUser/destfile.txt
+    ```
+    
+    The command above will overwrite the data object `/myZone/home/myUser/destfile.txt` with the content of `/myZone/home/myUser/sourcefile.txt` if already exists.
+
+2. **`-r, --recursive`: Recursively process operations for collections and their contents.**
+    ```sh
+    gocmd cp -r /myZone/home/myUser/sourcecollection /myZone/home/myUser/destcollection
+    ```
+
+    This command will copy the entire `sourcecollection` and all its contents (including subdirectories and files) to `destcollection`.
 
 ## Important Notes
 

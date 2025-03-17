@@ -21,7 +21,14 @@ This command will prompt you to enter your current password and then your new pa
 - Password complexity requirements may vary depending on your iRODS server configuration.
 - Typically, a strong password is recommended (e.g., combining uppercase and lowercase letters, numbers, and special characters).
 
-## Available Flags
+## Important Notes
+
+- Ensure you remember your new password, as it will be required for future iRODS operations.
+- If you encounter issues changing your password, contact your iRODS administrator.
+- For security reasons, avoid using the same password across multiple systems.
+- After changing your password, you may need to update it in any scripts or applications that use your iRODS credentials.
+
+## All Available Flags
 
 | Flag                  | Description                                                                 |
 |-----------------------|-----------------------------------------------------------------------------|
@@ -32,10 +39,3 @@ This command will prompt you to enter your current password and then your new pa
 | `-q, --quiet`         | Suppress all non-error output messages.                                     |
 | `-s, --session int`   | Specify session identifier for tracking operations (default 42938).         |
 | `-v, --version`       | Display version information.                                                |
-
-## Important Notes
-
-- Ensure you remember your new password, as it will be required for future iRODS operations.
-- If you encounter issues changing your password, contact your iRODS administrator.
-- For security reasons, avoid using the same password across multiple systems.
-- After changing your password, you may need to update it in any scripts or applications that use your iRODS credentials.

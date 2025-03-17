@@ -25,8 +25,7 @@ GoCommands is compatible with iCommands' configuration files. It can automatical
 GoCommands can read configurations from YAML or JSON files.
 
 ### Using an External YAML Configuration File without `init`
-1. Create a file named `config.yaml` using your preferred text editor.
-2. Add the following content:
+1. **Create a file named `config.yaml` using your preferred text editor:**
    ```
    irods_host: "data.cyverse.org"
    irods_port: 1247
@@ -34,15 +33,15 @@ GoCommands can read configurations from YAML or JSON files.
    irods_zone_name: "myZone"
    irods_user_password: "your password"
    ```
-3. To use this configuration file, provide its path with the `-c` flag when running GoCommands:
+2. **To use this configuration file, provide its path with the `-c` flag when running GoCommands:**
    ```
    gocmd -c config.yaml env
    ```
-4. Execute GoCommands for your task:
+3. **Execute GoCommands for your task:**
    ```
    gocmd -c config.yaml ls
    ```
-5. You can omit sensitive fields like `irods_user_password`, and GoCommands will prompt you for the missing values during runtime.
+4. You can omit sensitive fields like `irods_user_password`, and GoCommands will prompt you for the missing values during runtime.
 
 
 ### Creating Configuration from an External File
@@ -56,7 +55,7 @@ gocmd -c config.yaml init
 GoCommands can read configuration directly from environmental variables, which take precedence over other configuration sources.
 
 ### Setting Environmental Variables
-1. Export the required variables in your terminal:
+1. **Export the required variables in your terminal:**
    ```
    export IRODS_HOST="data.cyverse.org"
    export IRODS_PORT=1247
@@ -64,11 +63,11 @@ GoCommands can read configuration directly from environmental variables, which t
    export IRODS_ZONE_NAME="myZone"
    export IRODS_USER_PASSWORD="your password"
    ```
-2. Run GoCommands to verify the environment settings:
+2. **Run GoCommands to verify the environment settings:**
    ```
    gocmd env
    ```
-3. Execute GoCommands for your task:
+3. **Execute GoCommands for your task:**
    ```
    gocmd ls
    ```

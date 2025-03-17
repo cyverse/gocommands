@@ -9,7 +9,7 @@ gocmd ls <data-object-or-collection>... [flags]
 
 ## Example Usage
 
-1. List the contents of a collection, `/myZone/home/myUser/mydata`:
+1. **List the contents of a collection, `/myZone/home/myUser/mydata`:**
     ```sh
     gocmd ls /myZone/home/myUser/mydata
     ```
@@ -24,7 +24,7 @@ gocmd ls <data-object-or-collection>... [flags]
 
     The `C-` prefix indicates that the item is a collection (directory).
     
-2. Show a specific data-object, `/myZone/home/myUser/mydata/file1.bin`:
+2. **Show a specific data-object, `/myZone/home/myUser/mydata/file1.bin`:**
     ```sh
     gocmd ls /myZone/home/myUser/mydata/file1.bin
     ```
@@ -36,7 +36,7 @@ gocmd ls <data-object-or-collection>... [flags]
 
     This is useful for checking if a specific data object exists.
 
-3. List the contents of multiple collections, `/myZone/home/myUser/mydata1` and `/myZone/home/myUser/mydata2`:
+3. **List the contents of multiple collections, `/myZone/home/myUser/mydata1` and `/myZone/home/myUser/mydata2`:**
     ```sh
     gocmd ls /myZone/home/myUser/mydata1 /myZone/home/myUser/mydata2
     ```
@@ -52,7 +52,7 @@ gocmd ls <data-object-or-collection>... [flags]
       file3.bin
     ```
 
-4. List the contents of the current working collection:
+4. **List the contents of the current working collection:**
     ```sh
     gocmd ls
     ```
@@ -69,7 +69,7 @@ gocmd ls <data-object-or-collection>... [flags]
 
 ## Useful Flags
 
-1. `-A`, `--access`: Display access control lists for data-objects and collections
+1. **`-A`, `--access`: Display access control lists for data-objects and collections**
     ```sh
     gocmd ls -A /myZone/home/myUser/mydata
     ```
@@ -93,7 +93,7 @@ gocmd ls <data-object-or-collection>... [flags]
         - `modify_object`: Allows modification (write) of the data object or collection.
         - `own`: Grants ownership of the data object or collection.
 
-2. `-l`, `--long`: Display results in long format with additional details
+2. **`-l`, `--long`: Display results in long format with additional details**
     ```sh
     gocmd ls -l /myZone/home/myUser/mydata
     ```
@@ -115,7 +115,7 @@ gocmd ls <data-object-or-collection>... [flags]
         - `X`: Stale
         - `?`: Unknown
 
-3. `-L`, `--verylong`: Display results in very long format with comprehensive information
+3. **`-L`, `--verylong`: Display results in very long format with comprehensive information**
     ```sh
     gocmd ls -L /myZone/home/myUser/mydata
     ```
@@ -137,7 +137,7 @@ gocmd ls <data-object-or-collection>... [flags]
     - The flag adds a new output line for each replica, displaying its checksum and physical location in the iRODS resource server.
     - The checksum can be generated using various hash algorithms, such as `MD5` or `SHA256`. If the algorithm used is not `MD5`, the checksum string will include the algorithm as a prefix. For example: `sha256:84bae6e26c2d40fc02a0dd266dccac0c34a2023d1a2ba8fea59dd11693445828`.
 
-4. `-H`, `--human_readable`: Display data object sizes in human-readable units (KB, MB, GB).
+4. **`-H`, `--human_readable`: Display data object sizes in human-readable units (KB, MB, GB).**
     This flag must be used with the `-l` or `-L` flags, as they display data object sizes.
     ```sh
     gocmd ls -H -l /myZone/home/myUser/mydata_large
@@ -152,7 +152,7 @@ gocmd ls <data-object-or-collection>... [flags]
       myUser	1	demoRes2;rs2	5.0 GB  2025-02-19.10:32	&	large_file2.bin
     ```
 
-5. `-S`, `--sort`: Sort data objects and collections in ascending order by `name`, `size`, `time`, or `ext`.
+5. **`-S`, `--sort`: Sort data objects and collections in ascending order by `name`, `size`, `time`, or `ext`.**
     ```sh
     gocmd -S name /myZone/home/myUser/mydata_sort
     ```
@@ -178,7 +178,7 @@ gocmd ls <data-object-or-collection>... [flags]
       - `time`: Sort by creation time first, with modification time as a secondary criterion.
       - `ext`: Sort by file extension.
 
-6. `--reverse_sort`: Sort data objects and collections in reverse order.
+6. **`--reverse_sort`: Sort data objects and collections in reverse order.**
     This flag is often used with the `-S` flag.
     ```sh
     gocmd ls -S name --reverse_sort /myZone/home/myUser/mydata_sort
@@ -197,7 +197,7 @@ gocmd ls <data-object-or-collection>... [flags]
       C- /myZone/home/myUser/mydata_sort/Radish
     ```
 
-7. `-w`, `--wildcard`: Enable wildcard expansion to search for source files.
+7. **`-w`, `--wildcard`: Enable wildcard expansion to search for source files.**
     ```sh
     gocmd ls -w /myZone/home/myUser/mydata_sort/*a*
     ```
@@ -227,25 +227,25 @@ gocmd ls <data-object-or-collection>... [flags]
 
 | Flag                                | Description                                                                 |
 |-------------------------------------|-----------------------------------------------------------------------------|
-| `-A, --access`                      | Display access control lists for data-objects and collections               |
-| `-c, --config string`               | Specify custom iRODS configuration file or directory path (default `"/home/myUser/.irods"`) |
-| `-d, --debug`                       | Enable verbose debug output for troubleshooting                             |
-| `--decrypt`                         | Enable file decryption (default true)                                       |
-| `--decrypt_key string`              | Specify the decryption key for 'winscp' or 'pgp' modes                      |
-| `--decrypt_priv_key string`         | Provide the decryption private key for 'ssh' mode (default `"/home/myUser/.ssh/id_rsa"`) |
-| `--decrypt_temp string`             | Set a temporary directory for file decryption (default `"/tmp"`)            |
-| `--exclude_hidden_files`            | Skip files and directories that start with '.'                              |
-| `-h, --help`                        | Display help information about available commands and options               |
-| `-H, --human_readable`              | Show file sizes in human-readable units (KB, MB, GB)                       |
-| `--log_level string`                | Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG)                |
-| `-l, --long`                        | Display results in long format with additional details                      |
-| `--no_decrypt`                      | Disable file decryption forcefully                                          |
-| `-q, --quiet`                       | Suppress all non-error output messages                                      |
-| `-R, --resource string`             | Target specific iRODS resource server for operations                        |
-| `--reverse_sort`                    | Sort results in reverse order                                               |
-| `-s, --session int`                 | Specify session identifier for tracking operations (default `313985`)       |
-| `-S, --sort string`                 | Sort results by: name, size, time, or ext (default `name`)                 |
-| `-T, --ticket string`               | Specify the name of the ticket                                              |
-| `-v, --version`                     | Display version information                                                |
-| `-L, --verylong`                    | Display results in very long format with comprehensive information           |
-| `-w, --wildcard`                    | Enable wildcard expansion to search for source files                        |
+| `-A, --access`                      | Display access control lists for data-objects and collections.              |
+| `-c, --config string`               | Specify custom iRODS configuration file or directory path (default "/home/myUser/.irods"). |
+| `-d, --debug`                       | Enable verbose debug output for troubleshooting.                            |
+| `--decrypt`                         | Enable file decryption (default true).                                      |
+| `--decrypt_key string`              | Specify the decryption key for 'winscp' or 'pgp' modes.                     |
+| `--decrypt_priv_key string`         | Provide the decryption private key for 'ssh' mode (default "/home/myUser/.ssh/id_rsa"). |
+| `--decrypt_temp string`             | Set a temporary directory for file decryption (default "/tmp").             |
+| `--exclude_hidden_files`            | Skip files and directories that start with '.'.                             |
+| `-h, --help`                        | Display help information about available commands and options.              |
+| `-H, --human_readable`              | Show file sizes in human-readable units (KB, MB, GB).                       |
+| `--log_level string`                | Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG).               |
+| `-l, --long`                        | Display results in long format with additional details.                     |
+| `--no_decrypt`                      | Disable file decryption forcefully.                                         |
+| `-q, --quiet`                       | Suppress all non-error output messages.                                     |
+| `-R, --resource string`             | Target specific iRODS resource server for operations.                       |
+| `--reverse_sort`                    | Sort results in reverse order.                                              |
+| `-s, --session int`                 | Specify session identifier for tracking operations (default 313985).        |
+| `-S, --sort string`                 | Sort results by: name, size, time, or ext (default "name").                 |
+| `-T, --ticket string`               | Specify the name of the ticket.                                             |
+| `-v, --version`                     | Display version information.                                                |
+| `-L, --verylong`                    | Display results in very long format with comprehensive information.         |
+| `-w, --wildcard`                    | Enable wildcard expansion to search for source files.                       |

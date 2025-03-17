@@ -9,27 +9,27 @@ gocmd mv <data-object-or-collection>... <target-data-object-or-collection> [flag
 
 ## Example Usage
 
-1. To rename a data object:
+1. **Rename a data object:**
     ```sh
     gocmd mv /myZone/home/myUser/oldfile.txt /myZone/home/myUser/newfile.txt
     ```
 
-2. To move a data object to a different collection:
+2. **Move a data object to a different collection:**
     ```sh
     gocmd mv /myZone/home/myUser/file.txt /myZone/home/myUser/subcollection/
     ```
 
-3. To rename a collection:
+3. **Rename a collection:**
     ```sh
     gocmd mv /myZone/home/myUser/oldcollection /myZone/home/myUser/newcollection
     ```
 
-4. To move multiple data objects:
+4. **Move multiple data objects:**
     ```sh
     gocmd mv /myZone/home/myUser/file1.txt /myZone/home/myUser/file2.txt /myZone/home/myUser/targetcollection/
     ```
 
-5. To move multiple data objects with wildcard:
+5. **Move multiple data objects with wildcard:**
     ```sh
     gocmd mv -w /myZone/home/myUser/*.txt /myZone/home/myUser/targetcollection/
     ```

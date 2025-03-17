@@ -9,17 +9,17 @@ gocmd bput <local_source_path> <iRODS_destination_path>
 
 ## Example Usage:
 
-1. **Upload a directory of small files** to iRODS:
+1. **Upload a directory of small files to iRODS:**
    ```sh
    gocmd bput /local/dir /myZone/home/myUser/
    ```
 
-2. **Upload multiple directories and files** from different local paths:
+2. **Upload multiple directories and files from different local paths:*
    ```sh
    gocmd bput /local/dir1 /local/dir2 /local/dir3/file3 /myZone/home/myUser/
    ```
 
-3. **Upload a directory** to the current iRODS working directory (omit the iRODS destination):
+3. **Upload a directory to the current iRODS working directory (omit the iRODS destination):**
    ```sh
    gocmd bput /local/dir
    ```

@@ -21,37 +21,37 @@ gocmd chmodinherit <inherit_flag> <directory_path>
 
 ## Example Usage  
 
-1. **List current access levels for a file or directory**:  
+1. **List current access levels for a file or directory:**
    ```sh
    gocmd ls -A /myZone/home/myUser/dir
    ```
 
-2. **Grant a user write permission to a file**:  
+2. **Grant a user write permission to a file:**
    ```sh
    gocmd chmod write myUser /myZone/home/myUser/dir/file1
    ```
 
-3. **Grant a user write permission to a directory and its contents**:  
+3. **Grant a user write permission to a directory and its contents:**
    ```sh
    gocmd chmod -r write myUser /myZone/home/myUser/dir
    ```
 
-4. **Grant a user read permission to a directory and its contents**:  
+4. **Grant a user read permission to a directory and its contents:**
    ```sh
    gocmd chmod -r read myUser /myZone/home/myUser/dir
    ```
 
-5. **Grant a user owner permission to a directory and its contents**:  
+5. **Grant a user owner permission to a directory and its contents:**
    ```sh
    gocmd chmod -r owner myUser /myZone/home/myUser/dir
    ```
 
-6. **Enable access inheritance for all files and subdirectories**:  
+6. **Enable access inheritance for all files and subdirectories:**
    ```sh
    gocmd chmodinherit inherit /myZone/home/myUser/dir
    ```
 
-7. **Disable access inheritance for all files and subdirectories**:  
+7. **Disable access inheritance for all files and subdirectories:**
    ```sh
    gocmd chmodinherit noinherit /myZone/home/myUser/dir
    ```
@@ -65,7 +65,7 @@ gocmd chmodinherit <inherit_flag> <directory_path>
 | `write` | Grant write access |
 | `own` | Grant ownership (full control) |
 
-## Available Inheritance Flags for `chmodinherit`  
+## Available Inheritance Value for `chmodinherit`  
 
 | Flag | Description |
 |------|-------------|
