@@ -1,49 +1,48 @@
-# Remove Collections in iRODS
+# Remove Data Objects in iRODS
 
-The `rmdir` command allows you to remove empty collections (directories) in iRODS. This is similar to the Unix `rmdir` command but operates within the iRODS environment.
+The `rm` command allows you to remove data objects (files) in iRODS. This is similar to the Unix `rm` command but operates within the iRODS environment.
 
 ## Syntax
 ```sh
-gocmd rmdir [flags] <collection>
+gocmd rm [flags] <data-object>
 ```
 
 ## Example Usage
 
-1. **Remove an empty collection:**
+1. **Remove a single data object:**
     ```sh
-    gocmd rmdir /myZone/home/myUser/emptyCollection
+    gocmd rm /myZone/home/myUser/file.txt
     ```
 
 2. **Remove a collection and its contents recursively:**
-    ```sh
-    gocmd rmdir -r /myZone/home/myUser/parentCollection
-    ```
-
-    This is equivalent to:
     ```sh
     gocmd rm -r /myZone/home/myUser/parentCollection
     ```
 
 3. **Force remove a collection and its contents recursively:**
     ```sh
-    gocmd rmdir -rf /myZone/home/myUser/parentCollection
+    gocmd rm -rf /myZone/home/myUser/parentCollection
     ```
+
+4. **Remove multiple data objects:**
+    ```sh
+    gocmd rm /myZone/home/myUser/file1.txt /myZone/home/myUser/file2.txt
+    ```
+
+5. **Remove multiple data objects with wildcard:**
+    ```sh
+    gocmd rm /myZone/home/myUser/file*.txt
+    ```
+
+    This command removes all files with names starting with "file" and ending with ".txt" in the specified iRODS collection. Wildcard usage allows for batch removal of multiple files matching the pattern. Use this feature cautiously to avoid unintended deletions.
 
 ## Important Notes
 
-1. **Permissions:** Ensure you have the necessary permissions to remove the collection. Use the following command to check permissions:
-    ```sh
-    gocmd ls -A
-    ```
+1. **Permissions:** Ensure you have the necessary permissions to remove the data objects or collections.
 
-2. **Non-empty Collections:** The `rmdir` command will fail if the collection is not empty. To remove non-empty collections, use the `-r` flag.
+2. **Recursive Removal:** Use the `-r` flag to remove non-empty collections and their contents.
 
-3. **Relative and Absolute Paths:** You can specify either an absolute path or a relative path based on your current working collection.
-
-4. **Error Handling:** If you encounter an error while creating a collection, verify that:
-   - The specified path is correct.
-   - You have sufficient permissions to remove the collection.
-   - The collection is empty (unless using `-r`).
+3. **Force Removal:** The `-f` flag bypasses the trash collection and permanently deletes the items.
 
 ## All Available Flags
 
@@ -60,4 +59,3 @@ gocmd rmdir [flags] <collection>
 | `-s, --session int`   | Specify session identifier for tracking operations (default 94807).         |
 | `-v, --version`       | Display version information.                                                |
 | `-w, --wildcard`      | Enable wildcard expansion to search for source files.                       |
-
