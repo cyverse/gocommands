@@ -91,7 +91,7 @@ Use `i:<path>` to specify an iRODS path. Local paths do not require a prefix.
 
     This command uses direct access to the resource server. It is useful when transferring large files.
 
-9. **Sync local directory to iRODS with specifying transfer threads:**
+9. **Sync local directory to iRODS with specified transfer threads:**
     ```sh
     gocmd sync --thread_num 15 /local/dir i:/myZone/home/myUser/dir
     ```

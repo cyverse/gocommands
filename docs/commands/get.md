@@ -75,7 +75,7 @@ gocmd get [flags] <data-object-or-collection>... <dest-local-file-or-dir>
 
     This command bypasses the iCAT server for data transfer, directly accessing the specified resource server. It optimizes performance for large files by direct connection to the resource server.
 
-11. **Download with specifying transfer threads:**
+11. **Download with specified transfer threads:**
     ```sh
     gocmd get --thread_num 15 /myZone/home/myUser/dir /local/dir
     ```
