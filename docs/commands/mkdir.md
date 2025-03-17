@@ -1,10 +1,10 @@
-# Create a Collection in iRODS
+# Create Collections in iRODS
 
-The `mkdir` command allows you to create a new collection (directory) in iRODS. This is similar to the Unix `mkdir` command but operates within the iRODS environment. Collections in iRODS are used to organize data objects (files) hierarchically.
+The `mkdir` command allows you to create new collections (directories) in iRODS. This is similar to the Unix `mkdir` command but operates within the iRODS environment. Collections in iRODS are used to organize data objects (files) hierarchically.
 
 ## Syntax
 ```sh
-gocmd mkdir [flags] <new-collection>
+gocmd mkdir [flags] <new-collection>...
 ```
 
 ## Example Usage
