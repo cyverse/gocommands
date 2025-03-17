@@ -13,7 +13,7 @@ var (
 )
 
 func SetNoCreateFlags(command *cobra.Command) {
-	command.Flags().BoolVar(&noCreateFlagValues.NoCreate, "no_create", false, "Do not create the data object")
+	command.Flags().BoolVar(&noCreateFlagValues.NoCreate, "no_create", false, "Skip creation of the data object")
 }
 
 func GetNoCreateFlagValues() *NoCreateFlagValues {
