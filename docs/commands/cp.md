@@ -1,6 +1,6 @@
 # Copy Data Objects and Collections in iRODS
 
-The `cp` command allows you to copy data objects and collections in iRODS. This command is similar to the Unix `cp` command but is adapted for use with iRODS.
+The `cp` command allows you to copy data objects (files) and collections (directories) in iRODS. This command is similar to the Unix `cp` command but is adapted for use with iRODS.
 
 ## Syntax
 ```sh

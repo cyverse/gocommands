@@ -1,6 +1,6 @@
 # Move (Rename) Data Objects and Collections in iRODS
 
-The `mv` command allows you to move or rename data objects and collections in iRODS. This command is similar to the Unix `mv` command but is adapted for use with iRODS.
+The `mv` command allows you to move or rename data objects (files) and collections (directories) in iRODS. This command is similar to the Unix `mv` command but is adapted for use with iRODS.
 
 ## Syntax
 ```sh

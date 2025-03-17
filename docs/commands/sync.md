@@ -1,6 +1,6 @@
 # Sync Data Between Local and iRODS
 
-The `sync` command efficiently synchronizes datasets between local storage and iRODS by transferring only new or modified files. It automatically runs `get`, `put`, `bput`, and `cp` commands as needed to keep data in sync.
+The `sync` command efficiently synchronizes datasets between local storage and iRODS by transferring only new or modified data objects (files). It automatically runs `get`, `put`, `bput`, and `cp` commands as needed to keep data in sync.
 
 ## Syntax
 ```sh

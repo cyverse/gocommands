@@ -1,6 +1,6 @@
 # Download Data From iRODS
 
-The `get` command allows you to download data objects and collections from iRODS to your local system. It is similar to the `cp` command in Unix but operates between iRODS and your local file system.
+The `get` command allows you to download data objects (files) and collections (directories) from iRODS to your local system. It is similar to the `cp` command in Unix but operates between iRODS and your local file system.
 
 ## Syntax
 ```sh
@@ -18,7 +18,7 @@ gocmd get [flags] <data-object-or-collection>... <dest-local-file-or-dir>
 
 2. **Download a collection and its contents:**
     ```sh
-    gocmd get i:/local/dir
+    gocmd get /local/dir
     ```
 
 3. **Download a data object to a specific local path:**
@@ -29,7 +29,7 @@ gocmd get [flags] <data-object-or-collection>... <dest-local-file-or-dir>
 4. **Download with progress bars:**
     ```sh
     text
-    gocmd get --progress /myZone/home/myUser/largefile.dat
+    gocmd get --progress /myZone/home/myUser/largefile.dat /local/dir/
     ```
 
 5. **Force download:**
@@ -102,11 +102,11 @@ gocmd get [flags] <data-object-or-collection>... <dest-local-file-or-dir>
 | Flag                  | Description                                                                 |
 |-----------------------|-----------------------------------------------------------------------------|
 | `--age int`           | Exclude files older than the specified age in minutes.                      |
-| `-c, --config string` | Specify custom iRODS configuration file or directory path (default "/home/iychoi/.irods"). |
+| `-c, --config string` | Specify custom iRODS configuration file or directory path (default "/home/myUser/.irods"). |
 | `-d, --debug`         | Enable verbose debug output for troubleshooting.                            |
 | `--decrypt`           | Enable file decryption (default true).                                      |
 | `--decrypt_key string`| Specify the decryption key for 'winscp' or 'pgp' modes.                     |
-| `--decrypt_priv_key string` | Provide the decryption private key for 'ssh' mode (default "/home/iychoi/.ssh/id_rsa"). |
+| `--decrypt_priv_key string` | Provide the decryption private key for 'ssh' mode (default "/home/myUser/.ssh/id_rsa"). |
 | `--decrypt_temp string` | Set a temporary directory for file decryption (default "/tmp").           |
 | `--delete`            | Delete extra files in the destination directory.                            |
 | `--delete_on_success` | Delete the source file after a successful transfer.                         |
