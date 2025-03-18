@@ -15,7 +15,7 @@ import (
 
 var initCmd = &cobra.Command{
 	Use:     "init",
-	Aliases: []string{"iinit"},
+	Aliases: []string{"iinit", "configure"},
 	Short:   "Initialize gocommands",
 	Long:    `This command sets up the iRODS Host and access account for use with other gocommands tools. Once the configuration is set, configuration files are created under the ~/.irods directory. The configuration is fully compatible with that of icommands.`,
 	RunE:    processInitCommand,

@@ -2,16 +2,36 @@
 
 ## Using the `init` command
 
-1. Run the following command to configure GoCommands. Enter your iRODS account credentials when prompted. This will create the configuration file under `~/.irods`:
+1. **Run the following command to configure GoCommands:**
    ```
    gocmd init
    ```
-2. To verify the current environment, use:
+
+   > **Note:** Getting 'Command not found error?'
+      This error indicates that the system could not locate `gocmd` binary in the directories specified by the `$PATH` environment variable. To resolve this:
+   > 1. Use an absolute path: Run `./gocmd init` from the directory where you downloaded the `gocmd` binary.
+   > 2. For easier future use: Move the `gocmd` binary to a directory in your `$PATH`, such as `/usr/local/bin`.
+   > 3. Windows users: Ensure the executable is named `gocmd.exe` and run `gocmd.exe init` to initialize.
+
+2. **Enter your Data Store account credentials when prompted. Use the following information:**
+
+   | Configuration Key | Value |
+   |-------------------|-------|
+   | `irods_host`      | <iRODS Hostname> |
+   | `irods_port`      | <iRODS Port> |
+   | `irods_zone_name` | <iRODS Zone Name> |
+   | `irods_user_name` |  <iRODS Username> |
+   | `irods_user_password` | <iRODS Password> |
+
+   > **Note:** This will create the configuration file under `~/.irods`.
+
+3. **To verify the current configuration, use:**
    ```
    gocmd env
    ```
    This will display the current configurations.
-3. Execute GoCommands for your task:
+
+4. **Execute GoCommands for your task:**
    ```
    gocmd ls
    ```
@@ -20,68 +40,101 @@
 
 GoCommands is compatible with iCommands' configuration files. It can automatically detect and use the existing iCommands configuration files located in `~/.irods`. Additionally, GoCommands creates its own configuration files in this directory, allowing users to work with both iCommands and GoCommands interchangeably.
 
-## Using an External Configuration File (YAML or JSON)
+## Using an External Configuration File (YAML or JSON) without `init`
 
-GoCommands can read configurations from YAML or JSON files.
+GoCommands can read configurations from YAML or JSON files without running `init` to create the `~/.irods` directory. This approach offers flexibility but requires specifying the configuration file path for each command. Here's how to use this method:
 
-### Using an External YAML Configuration File without `init`
 1. **Create a file named `config.yaml` using your preferred text editor:**
    ```
-   irods_host: "data.cyverse.org"
-   irods_port: 1247
-   irods_user_name: "your username"
-   irods_zone_name: "myZone"
-   irods_user_password: "your password"
+   irods_host: "<iRODS Hostname>"
+   irods_port: <iRODS Port>
+   irods_zone_name: "<iRODS Zone Name>"
+   irods_user_name: "<iRODS Username>"
+   irods_user_password: "<iRODS Password>"
    ```
+
+   > **Note:** Prefer not to include your password in the file?
+      You can omit sensitive fields like `irods_user_password`, and GoCommands will prompt you to enter the missing values during runtime.
+
 2. **To use this configuration file, provide its path with the `-c` flag when running GoCommands:**
    ```
    gocmd -c config.yaml env
    ```
+
 3. **Execute GoCommands for your task:**
    ```
    gocmd -c config.yaml ls
    ```
-4. You can omit sensitive fields like `irods_user_password`, and GoCommands will prompt you for the missing values during runtime.
 
+## Using an External Configuration File (YAML or JSON)
 
-### Creating Configuration from an External File
-To configure GoCommands using an external file:
-```
-gocmd -c config.yaml init
-```
+The `init` command can be executed with an external file to automate configuration.
 
-## Using Environmental Variables
+1. **Create a file named `config.yaml` using your preferred text editor:**
+   ```
+   irods_host: "<iRODS Hostname>"
+   irods_port: <iRODS Port>
+   irods_zone_name: "<iRODS Zone Name>"
+   irods_user_name: "<iRODS Username>"
+   irods_user_password: "<iRODS Password>"
+   ```
+
+   > **Note:** Prefer not to include your password in the file?
+      You can omit sensitive fields like `irods_user_password`, and GoCommands will prompt you to enter the missing values during runtime.
+
+2. **Execute the `init` command with the `-c` flag to configure:**
+   ```
+   gocmd -c config.yaml init
+   ```
+
+## Using Environmental Variables without `init`
 
 GoCommands can read configuration directly from environmental variables, which take precedence over other configuration sources.
 
-### Setting Environmental Variables
 1. **Export the required variables in your terminal:**
    ```
-   export IRODS_HOST="data.cyverse.org"
-   export IRODS_PORT=1247
-   export IRODS_USER_NAME="your username"
-   export IRODS_ZONE_NAME="myZone"
-   export IRODS_USER_PASSWORD="your password"
+   export IRODS_HOST="<iRODS Hostname>"
+   export IRODS_PORT=<iRODS Port>
+   export IRODS_ZONE_NAME="<iRODS Zone Name>"
+   export IRODS_USER_NAME="<iRODS Username>"
+   export IRODS_USER_PASSWORD="<iRODS Password>"
    ```
+
+   > **Note:** Prefer not to set your password as an environment variable?
+      You can omit sensitive fields like `IRODS_USER_PASSWORD`, and GoCommands will prompt you to enter the missing values during runtime.
+
 2. **Run GoCommands to verify the environment settings:**
    ```
    gocmd env
    ```
+
 3. **Execute GoCommands for your task:**
    ```
    gocmd ls
    ```
-4. Similar to YAML/JSON configurations, you can omit sensitive fields like `IRODS_USER_PASSWORD`, and GoCommands will prompt for missing values during runtime.
 
+### Using Environmental Variables
 
-### Creating Configuration from Environmental Variables
+The `init` command can be executed with environmental variables to automate configuration.
 
-To configure GoCommands using environmental variables:
-```
-gocmd init
-```
+1. **Export the required variables in your terminal:**
+   ```
+   export IRODS_HOST="<iRODS Hostname>"
+   export IRODS_PORT=<iRODS Port>
+   export IRODS_ZONE_NAME="<iRODS Zone Name>"
+   export IRODS_USER_NAME="<iRODS Username>"
+   export IRODS_USER_PASSWORD="<iRODS Password>"
+   ```
 
-GoCommands will prompt you to input only the missing fields.
+   > **Note:** Prefer not to set your password as an environment variable?
+      You can omit sensitive fields like `IRODS_USER_PASSWORD`, and GoCommands will prompt you to enter the missing values during runtime.
+
+2. **Execute the `init` command:**
+   ```
+   gocmd init
+   ```
+
+   > **Note:** GoCommands will prompt you to input only the missing fields.
 
 
 ## Full List of Supported Configuration Fields
