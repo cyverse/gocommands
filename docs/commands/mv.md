@@ -34,9 +34,9 @@ gocmd mv [flags] <data-object-or-collection>... <target-data-object-or-collectio
     gocmd mv -w /myZone/home/myUser/*.txt /myZone/home/myUser/targetcollection/
     ```
 
-    This command will move all files with the `.txt` extension from the /myZone/home/myUser/ collection to the targetcollection. The asterisk (*) wildcard matches any number of characters in the filename.
+    This command will move all data objects with the `.txt` extension from the /myZone/home/myUser/ collection to the `targetcollection`. The asterisk (*) wildcard matches any number of characters in the filename.
 
-    You can use more specific wildcard patterns for precise file selection, such as file*.txt to move all text files starting with "file".
+    You can use more specific wildcard patterns for precise file selection, such as `file*.txt` to move all text files starting with "file".
 
 ## Important Notes
 
