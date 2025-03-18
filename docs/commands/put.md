@@ -16,10 +16,14 @@ gocmd put [flags] <local-files-or-dir>... <dest-data-object-or-collection>
     gocmd put /local/path/file.txt /myZone/home/myUser/
     ```
 
+    This command uploads the file `/local/path/file.txt` to `/myZone/home/myUser/`, creating `/myZone/home/myUser/file.txt` in iRODS.
+
 2. **Upload a directory and its contents:**
     ```sh
     gocmd put /local/dir /myZone/home/myUser/
     ```
+
+    This command uploads the contents of the directory `/local/dir` to `/myZone/home/myUser/dir` in iRODS. The uploaded files and subdirectories will be placed within the `/myZone/home/myUser/dir` folder.
 
 3. **Upload a data object to a specific iRODS path:**
     ```sh

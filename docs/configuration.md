@@ -17,11 +17,11 @@
 
    | Configuration Key | Value |
    |-------------------|-------|
-   | `irods_host`      | <iRODS Hostname> |
-   | `irods_port`      | <iRODS Port> |
-   | `irods_zone_name` | <iRODS Zone Name> |
-   | `irods_user_name` |  <iRODS Username> |
-   | `irods_user_password` | <iRODS Password> |
+   | `irods_host`      | `<iRODS Hostname>` |
+   | `irods_port`      | `<iRODS Port>` |
+   | `irods_zone_name` | `<iRODS Zone Name>` |
+   | `irods_user_name` |  `<iRODS Username>` |
+   | `irods_user_password` | `<iRODS Password>` |
 
    > **Note:** This will create the configuration file under `~/.irods`.
 
@@ -143,8 +143,8 @@ Below is a comprehensive list of supported fields, along with their correspondin
 
 | Field Name                     | JSON/YAML Key                     | Environmental Variable              | Default Value                    |
 |--------------------------------|------------------------------------|-------------------------------------|---------------------------------|
-| Authentication Scheme           | `irods_authentication_scheme`     | `IRODS_AUTHENTICATION_SCHEME`       | native                           |
-| Authentication File             | `irods_authentication_file`       | `IRODS_AUTHENTICATION_FILE`         | ~/irods/.irodsA                 |
+| AuthenticationScheme           | `irods_authentication_scheme`     | `IRODS_AUTHENTICATION_SCHEME`       | native                           |
+| AuthenticationFile             | `irods_authentication_file`       | `IRODS_AUTHENTICATION_FILE`         | ~/irods/.irodsA                 |
 | ClientServerNegotiation        | `irods_client_server_negotiation` | `IRODS_CLIENT_SERVER_NEGOTIATION`   | off                              |
 | ClientServerPolicy             | `irods_client_server_policy`       | `IRODS_CLIENT_SERVER_POLICY`        | CS_NEG_REFUSE                    |
 | Host                           | `irods_host`                      | `IRODS_HOST`                        |                                 |

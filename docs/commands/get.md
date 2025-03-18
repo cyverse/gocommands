@@ -11,30 +11,30 @@ gocmd get [flags] <data-object-or-collection>... <dest-local-file-or-dir>
 
 ## Example Usage
 
-1. **Download a single data object:**
+1. **Download a single data object to the current working directory:**
     ```sh
     gocmd get /myZone/home/myUser/file.txt
     ```
 
-2. **Download a collection and its contents:**
+2. **Download a collection and its contents to the current working directory:**
     ```sh
     gocmd get /local/dir
     ```
 
 3. **Download a data object to a specific local path:**
     ```sh
-    gocmd get /myZone/home/myUser/file.txt /local/path/file.txt
+    gocmd get /myZone/home/myUser/file.txt /local/path/file_new_name.txt
     ```
+
+    This command downloads the data object `/myZone/home/myUser/file.txt` and saves it as `/local/path/file_new_name.txt`.
 
 4. **Download with progress bars:**
     ```sh
-    text
     gocmd get --progress /myZone/home/myUser/largefile.dat /local/dir/
     ```
 
 5. **Force download:**
     ```sh
-    text
     gocmd get -f /myZone/home/myUser/largefile.dat
     ```
 
@@ -45,7 +45,7 @@ gocmd get [flags] <data-object-or-collection>... <dest-local-file-or-dir>
     gocmd get -K /myZone/home/myUser/important_data.txt
     ```
 
-    This command downloads the file and verifies its integrity by calculating the checksum after download and comparing it with the original in iRODS. This ensures data consistency and detects any corruption during transfer.
+    This command downloads the data object and verifies its integrity by calculating the checksum after download and comparing it with the original in iRODS. This ensures data consistency and detects any corruption during transfer.
 
 7. **Download only different or new contents:**
     ```sh

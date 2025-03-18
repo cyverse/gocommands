@@ -25,10 +25,8 @@ This command will output your current working collection, such as:
 
 By default, after configuring GoCommands, your current working collection is set to your **home directory**, which is typically located at:
 ```sh
-//home/
+/<Zone Name>/home/<Username>
 ```
-
----
 
 ## Change the Current Working Collection
 
