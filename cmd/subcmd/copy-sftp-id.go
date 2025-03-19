@@ -316,6 +316,8 @@ func (copy *CopySftpIdCommand) copySftpId(identityFiles []string) error {
 		if err != nil {
 			return xerrors.Errorf("failed to update keys in %q: %w", authorizedKeyPath, err)
 		}
+
+		commons.Printf("%d SSH public key(s) copied to iRODS for user %q\n", len(authorizedKeysUpdated), copy.account.ClientUser)
 	}
 
 	return nil
