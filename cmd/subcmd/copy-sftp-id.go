@@ -30,7 +30,6 @@ func AddCopySftpIdCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(copySftpIdCmd, false)
 
-	flag.SetForceFlags(copySftpIdCmd, false)
 	flag.SetDryRunFlags(copySftpIdCmd)
 	flag.SetSFTPIDFlags(copySftpIdCmd)
 
@@ -50,7 +49,6 @@ type CopySftpIdCommand struct {
 	command *cobra.Command
 
 	commonFlagValues *flag.CommonFlagValues
-	forceFlagValues  *flag.ForceFlagValues
 	dryRunFlagValues *flag.DryRunFlagValues
 	sftpIDFlagValues *flag.SFTPIDFlagValues
 
@@ -63,7 +61,6 @@ func NewCopySftpIdCommand(command *cobra.Command, args []string) (*CopySftpIdCom
 		command: command,
 
 		commonFlagValues: flag.GetCommonFlagValues(command),
-		forceFlagValues:  flag.GetForceFlagValues(),
 		dryRunFlagValues: flag.GetDryRunFlagValues(),
 		sftpIDFlagValues: flag.GetSFTPIDFlagValues(),
 	}
@@ -183,6 +180,7 @@ func (copy *CopySftpIdCommand) readAuthorizedKeys(authorizedKeyPath string) ([]s
 
 		existingAuthorizedKeysContent := contentBuffer.String()
 		if len(existingAuthorizedKeysContent) > 0 {
+			existingAuthorizedKeysContent = strings.TrimSpace(existingAuthorizedKeysContent)
 			authorizedKeysArray := strings.Split(existingAuthorizedKeysContent, "\n")
 			return authorizedKeysArray, nil
 		}
@@ -205,7 +203,7 @@ func (copy *CopySftpIdCommand) updateAuthorizedKeys(identityFiles []string, auth
 
 	// add
 	for _, identityFile := range identityFiles {
-		logger.Debugf("copying a SSH public key %q to iRODS for user %q", identityFile, copy.account.ClientUser)
+		logger.Debugf("checking a SSH public key %q to iRODS for user %q", identityFile, copy.account.ClientUser)
 
 		// copy
 		// read the identity file first
@@ -217,13 +215,6 @@ func (copy *CopySftpIdCommand) updateAuthorizedKeys(identityFiles []string, auth
 		userKey, _, _, _, err := ssh.ParseAuthorizedKey(identityFileContent)
 		if err != nil {
 			return newAuthorizedKeys, contentChanged, xerrors.Errorf("failed to parse a SSH public key %q for user %q: %w", identityFile, copy.account.ClientUser, err)
-		}
-
-		if copy.forceFlagValues.Force {
-			// append forcefully
-			newAuthorizedKeys = append(newAuthorizedKeys, string(identityFileContent))
-			contentChanged = true
-			continue
 		}
 
 		// check if exists, add only if it doesn't
@@ -246,7 +237,6 @@ func (copy *CopySftpIdCommand) updateAuthorizedKeys(identityFiles []string, auth
 				// existing - update
 				newAuthorizedKeys[keyLineIdx] = string(identityFileContent)
 				hasExisting = true
-				contentChanged = true
 				break
 			}
 		}
@@ -255,6 +245,7 @@ func (copy *CopySftpIdCommand) updateAuthorizedKeys(identityFiles []string, auth
 			// not found - add
 			newAuthorizedKeys = append(newAuthorizedKeys, string(identityFileContent))
 			contentChanged = true
+			logger.Debugf("adding a SSH public key %q to iRODS for user %q", identityFile, copy.account.ClientUser)
 		}
 	}
 
@@ -307,6 +298,7 @@ func (copy *CopySftpIdCommand) copySftpId(identityFiles []string) error {
 	if !copy.dryRunFlagValues.DryRun {
 		if !contentChanged {
 			logger.Debugf("skipping writing authorized_keys %q on iRODS for user %q, nothing changed", authorizedKeyPath, copy.account.ClientUser)
+			commons.Printf("SSH public key(s) are already set for user %q\n", copy.account.ClientUser)
 			return nil
 		}
 
