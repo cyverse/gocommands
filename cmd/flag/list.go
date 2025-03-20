@@ -21,7 +21,7 @@ var (
 	listFlagValues ListFlagValues
 )
 
-func SetListFlags(command *cobra.Command, hideHumanReadable bool) {
+func SetListFlags(command *cobra.Command, hideHumanReadable bool, hideAccess bool) {
 	command.Flags().BoolVarP(&listFlagValues.longFormatInput, "long", "l", false, "Display results in long format with additional details")
 	command.Flags().BoolVarP(&listFlagValues.veryLongFormatInput, "verylong", "L", false, "Display results in very long format with comprehensive information")
 	command.Flags().BoolVarP(&listFlagValues.HumanReadableSizes, "human_readable", "H", false, "Show file sizes in human-readable units (KB, MB, GB)")
@@ -31,6 +31,10 @@ func SetListFlags(command *cobra.Command, hideHumanReadable bool) {
 
 	if hideHumanReadable {
 		command.Flags().MarkHidden("human_readable")
+	}
+
+	if hideAccess {
+		command.Flags().MarkHidden("access")
 	}
 }
 

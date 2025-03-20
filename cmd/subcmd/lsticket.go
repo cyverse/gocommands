@@ -25,7 +25,7 @@ func AddLsticketCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(lsticketCmd, true)
 
-	flag.SetListFlags(lsticketCmd, true)
+	flag.SetListFlags(lsticketCmd, true, true)
 
 	rootCmd.AddCommand(lsticketCmd)
 }

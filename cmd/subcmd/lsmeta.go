@@ -25,7 +25,7 @@ func AddLsmetaCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlagsWithoutResource(lsmetaCmd)
 
-	flag.SetListFlags(lsmetaCmd, true)
+	flag.SetListFlags(lsmetaCmd, true, true)
 	flag.SetTargetObjectFlags(lsmetaCmd)
 
 	rootCmd.AddCommand(lsmetaCmd)
