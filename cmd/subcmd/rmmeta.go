@@ -13,7 +13,7 @@ import (
 )
 
 var rmmetaCmd = &cobra.Command{
-	Use:     "rmmeta <irods-object> <AVU-ID-or-attribute-name>...",
+	Use:     "rmmeta <irods-object> <metadata-ID-or-name>...",
 	Aliases: []string{"rm_meta", "remove_meta", "rm_metadata", "remove_metadata", "delete_meta", "delete_metadata"},
 	Short:   "Remove metadata for a collection, data object, user, or resource",
 	Long:    `This command removes metadata from a specified iRODS object, such as a collection, data object, user, or resource.`,
