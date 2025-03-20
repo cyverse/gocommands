@@ -7,7 +7,7 @@ The `rmmeta` command allows you to remove metadata from data objects, collection
 gocmd rmmeta [flags] <irods-object> <metadata-ID-or-name>
 ```
 
-**Note:** The `metadata-ID` is an ID (number) for the metadata.
+**Note:** The `metadata-ID` is a numeric identifier for the metadata. It can be obtained from the output of the `lsmeta` command.
 
 ### iRODS Objects 
 

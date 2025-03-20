@@ -1,6 +1,7 @@
 # List Metadata of Data Objects, Collections, Resources, or Users in iRODS
 
 To list metadata of Data Objects, Collections, Resources, or Users in iRODS using GoCommands, use the `lsmeta` command.
+
 ## Syntax
 ```sh
 gocmd lsmeta [flags] <irods-object>...
