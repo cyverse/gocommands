@@ -13,12 +13,12 @@ import (
 )
 
 var lsmetaCmd = &cobra.Command{
-	Use:     "lsmeta",
+	Use:     "lsmeta <irods-object>...",
 	Aliases: []string{"ls_meta", "ls_metadata", "list_meta", "list_metadata"},
 	Short:   "List metadata for iRODS collections, data objects, users, or resources",
-	Long:    `This command lists the metadata associated with the given collection, data object, user, or resource in iRODS.`,
+	Long:    `This command lists metadata associated with a specified iRODS object, such as a collection, data object, user, or resource.`,
 	RunE:    processLsmetaCommand,
-	Args:    cobra.NoArgs,
+	Args:    cobra.MinimumNArgs(1),
 }
 
 func AddLsmetaCommand(rootCmd *cobra.Command) {
@@ -49,6 +49,8 @@ type LsMetaCommand struct {
 
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
+
+	targetObjects []string
 }
 
 func NewLsMetaCommand(command *cobra.Command, args []string) (*LsMetaCommand, error) {
@@ -59,6 +61,8 @@ func NewLsMetaCommand(command *cobra.Command, args []string) (*LsMetaCommand, er
 		listFlagValues:         flag.GetListFlagValues(),
 		targetObjectFlagValues: flag.GetTargetObjectFlagValues(command),
 	}
+
+	lsMeta.targetObjects = args[:]
 
 	return lsMeta, nil
 }
@@ -87,12 +91,14 @@ func (lsMeta *LsMetaCommand) Process() error {
 	}
 	defer lsMeta.filesystem.Release()
 
-	if lsMeta.targetObjectFlagValues.PathUpdated {
-		return lsMeta.listMetaForPath(lsMeta.targetObjectFlagValues.Path)
-	} else if lsMeta.targetObjectFlagValues.UserUpdated {
-		return lsMeta.listMetaForUser(lsMeta.targetObjectFlagValues.User)
-	} else if lsMeta.targetObjectFlagValues.ResourceUpdated {
-		return lsMeta.listMetaForResource(lsMeta.targetObjectFlagValues.Resource)
+	for _, targetObject := range lsMeta.targetObjects {
+		if lsMeta.targetObjectFlagValues.Path {
+			return lsMeta.listMetaForPath(targetObject)
+		} else if lsMeta.targetObjectFlagValues.User {
+			return lsMeta.listMetaForUser(targetObject)
+		} else if lsMeta.targetObjectFlagValues.Resource {
+			return lsMeta.listMetaForResource(targetObject)
+		}
 	}
 
 	// nothing updated

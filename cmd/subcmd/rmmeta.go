@@ -13,12 +13,12 @@ import (
 )
 
 var rmmetaCmd = &cobra.Command{
-	Use:     "rmmeta <AVU-ID-or-attribute-name>...",
+	Use:     "rmmeta <irods-object> <AVU-ID-or-attribute-name>...",
 	Aliases: []string{"rm_meta", "remove_meta", "rm_metadata", "remove_metadata", "delete_meta", "delete_metadata"},
 	Short:   "Remove metadata for a collection, data object, user, or resource",
-	Long:    `This command removes metadata for the specified collection, data object, user, or resource.`,
+	Long:    `This command removes metadata from a specified iRODS object, such as a collection, data object, user, or resource.`,
 	RunE:    processRmmetaCommand,
-	Args:    cobra.MinimumNArgs(1),
+	Args:    cobra.MinimumNArgs(2),
 }
 
 func AddRmmetaCommand(rootCmd *cobra.Command) {
@@ -48,7 +48,8 @@ type RmMetaCommand struct {
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
 
-	avuIDs []string
+	targetObject string
+	avuIDs       []string
 }
 
 func NewRmMetaCommand(command *cobra.Command, args []string) (*RmMetaCommand, error) {
@@ -60,7 +61,8 @@ func NewRmMetaCommand(command *cobra.Command, args []string) (*RmMetaCommand, er
 	}
 
 	// path
-	rmMeta.avuIDs = args
+	rmMeta.targetObject = args[0]
+	rmMeta.avuIDs = args[1:]
 
 	return rmMeta, nil
 }
@@ -123,22 +125,22 @@ func (rmMeta *RmMetaCommand) removeOne(avuidString string) error {
 }
 
 func (rmMeta *RmMetaCommand) removeOneByID(avuID int64) error {
-	if rmMeta.targetObjectFlagValues.PathUpdated {
-		err := rmMeta.removeMetaFromPath(rmMeta.targetObjectFlagValues.Path, avuID)
+	if rmMeta.targetObjectFlagValues.Path {
+		err := rmMeta.removeMetaFromPath(rmMeta.targetObject, avuID)
 		if err != nil {
 			return err
 		}
 
 		return nil
-	} else if rmMeta.targetObjectFlagValues.UserUpdated {
-		err := rmMeta.removeMetaFromUser(rmMeta.targetObjectFlagValues.User, avuID)
+	} else if rmMeta.targetObjectFlagValues.User {
+		err := rmMeta.removeMetaFromUser(rmMeta.targetObject, avuID)
 		if err != nil {
 			return err
 		}
 
 		return nil
-	} else if rmMeta.targetObjectFlagValues.ResourceUpdated {
-		err := rmMeta.removeMetaFromResource(rmMeta.targetObjectFlagValues.Resource, avuID)
+	} else if rmMeta.targetObjectFlagValues.Resource {
+		err := rmMeta.removeMetaFromResource(rmMeta.targetObject, avuID)
 		if err != nil {
 			return err
 		}
@@ -151,22 +153,22 @@ func (rmMeta *RmMetaCommand) removeOneByID(avuID int64) error {
 }
 
 func (rmMeta *RmMetaCommand) removeOneByName(attrName string) error {
-	if rmMeta.targetObjectFlagValues.PathUpdated {
-		err := rmMeta.removeMetaFromPathByName(rmMeta.targetObjectFlagValues.Path, attrName)
+	if rmMeta.targetObjectFlagValues.Path {
+		err := rmMeta.removeMetaFromPathByName(rmMeta.targetObject, attrName)
 		if err != nil {
 			return err
 		}
 
 		return nil
-	} else if rmMeta.targetObjectFlagValues.UserUpdated {
-		err := rmMeta.removeMetaFromUserByName(rmMeta.targetObjectFlagValues.User, attrName)
+	} else if rmMeta.targetObjectFlagValues.User {
+		err := rmMeta.removeMetaFromUserByName(rmMeta.targetObject, attrName)
 		if err != nil {
 			return err
 		}
 
 		return nil
-	} else if rmMeta.targetObjectFlagValues.ResourceUpdated {
-		err := rmMeta.removeMetaFromResourceByName(rmMeta.targetObjectFlagValues.Resource, attrName)
+	} else if rmMeta.targetObjectFlagValues.Resource {
+		err := rmMeta.removeMetaFromResourceByName(rmMeta.targetObject, attrName)
 		if err != nil {
 			return err
 		}

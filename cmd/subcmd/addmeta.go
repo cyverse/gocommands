@@ -11,12 +11,12 @@ import (
 )
 
 var addmetaCmd = &cobra.Command{
-	Use:     "addmeta <attribute-name> <attribute-value> [attribute-unit (optional)]",
+	Use:     "addmeta <irods-object> <attribute-name> <attribute-value> [attribute-unit (optional)]",
 	Aliases: []string{"add_meta", "add_metadata"},
 	Short:   "Add metadata to a specified iRODS object",
-	Long:    `This command allows you to add metadata to a specified iRODS object, such as a collection, data object, user, or resource. The metadata consists of an attribute name, value, and optionally a unit.`,
+	Long:    `This command adds metadata to a specified iRODS object, such as a collection, data object, user, or resource. The metadata consists of an attribute name, value, and optionally a unit.`,
 	RunE:    processAddmetaCommand,
-	Args:    cobra.RangeArgs(2, 3),
+	Args:    cobra.RangeArgs(3, 4),
 }
 
 func AddAddmetaCommand(rootCmd *cobra.Command) {
@@ -46,6 +46,8 @@ type AddMetaCommand struct {
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
 
+	targetObject string
+
 	attribute string
 	value     string
 	unit      string
@@ -60,11 +62,12 @@ func NewAddMetaCommand(command *cobra.Command, args []string) (*AddMetaCommand, 
 	}
 
 	// get avu
-	addMeta.attribute = args[0]
-	addMeta.value = args[1]
+	addMeta.targetObject = args[0]
+	addMeta.attribute = args[1]
+	addMeta.value = args[2]
 	addMeta.unit = ""
-	if len(args) >= 3 {
-		addMeta.unit = args[2]
+	if len(args) >= 4 {
+		addMeta.unit = args[3]
 	}
 
 	return addMeta, nil
@@ -95,18 +98,18 @@ func (addMeta *AddMetaCommand) Process() error {
 	defer addMeta.filesystem.Release()
 
 	// add meta
-	if addMeta.targetObjectFlagValues.PathUpdated {
-		err = addMeta.addMetaToPath(addMeta.targetObjectFlagValues.Path, addMeta.attribute, addMeta.value, addMeta.unit)
+	if addMeta.targetObjectFlagValues.Path {
+		err = addMeta.addMetaToPath(addMeta.targetObject, addMeta.attribute, addMeta.value, addMeta.unit)
 		if err != nil {
 			return err
 		}
-	} else if addMeta.targetObjectFlagValues.UserUpdated {
-		err = addMeta.addMetaToUser(addMeta.targetObjectFlagValues.User, addMeta.attribute, addMeta.value, addMeta.unit)
+	} else if addMeta.targetObjectFlagValues.User {
+		err = addMeta.addMetaToUser(addMeta.targetObject, addMeta.attribute, addMeta.value, addMeta.unit)
 		if err != nil {
 			return err
 		}
-	} else if addMeta.targetObjectFlagValues.ResourceUpdated {
-		err = addMeta.addMetaToResource(addMeta.targetObjectFlagValues.Resource, addMeta.attribute, addMeta.value, addMeta.unit)
+	} else if addMeta.targetObjectFlagValues.Resource {
+		err = addMeta.addMetaToResource(addMeta.targetObject, addMeta.attribute, addMeta.value, addMeta.unit)
 		if err != nil {
 			return err
 		}
