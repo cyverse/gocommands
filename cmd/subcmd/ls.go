@@ -38,7 +38,7 @@ func AddLsCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(lsCmd, false)
 
-	flag.SetListFlags(lsCmd)
+	flag.SetListFlags(lsCmd, false)
 	flag.SetTicketAccessFlags(lsCmd)
 	flag.SetDecryptionFlags(lsCmd)
 	flag.SetHiddenFileFlags(lsCmd)
