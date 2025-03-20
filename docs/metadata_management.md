@@ -18,9 +18,9 @@ gocmd lsmeta [flags] <irods-object>...
 
 | iROD Object | Flag | Description |
 |-------------|-------------|--------|
-| `data object` or `collection` | `-P` | Add metadata to a data object or collection |
-| `resource` | `-R` | Add metadata to a resource |
-| `user` | `-U` | Add metadata to a user |
+| `data object` or `collection` | `-P` | List metadata of data objects or collections |
+| `resource` | `-R` | List metadata of resources |
+| `user` | `-U` | List metadata of users |
 
 ### Example Usage
 
