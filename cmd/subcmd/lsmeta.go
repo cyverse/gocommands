@@ -184,7 +184,6 @@ func (lsMeta *LsMetaCommand) printMetaInternal(meta *irodsclient_types.IRODSMeta
 	switch lsMeta.listFlagValues.Format {
 	case commons.ListFormatLong, commons.ListFormatVeryLong:
 		commons.Printf("[%s]\n", meta.Name)
-		commons.Printf("[%s]\n", meta.Name)
 		commons.Printf("  id: %d\n", meta.AVUID)
 		commons.Printf("  attribute: %s\n", name)
 		commons.Printf("  value: %s\n", value)
