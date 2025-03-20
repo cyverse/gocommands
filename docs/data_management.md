@@ -316,6 +316,9 @@ For detailed information on GoCommands, refer to the command-specific documentat
 - [put](commands/put.md): Upload files to iRODS
 - [bput](commands/bput.md): Bulk upload files to iRODS
 - [sync](commands/sync.md): Synchronize local and remote directories
+- [chmod](commands/chmod.md): Change access permission of files or directories
+- [chmodinherit](commands/chmodinherit.md): Change access permission inheritance of directories
+- [copy-sftp-id](commands/copy-sftp-id.md): Configure SFTP Public-key Authentication
 - [svrinfo](commands/svrinfo.md): Display server information
 - [ps](commands/ps.md): Display current iRODS sessions
 - [upgrade](commands/upgrade.md): Upgrade GoCommands
