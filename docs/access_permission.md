@@ -46,14 +46,17 @@ gocmd chmodinherit <inherit_flag> <collection_path>
    gocmd chmod -r owner anotherUser /myZone/home/myUser/dir
    ```
 
-6. **Remove 
+6. **Remove access permission from a user to a collection and its contents:**
+   ```sh
+   gocmd chmod -r none anotherUser /iplant/home/myUser/dir
+   ```
 
-6. **Enable access inheritance for all data objects and subdirectories:**
+7. **Enable access inheritance for all data objects and subdirectories:**
    ```sh
    gocmd chmodinherit inherit /myZone/home/myUser/dir
    ```
 
-7. **Disable access inheritance for all data objects and subdirectories:**
+8. **Disable access inheritance for all data objects and subdirectories:**
    ```sh
    gocmd chmodinherit noinherit /myZone/home/myUser/dir
    ```

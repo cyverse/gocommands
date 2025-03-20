@@ -31,7 +31,7 @@ gocmd chmod [flags] <access-level> <user-or-group(#zone)> <data-object-or-collec
     gocmd chmod -r read anotherUser /iplant/home/myUser/dir
     ```
 
-4. **Grant a user write permission to a collection and all its contents:**
+4. **Grant a user write permission to a collection and its contents:**
     ```sh
     gocmd chmod -r write anotherUser /iplant/home/myUser/dir
     ```
