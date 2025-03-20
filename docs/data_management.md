@@ -318,6 +318,9 @@ For detailed information on GoCommands, refer to the command-specific documentat
 - [sync](commands/sync.md): Synchronize local and remote directories
 - [chmod](commands/chmod.md): Change access permission of files or directories
 - [chmodinherit](commands/chmodinherit.md): Change access permission inheritance of directories
+- [lsmeta](commands/lsmeta.md): List metadata of data objects, collections, resources, or users in iRODS
+- [addmeta](commands/addmeta.md): Add metadata to data objects, collections, resources, or users in iRODS
+- [rmmeta](commands/rmmeta.md): Remove metadata from data objects, collections, resources, or users in iRODS
 - [copy-sftp-id](commands/copy-sftp-id.md): Configure SFTP Public-key Authentication
 - [svrinfo](commands/svrinfo.md): Display server information
 - [ps](commands/ps.md): Display current iRODS sessions
