@@ -6,33 +6,36 @@ When inheritance is enabled for a collection, any new data objects or subcollect
 
 ## Syntax
 ```sh
-gocmd chmodinherit [flags]  
+gocmd [flags] chmodinherit <inherit|noinherit> <collection>
 ```
 
-## Inheritance Options
-- `inherit`: Enable access inheritance. Data objects and sub-collections inherit permissions from the parent collection.
-- `noinherit`: Disable access inheritance. Data objects and sub-collections do not inherit permissions from the parent collection.
+### Inheritance Options
+
+| Flag | Description |
+|------|-------------|
+| `inherit` | Enable access inheritance. Data objects and sub-collections inherit permissions from the parent collection |
+| `noinherit` | Disable access inheritance. Data objects and sub-collections do not inherit permissions from the parent collection |
 
 ## Example Usage
 
 1. **Enable inheritance for a collection:**
     ```sh
-    gocmd chmodinherit inherit /iplant/home/myUser/dir
+    gocmd chmodinherit inherit /myZone/home/myUser/dir
     ```
 
 2. **Disable inheritance for a collection:**
     ```sh
-    gocmd chmodinherit noinherit /iplant/home/myUser/dir
+    gocmd chmodinherit noinherit /myZone/home/myUser/dir
     ```
 
 3. **Enable inheritance recursively for a collection and its subcollections:**
     ```sh
-    gocmd chmodinherit -r inherit /iplant/home/myUser/dir
+    gocmd chmodinherit -r inherit /myZone/home/myUser/dir
     ```
 
 4. **Disable inheritance recursively for a collection and its subcollections:**
     ```sh
-    gocmd chmodinherit -r noinherit /iplant/home/myUser/dir
+    gocmd chmodinherit -r noinherit /myZone/home/myUser/dir
     ```
 
 ## All Available Flags

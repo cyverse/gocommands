@@ -9,41 +9,44 @@ gocmd chmod [flags] <access-level> <user-or-group(#zone)> <data-object-or-collec
 ```
 
 ### Access Levels
-- `read`: Allows reading the object or collection
-- `write`: Allows reading and modifying the object or collection
-- `own`: Grants full control, including the ability to change permissions
-- `null`: Removes all permissions
+
+| Access Level | Description |
+|-------------|-------------|
+| `null` | Removes all permissions |
+| `read` | Allows reading the object or collection |
+| `write` | Allows reading and modifying the object or collection |
+| `own` | Grants full control, including the ability to change permissions |
 
 ## Example Usage
 
 1. **Grant a user read permission to a data object:**
     ```sh
-    gocmd chmod read anotherUser /iplant/home/myUser/file.txt
+    gocmd chmod read anotherUser /myZone/home/myUser/file.txt
     ```
 
 2. **Grant a user from a different zone read permission to a data object:**
     ```sh
-    gocmd chmod read anotherUser#anotherZone /iplant/home/myUser/file.txt
+    gocmd chmod read anotherUser#anotherZone /myZone/home/myUser/file.txt
     ```
 
 3. **Grant a user read permission to a collection and its contents:**
     ```sh
-    gocmd chmod -r read anotherUser /iplant/home/myUser/dir
+    gocmd chmod -r read anotherUser /myZone/home/myUser/dir
     ```
 
 4. **Grant a user write permission to a collection and its contents:**
     ```sh
-    gocmd chmod -r write anotherUser /iplant/home/myUser/dir
+    gocmd chmod -r write anotherUser /myZone/home/myUser/dir
     ```
 
 5. **Grant a user owner permission to a collection and its contents:**
    ```sh
-   gocmd chmod -r owner anotherUser /iplant/home/myUser/dir
+   gocmd chmod -r owner anotherUser /myZone/home/myUser/dir
    ```
 
 6. **Remove access permission from a user to a collection and its contents:**
    ```sh
-   gocmd chmod -r none anotherUser /iplant/home/myUser/dir
+   gocmd chmod -r none anotherUser /myZone/home/myUser/dir
    ```
 
 ## All Available Flags
