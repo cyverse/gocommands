@@ -11,7 +11,7 @@ import (
 )
 
 var addmetaCmd = &cobra.Command{
-	Use:     "addmeta <irods-object> <attribute-name> <attribute-value> [attribute-unit (optional)]",
+	Use:     "addmeta <irods-object> <attribute-name> <attribute-value> [attribute-unit]",
 	Aliases: []string{"add_meta", "add_metadata"},
 	Short:   "Add metadata to a specified iRODS object",
 	Long:    `This command adds metadata to a specified iRODS object, such as a collection, data object, user, or resource. The metadata consists of an attribute name, value, and optionally a unit.`,
