@@ -240,12 +240,14 @@ func InputFieldsForInit() (bool, error) {
 	}
 
 	if len(environmentManager.Environment.ZoneName) == 0 {
-		environmentManager.Environment.ZoneName = "iplant" // default
+		environmentManager.Environment.ZoneName = "iplant"       // default
+		environmentManager.Environment.ClientZoneName = "iplant" // default
 	}
 
 	newZone := Input(fmt.Sprintf("iRODS Zone [%s]", environmentManager.Environment.ZoneName))
 	if len(newZone) > 0 && newZone != environmentManager.Environment.ZoneName {
 		environmentManager.Environment.ZoneName = newZone
+		environmentManager.Environment.ClientZoneName = newZone
 		updated = true
 	}
 
@@ -259,6 +261,7 @@ func InputFieldsForInit() (bool, error) {
 
 		if len(newUsername) > 0 && newUsername != environmentManager.Environment.Username {
 			environmentManager.Environment.Username = newUsername
+			environmentManager.Environment.ClientUsername = newUsername
 			updated = true
 		}
 

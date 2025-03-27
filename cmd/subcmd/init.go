@@ -1,6 +1,7 @@
 package subcmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -71,6 +72,8 @@ func (init *InitCommand) Process() error {
 	}
 
 	init.environmentManager = commons.GetEnvironmentManager()
+
+	fmt.Printf("%v\n", init.environmentManager.Environment)
 
 	// handle local flags
 	updated := false
