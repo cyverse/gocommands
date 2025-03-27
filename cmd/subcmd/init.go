@@ -83,7 +83,7 @@ func (init *InitCommand) Process() error {
 
 		updated = true
 	} else {
-		updated, err = commons.ReinputFields()
+		updated, err = commons.InputFieldsForInit()
 		if err != nil {
 			return xerrors.Errorf("failed to input fields: %w", err)
 		}

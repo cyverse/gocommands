@@ -194,55 +194,75 @@ func InputMissingFieldsFromStdin() error {
 	return nil
 }
 
-// ReinputFields re-inputs fields
-func ReinputFields() (bool, error) {
+// InputFieldsForInit inputs fields
+func InputFieldsForInit() (bool, error) {
+	logger := log.WithFields(log.Fields{
+		"package":  "commons",
+		"function": "InputFieldsForInit",
+	})
+
 	updated := false
 
-	env := environmentManager.Environment
-	if len(env.Host) == 0 {
-		env.Host = "data.cyverse.org" // default
+	if len(environmentManager.Environment.Host) == 0 {
+		environmentManager.Environment.Host = "data.cyverse.org" // default
 	}
 
-	newHost := Input(fmt.Sprintf("iRODS Host [%s]", env.Host))
-	if len(newHost) > 0 && newHost != env.Host {
-		env.Host = newHost
+	newHost := Input(fmt.Sprintf("iRODS Host [%s]", environmentManager.Environment.Host))
+	if len(newHost) > 0 && newHost != environmentManager.Environment.Host {
+		environmentManager.Environment.Host = newHost
 		updated = true
 	}
 
-	if env.Port == 0 {
-		env.Port = 1247 // default
+	// read catalog
+	configCatalog, err := NewConfigCatalog()
+	if err == nil {
+		logger.Debug("read config catalog")
+		// ignore error
+		config, found := configCatalog.GetIRODSConfig(environmentManager.Environment.Host)
+
+		if found {
+			logger.Debugf("found config catalog for host - %s", environmentManager.Environment.Host)
+
+			// overwrite
+			environmentManager.Environment = config
+			updated = true
+		}
 	}
 
-	newPort := InputInt(fmt.Sprintf("iRODS Port [%d]", env.Port))
-	if newPort > 0 && newPort != env.Port {
-		env.Port = newPort
+	if environmentManager.Environment.Port == 0 {
+		environmentManager.Environment.Port = 1247 // default
+	}
+
+	newPort := InputInt(fmt.Sprintf("iRODS Port [%d]", environmentManager.Environment.Port))
+	if newPort > 0 && newPort != environmentManager.Environment.Port {
+		environmentManager.Environment.Port = newPort
 		updated = true
 	}
 
-	if len(env.ZoneName) == 0 {
-		env.ZoneName = "iplant" // default
+	if len(environmentManager.Environment.ZoneName) == 0 {
+		environmentManager.Environment.ZoneName = "iplant" // default
 	}
 
-	newZone := Input(fmt.Sprintf("iRODS Zone [%s]", env.ZoneName))
-	if len(newZone) > 0 && newZone != env.ZoneName {
-		env.ZoneName = newZone
+	newZone := Input(fmt.Sprintf("iRODS Zone [%s]", environmentManager.Environment.ZoneName))
+	if len(newZone) > 0 && newZone != environmentManager.Environment.ZoneName {
+		environmentManager.Environment.ZoneName = newZone
 		updated = true
 	}
 
 	for {
 		newUsername := ""
-		if len(env.Username) > 0 {
-			newUsername = Input(fmt.Sprintf("iRODS Username [%s]", env.Username))
+		if len(environmentManager.Environment.Username) > 0 {
+			newUsername = Input(fmt.Sprintf("iRODS Username [%s]", environmentManager.Environment.Username))
 		} else {
 			newUsername = Input("iRODS Username")
 		}
 
-		if len(newUsername) > 0 && newUsername != env.Username {
-			env.Username = newUsername
+		if len(newUsername) > 0 && newUsername != environmentManager.Environment.Username {
+			environmentManager.Environment.Username = newUsername
 			updated = true
 		}
 
-		if len(env.Username) > 0 {
+		if len(environmentManager.Environment.Username) > 0 {
 			break
 		}
 	}

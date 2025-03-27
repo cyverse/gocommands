@@ -83,7 +83,7 @@ func (sysConfig *SystemConfig) GetIRODSConfig() *irodsclient_config.Config {
 	irodsConfig := irodsclient_config.GetDefaultConfig()
 
 	// convert struct to map
-	jsonConfig, err := json.Marshal(sysConfig.IRODSConfig)
+	jsonConfig, err := json.Marshal(irodsConfig)
 	if err != nil {
 		return irodsConfig
 	}
