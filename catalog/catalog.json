@@ -10,6 +10,16 @@
             "irods_client_zone_name": "iplant",
             "irods_default_hash_scheme": "SHA256"
         },
+        "data.cyverse.rocks": {
+            "irods_authentication_scheme": "native",
+            "irods_client_server_negotiation": "off",
+            "irods_client_server_policy": "CS_NEG_REFUSE",
+            "irods_host": "data.cyverse.rocks",
+            "irods_port": 1247,
+            "irods_zone_name": "cyverse",
+            "irods_client_zone_name": "cyverse",
+            "irods_default_hash_scheme": "SHA256"
+        },
         "data.soteria.arizona.edu": {
             "irods_authentication_scheme": "pam",
             "irods_client_server_negotiation": "request_server_negotiation",
