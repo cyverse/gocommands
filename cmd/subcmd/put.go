@@ -1003,8 +1003,12 @@ func (put *PutCommand) calculateThreadForTransferJob(size int64) int {
 		return threads
 	}
 
-	if size < commons.RedirectToResourceMinSize && !put.filesystem.SupportParallelUpload() {
-		// icat
+	//if size < commons.RedirectToResourceMinSize && !put.filesystem.SupportParallelUpload() {
+	//	// icat
+	//	return 1
+	//}
+
+	if !put.filesystem.SupportParallelUpload() {
 		return 1
 	}
 
@@ -1035,9 +1039,9 @@ func (put *PutCommand) determineTransferMode(size int64) commons.TransferMode {
 	}
 
 	// auto
-	if size >= commons.RedirectToResourceMinSize {
-		return commons.TransferModeRedirect
-	}
+	//if size >= commons.RedirectToResourceMinSize {
+	//	return commons.TransferModeRedirect
+	//}
 
 	return commons.TransferModeICAT
 }

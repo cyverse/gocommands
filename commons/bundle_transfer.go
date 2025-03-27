@@ -1163,8 +1163,12 @@ func (manager *BundleTransferManager) calculateThreadForBundleTransfer(size int6
 		return threads
 	}
 
-	if size < RedirectToResourceMinSize && !manager.filesystem.SupportParallelUpload() {
-		// icat
+	//if size < RedirectToResourceMinSize && !manager.filesystem.SupportParallelUpload() {
+	//	// icat
+	//	return 1
+	//}
+
+	if !manager.filesystem.SupportParallelUpload() {
 		return 1
 	}
 
@@ -1195,9 +1199,9 @@ func (manager *BundleTransferManager) determineTransferMode(size int64) Transfer
 	}
 
 	// auto
-	if size >= RedirectToResourceMinSize {
-		return TransferModeRedirect
-	}
+	//if size >= RedirectToResourceMinSize {
+	//	return TransferModeRedirect
+	//}
 
 	return TransferModeICAT
 }

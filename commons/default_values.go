@@ -14,7 +14,7 @@ const (
 	transferThreadNumDefault   int                        = 5
 	tcpBufferSizeStringDefault string                     = "1MB"
 	bputForSyncDefaut          bool                       = false
-	RedirectToResourceMinSize  int64                      = 1024 * 1024 * 1024 // 1GB
+	//RedirectToResourceMinSize  int64                      = 1024 * 1024 * 1024 // 1GB
 )
 
 func GetDefaultTCPBufferSize() int {

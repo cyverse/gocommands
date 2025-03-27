@@ -1026,9 +1026,9 @@ func (get *GetCommand) determineTransferMode(size int64) commons.TransferMode {
 	}
 
 	// auto
-	if size >= commons.RedirectToResourceMinSize {
-		return commons.TransferModeRedirect
-	}
+	//if size >= commons.RedirectToResourceMinSize {
+	//	return commons.TransferModeRedirect
+	//}
 
 	return commons.TransferModeICAT
 }
