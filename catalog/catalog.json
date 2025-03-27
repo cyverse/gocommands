@@ -1,60 +1,29 @@
 {
     "configs": {
         "data.cyverse.org": {
-            "default": {
-                "irods_config": {
-                    "irods_authentication_scheme": "native",
-                    "irods_client_server_negotiation": "off",
-                    "irods_client_server_policy": "CS_NEG_REFUSE",
-                    "irods_host": "data.cyverse.org",
-                    "irods_port": 1247,
-                    "irods_zone_name": "iplant",
-                    "irods_client_zone_name": "iplant",
-                    "irods_default_hash_scheme": "SHA256"
-                },
-                "additional_config": {
-                    "verify_checksum": true
-                }
-            },
-            "128.196.0.0/16": {
-                "irods_config": {
-                    "irods_authentication_scheme": "native",
-                    "irods_client_server_negotiation": "off",
-                    "irods_client_server_policy": "CS_NEG_REFUSE",
-                    "irods_host": "data.cyverse.org",
-                    "irods_port": 1247,
-                    "irods_zone_name": "iplant",
-                    "irods_client_zone_name": "iplant",
-                    "irods_default_hash_scheme": "SHA256"
-                }, 
-                "additional_config": {
-                    "transfer_mode": "icat",
-                    "verify_checksum": true
-                }
-            }
+            "irods_authentication_scheme": "native",
+            "irods_client_server_negotiation": "off",
+            "irods_client_server_policy": "CS_NEG_REFUSE",
+            "irods_host": "data.cyverse.org",
+            "irods_port": 1247,
+            "irods_zone_name": "iplant",
+            "irods_client_zone_name": "iplant",
+            "irods_default_hash_scheme": "SHA256"
         },
         "data.soteria.arizona.edu": {
-            "default": {
-                "irods_config": {
-                    "irods_authentication_scheme": "pam",
-                    "irods_client_server_negotiation": "request_server_negotiation",
-                    "irods_client_server_policy": "CS_NEG_REQUIRE",
-                    "irods_host": "data.soteria.arizona.edu",
-                    "irods_port": 1247,
-                    "irods_zone_name": "soteria",
-                    "irods_client_zone_name": "soteria",
-                    "irods_default_hash_scheme": "SHA256",
-                    "irods_encryption_algorithm": "AES-256-CBC",
-                    "irods_encryption_key_size": 32,
-                    "irods_encryption_salt_size": 8,
-                    "irods_encryption_num_hash_rounds": 16,
-                    "irods_ssl_verify_server": "none"
-                },
-                "additional_config": {
-                    "transfer_mode": "icat",
-                    "verify_checksum": true
-                }
-            }
+            "irods_authentication_scheme": "pam",
+            "irods_client_server_negotiation": "request_server_negotiation",
+            "irods_client_server_policy": "CS_NEG_REQUIRE",
+            "irods_host": "data.soteria.arizona.edu",
+            "irods_port": 1247,
+            "irods_zone_name": "soteria",
+            "irods_client_zone_name": "soteria",
+            "irods_default_hash_scheme": "SHA256",
+            "irods_encryption_algorithm": "AES-256-CBC",
+            "irods_encryption_key_size": 32,
+            "irods_encryption_salt_size": 8,
+            "irods_encryption_num_hash_rounds": 16,
+            "irods_ssl_verify_server": "none"
         }
     }
 }
