@@ -124,6 +124,6 @@ download_and_extract "$URL"
 if [[ "$INSTALL" == "true" ]]; then
     # After extraction, move the binary to the install location
     install_binary
+else
+    echo "$BINARY_NAME downloaded successfully"
 fi
-
-echo "Installation complete."
