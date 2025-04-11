@@ -85,7 +85,7 @@ func SetTicketUpdateFlags(command *cobra.Command) {
 	command.Flags().BoolVar(&ticketUpdateFlagValues.clearWriteFileLimitInput, "clear_wflimit", false, "Clear the write file limit")
 	command.Flags().Int64Var(&ticketUpdateFlagValues.WriteByteLimit, "wblimit", 0, "Set the write byte limit")
 	command.Flags().BoolVar(&ticketUpdateFlagValues.clearWriteByteLimitInput, "clear_wblimit", false, "Clear the write byte limit")
-	command.Flags().StringVar(&ticketUpdateFlagValues.expirationTimeInput, "expiry", "0", "Set the expiration time [YYYY:MM:DD HH:mm:SS]")
+	command.Flags().StringVar(&ticketUpdateFlagValues.expirationTimeInput, "expiry", "0", "Set the expiration time [YYYY-MM-DD HH:mm:SS]")
 	command.Flags().BoolVar(&ticketUpdateFlagValues.clearExpirationTimeInput, "clear_expiry", false, "Clear the expiration time")
 	command.Flags().StringSliceVar(&ticketUpdateFlagValues.AddAllowedUsers, "add_user", []string{}, "Add users to the allowed list")
 	command.Flags().StringSliceVar(&ticketUpdateFlagValues.AddAllowedGroups, "add_group", []string{}, "Add groups to the allowed list")

@@ -653,11 +653,11 @@ func (ls *LsCommand) printReplica(flatReplica FlatReplica, accesses []*irodsclie
 	case commons.ListFormatNormal:
 		commons.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
 	case commons.ListFormatLong:
-		modTime := commons.MakeDateTimeString(flatReplica.Replica.ModifyTime)
+		modTime := commons.MakeDateTimeStringHM(flatReplica.Replica.ModifyTime)
 		commons.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
 			size, modTime, ls.getStatusMark(flatReplica.Replica.Status), newName)
 	case commons.ListFormatVeryLong:
-		modTime := commons.MakeDateTimeString(flatReplica.Replica.ModifyTime)
+		modTime := commons.MakeDateTimeStringHM(flatReplica.Replica.ModifyTime)
 		commons.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
 			size, modTime, ls.getStatusMark(flatReplica.Replica.Status), newName)
 		commons.Printf("    %s\t%s\n", flatReplica.Replica.Checksum.IRODSChecksumString, flatReplica.Replica.Path)

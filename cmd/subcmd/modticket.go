@@ -24,7 +24,7 @@ func AddModticketCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(modticketCmd, true)
 
-	flag.SetTicketFlags(modticketCmd)
+	flag.SetTicketUpdateFlags(modticketCmd)
 
 	rootCmd.AddCommand(modticketCmd)
 }
