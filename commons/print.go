@@ -20,6 +20,7 @@ type TerminalWriter struct {
 func (writer *TerminalWriter) Write(p []byte) (n int, err error) {
 	writer.mutex.Lock()
 	defer writer.mutex.Unlock()
+
 	return os.Stdout.Write(p)
 }
 

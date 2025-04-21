@@ -10,7 +10,8 @@ const (
 	goCommandsRepoPackagePath string = "cyverse/gocommands"
 
 	ClientProgramName          string                     = "gocommands"
-	FilesystemTimeout          irodsclient_types.Duration = irodsclient_types.Duration(10 * time.Minute)
+	FilesystemTimeout          irodsclient_types.Duration = irodsclient_types.Duration(1 * time.Minute)
+	LongFilesystemTimeout      irodsclient_types.Duration = irodsclient_types.Duration(10 * time.Minute) // exceptionally long timeout for listing dirs or users
 	transferThreadNumDefault   int                        = 5
 	tcpBufferSizeStringDefault string                     = "1MB"
 	bputForSyncDefaut          bool                       = false

@@ -1,6 +1,7 @@
 package flag
 
 import (
+	"io"
 	"os"
 
 	irodsclient_config "github.com/cyverse/go-irodsclient/config"
@@ -8,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 type CommonFlagValues struct {
@@ -19,6 +21,7 @@ type CommonFlagValues struct {
 	logLevelInput   string
 	LogLevel        log.Level
 	LogLevelUpdated bool
+	LogFile         string
 	SessionID       int
 	Resource        string
 	ResourceUpdated bool
@@ -39,6 +42,7 @@ func SetCommonFlags(command *cobra.Command, hideResource bool) {
 	command.Flags().BoolVarP(&commonFlagValues.DebugMode, "debug", "d", false, "Enable verbose debug output for troubleshooting")
 	command.Flags().BoolVarP(&commonFlagValues.Quiet, "quiet", "q", false, "Suppress all non-error output messages")
 	command.Flags().StringVar(&commonFlagValues.logLevelInput, "log_level", "", "Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG)")
+	command.Flags().StringVar(&commonFlagValues.LogFile, "log_file", "", "Specify file path for logging output")
 	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Specify session identifier for tracking operations")
 	command.Flags().StringVarP(&commonFlagValues.Resource, "resource", "R", "", "Target specific iRODS resource server for operations")
 
@@ -62,6 +66,7 @@ func SetCommonFlagsWithoutResource(command *cobra.Command) {
 	command.Flags().BoolVarP(&commonFlagValues.DebugMode, "debug", "d", false, "Enable debug mode")
 	command.Flags().BoolVarP(&commonFlagValues.Quiet, "quiet", "q", false, "Suppress usual output messages")
 	command.Flags().StringVar(&commonFlagValues.logLevelInput, "log_level", "", "Set log level")
+	command.Flags().StringVar(&commonFlagValues.LogFile, "log_file", "", "Specify file path for logging output")
 	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Set session ID")
 
 	command.MarkFlagsMutuallyExclusive("quiet", "version")
@@ -127,6 +132,20 @@ func setLogLevel(command *cobra.Command) {
 	}
 }
 
+func getLogWriter(logFile string) io.WriteCloser {
+	if len(logFile) > 0 {
+		return &lumberjack.Logger{
+			Filename:   logFile,
+			MaxSize:    50, // 50MB
+			MaxBackups: 5,
+			MaxAge:     30, // 30 days
+			Compress:   false,
+		}
+	}
+
+	return nil
+}
+
 func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "flag",
@@ -146,6 +165,13 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	if myCommonFlagValues.ShowVersion {
 		printVersion()
 		return false, nil // stop here
+	}
+
+	if len(myCommonFlagValues.LogFile) > 0 {
+		fileLogWriter := getLogWriter(myCommonFlagValues.LogFile)
+		// use multi output - to output to file and stdout
+		mw := io.MultiWriter(commons.GetTerminalWriter(), fileLogWriter)
+		log.SetOutput(mw)
 	}
 
 	// init config
