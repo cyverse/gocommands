@@ -48,6 +48,30 @@ func GetIRODSFSClientForSingleOperation(account *irodsclient_types.IRODSAccount)
 	return irodsclient_fs.NewFileSystem(account, fsConfig)
 }
 
+// GetIRODSFSClientForLongSingleOperation returns a file system client for single operation that may take very long
+func GetIRODSFSClientForLongSingleOperation(account *irodsclient_types.IRODSAccount) (*irodsclient_fs.FileSystem, error) {
+	fsConfig := irodsclient_fs.NewFileSystemConfig(ClientProgramName)
+
+	// set operation time out
+	fsConfig.MetadataConnection.OperationTimeout = LongFilesystemTimeout
+	fsConfig.IOConnection.OperationTimeout = LongFilesystemTimeout
+
+	// set tcp buffer size
+	fsConfig.MetadataConnection.TCPBufferSize = GetDefaultTCPBufferSize()
+	fsConfig.IOConnection.TCPBufferSize = GetDefaultTCPBufferSize()
+
+	// cache timeout
+	// infinite
+	infiniteDuration := irodsclient_types.Duration(365 * 24 * time.Hour) // 1y (almost infinite)
+
+	fsConfig.Cache.Timeout = infiniteDuration
+	fsConfig.Cache.CleanupTime = infiniteDuration
+	fsConfig.Cache.InvalidateParentEntryCacheImmediately = true
+	fsConfig.Cache.StartNewTransaction = false
+
+	return irodsclient_fs.NewFileSystem(account, fsConfig)
+}
+
 // GetIRODSFSClientForLargeFileIO returns a file system client
 func GetIRODSFSClientForLargeFileIO(account *irodsclient_types.IRODSAccount, maxIOConnection int, tcpBufferSize int) (*irodsclient_fs.FileSystem, error) {
 	fsConfig := irodsclient_fs.NewFileSystemConfig(ClientProgramName)
