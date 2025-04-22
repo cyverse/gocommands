@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/creativeprojects/go-selfupdate v1.0.1
-	github.com/cyverse/go-irodsclient v0.17.1
+	github.com/cyverse/go-irodsclient v0.17.2
 	github.com/dustin/go-humanize v1.0.1
 	github.com/gliderlabs/ssh v0.3.5
 	github.com/jedib0t/go-pretty/v6 v6.6.7
@@ -15,6 +15,7 @@ require (
 	golang.org/x/crypto v0.31.0
 	golang.org/x/term v0.29.0
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
 )
 
