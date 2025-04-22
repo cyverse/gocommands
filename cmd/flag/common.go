@@ -22,6 +22,7 @@ type CommonFlagValues struct {
 	LogLevel        log.Level
 	LogLevelUpdated bool
 	LogFile         string
+	LogTerminal     bool
 	SessionID       int
 	Resource        string
 	ResourceUpdated bool
@@ -43,6 +44,7 @@ func SetCommonFlags(command *cobra.Command, hideResource bool) {
 	command.Flags().BoolVarP(&commonFlagValues.Quiet, "quiet", "q", false, "Suppress all non-error output messages")
 	command.Flags().StringVar(&commonFlagValues.logLevelInput, "log_level", "", "Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG)")
 	command.Flags().StringVar(&commonFlagValues.LogFile, "log_file", "", "Specify file path for logging output")
+	command.Flags().BoolVarP(&commonFlagValues.LogTerminal, "log_terminal", "", false, "Enable logging to terminal")
 	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Specify session identifier for tracking operations")
 	command.Flags().StringVarP(&commonFlagValues.Resource, "resource", "R", "", "Target specific iRODS resource server for operations")
 
@@ -67,6 +69,7 @@ func SetCommonFlagsWithoutResource(command *cobra.Command) {
 	command.Flags().BoolVarP(&commonFlagValues.Quiet, "quiet", "q", false, "Suppress usual output messages")
 	command.Flags().StringVar(&commonFlagValues.logLevelInput, "log_level", "", "Set log level")
 	command.Flags().StringVar(&commonFlagValues.LogFile, "log_file", "", "Specify file path for logging output")
+	command.Flags().BoolVarP(&commonFlagValues.LogTerminal, "log_terminal", "", false, "Enable logging to terminal")
 	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Set session ID")
 
 	command.MarkFlagsMutuallyExclusive("quiet", "version")
@@ -169,9 +172,15 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 
 	if len(myCommonFlagValues.LogFile) > 0 {
 		fileLogWriter := getLogWriter(myCommonFlagValues.LogFile)
-		// use multi output - to output to file and stdout
-		mw := io.MultiWriter(commons.GetTerminalWriter(), fileLogWriter)
-		log.SetOutput(mw)
+
+		if myCommonFlagValues.LogTerminal {
+			// use multi output - to output to file and stdout
+			mw := io.MultiWriter(commons.GetTerminalWriter(), fileLogWriter)
+			log.SetOutput(mw)
+		} else {
+			// use file log writer
+			log.SetOutput(fileLogWriter)
+		}
 	}
 
 	// init config
