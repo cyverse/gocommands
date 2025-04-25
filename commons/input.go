@@ -10,7 +10,8 @@ import (
 )
 
 var (
-	selectedAll bool = false
+	selectedYesAll bool = false
+	selectedNoAll  bool = false
 )
 
 func Input(msg string) string {
@@ -33,20 +34,27 @@ func Input(msg string) string {
 // InputYN inputs Y or N
 // true for Y, false for N
 func InputYN(msg string) bool {
-	if selectedAll {
+	if selectedYesAll {
 		return true
 	}
 
+	if selectedNoAll {
+		return false
+	}
+
 	for {
-		inputString := Input(fmt.Sprintf("%s [yes(y)/no(n)/all(a)]", msg))
+		inputString := Input(fmt.Sprintf("%s [yes(y)/no(n)/yes-all(a)/no-all(na)]", msg))
 		inputString = strings.ToLower(inputString)
 		if inputString == "y" || inputString == "yes" || inputString == "true" {
 			return true
 		} else if inputString == "n" || inputString == "no" || inputString == "false" {
 			return false
-		} else if inputString == "a" || inputString == "all" {
-			selectedAll = true
+		} else if inputString == "a" || inputString == "ya" || inputString == "all" || inputString == "yes-all" {
+			selectedYesAll = true
 			return true
+		} else if inputString == "na" || inputString == "none" || inputString == "no-all" {
+			selectedNoAll = true
+			return false
 		}
 	}
 }
