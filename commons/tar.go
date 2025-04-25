@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	log "github.com/sirupsen/logrus"
@@ -31,14 +32,22 @@ func Tar(baseDir string, sources []string, target string, callback TrackerCallBa
 		"function": "Tar",
 	})
 
-	logger.Infof("creating a tarball %q", target)
+	baseDir, err := filepath.Abs(baseDir)
+	if err != nil {
+		return xerrors.Errorf("failed to get absolute path of %q: %w", baseDir, err)
+	}
 
 	entries := []*TarEntry{}
 
 	createdDirs := map[string]bool{}
 
 	for _, source := range sources {
-		logger.Infof("adding a source %q to a tarball %q", source, target)
+		source, err := filepath.Abs(source)
+		if err != nil {
+			return xerrors.Errorf("failed to get absolute path of %q: %w", source, err)
+		}
+
+		logger.Infof("adding a source %q (base %q) to a tarball %q", source, baseDir, target)
 
 		sourceStat, err := os.Stat(source)
 		if err != nil {
@@ -54,10 +63,14 @@ func Tar(baseDir string, sources []string, target string, callback TrackerCallBa
 			return xerrors.Errorf("failed to compute relative path %q to %q: %w", source, baseDir, err)
 		}
 
-		pdirs := GetParentLocalDirs(rel)
-		for _, pdir := range pdirs {
+		parentDirs := GetParentLocalDirs(source)
+		logger.Debugf("parent dirs %q", parentDirs)
+
+		for _, pdir := range parentDirs {
 			if _, ok := createdDirs[pdir]; !ok {
-				if len(pdir) > len(baseDir) {
+				baseDirPrefix := strings.TrimSuffix(baseDir, string(os.PathSeparator)) + string(os.PathSeparator)
+				if strings.HasPrefix(pdir, baseDirPrefix) {
+					// pdir is a subdir of baseDir
 					// make entries for dir
 					relDir, err := filepath.Rel(baseDir, pdir)
 					if err != nil {
