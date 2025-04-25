@@ -166,12 +166,8 @@ func GetParentLocalDirs(p string) []string {
 		return parents
 	}
 
-	absPath, _ := filepath.Abs(p)
-	if filepath.Dir(absPath) == absPath {
-		return parents
-	}
-
-	curPath := absPath
+	cleanPath := filepath.Clean(p)
+	curPath := cleanPath
 	logger.Infof("curPath = %s", curPath)
 	for len(curPath) > 0 {
 		curDir := filepath.Dir(curPath)
