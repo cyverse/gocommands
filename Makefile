@@ -27,7 +27,7 @@ thirdparty_licenses:
 	
 .PHONY: image
 image:
-	docker build --build-arg="GOCOMMANDS_VER=${VERSION}" -t $(DOCKER_IMAGE):${VERSION} -f $(DOCKERFILE) .
+	docker build -t $(DOCKER_IMAGE):${VERSION} -f $(DOCKERFILE) .
 	docker tag $(DOCKER_IMAGE):${VERSION} $(DOCKER_IMAGE):latest
 
 .PHONY: push
