@@ -13,7 +13,7 @@ import (
 )
 
 var rmmetaCmd = &cobra.Command{
-	Use:     "rmmeta <irods-object> <metadata-ID-or-name>...",
+	Use:     "rmmeta <irods-object> <metadata-ID>... OR <irods-object> <metadata-name> <metadata-value> [metadata-unit]",
 	Aliases: []string{"rm_meta", "remove_meta", "rm_metadata", "remove_metadata", "delete_meta", "delete_metadata"},
 	Short:   "Remove metadata for a collection, data object, user, or resource",
 	Long:    `This command removes metadata from a specified iRODS object, such as a collection, data object, user, or resource.`,
@@ -26,6 +26,7 @@ func AddRmmetaCommand(rootCmd *cobra.Command) {
 	flag.SetCommonFlagsWithoutResource(rmmetaCmd)
 
 	flag.SetTargetObjectFlags(rmmetaCmd)
+	flag.SetMetadataByIDFlags(rmmetaCmd)
 
 	rootCmd.AddCommand(rmmetaCmd)
 }
@@ -44,12 +45,18 @@ type RmMetaCommand struct {
 
 	commonFlagValues       *flag.CommonFlagValues
 	targetObjectFlagValues *flag.TargetObjectFlagValues
+	metadataByIDFlagValues *flag.MetadataByIDFlagValues
 
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
 
 	targetObject string
-	avuIDs       []string
+
+	avuIDs []string
+
+	attribute string
+	value     string
+	unit      string
 }
 
 func NewRmMetaCommand(command *cobra.Command, args []string) (*RmMetaCommand, error) {
@@ -58,11 +65,22 @@ func NewRmMetaCommand(command *cobra.Command, args []string) (*RmMetaCommand, er
 
 		commonFlagValues:       flag.GetCommonFlagValues(command),
 		targetObjectFlagValues: flag.GetTargetObjectFlagValues(command),
+		metadataByIDFlagValues: flag.GetMetadataByIDFlagValues(command),
 	}
 
 	// path
 	rmMeta.targetObject = args[0]
-	rmMeta.avuIDs = args[1:]
+
+	if rmMeta.metadataByIDFlagValues.ByID {
+		rmMeta.avuIDs = args[1:]
+	} else {
+		rmMeta.attribute = args[1]
+		rmMeta.value = args[2]
+		rmMeta.unit = ""
+		if len(args) >= 4 {
+			rmMeta.unit = args[3]
+		}
+	}
 
 	return rmMeta, nil
 }
@@ -92,55 +110,48 @@ func (rmMeta *RmMetaCommand) Process() error {
 	defer rmMeta.filesystem.Release()
 
 	// remove
-	for _, avuidString := range rmMeta.avuIDs {
-		err = rmMeta.removeOne(avuidString)
+	if rmMeta.metadataByIDFlagValues.ByID {
+		// id
+		for _, avuIDString := range rmMeta.avuIDs {
+			err = rmMeta.removeOneByID(avuIDString)
+			if err != nil {
+				return xerrors.Errorf("failed to remove meta for avuID %q: %w", avuIDString, err)
+			}
+		}
+	} else {
+		// avu
+		err = rmMeta.removeOneByAVU(rmMeta.attribute, rmMeta.value, rmMeta.unit)
 		if err != nil {
-			return xerrors.Errorf("failed to remove meta for avuid (or name) %q: %w", avuidString, err)
+			return xerrors.Errorf("failed to remove meta for attr %q, val %q, unit %q: %w", rmMeta.attribute, rmMeta.value, rmMeta.unit, err)
 		}
 	}
 
 	return nil
 }
 
-func (rmMeta *RmMetaCommand) removeOne(avuidString string) error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "RmMetaCommand",
-		"function": "removeOne",
-	})
-
-	if commons.IsDigitsOnly(avuidString) {
-		// avu ID
-		avuid, err := strconv.ParseInt(avuidString, 10, 64)
-		if err != nil {
-			return xerrors.Errorf("failed to parse AVUID: %w", err)
-		}
-
-		return rmMeta.removeOneByID(avuid)
+func (rmMeta *RmMetaCommand) removeOneByID(avuIDString string) error {
+	// avu ID
+	avuID, err := strconv.ParseInt(avuIDString, 10, 64)
+	if err != nil {
+		return xerrors.Errorf("failed to parse AVUID: %w", err)
 	}
 
-	// possibly name
-	logger.Debugf("remove metadata with name %q", avuidString)
-	return rmMeta.removeOneByName(avuidString)
-}
-
-func (rmMeta *RmMetaCommand) removeOneByID(avuID int64) error {
 	if rmMeta.targetObjectFlagValues.Path {
-		err := rmMeta.removeMetaFromPath(rmMeta.targetObject, avuID)
+		err := rmMeta.removeMetaFromPathByID(rmMeta.targetObject, avuID)
 		if err != nil {
 			return err
 		}
 
 		return nil
 	} else if rmMeta.targetObjectFlagValues.User {
-		err := rmMeta.removeMetaFromUser(rmMeta.targetObject, avuID)
+		err := rmMeta.removeMetaFromUserByID(rmMeta.targetObject, avuID)
 		if err != nil {
 			return err
 		}
 
 		return nil
 	} else if rmMeta.targetObjectFlagValues.Resource {
-		err := rmMeta.removeMetaFromResource(rmMeta.targetObject, avuID)
+		err := rmMeta.removeMetaFromResourceByID(rmMeta.targetObject, avuID)
 		if err != nil {
 			return err
 		}
@@ -152,23 +163,23 @@ func (rmMeta *RmMetaCommand) removeOneByID(avuID int64) error {
 	return xerrors.Errorf("one of path, user, or resource must be selected")
 }
 
-func (rmMeta *RmMetaCommand) removeOneByName(attrName string) error {
+func (rmMeta *RmMetaCommand) removeOneByAVU(attribute string, value string, unit string) error {
 	if rmMeta.targetObjectFlagValues.Path {
-		err := rmMeta.removeMetaFromPathByName(rmMeta.targetObject, attrName)
+		err := rmMeta.removeMetaFromPathByAVU(rmMeta.targetObject, attribute, value, unit)
 		if err != nil {
 			return err
 		}
 
 		return nil
 	} else if rmMeta.targetObjectFlagValues.User {
-		err := rmMeta.removeMetaFromUserByName(rmMeta.targetObject, attrName)
+		err := rmMeta.removeMetaFromUserByAVU(rmMeta.targetObject, attribute, value, unit)
 		if err != nil {
 			return err
 		}
 
 		return nil
 	} else if rmMeta.targetObjectFlagValues.Resource {
-		err := rmMeta.removeMetaFromResourceByName(rmMeta.targetObject, attrName)
+		err := rmMeta.removeMetaFromResourceByAVU(rmMeta.targetObject, attribute, value, unit)
 		if err != nil {
 			return err
 		}
@@ -180,113 +191,113 @@ func (rmMeta *RmMetaCommand) removeOneByName(attrName string) error {
 	return xerrors.Errorf("one of path, user, or resource must be selected")
 }
 
-func (rmMeta *RmMetaCommand) removeMetaFromPath(targetPath string, avuid int64) error {
+func (rmMeta *RmMetaCommand) removeMetaFromPathByID(targetPath string, avuID int64) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "RmMetaCommand",
-		"function": "removeMetaFromPath",
+		"function": "removeMetaFromPathByID",
 	})
 
-	logger.Debugf("remove metadata %d from path %q", avuid, targetPath)
+	logger.Debugf("remove metadata (id: %d) from path %q", avuID, targetPath)
 
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := rmMeta.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	err := rmMeta.filesystem.DeleteMetadata(targetPath, avuid)
+	err := rmMeta.filesystem.DeleteMetadata(targetPath, avuID)
 	if err != nil {
-		return xerrors.Errorf("failed to delete metadata %d from path %q: %w", avuid, targetPath, err)
+		return xerrors.Errorf("failed to delete metadata (id: %d) from path %q: %w", avuID, targetPath, err)
 	}
 
 	return nil
 }
 
-func (rmMeta *RmMetaCommand) removeMetaFromUser(username string, avuid int64) error {
+func (rmMeta *RmMetaCommand) removeMetaFromUserByID(username string, avuID int64) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "RmMetaCommand",
-		"function": "removeMetaFromUser",
+		"function": "removeMetaFromUserByID",
 	})
 
-	logger.Debugf("remove metadata %d from user %q", avuid, username)
+	logger.Debugf("remove metadata (id: %d) from user %q", avuID, username)
 
-	err := rmMeta.filesystem.DeleteUserMetadata(username, rmMeta.account.ClientZone, avuid)
+	err := rmMeta.filesystem.DeleteUserMetadata(username, rmMeta.account.ClientZone, avuID)
 	if err != nil {
-		return xerrors.Errorf("failed to delete metadata %d from user %q: %w", avuid, username, err)
+		return xerrors.Errorf("failed to delete metadata (id: %d) from user %q: %w", avuID, username, err)
 	}
 
 	return nil
 }
 
-func (rmMeta *RmMetaCommand) removeMetaFromResource(resource string, avuid int64) error {
+func (rmMeta *RmMetaCommand) removeMetaFromResourceByID(resource string, avuID int64) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "RmMetaCommand",
-		"function": "removeMetaFromResource",
+		"function": "removeMetaFromResourceByID",
 	})
 
-	logger.Debugf("remove metadata %d from resource %q", avuid, resource)
+	logger.Debugf("remove metadata (id: %d) from resource %q", avuID, resource)
 
-	err := rmMeta.filesystem.DeleteResourceMetadata(resource, avuid)
+	err := rmMeta.filesystem.DeleteResourceMetadata(resource, avuID)
 	if err != nil {
-		return xerrors.Errorf("failed to delete metadata %d from resource %q: %w", avuid, resource, err)
+		return xerrors.Errorf("failed to delete metadata (id: %d) from resource %q: %w", avuID, resource, err)
 	}
 
 	return nil
 }
 
-func (rmMeta *RmMetaCommand) removeMetaFromPathByName(targetPath string, attr string) error {
+func (rmMeta *RmMetaCommand) removeMetaFromPathByAVU(targetPath string, attr string, val string, unit string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "RmMetaCommand",
-		"function": "removeMetaFromPathByName",
+		"function": "removeMetaFromPathByAVU",
 	})
 
-	logger.Debugf("remove metadata %q from path %q by name", attr, targetPath)
+	logger.Debugf("remove metadata (attr: %q, val: %q, unit: %q) from path %q", attr, val, unit, targetPath)
 
 	cwd := commons.GetCWD()
 	home := commons.GetHomeDir()
 	zone := rmMeta.account.ClientZone
 	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	err := rmMeta.filesystem.DeleteMetadataByName(targetPath, attr)
+	err := rmMeta.filesystem.DeleteMetadataByAVU(targetPath, attr, val, unit)
 	if err != nil {
-		return xerrors.Errorf("failed to delete metadata %q from path %q by name: %w", attr, targetPath, err)
+		return xerrors.Errorf("failed to delete metadata (attr: %q, val: %q, unit: %q) from path %q: %w", attr, val, unit, targetPath, err)
 	}
 
 	return nil
 }
 
-func (rmMeta *RmMetaCommand) removeMetaFromUserByName(username string, attr string) error {
+func (rmMeta *RmMetaCommand) removeMetaFromUserByAVU(username string, attr string, val string, unit string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "RmMetaCommand",
-		"function": "removeMetaFromUserByName",
+		"function": "removeMetaFromUserByAVU",
 	})
 
-	logger.Debugf("remove metadata %q from user %q by name", attr, username)
+	logger.Debugf("remove metadata (attr: %q, val: %q, unit: %q) from user %q", attr, val, unit, username)
 
-	err := rmMeta.filesystem.DeleteUserMetadataByName(username, rmMeta.account.ClientZone, attr)
+	err := rmMeta.filesystem.DeleteUserMetadataByAVU(username, rmMeta.account.ClientZone, attr, val, unit)
 	if err != nil {
-		return xerrors.Errorf("failed to delete metadata %q from user %q by name: %w", attr, username, err)
+		return xerrors.Errorf("failed to delete metadata (attr: %q, val: %q, unit: %q) from user %q: %w", attr, val, unit, username, err)
 	}
 
 	return nil
 }
 
-func (rmMeta *RmMetaCommand) removeMetaFromResourceByName(resource string, attr string) error {
+func (rmMeta *RmMetaCommand) removeMetaFromResourceByAVU(resource string, attr string, val string, unit string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "RmMetaCommand",
-		"function": "removeMetaFromResourceByName",
+		"function": "removeMetaFromResourceByAVU",
 	})
 
-	logger.Debugf("remove metadata %q from resource %q by name", attr, resource)
+	logger.Debugf("remove metadata (attr: %q, val: %q, unit: %q) from resource %q", attr, val, unit, resource)
 
-	err := rmMeta.filesystem.DeleteResourceMetadataByName(resource, attr)
+	err := rmMeta.filesystem.DeleteResourceMetadataByAVU(resource, attr, val, unit)
 	if err != nil {
-		return xerrors.Errorf("failed to delete metadata %q from resource %q by name: %w", attr, resource, err)
+		return xerrors.Errorf("failed to delete metadata (attr: %q, val: %q, unit: %q) from resource %q: %w", attr, val, unit, resource, err)
 	}
 
 	return nil
