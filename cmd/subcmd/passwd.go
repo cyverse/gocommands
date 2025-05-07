@@ -2,7 +2,6 @@ package subcmd
 
 import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
-	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
@@ -71,7 +70,7 @@ func (passwd *PasswdCommand) Process() error {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	// Create a connection
+	// Create a file system
 	passwd.account = commons.GetSessionConfig().ToIRODSAccount()
 	passwd.filesystem, err = commons.GetIRODSFSClientForSingleOperation(passwd.account)
 	if err != nil {
@@ -91,12 +90,6 @@ func (passwd *PasswdCommand) changePassword() error {
 		"struct":   "PasswdCommand",
 		"function": "changePassword",
 	})
-
-	connection, err := passwd.filesystem.GetMetadataConnection()
-	if err != nil {
-		return xerrors.Errorf("failed to get connection: %w", err)
-	}
-	defer passwd.filesystem.ReturnMetadataConnection(connection)
 
 	logger.Debugf("changing password for user %q", passwd.account.ClientUser)
 
@@ -138,7 +131,7 @@ func (passwd *PasswdCommand) changePassword() error {
 		return xerrors.Errorf("password mismatched")
 	}
 
-	err = irodsclient_irodsfs.ChangeUserPassword(connection, passwd.account.ClientUser, passwd.account.ClientZone, newPassword)
+	err := passwd.filesystem.ChangeUserPassword(passwd.account.ClientUser, passwd.account.ClientZone, newPassword)
 	if err != nil {
 		return xerrors.Errorf("failed to change user password for user %q: %w", passwd.account.ClientUser, err)
 	}

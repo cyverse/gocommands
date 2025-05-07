@@ -9,8 +9,8 @@ github.com/cpuguy83/go-md2man/v2 v2.0.4/go.mod h1:tgQtvFlXSQOSOSIRvRPT7W67SCa46t
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/creativeprojects/go-selfupdate v1.0.1 h1:5Un4MTv4puCR5GBgkDLC14J72fljGuMC60E63cFGq1o=
 github.com/creativeprojects/go-selfupdate v1.0.1/go.mod h1:nm7AWUJfrfYt/SB97NAcMhR0KEpPqlrVHXkWFti+ezw=
-github.com/cyverse/go-irodsclient v0.17.3-0.20250428161418-215358ab4226 h1:RjrnFaJLvcNzWrKPERmOGE3mHDg/mBU6VYa6VQsefAw=
-github.com/cyverse/go-irodsclient v0.17.3-0.20250428161418-215358ab4226/go.mod h1:NgL8k4aWaC3mDFNnkETJsEqeQrfdmorU6UkR3keZuMw=
+github.com/cyverse/go-irodsclient v0.17.3-0.20250507210151-4af6f35e74d6 h1:273+1ZylFfwHr7uMBCjwtqvxwO7r/2w5LSh2PxgQ4Dc=
+github.com/cyverse/go-irodsclient v0.17.3-0.20250507210151-4af6f35e74d6/go.mod h1:NgL8k4aWaC3mDFNnkETJsEqeQrfdmorU6UkR3keZuMw=
 github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964 h1:y5HC9v93H5EPKqaS1UYVg1uYah5Xf51mBfIoWehClUQ=
 github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964/go.mod h1:Xd9hchkHSWYkEqJwUGisez3G1QY8Ryz0sdWrLPMGjLk=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

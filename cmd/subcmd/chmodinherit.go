@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
-	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
@@ -130,13 +129,7 @@ func (chModInherit *ChModInheritCommand) changeOne(targetPath string) error {
 		return xerrors.Errorf("target %q is not a collection", targetPath)
 	}
 
-	connection, err := chModInherit.filesystem.GetMetadataConnection()
-	if err != nil {
-		return xerrors.Errorf("failed to get metadata connection: %w", err)
-	}
-	defer chModInherit.filesystem.ReturnMetadataConnection(connection)
-
-	err = irodsclient_irodsfs.ChangeAccessInherit(connection, targetPath, chModInherit.inherit, chModInherit.recursiveFlagValues.Recursive, false)
+	err = chModInherit.filesystem.ChangeDirACLInheritance(targetPath, chModInherit.inherit, chModInherit.recursiveFlagValues.Recursive, false)
 	if err != nil {
 		return xerrors.Errorf("failed to set access inherit %t to %q (recurse: %t): %w", chModInherit.inherit, targetPath, chModInherit.recursiveFlagValues.Recursive, err)
 	}

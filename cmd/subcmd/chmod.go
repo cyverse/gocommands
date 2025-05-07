@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
-	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
@@ -127,18 +126,12 @@ func (chMod *ChModCommand) changeOne(targetPath string) error {
 		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
 	}
 
-	connection, err := chMod.filesystem.GetMetadataConnection()
-	if err != nil {
-		return xerrors.Errorf("failed to get metadata connection: %w", err)
-	}
-	defer chMod.filesystem.ReturnMetadataConnection(connection)
-
 	zoneName := chMod.zoneName
 	if len(zoneName) == 0 {
 		zoneName = chMod.account.ClientZone
 	}
 
-	err = irodsclient_irodsfs.ChangeAccess(connection, targetPath, chMod.accessLevel, chMod.username, zoneName, chMod.recursiveFlagValues.Recursive, false)
+	err = chMod.filesystem.ChangeACLs(targetPath, chMod.accessLevel, chMod.username, zoneName, chMod.recursiveFlagValues.Recursive, false)
 	if err != nil {
 		return xerrors.Errorf("failed to change access: %w", err)
 	}

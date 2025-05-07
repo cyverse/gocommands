@@ -2,7 +2,6 @@ package subcmd
 
 import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
-	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
@@ -111,18 +110,22 @@ func (cd *CdCommand) changeWorkingDir(collectionPath string) error {
 	zone := cd.account.ClientZone
 	collectionPath = commons.MakeIRODSPath(cwd, home, zone, collectionPath)
 
-	connection, err := cd.filesystem.GetMetadataConnection()
+	entry, err := cd.filesystem.StatDir(collectionPath)
 	if err != nil {
-		return xerrors.Errorf("failed to get connection: %w", err)
+		if irodsclient_types.IsFileNotFoundError(err) {
+			// not exist
+			return xerrors.Errorf("directory %q does not exist: %w", collectionPath, err)
+		} else {
+			return xerrors.Errorf("failed to stat %q: %w", collectionPath, err)
+		}
 	}
-	defer cd.filesystem.ReturnMetadataConnection(connection)
+
+	if !entry.IsDir() {
+		// not a directory
+		return xerrors.Errorf("%q is not a directory", collectionPath)
+	}
 
 	logger.Debugf("changing working directory to %q", collectionPath)
-
-	_, err = irodsclient_irodsfs.GetCollection(connection, collectionPath)
-	if err != nil {
-		return xerrors.Errorf("failed to get collection %q: %w", collectionPath, err)
-	}
 
 	err = commons.SetCWD(collectionPath)
 	if err != nil {
