@@ -94,6 +94,9 @@ func (init *InitCommand) Process() error {
 		return xerrors.Errorf("failed to get iRODS account info from iCommands Environment: %w", err)
 	}
 
+	// clear PAM token as it will be overwritten
+	init.account.PAMToken = ""
+
 	// update PAM TTL
 	init.account.PamTTL = init.initFlagValues.PamTTL
 
