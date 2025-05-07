@@ -5,7 +5,6 @@ import (
 	"os"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
-	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
@@ -102,15 +101,9 @@ func (ps *PsCommand) listProcesses() error {
 		"function": "listProcesses",
 	})
 
-	connection, err := ps.filesystem.GetMetadataConnection()
-	if err != nil {
-		return xerrors.Errorf("failed to get connection: %w", err)
-	}
-	defer ps.filesystem.ReturnMetadataConnection(connection)
-
 	logger.Debugf("listing processes - addr: %q, zone: %q", ps.processFilterFlagValues.Address, ps.processFilterFlagValues.Zone)
 
-	processes, err := irodsclient_irodsfs.StatProcess(connection, ps.processFilterFlagValues.Address, ps.processFilterFlagValues.Zone)
+	processes, err := ps.filesystem.StatProcess(ps.processFilterFlagValues.Address, ps.processFilterFlagValues.Zone)
 	if err != nil {
 		return xerrors.Errorf("failed to stat process addr %q, zone %q: %w", ps.processFilterFlagValues.Address, ps.processFilterFlagValues.Zone, err)
 	}

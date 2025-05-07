@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/creativeprojects/go-selfupdate v1.0.1
-	github.com/cyverse/go-irodsclient v0.17.3-0.20250507210151-4af6f35e74d6
+	github.com/cyverse/go-irodsclient v0.17.3-0.20250507211308-472d5351cc1e
 	github.com/dustin/go-humanize v1.0.1
 	github.com/gliderlabs/ssh v0.3.5
 	github.com/jedib0t/go-pretty/v6 v6.6.7
