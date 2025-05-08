@@ -9,12 +9,13 @@ import (
 const (
 	goCommandsRepoPackagePath string = "cyverse/gocommands"
 
-	ClientProgramName          string                     = "gocommands"
-	FilesystemTimeout          irodsclient_types.Duration = irodsclient_types.Duration(1 * time.Minute)
-	LongFilesystemTimeout      irodsclient_types.Duration = irodsclient_types.Duration(10 * time.Minute) // exceptionally long timeout for listing dirs or users
-	transferThreadNumDefault   int                        = 5
-	tcpBufferSizeStringDefault string                     = "1MB"
-	bputForSyncDefaut          bool                       = false
+	ClientProgramName               string                     = "gocommands"
+	FilesystemTimeout               irodsclient_types.Duration = irodsclient_types.Duration(1 * time.Minute)
+	LongFilesystemTimeout           irodsclient_types.Duration = irodsclient_types.Duration(10 * time.Minute) // exceptionally long timeout for listing dirs or users
+	transferThreadNumDefault        int                        = 5
+	transferThreadNumPerFileDefault int                        = 5
+	tcpBufferSizeStringDefault      string                     = "1MB"
+	bputForSyncDefaut               bool                       = false
 	//RedirectToResourceMinSize  int64                      = 1024 * 1024 * 1024 // 1GB
 )
 
@@ -47,6 +48,19 @@ func GetDefaultTransferThreadNum() int {
 	}
 
 	return transferThreadNumDefault
+}
+
+func GetDefaultTransferThreadNumPerFile() int {
+	// get from sysconfig
+	sysConfig := GetSystemConfig()
+
+	if sysConfig != nil && sysConfig.AdditionalConfig != nil {
+		if sysConfig.AdditionalConfig.TransferThreadNumPerFile > 0 {
+			return sysConfig.AdditionalConfig.TransferThreadNumPerFile
+		}
+	}
+
+	return transferThreadNumPerFileDefault
 }
 
 func GetDefaultBputForSync() bool {

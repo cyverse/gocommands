@@ -46,7 +46,6 @@ type Bundle struct {
 	Index             int64
 	Entries           []*BundleEntry
 	Size              int64
-	ThreadsRequired   int
 	LocalBundlePath   string
 	IRODSBundlePath   string
 	LastError         error
@@ -166,6 +165,10 @@ func (bundle *Bundle) RequireTar() bool {
 	return len(bundle.Entries) >= bundle.manager.minBundleFileNum
 }
 
+func (bundle *Bundle) GetThreadsRequired() int {
+	return bundle.manager.calculateThreadForBundleTransfer(bundle)
+}
+
 type BundleTransferManager struct {
 	// moved to top to avoid 64bit alignment issue
 	bundlesScheduledCounter int64
@@ -183,7 +186,8 @@ type BundleTransferManager struct {
 	minBundleFileNum             int
 	maxBundleFileNum             int
 	maxBundleFileSize            int64
-	maxUploadThreads             int
+	maxTotalUploadThreads        int
+	maxUploadThreadsPerFile      int
 	redirectToResource           bool
 	icat                         bool
 	localTempDirPath             string
@@ -204,7 +208,7 @@ type BundleTransferManager struct {
 }
 
 // NewBundleTransferManager creates a new BundleTransferManager
-func NewBundleTransferManager(account *irodsclient_types.IRODSAccount, fs *irodsclient_fs.FileSystem, transferReportManager *TransferReportManager, irodsDestPath string, localBundleRootPath string, minBundleFileNum int, maxBundleFileNum int, maxBundleFileSize int64, maxUploadThreads int, redirectToResource bool, useIcat bool, localTempDirPath string, irodsTempDirPath string, noBulkReg bool, verifyChecksum bool, showProgress bool, showFullPath bool) *BundleTransferManager {
+func NewBundleTransferManager(account *irodsclient_types.IRODSAccount, fs *irodsclient_fs.FileSystem, transferReportManager *TransferReportManager, irodsDestPath string, localBundleRootPath string, minBundleFileNum int, maxBundleFileNum int, maxBundleFileSize int64, maxTotalUploadThreads int, maxUploadThreadsPerFile int, redirectToResource bool, useIcat bool, localTempDirPath string, irodsTempDirPath string, noBulkReg bool, verifyChecksum bool, showProgress bool, showFullPath bool) *BundleTransferManager {
 	cwd := GetCWD()
 	home := GetHomeDir()
 	zone := account.ClientZone
@@ -223,7 +227,8 @@ func NewBundleTransferManager(account *irodsclient_types.IRODSAccount, fs *irods
 		minBundleFileNum:        minBundleFileNum,
 		maxBundleFileNum:        maxBundleFileNum,
 		maxBundleFileSize:       maxBundleFileSize,
-		maxUploadThreads:        maxUploadThreads,
+		maxTotalUploadThreads:   maxTotalUploadThreads,
+		maxUploadThreadsPerFile: maxUploadThreadsPerFile,
 		redirectToResource:      redirectToResource,
 		icat:                    useIcat,
 		localTempDirPath:        localTempDirPath,
@@ -502,9 +507,6 @@ func (manager *BundleTransferManager) Start() error {
 		defer close(processBundleRemoveFilesAndMakeDirsChan)
 
 		for bundle := range manager.pendingBundles {
-			// init
-			bundle.ThreadsRequired = manager.calculateThreadForBundleTransfer(bundle.Size)
-
 			// send to tar and remove
 			processBundleTarChan <- bundle
 			processBundleRemoveFilesAndMakeDirsChan <- bundle
@@ -570,11 +572,13 @@ func (manager *BundleTransferManager) Start() error {
 			manager.mutex.RUnlock()
 
 			if cont {
+				threadsRequired := bundle.GetThreadsRequired()
+
 				manager.mutex.Lock()
 				if currentUploadThreads > 0 {
-					for currentUploadThreads+bundle.ThreadsRequired > manager.maxUploadThreads {
+					for currentUploadThreads+threadsRequired > manager.maxTotalUploadThreads {
 						// exceed max threads, wait
-						logger.Debugf("waiting for other transfers to complete - current %d, max %d", currentUploadThreads, manager.maxUploadThreads)
+						logger.Debugf("waiting for other transfers to complete - current %d, max %d", currentUploadThreads, manager.maxTotalUploadThreads)
 
 						manager.availableThreadWaitCondition.Wait()
 					}
@@ -582,8 +586,8 @@ func (manager *BundleTransferManager) Start() error {
 
 				threadWaiter.Add(1)
 
-				currentUploadThreads += bundle.ThreadsRequired
-				logger.Debugf("# threads : %d, max %d", currentUploadThreads, manager.maxUploadThreads)
+				currentUploadThreads += threadsRequired
+				logger.Debugf("# threads : %d, max %d", currentUploadThreads, manager.maxTotalUploadThreads)
 
 				go func(pbundle *Bundle) {
 					defer threadWaiter.Done()
@@ -605,11 +609,11 @@ func (manager *BundleTransferManager) Start() error {
 					}
 
 					manager.mutex.Lock()
-					currentUploadThreads -= bundle.ThreadsRequired
+					currentUploadThreads -= threadsRequired
 					manager.availableThreadWaitCondition.Broadcast()
 					manager.mutex.Unlock()
 
-					logger.Debugf("# threads : %d, max %d", currentUploadThreads, manager.maxUploadThreads)
+					logger.Debugf("# threads : %d, max %d", currentUploadThreads, manager.maxTotalUploadThreads)
 
 					processBundleExtractChan1 <- pbundle
 				}(bundle)
@@ -937,18 +941,16 @@ func (manager *BundleTransferManager) processBundleUploadWithTar(bundle *Bundle)
 	// determine how to upload
 	startTime := time.Now()
 	transferMode := manager.determineTransferMode(bundle.Size)
+	threadsRequired := bundle.GetThreadsRequired()
 	switch transferMode {
 	case TransferModeRedirect:
-		_, err = manager.filesystem.UploadFileRedirectToResource(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, manager.verifyChecksum, manager.verifyChecksum, false, callbackPut)
-		notes = append(notes, "redirect-to-resource", "bundle")
-	case TransferModeSingleThread:
-		_, err = manager.filesystem.UploadFile(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", false, manager.verifyChecksum, manager.verifyChecksum, false, callbackPut)
-		notes = append(notes, "icat", "single-thread", "bundle")
+		_, err = manager.filesystem.UploadFileRedirectToResource(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", threadsRequired, false, manager.verifyChecksum, manager.verifyChecksum, false, callbackPut)
+		notes = append(notes, "redirect-to-resource", "bundle", fmt.Sprintf("%d threads", threadsRequired))
 	case TransferModeICAT:
 		fallthrough
 	default:
-		_, err = manager.filesystem.UploadFileParallel(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", 0, false, manager.verifyChecksum, manager.verifyChecksum, false, callbackPut)
-		notes = append(notes, "icat", "multi-thread", "bundle")
+		_, err = manager.filesystem.UploadFileParallel(bundle.LocalBundlePath, bundle.IRODSBundlePath, "", threadsRequired, false, manager.verifyChecksum, manager.verifyChecksum, false, callbackPut)
+		notes = append(notes, "icat", "bundle", fmt.Sprintf("%d threads", threadsRequired))
 	}
 
 	if err != nil {
@@ -1052,18 +1054,16 @@ func (manager *BundleTransferManager) processBundleUploadWithoutTar(bundle *Bund
 
 		// determine how to upload
 		transferMode := manager.determineTransferMode(bundle.Size)
+		threadsRequired := manager.calculateThreadForFileTransfer(file.Size)
 		switch transferMode {
 		case TransferModeRedirect:
-			uploadResult, err = manager.filesystem.UploadFileRedirectToResource(file.LocalPath, file.IRODSPath, "", 0, false, true, true, false, callbackPut)
-			notes = append(notes, "redirect-to-resource", "no-bundle")
-		case TransferModeSingleThread:
-			uploadResult, err = manager.filesystem.UploadFile(file.LocalPath, file.IRODSPath, "", false, true, true, false, callbackPut)
-			notes = append(notes, "icat", "single-thread", "no-bundle")
+			uploadResult, err = manager.filesystem.UploadFileRedirectToResource(file.LocalPath, file.IRODSPath, "", threadsRequired, false, true, true, false, callbackPut)
+			notes = append(notes, "redirect-to-resource", "no-bundle", fmt.Sprintf("%d threads", threadsRequired))
 		case TransferModeICAT:
 			fallthrough
 		default:
-			uploadResult, err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", 0, false, true, true, false, callbackPut)
-			notes = append(notes, "icat", "multi-thread", "no-bundle")
+			uploadResult, err = manager.filesystem.UploadFileParallel(file.LocalPath, file.IRODSPath, "", threadsRequired, false, true, true, false, callbackPut)
+			notes = append(notes, "icat", "no-bundle", fmt.Sprintf("%d threads", threadsRequired))
 		}
 
 		if err != nil {
@@ -1151,11 +1151,26 @@ func (manager *BundleTransferManager) getProgressName(bundle *Bundle, taskName s
 	return fmt.Sprintf("bundle %d - %q", bundle.Index, taskName)
 }
 
-func (manager *BundleTransferManager) calculateThreadForBundleTransfer(size int64) int {
-	threads := CalculateThreadForTransferJob(size, manager.maxUploadThreads)
+func (manager *BundleTransferManager) calculateThreadForBundleTransfer(bundle *Bundle) int {
+	if bundle.RequireTar() {
+		return manager.calculateThreadForFileTransfer(bundle.Size)
+	}
+
+	maxThreads := 1
+	for _, entry := range bundle.Entries {
+		curThreads := manager.calculateThreadForFileTransfer(entry.Size)
+		if curThreads > maxThreads {
+			maxThreads = curThreads
+		}
+	}
+	return maxThreads
+}
+
+func (manager *BundleTransferManager) calculateThreadForFileTransfer(size int64) int {
+	threads := CalculateThreadForTransferJob(size, manager.maxUploadThreadsPerFile)
 
 	// determine how to upload
-	if manager.maxUploadThreads == 1 {
+	if manager.maxTotalUploadThreads == 1 {
 		return 1
 	} else if manager.icat && !manager.filesystem.SupportParallelUpload() {
 		return 1
@@ -1176,15 +1191,7 @@ func (manager *BundleTransferManager) calculateThreadForBundleTransfer(size int6
 }
 
 func (manager *BundleTransferManager) determineTransferMode(size int64) TransferMode {
-	threadsRequired := manager.calculateThreadForBundleTransfer(size)
-
-	if threadsRequired == 1 {
-		return TransferModeSingleThread
-	}
-
-	if manager.maxUploadThreads == 1 {
-		return TransferModeSingleThread
-	} else if manager.redirectToResource {
+	if manager.redirectToResource {
 		return TransferModeRedirect
 	} else if manager.icat {
 		return TransferModeICAT

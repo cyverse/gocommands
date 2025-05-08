@@ -30,6 +30,7 @@ func SetBundleTransferFlags(command *cobra.Command, hideTempPathConfig bool, hid
 	command.Flags().IntVar(&bundleTransferFlagValues.MinFileNum, "min_file_num", commons.MinBundleFileNumDefault, "Minimum number of files to include in a single bundle")
 	command.Flags().IntVar(&bundleTransferFlagValues.MaxFileNum, "max_file_num", commons.MaxBundleFileNumDefault, "Maximum number of files to include in a single bundle")
 	command.Flags().StringVar(&bundleTransferFlagValues.maxFileSizeInput, "max_file_size", strconv.FormatInt(commons.MaxBundleFileSizeDefault, 10), "Maximum size limit for a single bundle file")
+
 	command.Flags().BoolVar(&bundleTransferFlagValues.NoBulkRegistration, "no_bulk_reg", false, "Disable bulk registration of bundle files")
 
 	if hideTempPathConfig {

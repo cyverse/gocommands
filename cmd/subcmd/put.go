@@ -408,15 +408,12 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 		switch transferMode {
 		case commons.TransferModeRedirect:
 			uploadResult, uploadErr = fs.UploadFileRedirectToResource(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
-			notes = append(notes, "redirect-to-resource")
-		case commons.TransferModeSingleThread:
-			uploadResult, uploadErr = fs.UploadFile(uploadSourcePath, targetPath, "", false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
-			notes = append(notes, "icat", "single-thread")
+			notes = append(notes, "redirect-to-resource", fmt.Sprintf("%d threads", threadsRequired))
 		case commons.TransferModeICAT:
 			fallthrough
 		default:
 			uploadResult, uploadErr = fs.UploadFileParallel(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
-			notes = append(notes, "icat", "multi-thread")
+			notes = append(notes, "icat", fmt.Sprintf("%d threads", threadsRequired))
 		}
 
 		if uploadErr != nil {
@@ -992,10 +989,10 @@ func (put *PutCommand) encryptFile(sourcePath string, encryptedFilePath string, 
 }
 
 func (put *PutCommand) calculateThreadForTransferJob(size int64) int {
-	threads := commons.CalculateThreadForTransferJob(size, put.parallelTransferFlagValues.ThreadNumber)
+	threads := commons.CalculateThreadForTransferJob(size, put.parallelTransferFlagValues.ThreadNumberPerFile)
 
 	// determine how to upload
-	if put.parallelTransferFlagValues.SingleThread || put.parallelTransferFlagValues.ThreadNumber == 1 {
+	if put.parallelTransferFlagValues.SingleThread || put.parallelTransferFlagValues.ThreadNumber == 1 || put.parallelTransferFlagValues.ThreadNumberPerFile == 1 {
 		return 1
 	} else if put.parallelTransferFlagValues.Icat && !put.filesystem.SupportParallelUpload() {
 		return 1
@@ -1016,15 +1013,7 @@ func (put *PutCommand) calculateThreadForTransferJob(size int64) int {
 }
 
 func (put *PutCommand) determineTransferMode(size int64) commons.TransferMode {
-	threadsRequired := put.calculateThreadForTransferJob(size)
-
-	if threadsRequired == 1 {
-		return commons.TransferModeSingleThread
-	}
-
-	if put.parallelTransferFlagValues.SingleThread || put.parallelTransferFlagValues.ThreadNumber == 1 {
-		return commons.TransferModeSingleThread
-	} else if put.parallelTransferFlagValues.RedirectToResource {
+	if put.parallelTransferFlagValues.RedirectToResource {
 		return commons.TransferModeRedirect
 	} else if put.parallelTransferFlagValues.Icat {
 		return commons.TransferModeICAT
