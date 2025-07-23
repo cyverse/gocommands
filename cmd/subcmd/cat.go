@@ -6,7 +6,10 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/path"
+	"github.com/cyverse/gocommands/commons/terminal"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -82,26 +85,26 @@ func (cat *CatCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	// Create a file system
-	cat.account = commons.GetSessionConfig().ToIRODSAccount()
+	cat.account = config.GetSessionConfig().ToIRODSAccount()
 	if len(cat.ticketAccessFlagValues.Name) > 0 {
 		logger.Debugf("use ticket: %q", cat.ticketAccessFlagValues.Name)
 		cat.account.Ticket = cat.ticketAccessFlagValues.Name
 	}
 
-	cat.filesystem, err = commons.GetIRODSFSClient(cat.account, false, false)
+	cat.filesystem, err = irods.GetIRODSFSClient(cat.account, false, false)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer cat.filesystem.Release()
 
 	if cat.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(cat.filesystem, cat.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(cat.filesystem, cat.commonFlagValues.Timeout)
 	}
 
 	// run
@@ -116,10 +119,10 @@ func (cat *CatCommand) Process() error {
 }
 
 func (cat *CatCommand) catOne(sourcePath string) error {
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := cat.account.ClientZone
-	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
+	sourcePath = path.MakeIRODSPath(cwd, home, zone, sourcePath)
 
 	sourceEntry, err := cat.filesystem.Stat(sourcePath)
 	if err != nil {
@@ -141,7 +144,7 @@ func (cat *CatCommand) catOne(sourcePath string) error {
 	for {
 		readLen, err := fh.Read(buf)
 		if readLen > 0 {
-			commons.Printf("%s", string(buf[:readLen]))
+			terminal.Printf("%s", string(buf[:readLen]))
 		}
 
 		if err == io.EOF {

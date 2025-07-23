@@ -6,6 +6,9 @@ import (
 
 	irodsclient_config "github.com/cyverse/go-irodsclient/config"
 	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/path"
+	"github.com/cyverse/gocommands/commons/terminal"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -35,7 +38,7 @@ var (
 )
 
 func SetCommonFlags(command *cobra.Command, hideResource bool) {
-	command.Flags().StringVarP(&commonFlagValues.ConfigFilePath, "config", "c", commons.GetDefaultIRODSConfigPath(), "Specify custom iRODS configuration file or directory path")
+	command.Flags().StringVarP(&commonFlagValues.ConfigFilePath, "config", "c", config.GetDefaultIRODSConfigPath(), "Specify custom iRODS configuration file or directory path")
 	command.Flags().BoolVarP(&commonFlagValues.ShowVersion, "version", "v", false, "Display version information")
 	command.Flags().BoolVarP(&commonFlagValues.ShowHelp, "help", "h", false, "Display help information about available commands and options")
 	command.Flags().BoolVarP(&commonFlagValues.DebugMode, "debug", "d", false, "Enable verbose debug output for troubleshooting")
@@ -45,7 +48,7 @@ func SetCommonFlags(command *cobra.Command, hideResource bool) {
 	command.Flags().BoolVarP(&commonFlagValues.LogTerminal, "log_terminal", "", false, "Enable logging to terminal")
 	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Specify session identifier for tracking operations")
 	command.Flags().StringVarP(&commonFlagValues.Resource, "resource", "R", "", "Target specific iRODS resource server for operations")
-	command.Flags().IntVarP(&commonFlagValues.Timeout, "timeout", "", commons.GetDefaultFilesystemTimeout(), "Specify timeout duration in seconds")
+	command.Flags().IntVarP(&commonFlagValues.Timeout, "timeout", "", config.GetDefaultFilesystemTimeout(), "Specify timeout duration in seconds")
 
 	command.MarkFlagsMutuallyExclusive("quiet", "version")
 	command.MarkFlagsMutuallyExclusive("log_level", "version")
@@ -61,7 +64,7 @@ func SetCommonFlags(command *cobra.Command, hideResource bool) {
 }
 
 func SetCommonFlagsWithoutResource(command *cobra.Command) {
-	command.Flags().StringVarP(&commonFlagValues.ConfigFilePath, "config", "c", commons.GetDefaultIRODSConfigPath(), "Set config file or directory")
+	command.Flags().StringVarP(&commonFlagValues.ConfigFilePath, "config", "c", config.GetDefaultIRODSConfigPath(), "Set config file or directory")
 	command.Flags().BoolVarP(&commonFlagValues.ShowVersion, "version", "v", false, "Print version")
 	command.Flags().BoolVarP(&commonFlagValues.ShowHelp, "help", "h", false, "Print help")
 	command.Flags().BoolVarP(&commonFlagValues.DebugMode, "debug", "d", false, "Enable debug mode")
@@ -70,7 +73,7 @@ func SetCommonFlagsWithoutResource(command *cobra.Command) {
 	command.Flags().StringVar(&commonFlagValues.LogFile, "log_file", "", "Specify file path for logging output")
 	command.Flags().BoolVarP(&commonFlagValues.LogTerminal, "log_terminal", "", false, "Enable logging to terminal")
 	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Set session ID")
-	command.Flags().IntVarP(&commonFlagValues.Timeout, "timeout", "", commons.GetDefaultFilesystemTimeout(), "Specify timeout duration in seconds")
+	command.Flags().IntVarP(&commonFlagValues.Timeout, "timeout", "", config.GetDefaultFilesystemTimeout(), "Specify timeout duration in seconds")
 
 	command.MarkFlagsMutuallyExclusive("quiet", "version")
 	command.MarkFlagsMutuallyExclusive("log_level", "version")
@@ -179,7 +182,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 
 		if myCommonFlagValues.LogTerminal {
 			// use multi output - to output to file and stdout
-			mw := io.MultiWriter(commons.GetTerminalWriter(), fileLogWriter)
+			mw := io.MultiWriter(terminal.GetTerminalWriter(), fileLogWriter)
 			log.SetOutput(mw)
 		} else {
 			// use file log writer
@@ -188,12 +191,12 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	}
 
 	// init config
-	err := commons.InitEnvironmentManagerFromSystemConfig()
+	err := config.InitEnvironmentManagerFromSystemConfig()
 	if err != nil {
 		return false, xerrors.Errorf("failed to init environment manager: %w", err)
 	}
 
-	environmentManager := commons.GetEnvironmentManager()
+	environmentManager := config.GetEnvironmentManager()
 
 	logger.Debugf("use sessionID - %d", myCommonFlagValues.SessionID)
 	environmentManager.SetPPID(myCommonFlagValues.SessionID)
@@ -207,7 +210,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 
 	// load config
 	if len(configFilePath) > 0 {
-		configFilePath, err = commons.ExpandHomeDir(configFilePath)
+		configFilePath, err = path.ExpandLocalHomeDirPath(configFilePath)
 		if err != nil {
 			return false, xerrors.Errorf("failed to expand home directory for %q: %w", configFilePath, err)
 		}
@@ -274,7 +277,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 
 	if retryFlagValues.RetryChild {
 		// read from stdin
-		err := commons.InputMissingFieldsFromStdin()
+		err := config.InputMissingFieldsFromStdin()
 		if err != nil {
 			return false, xerrors.Errorf("failed to load config from stdin: %w", err) // stop here
 		}
@@ -294,6 +297,6 @@ func printVersion() error {
 		return xerrors.Errorf("failed to get version json: %w", err)
 	}
 
-	commons.Println(info)
+	terminal.Println(info)
 	return nil
 }

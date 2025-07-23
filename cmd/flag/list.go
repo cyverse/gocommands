@@ -1,18 +1,18 @@
 package flag
 
 import (
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/format"
 	"github.com/spf13/cobra"
 )
 
 type ListFlagValues struct {
-	Format              commons.ListFormat
+	Format              format.ListFormat
 	longFormatInput     bool
 	veryLongFormatInput bool
 	Access              bool
 	HumanReadableSizes  bool
 
-	SortOrder      commons.ListSortOrder
+	SortOrder      format.ListSortOrder
 	sortOrderInput string
 	SortReverse    bool
 }
@@ -40,14 +40,14 @@ func SetListFlags(command *cobra.Command, hideHumanReadable bool, hideAccess boo
 
 func GetListFlagValues() *ListFlagValues {
 	if listFlagValues.veryLongFormatInput {
-		listFlagValues.Format = commons.ListFormatVeryLong
+		listFlagValues.Format = format.ListFormatVeryLong
 	} else if listFlagValues.longFormatInput {
-		listFlagValues.Format = commons.ListFormatLong
+		listFlagValues.Format = format.ListFormatLong
 	} else {
-		listFlagValues.Format = commons.ListFormatNormal
+		listFlagValues.Format = format.ListFormatNormal
 	}
 
-	listFlagValues.SortOrder = commons.GetListSortOrder(listFlagValues.sortOrderInput)
+	listFlagValues.SortOrder = format.GetListSortOrder(listFlagValues.sortOrderInput)
 
 	return &listFlagValues
 }

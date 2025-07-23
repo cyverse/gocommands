@@ -4,7 +4,9 @@ import (
 	"os"
 
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -70,20 +72,20 @@ func (init *InitCommand) Process() error {
 		return nil
 	}
 
-	init.environmentManager = commons.GetEnvironmentManager()
+	init.environmentManager = config.GetEnvironmentManager()
 
 	// handle local flags
 	updated := false
 	if init.command.Flags().Changed("config") {
 		// set config manually
-		_, err = commons.InputMissingFields()
+		_, err = config.InputMissingFields()
 		if err != nil {
 			return xerrors.Errorf("failed to input missing fields: %w", err)
 		}
 
 		updated = true
 	} else {
-		updated, err = commons.InputFieldsForInit()
+		updated, err = config.InputFieldsForInit()
 		if err != nil {
 			return xerrors.Errorf("failed to input fields: %w", err)
 		}
@@ -101,7 +103,7 @@ func (init *InitCommand) Process() error {
 	init.account.PamTTL = init.initFlagValues.PamTTL
 
 	// test connect
-	conn, err := commons.GetIRODSConnection(init.account)
+	conn, err := irods.GetIRODSConnection(init.account)
 	if err != nil {
 		return xerrors.Errorf("failed to connect to iRODS server: %w", err)
 	}
@@ -114,7 +116,7 @@ func (init *InitCommand) Process() error {
 
 	if updated {
 		// save
-		manager := commons.GetEnvironmentManager()
+		manager := config.GetEnvironmentManager()
 		manager.FixAuthConfiguration()
 
 		err = manager.SetEnvironmentDirPath(irodsclient_config.GetDefaultEnvironmentDirPath())
@@ -127,7 +129,7 @@ func (init *InitCommand) Process() error {
 			return xerrors.Errorf("failed to save iCommands Environment: %w", err)
 		}
 	} else {
-		commons.Println("gocommands is already configured for following account:")
+		terminal.Println("gocommands is already configured for following account:")
 		err = init.PrintAccount()
 		if err != nil {
 			return xerrors.Errorf("failed to print account info: %w", err)
@@ -138,7 +140,7 @@ func (init *InitCommand) Process() error {
 }
 
 func (init *InitCommand) PrintAccount() error {
-	envMgr := commons.GetEnvironmentManager()
+	envMgr := config.GetEnvironmentManager()
 	if envMgr == nil {
 		return xerrors.Errorf("environment is not set")
 	}

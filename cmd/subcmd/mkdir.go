@@ -4,7 +4,9 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/path"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -74,21 +76,21 @@ func (mkDir *MkDirCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	// Create a file system
-	mkDir.account = commons.GetSessionConfig().ToIRODSAccount()
-	mkDir.filesystem, err = commons.GetIRODSFSClient(mkDir.account, true, false)
+	mkDir.account = config.GetSessionConfig().ToIRODSAccount()
+	mkDir.filesystem, err = irods.GetIRODSFSClient(mkDir.account, true, false)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer mkDir.filesystem.Release()
 
 	if mkDir.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(mkDir.filesystem, mkDir.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(mkDir.filesystem, mkDir.commonFlagValues.Timeout)
 	}
 
 	// run
@@ -108,10 +110,10 @@ func (mkDir *MkDirCommand) makeOne(targetPath string) error {
 		"function": "makeOne",
 	})
 
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := mkDir.account.ClientZone
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	targetPath = path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	// dir or not exist
 	logger.Debugf("making a directory %q", targetPath)

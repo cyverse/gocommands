@@ -4,8 +4,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cyverse/go-irodsclient/irods/types"
-	"github.com/cyverse/gocommands/commons"
+	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	"github.com/cyverse/gocommands/commons/types"
 	"github.com/rs/xid"
 	"github.com/spf13/cobra"
 )
@@ -17,7 +17,7 @@ type TicketAccessFlagValues struct {
 type TicketFlagValues struct {
 	Name      string
 	typeInput string
-	Type      types.TicketType
+	Type      irodsclient_types.TicketType
 }
 
 type TicketUpdateFlagValues struct {
@@ -68,11 +68,11 @@ func GetTicketFlagValues() *TicketFlagValues {
 
 	switch strings.ToLower(ticketFlagValues.typeInput) {
 	case "read", "r":
-		ticketFlagValues.Type = types.TicketTypeRead
+		ticketFlagValues.Type = irodsclient_types.TicketTypeRead
 	case "write", "w", "rw", "readwrite", "read-write":
-		ticketFlagValues.Type = types.TicketTypeWrite
+		ticketFlagValues.Type = irodsclient_types.TicketTypeWrite
 	default:
-		ticketFlagValues.Type = types.TicketTypeRead
+		ticketFlagValues.Type = irodsclient_types.TicketTypeRead
 	}
 
 	return &ticketFlagValues
@@ -128,7 +128,7 @@ func GetTicketUpdateFlagValues(command *cobra.Command) *TicketUpdateFlagValues {
 	if ticketUpdateFlagValues.clearExpirationTimeInput {
 		ticketUpdateFlagValues.ExpirationTime = time.Time{}
 	} else {
-		exp, err := commons.MakeDateTimeFromString(ticketUpdateFlagValues.expirationTimeInput)
+		exp, err := types.MakeDateTimeFromString(ticketUpdateFlagValues.expirationTimeInput)
 		if err == nil {
 			ticketUpdateFlagValues.ExpirationTime = exp
 		} else {

@@ -2,7 +2,8 @@ package subcmd
 
 import (
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -68,13 +69,13 @@ func (env *EnvCommand) Process() error {
 }
 
 func (env *EnvCommand) printEnvironment() error {
-	envMgr := commons.GetEnvironmentManager()
+	envMgr := config.GetEnvironmentManager()
 	if envMgr == nil {
 		return xerrors.Errorf("environment is not set")
 	}
 
 	t := table.NewWriter()
-	t.SetOutputMirror(commons.GetTerminalWriter())
+	t.SetOutputMirror(terminal.GetTerminalWriter())
 
 	sessionConfig, err := envMgr.GetSessionConfig()
 	if err != nil {
@@ -124,11 +125,11 @@ func (env *EnvCommand) printEnvironment() error {
 		},
 		{
 			"Current Working Dir",
-			commons.GetCWD(),
+			config.GetCWD(),
 		},
 		{
 			"Home",
-			commons.GetHomeDir(),
+			config.GetHomeDir(),
 		},
 		{
 			"Default Hash Scheme",

@@ -49,42 +49,35 @@ gocmd bput [flags] <local-files-or-dir>... <dest-collection>
 
     This command uses iCAT as a transfer broker, useful when direct access to the resource server is unstable.
 
-7. **Upload via resource server:**
-    ```sh
-    gocmd bput --redirect /local/dir /myZone/home/myUser/
-    ```
-
-    This command bypasses the iCAT server for data transfer, directly accessing the specified resource server for optimized performance.
-
-8. **Upload with specified transfer threads:**
+7. **Upload with specified transfer threads:**
     ```sh
     gocmd bput --thread_num 15 /local/dir /myZone/home/myUser/
     ```
 
     This command uses up to 15 threads for data transfer, requiring more CPU power and RAM.
 
-9. **Upload and generate report:** 
+8. **Upload and generate report:** 
     ```sh
     gocmd bput --report report.json /local/dir /myZone/home/myUser/
     ```
 
     This command uploads files from the local directory to iRODS and generates a JSON report containing details such as paths, file sizes, checksums, and transfer methods.
 
-10. **Upload with specified maximum file count per bundle:**
+9. **Upload with specified maximum file count per bundle:**
     ```sh
     gocmd bput --max_file_num 100 /local/dir /myZone/home/myUser/
     ```
 
     This command uploads files from the local directory to iRODS by creating bundles containing up to 100 files each.
 
-11. **Upload with specified mininum file count per bundle:**
+10. **Upload with specified mininum file count per bundle:**
     ```sh
     gocmd bput --min_file_num 50 /local/dir /myZone/home/myUser/
     ```
 
     This command uploads files from the local directory to iRODS by creating bundles containing at least 50 files each.
 
-12. **Upload with specified maximum bundle file size:**
+11. **Upload with specified maximum bundle file size:**
     ```sh
     gocmd bput --max_file_size 10GB /local/dir /myZone/home/myUser/
     ```
@@ -116,7 +109,6 @@ gocmd bput [flags] <local-files-or-dir>... <dest-collection>
 | `--no_root`           | Avoid creating the root directory at the destination during operation.      |
 | `--progress`          | Show progress bars during transfer.                                         |
 | `-q, --quiet`         | Suppress all non-error output messages.                                     |
-| `--redirect`          | Enable transfer redirection to the resource server.                         |
 | `--report string`     | Create a transfer report; specify the path for file output. An empty string or '-' outputs to stdout. |
 | `-R, --resource string` | Target specific iRODS resource server for operations.                     |
 | `--retry int`         | Set the number of retry attempts.                                           |

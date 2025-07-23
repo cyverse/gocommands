@@ -4,7 +4,9 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/path"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -74,21 +76,21 @@ func (mkTicket *MkTicketCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	// Create a file system
-	mkTicket.account = commons.GetSessionConfig().ToIRODSAccount()
-	mkTicket.filesystem, err = commons.GetIRODSFSClient(mkTicket.account, true, false)
+	mkTicket.account = config.GetSessionConfig().ToIRODSAccount()
+	mkTicket.filesystem, err = irods.GetIRODSFSClient(mkTicket.account, true, false)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer mkTicket.filesystem.Release()
 
 	if mkTicket.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(mkTicket.filesystem, mkTicket.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(mkTicket.filesystem, mkTicket.commonFlagValues.Timeout)
 	}
 
 	// make ticket
@@ -108,10 +110,10 @@ func (mkTicket *MkTicketCommand) makeTicket(ticketName string, ticketType irodsc
 
 	logger.Debugf("make ticket %q", ticketName)
 
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := mkTicket.account.ClientZone
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	targetPath = path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	err := mkTicket.filesystem.CreateTicket(ticketName, ticketType, targetPath)
 	if err != nil {

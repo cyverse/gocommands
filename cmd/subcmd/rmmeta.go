@@ -6,7 +6,9 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/path"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -96,21 +98,21 @@ func (rmMeta *RmMetaCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	// Create a file system
-	rmMeta.account = commons.GetSessionConfig().ToIRODSAccount()
-	rmMeta.filesystem, err = commons.GetIRODSFSClient(rmMeta.account, true, false)
+	rmMeta.account = config.GetSessionConfig().ToIRODSAccount()
+	rmMeta.filesystem, err = irods.GetIRODSFSClient(rmMeta.account, true, false)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer rmMeta.filesystem.Release()
 
 	if rmMeta.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(rmMeta.filesystem, rmMeta.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(rmMeta.filesystem, rmMeta.commonFlagValues.Timeout)
 	}
 
 	// remove
@@ -204,10 +206,10 @@ func (rmMeta *RmMetaCommand) removeMetaFromPathByID(targetPath string, avuID int
 
 	logger.Debugf("remove metadata (id: %d) from path %q", avuID, targetPath)
 
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := rmMeta.account.ClientZone
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	targetPath = path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	err := rmMeta.filesystem.DeleteMetadata(targetPath, avuID)
 	if err != nil {
@@ -260,10 +262,10 @@ func (rmMeta *RmMetaCommand) removeMetaFromPathByAVU(targetPath string, attr str
 
 	logger.Debugf("remove metadata (attr: %q, val: %q, unit: %q) from path %q", attr, val, unit, targetPath)
 
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := rmMeta.account.ClientZone
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	targetPath = path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	err := rmMeta.filesystem.DeleteMetadataByAVU(targetPath, attr, val, unit)
 	if err != nil {

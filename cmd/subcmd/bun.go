@@ -1,12 +1,17 @@
 package subcmd
 
 import (
+	"path"
 	"strings"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	commons_path "github.com/cyverse/gocommands/commons/path"
+	"github.com/cyverse/gocommands/commons/types"
+	"github.com/cyverse/gocommands/commons/wildcard"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -89,26 +94,26 @@ func (bun *BunCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	// Create a file system
-	bun.account = commons.GetSessionConfig().ToIRODSAccount()
-	bun.filesystem, err = commons.GetIRODSFSClient(bun.account, false, true)
+	bun.account = config.GetSessionConfig().ToIRODSAccount()
+	bun.filesystem, err = irods.GetIRODSFSClient(bun.account, false, true)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer bun.filesystem.Release()
 
 	if bun.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(bun.filesystem, bun.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(bun.filesystem, bun.commonFlagValues.Timeout)
 	}
 
 	// Expand wildcards
 	if bun.wildcardSearchFlagValues.WildcardSearch {
-		bun.sourcePaths, err = commons.ExpandWildcards(bun.filesystem, bun.account, bun.sourcePaths, false, true)
+		bun.sourcePaths, err = wildcard.ExpandWildcards(bun.filesystem, bun.account, bun.sourcePaths, false, true)
 		if err != nil {
 			return xerrors.Errorf("failed to expand wildcards: %w", err)
 		}
@@ -144,7 +149,7 @@ func (bun *BunCommand) getDataType(irodsPath string, dataType string) (irodsclie
 	}
 
 	// auto
-	ext := commons.GetFileExtension(irodsPath)
+	ext := path.Ext(irodsPath)
 	switch strings.ToLower(ext) {
 	case ".tar":
 		return irodsclient_types.TAR_FILE_DT, nil
@@ -166,11 +171,11 @@ func (bun *BunCommand) extractOne(sourcePath string, targetPath string) error {
 		"function": "extractOne",
 	})
 
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := bun.account.ClientZone
-	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	sourcePath = commons_path.MakeIRODSPath(cwd, home, zone, sourcePath)
+	targetPath = commons_path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	sourceEntry, err := bun.filesystem.Stat(sourcePath)
 	if err != nil {
@@ -184,7 +189,7 @@ func (bun *BunCommand) extractOne(sourcePath string, targetPath string) error {
 		}
 	} else {
 		if !targetEntry.IsDir() {
-			return commons.NewNotDirError(targetPath)
+			return types.NewNotDirError(targetPath)
 		}
 	}
 

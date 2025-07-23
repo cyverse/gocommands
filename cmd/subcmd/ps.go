@@ -7,7 +7,8 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
 	"github.com/jedib0t/go-pretty/v6/table"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -73,21 +74,21 @@ func (ps *PsCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	// Create a connection
-	ps.account = commons.GetSessionConfig().ToIRODSAccount()
-	ps.filesystem, err = commons.GetIRODSFSClient(ps.account, true, true)
+	ps.account = config.GetSessionConfig().ToIRODSAccount()
+	ps.filesystem, err = irods.GetIRODSFSClient(ps.account, true, true)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer ps.filesystem.Release()
 
 	if ps.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(ps.filesystem, ps.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(ps.filesystem, ps.commonFlagValues.Timeout)
 	}
 
 	err = ps.listProcesses()

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -87,19 +87,10 @@ func (sync *SyncCommand) Process() error {
 	}
 
 	// handle local flags
-	//_, err = commons.InputMissingFields()
+	//_, err = config.InputMissingFields()
 	//if err != nil {
 	//	return xerrors.Errorf("failed to input missing fields: %w", err)
 	//}
-
-	// handle retry
-	if sync.retryFlagValues.RetryNumber > 0 && !sync.retryFlagValues.RetryChild {
-		err = commons.RunWithRetry(sync.retryFlagValues.RetryNumber, sync.retryFlagValues.RetryIntervalSeconds)
-		if err != nil {
-			return xerrors.Errorf("failed to run with retry %d: %w", sync.retryFlagValues.RetryNumber, err)
-		}
-		return nil
-	}
 
 	localSourcePaths := []string{}
 	irodsSourcePaths := []string{}
@@ -220,7 +211,7 @@ func (sync *SyncCommand) syncLocalToIRODS() error {
 		useBput = true
 	} else {
 		// sysconfig
-		systemConfig := commons.GetSystemConfig()
+		systemConfig := config.GetSystemConfig()
 		if systemConfig != nil && systemConfig.AdditionalConfig != nil {
 			if systemConfig.AdditionalConfig.BputForSync {
 				useBput = true

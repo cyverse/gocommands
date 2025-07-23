@@ -4,7 +4,9 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/path"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -76,21 +78,21 @@ func (cd *CdCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	// Create a file system
-	cd.account = commons.GetSessionConfig().ToIRODSAccount()
-	cd.filesystem, err = commons.GetIRODSFSClient(cd.account, false, false)
+	cd.account = config.GetSessionConfig().ToIRODSAccount()
+	cd.filesystem, err = irods.GetIRODSFSClient(cd.account, false, false)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer cd.filesystem.Release()
 
 	if cd.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(cd.filesystem, cd.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(cd.filesystem, cd.commonFlagValues.Timeout)
 	}
 
 	// run
@@ -109,10 +111,10 @@ func (cd *CdCommand) changeWorkingDir(collectionPath string) error {
 		"function": "changeWorkingDir",
 	})
 
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := cd.account.ClientZone
-	collectionPath = commons.MakeIRODSPath(cwd, home, zone, collectionPath)
+	collectionPath = path.MakeIRODSPath(cwd, home, zone, collectionPath)
 
 	entry, err := cd.filesystem.StatDir(collectionPath)
 	if err != nil {
@@ -131,7 +133,7 @@ func (cd *CdCommand) changeWorkingDir(collectionPath string) error {
 
 	logger.Debugf("changing working directory to %q", collectionPath)
 
-	err = commons.SetCWD(collectionPath)
+	err = config.SetCWD(collectionPath)
 	if err != nil {
 		return xerrors.Errorf("failed to set current working collection to %q: %w", collectionPath, err)
 	}

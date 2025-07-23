@@ -9,13 +9,21 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/encryption"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/parallel"
+	commons_path "github.com/cyverse/gocommands/commons/path"
+	"github.com/cyverse/gocommands/commons/terminal"
+	"github.com/cyverse/gocommands/commons/transfer"
+	"github.com/cyverse/gocommands/commons/types"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -91,9 +99,11 @@ type PutCommand struct {
 	sourcePaths []string
 	targetPath  string
 
-	parallelJobManager    *commons.ParallelJobManager
-	transferReportManager *commons.TransferReportManager
-	updatedPathMap        map[string]bool
+	parallelTransferJobManager    *parallel.ParallelJobManager
+	parallelPostProcessJobManager *parallel.ParallelJobManager
+	transferReportManager         *transfer.TransferReportManager
+	updatedPathMap                map[string]bool
+	mutex                         sync.RWMutex // mutex for updatedPathMap
 }
 
 func NewPutCommand(command *cobra.Command, args []string) (*PutCommand, error) {
@@ -155,39 +165,30 @@ func (put *PutCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
-	// handle retry
-	if put.retryFlagValues.RetryNumber > 0 && !put.retryFlagValues.RetryChild {
-		err = commons.RunWithRetry(put.retryFlagValues.RetryNumber, put.retryFlagValues.RetryIntervalSeconds)
-		if err != nil {
-			return xerrors.Errorf("failed to run with retry %d: %w", put.retryFlagValues.RetryNumber, err)
-		}
-		return nil
-	}
-
 	// Create a file system
-	put.account = commons.GetSessionConfig().ToIRODSAccount()
+	put.account = config.GetSessionConfig().ToIRODSAccount()
 	if len(put.ticketAccessFlagValues.Name) > 0 {
 		logger.Debugf("use ticket: %q", put.ticketAccessFlagValues.Name)
 		put.account.Ticket = put.ticketAccessFlagValues.Name
 	}
 
-	put.filesystem, err = commons.GetIRODSFSClientForLargeFileIO(put.account, put.maxConnectionNum, put.parallelTransferFlagValues.TCPBufferSize)
+	put.filesystem, err = irods.GetIRODSFSClientForLargeFileIO(put.account, put.maxConnectionNum, put.parallelTransferFlagValues.TCPBufferSize)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer put.filesystem.Release()
 
 	if put.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(put.filesystem, put.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(put.filesystem, put.commonFlagValues.Timeout)
 	}
 
 	// transfer report
-	put.transferReportManager, err = commons.NewTransferReportManager(put.transferReportFlagValues.Report, put.transferReportFlagValues.ReportPath, put.transferReportFlagValues.ReportToStdout)
+	put.transferReportManager, err = transfer.NewTransferReportManager(put.transferReportFlagValues.Report, put.transferReportFlagValues.ReportPath, put.transferReportFlagValues.ReportToStdout)
 	if err != nil {
 		return xerrors.Errorf("failed to create transfer report manager: %w", err)
 	}
@@ -199,15 +200,16 @@ func (put *PutCommand) Process() error {
 	}
 
 	// parallel job manager
-	put.parallelJobManager = commons.NewParallelJobManager(put.filesystem, put.parallelTransferFlagValues.ThreadNumber, put.progressFlagValues.ShowProgress, put.progressFlagValues.ShowFullPath)
-	put.parallelJobManager.Start()
+	ioSession := put.filesystem.GetIOSession()
+	put.parallelTransferJobManager = parallel.NewParallelJobManager(ioSession.GetMaxConnections(), put.progressFlagValues.ShowProgress, put.progressFlagValues.ShowFullPath)
+	put.parallelPostProcessJobManager = parallel.NewParallelJobManager(1, put.progressFlagValues.ShowProgress, put.progressFlagValues.ShowFullPath)
 
 	// run
 	if len(put.sourcePaths) >= 2 {
 		// multi-source, target must be a dir
 		err = put.ensureTargetIsDir(put.targetPath)
 		if err != nil {
-			return err
+			return xerrors.Errorf("target path %q is not a directory: %w", put.targetPath, err)
 		}
 	}
 
@@ -218,67 +220,79 @@ func (put *PutCommand) Process() error {
 		}
 	}
 
-	put.parallelJobManager.DoneScheduling()
-	err = put.parallelJobManager.Wait()
-	if err != nil {
-		return xerrors.Errorf("failed to perform parallel jobs: %w", err)
-	}
-
-	// delete on success
+	// delete sources on success
 	if put.postTransferFlagValues.DeleteOnSuccess {
 		for _, sourcePath := range put.sourcePaths {
-			logger.Infof("deleting source %q after successful data put", sourcePath)
+			logger.Infof("deleting source file or directory under %q after upload", sourcePath)
 
-			err := put.deleteOnSuccess(sourcePath)
+			err = put.deleteOnSuccessOne(sourcePath)
 			if err != nil {
-				return xerrors.Errorf("failed to delete source %q: %w", sourcePath, err)
+				return xerrors.Errorf("failed to delete source %q after upload: %w", sourcePath, err)
 			}
 		}
 	}
 
 	// delete extra
 	if put.syncFlagValues.Delete {
-		logger.Infof("deleting extra files and directories under %q", put.targetPath)
+		logger.Infof("deleting extra data objects and collections under %q", put.targetPath)
 
-		err = put.deleteExtra(put.targetPath)
+		err = put.deleteExtraOne(put.targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to delete extra files: %w", err)
+			return xerrors.Errorf("failed to delete extra data objects or collections: %w", err)
 		}
+	}
+
+	logger.Info("done scheduling jobs, starting jobs")
+
+	transferErr := put.parallelTransferJobManager.Start()
+	if transferErr != nil {
+		// error occurred while transferring files
+		put.parallelPostProcessJobManager.CancelJobs()
+	}
+
+	postProcessErr := put.parallelPostProcessJobManager.Start()
+
+	if transferErr != nil {
+		return xerrors.Errorf("failed to perform transfer jobs: %w", transferErr)
+	}
+
+	if postProcessErr != nil {
+		return xerrors.Errorf("failed to perform post process jobs: %w", err)
 	}
 
 	return nil
 }
 
 func (put *PutCommand) ensureTargetIsDir(targetPath string) error {
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := put.account.ClientZone
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	targetPath = commons_path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	targetEntry, err := put.filesystem.Stat(targetPath)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
 			// not exist
-			return commons.NewNotDirError(targetPath)
+			return types.NewNotDirError(targetPath)
 		}
 
 		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
 	}
 
 	if !targetEntry.IsDir() {
-		return commons.NewNotDirError(targetPath)
+		return types.NewNotDirError(targetPath)
 	}
 
 	return nil
 }
 
-func (put *PutCommand) requireEncryption(targetPath string, parentEncryption bool, parentEncryptionMode commons.EncryptionMode) (bool, commons.EncryptionMode) {
+func (put *PutCommand) getEncryptionMode(targetPath string, parentEncryptionMode encryption.EncryptionMode) encryption.EncryptionMode {
 	if put.encryptionFlagValues.Encryption {
-		return true, put.encryptionFlagValues.Mode
+		return put.encryptionFlagValues.Mode
 	}
 
 	if put.encryptionFlagValues.NoEncryption {
-		return false, commons.EncryptionModeUnknown
+		return encryption.EncryptionModeNone
 	}
 
 	if !put.encryptionFlagValues.IgnoreMeta {
@@ -288,38 +302,38 @@ func (put *PutCommand) requireEncryption(targetPath string, parentEncryption boo
 		targetEntry, err := put.filesystem.Stat(targetPath)
 		if err != nil {
 			if irodsclient_types.IsFileNotFoundError(err) {
-				targetDir = commons.GetDir(targetPath)
+				targetDir = path.Dir(targetPath)
 			} else {
-				return parentEncryption, parentEncryptionMode
+				return parentEncryptionMode
 			}
 		} else {
 			if !targetEntry.IsDir() {
-				targetDir = commons.GetDir(targetEntry.Path)
+				targetDir = path.Dir(targetEntry.Path)
 			}
 		}
 
-		encryptionConfig := commons.GetEncryptionConfigFromMeta(put.filesystem, targetDir)
+		encryptionConfig := encryption.GetEncryptionConfigFromMeta(put.filesystem, targetDir)
 
-		if encryptionConfig.Mode == commons.EncryptionModeUnknown {
-			if put.encryptionFlagValues.Mode == commons.EncryptionModeUnknown {
-				return false, commons.EncryptionModeUnknown
+		if encryptionConfig.Mode == encryption.EncryptionModeNone {
+			if put.encryptionFlagValues.Mode == encryption.EncryptionModeNone {
+				return encryption.EncryptionModeNone
 			}
 
-			return encryptionConfig.Required, put.encryptionFlagValues.Mode
+			return put.encryptionFlagValues.Mode
 		}
 
-		return encryptionConfig.Required, encryptionConfig.Mode
+		return encryptionConfig.Mode
 	}
 
-	return parentEncryption, parentEncryptionMode
+	return parentEncryptionMode
 }
 
 func (put *PutCommand) putOne(sourcePath string, targetPath string) error {
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := put.account.ClientZone
-	sourcePath = commons.MakeLocalPath(sourcePath)
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	sourcePath = commons_path.MakeLocalPath(sourcePath)
+	targetPath = commons_path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	sourceStat, err := os.Stat(sourcePath)
 	if err != nil {
@@ -333,64 +347,140 @@ func (put *PutCommand) putOne(sourcePath string, targetPath string) error {
 	if sourceStat.IsDir() {
 		// dir
 		if !put.noRootFlagValues.NoRoot {
-			targetPath = commons.MakeTargetIRODSFilePath(put.filesystem, sourcePath, targetPath)
+			targetPath = commons_path.MakeIRODSTargetFilePath(put.filesystem, sourcePath, targetPath)
 		}
 
-		return put.putDir(sourceStat, sourcePath, targetPath, false, commons.EncryptionModeUnknown)
+		return put.putDir(sourceStat, sourcePath, targetPath, encryption.EncryptionModeNone)
 	}
 
 	// file
-	requireEncryption, encryptionMode := put.requireEncryption(targetPath, false, commons.EncryptionModeUnknown)
-	if requireEncryption {
+	encryptionMode := put.getEncryptionMode(targetPath, encryption.EncryptionModeNone)
+	if encryptionMode != encryption.EncryptionModeNone {
 		// encrypt filename
 		tempPath, newTargetPath, err := put.getPathsForEncryption(sourcePath, targetPath)
 		if err != nil {
 			return xerrors.Errorf("failed to get encryption path for %q: %w", sourcePath, err)
 		}
 
-		return put.putFile(sourceStat, sourcePath, tempPath, newTargetPath, requireEncryption, encryptionMode)
+		return put.putFile(sourceStat, sourcePath, tempPath, newTargetPath, encryptionMode)
 	}
 
-	targetPath = commons.MakeTargetIRODSFilePath(put.filesystem, sourcePath, targetPath)
-	return put.putFile(sourceStat, sourcePath, "", targetPath, requireEncryption, commons.EncryptionModeUnknown)
+	targetPath = commons_path.MakeIRODSTargetFilePath(put.filesystem, sourcePath, targetPath)
+	return put.putFile(sourceStat, sourcePath, "", targetPath, encryption.EncryptionModeNone)
 }
 
-func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, tempPath string, targetPath string, requireDecryption bool, encryptionMode commons.EncryptionMode) error {
+func (put *PutCommand) deleteOnSuccessOne(sourcePath string) error {
+	sourcePath = commons_path.MakeLocalPath(sourcePath)
+
+	sourceStat, err := os.Stat(sourcePath)
+	if err != nil {
+		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
+	}
+
+	if sourceStat.IsDir() {
+		// dir
+		return put.deleteDirOnSuccess(sourcePath)
+	}
+
+	// file
+	return put.deleteFileOnSuccess(sourcePath)
+}
+
+func (put *PutCommand) deleteExtraOne(targetPath string) error {
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
+	zone := put.account.ClientZone
+	targetPath = commons_path.MakeIRODSPath(cwd, home, zone, targetPath)
+
+	targetEntry, err := put.filesystem.Stat(targetPath)
+	if err != nil {
+		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+	}
+
+	if targetEntry.IsDir() {
+		// dir
+		return put.deleteExtraDir(targetPath)
+	}
+
+	// file
+	return put.deleteExtraFile(targetPath)
+}
+
+func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, tempPath string, targetPath string, encryptionMode encryption.EncryptionMode) {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "PutCommand",
 		"function": "schedulePut",
 	})
 
-	threadsRequired := put.calculateThreadForTransferJob(sourceStat.Size())
+	defaultNotes := []string{"put"}
 
-	putTask := func(job *commons.ParallelJob) error {
-		manager := job.GetManager()
-		fs := manager.GetFilesystem()
+	reportSimple := func(err error, additionalNotes ...string) {
+		now := time.Now()
+		newNotes := append(defaultNotes, additionalNotes...)
+		newNotes = append(newNotes, "file")
 
-		callbackPut := func(processed int64, total int64) {
+		reportFile := &transfer.TransferReportFile{
+			Method:     transfer.TransferMethodPut,
+			StartAt:    now,
+			EndAt:      now,
+			SourcePath: sourcePath,
+			SourceSize: sourceStat.Size(),
+			DestPath:   targetPath,
+			Error:      err,
+			Notes:      newNotes,
+		}
+
+		put.transferReportManager.AddFile(reportFile)
+	}
+
+	reportTransfer := func(result *irodsclient_fs.FileTransferResult, err error, additionalNotes ...string) {
+		newNotes := append(defaultNotes, additionalNotes...)
+
+		put.transferReportManager.AddTransfer(result, transfer.TransferMethodPut, err, newNotes)
+	}
+
+	_, threadsRequired := put.determineTransferMethod(sourceStat.Size())
+
+	putTask := func(job *parallel.ParallelJob) error {
+		if job.IsCanceled() {
+			// job is canceled, do not run
+			job.Progress(-1, sourceStat.Size(), true)
+
+			reportSimple(nil, "canceled")
+			logger.Debugf("canceled a task for uploading %q to %q", sourcePath, targetPath)
+			return nil
+		}
+
+		logger.Debugf("uploading a file %q to %q", sourcePath, targetPath)
+
+		progressCallbackPut := func(processed int64, total int64) {
 			job.Progress(processed, total, false)
 		}
 
 		job.Progress(0, sourceStat.Size(), false)
 
-		logger.Debugf("uploading a file %q to %q", sourcePath, targetPath)
-
-		var uploadErr error
-		var uploadResult *irodsclient_fs.FileTransferResult
 		notes := []string{}
 
 		// encrypt
-		if requireDecryption {
-			encrypted, err := put.encryptFile(sourcePath, tempPath, encryptionMode)
-			if err != nil {
+		if encryptionMode != encryption.EncryptionModeNone {
+			notes = append(notes, "encrypt")
+
+			_, encryptErr := put.encryptFile(sourcePath, tempPath, encryptionMode)
+			if encryptErr != nil {
 				job.Progress(-1, sourceStat.Size(), true)
-				return xerrors.Errorf("failed to decrypt file: %w", err)
+
+				reportSimple(encryptErr, notes...)
+				return xerrors.Errorf("failed to encrypt file: %w", encryptErr)
 			}
 
-			if encrypted {
-				notes = append(notes, "encrypted", targetPath)
-			}
+			defer func() {
+				if len(tempPath) > 0 {
+					// remove temp file
+					logger.Debugf("removing a temporary file %q", tempPath)
+					os.Remove(tempPath)
+				}
+			}()
 		}
 
 		uploadSourcePath := sourcePath
@@ -398,88 +488,337 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 			uploadSourcePath = tempPath
 		}
 
-		parentTargetPath := commons.GetDir(targetPath)
-		if !fs.ExistsDir(parentTargetPath) {
-			err := fs.MakeDir(parentTargetPath, true)
-			if err != nil {
-				job.Progress(-1, sourceStat.Size(), true)
-				return xerrors.Errorf("failed to make a collection %q: %w", parentTargetPath, err)
-			}
+		parentTargetPath := path.Dir(targetPath)
+		_, statErr := put.filesystem.Stat(parentTargetPath)
+		if statErr != nil {
+			// must exist, mkdir is performed at putDir
+			job.Progress(-1, sourceStat.Size(), true)
+
+			reportSimple(statErr)
+			return xerrors.Errorf("failed to stat %q: %w", parentTargetPath, statErr)
 		}
 
-		// determine how to upload
-		transferMode := put.determineTransferMode(sourceStat.Size())
-		switch transferMode {
-		case commons.TransferModeRedirect:
-			uploadResult, uploadErr = fs.UploadFileRedirectToResource(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
-			notes = append(notes, "redirect-to-resource", fmt.Sprintf("%d threads", threadsRequired))
-		case commons.TransferModeICAT:
-			fallthrough
-		default:
-			uploadResult, uploadErr = fs.UploadFileParallel(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, callbackPut)
-			notes = append(notes, "icat", fmt.Sprintf("%d threads", threadsRequired))
-		}
+		uploadResult, uploadErr := put.filesystem.UploadFileParallel(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
+		notes = append(notes, "icat", fmt.Sprintf("%d threads", threadsRequired))
 
 		if uploadErr != nil {
 			job.Progress(-1, sourceStat.Size(), true)
+
+			reportTransfer(uploadResult, uploadErr, notes...)
 			return xerrors.Errorf("failed to upload %q to %q: %w", sourcePath, targetPath, uploadErr)
 		}
 
-		err := put.transferReportManager.AddTransfer(uploadResult, commons.TransferMethodPut, uploadErr, notes)
-		if err != nil {
-			job.Progress(-1, sourceStat.Size(), true)
-			return xerrors.Errorf("failed to add transfer report: %w", err)
-		}
-
-		if requireDecryption {
-			logger.Debugf("removing a temp file %q", tempPath)
-			os.Remove(tempPath)
-		}
+		reportTransfer(uploadResult, nil, notes...)
 
 		logger.Debugf("uploaded a file %q to %q", sourcePath, targetPath)
+
 		job.Progress(sourceStat.Size(), sourceStat.Size(), false)
 
-		job.Done()
 		return nil
 	}
 
-	err := put.parallelJobManager.Schedule(sourcePath, putTask, threadsRequired, progress.UnitsBytes)
-	if err != nil {
-		return xerrors.Errorf("failed to schedule upload %q to %q: %w", sourcePath, targetPath, err)
-	}
-
+	put.parallelTransferJobManager.Schedule(sourcePath, putTask, threadsRequired, progress.UnitsBytes)
 	logger.Debugf("scheduled a file upload %q to %q, %d threads", sourcePath, targetPath, threadsRequired)
-
-	return nil
 }
 
-func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPath string, targetPath string, requireEncryption bool, encryptionMode commons.EncryptionMode) error {
+func (put *PutCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"struct":   "PutCommand",
+		"function": "scheduleDeleteFileOnSuccess",
+	})
+
+	defaultNotes := []string{"put", "delete on success", "file"}
+
+	report := func(startTime time.Time, endTime time.Time, err error, additionalNotes ...string) {
+		newNotes := append(defaultNotes, additionalNotes...)
+
+		reportFile := &transfer.TransferReportFile{
+			Method:     transfer.TransferMethodDelete,
+			StartAt:    startTime,
+			EndAt:      endTime,
+			SourcePath: sourcePath,
+			Error:      err,
+			Notes:      newNotes,
+		}
+
+		put.transferReportManager.AddFile(reportFile)
+	}
+
+	reportSimple := func(err error, additionalNotes ...string) {
+		now := time.Now()
+		report(now, now, err, additionalNotes...)
+	}
+
+	deleteTask := func(job *parallel.ParallelJob) error {
+		if job.IsCanceled() {
+			// job is canceled, do not run
+			job.Progress(-1, 1, true)
+
+			reportSimple(nil, "canceled")
+			logger.Debugf("canceled a task for deleting empty directory %q", sourcePath)
+			return nil
+		}
+
+		logger.Debugf("deleting a file %q", sourcePath)
+
+		job.Progress(0, 1, false)
+
+		removeErr := os.Remove(sourcePath)
+		reportSimple(removeErr)
+
+		if removeErr != nil {
+			job.Progress(-1, 1, true)
+			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
+		}
+
+		logger.Debugf("deleted a file %q", sourcePath)
+		job.Progress(1, 1, false)
+		return nil
+	}
+
+	put.parallelPostProcessJobManager.Schedule("removing - "+sourcePath, deleteTask, 1, progress.UnitsDefault)
+	logger.Debugf("scheduled a file deletion %q", sourcePath)
+}
+
+func (put *PutCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"struct":   "PutCommand",
+		"function": "scheduleDeleteDirOnSuccess",
+	})
+
+	defaultNotes := []string{"put", "delete on success", "directory"}
+
+	report := func(startTime time.Time, endTime time.Time, err error, additionalNotes ...string) {
+		newNotes := append(defaultNotes, additionalNotes...)
+
+		reportFile := &transfer.TransferReportFile{
+			Method:     transfer.TransferMethodDelete,
+			StartAt:    startTime,
+			EndAt:      endTime,
+			SourcePath: sourcePath,
+			Error:      err,
+			Notes:      newNotes,
+		}
+
+		put.transferReportManager.AddFile(reportFile)
+	}
+
+	reportSimple := func(err error, additionalNotes ...string) {
+		now := time.Now()
+		report(now, now, err, additionalNotes...)
+	}
+
+	deleteTask := func(job *parallel.ParallelJob) error {
+		if job.IsCanceled() {
+			// job is canceled, do not run
+			job.Progress(-1, 1, true)
+
+			reportSimple(nil, "canceled")
+			logger.Debugf("canceled a task for deleting empty directory %q", sourcePath)
+			return nil
+		}
+
+		logger.Debugf("deleting an empty directory %q", sourcePath)
+
+		job.Progress(0, 1, false)
+
+		removeErr := os.Remove(sourcePath)
+		reportSimple(removeErr)
+
+		if removeErr != nil {
+			job.Progress(-1, 1, true)
+			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
+		}
+
+		logger.Debugf("deleted an empty directory %q", sourcePath)
+		job.Progress(1, 1, false)
+		return nil
+	}
+
+	put.parallelPostProcessJobManager.Schedule("removing - "+sourcePath, deleteTask, 1, progress.UnitsDefault)
+	logger.Debugf("scheduled an empty directory deletion %q", sourcePath)
+}
+
+func (put *PutCommand) scheduleDeleteExtraFile(targetPath string) {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"struct":   "PutCommand",
+		"function": "scheduleDeleteExtraFile",
+	})
+
+	defaultNotes := []string{"put", "extra", "file"}
+
+	report := func(startTime time.Time, endTime time.Time, err error, additionalNotes ...string) {
+		newNotes := append(defaultNotes, additionalNotes...)
+
+		reportFile := &transfer.TransferReportFile{
+			Method:   transfer.TransferMethodDelete,
+			StartAt:  startTime,
+			EndAt:    endTime,
+			DestPath: targetPath,
+			Error:    err,
+			Notes:    newNotes,
+		}
+
+		put.transferReportManager.AddFile(reportFile)
+	}
+
+	reportSimple := func(err error, additionalNotes ...string) {
+		now := time.Now()
+		report(now, now, err, additionalNotes...)
+	}
+
+	deleteTask := func(job *parallel.ParallelJob) error {
+		if job.IsCanceled() {
+			// job is canceled, do not run
+			job.Progress(-1, 1, true)
+
+			reportSimple(nil, "canceled")
+			logger.Debugf("canceled a task for deleting extra data object %q", targetPath)
+			return nil
+		}
+
+		logger.Debugf("deleting an extra data object %q", targetPath)
+
+		job.Progress(0, 1, false)
+
+		startTime := time.Now()
+		removeErr := put.filesystem.RemoveFile(targetPath, true)
+		endTime := time.Now()
+		report(startTime, endTime, removeErr)
+
+		if removeErr != nil {
+			job.Progress(-1, 1, true)
+			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
+		}
+
+		logger.Debugf("deleted an extra data object %q", targetPath)
+		job.Progress(1, 1, false)
+		return nil
+	}
+
+	put.parallelPostProcessJobManager.Schedule(targetPath, deleteTask, 1, progress.UnitsDefault)
+	logger.Debugf("scheduled an extra data object deletion %q", targetPath)
+}
+
+func (put *PutCommand) scheduleDeleteExtraDir(targetPath string) {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"struct":   "PutCommand",
+		"function": "scheduleDeleteExtraDir",
+	})
+
+	defaultNotes := []string{"put", "extra", "directory"}
+
+	report := func(startTime time.Time, endTime time.Time, err error, additionalNotes ...string) {
+		newNotes := append(defaultNotes, additionalNotes...)
+
+		reportFile := &transfer.TransferReportFile{
+			Method:   transfer.TransferMethodDelete,
+			StartAt:  startTime,
+			EndAt:    endTime,
+			DestPath: targetPath,
+			Error:    err,
+			Notes:    newNotes,
+		}
+
+		put.transferReportManager.AddFile(reportFile)
+	}
+
+	reportSimple := func(err error, additionalNotes ...string) {
+		now := time.Now()
+		report(now, now, err, additionalNotes...)
+	}
+
+	deleteTask := func(job *parallel.ParallelJob) error {
+		if job.IsCanceled() {
+			// job is canceled, do not run
+			job.Progress(-1, 1, true)
+
+			reportSimple(nil, "canceled")
+			logger.Debugf("canceled a task for deleting extra collection %q", targetPath)
+			return nil
+		}
+
+		logger.Debugf("deleting an extra collection %q", targetPath)
+
+		job.Progress(0, 1, false)
+
+		startTime := time.Now()
+		removeErr := put.filesystem.RemoveDir(targetPath, false, false)
+		endTime := time.Now()
+		report(startTime, endTime, removeErr)
+
+		if removeErr != nil {
+			job.Progress(-1, 1, true)
+			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
+		}
+
+		logger.Debugf("deleted an extra collection %q", targetPath)
+		job.Progress(1, 1, false)
+		return nil
+	}
+
+	put.parallelPostProcessJobManager.Schedule(targetPath, deleteTask, 1, progress.UnitsDefault)
+	logger.Debugf("scheduled an extra collection deletion %q", targetPath)
+}
+
+func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPath string, targetPath string, encryptionMode encryption.EncryptionMode) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "PutCommand",
 		"function": "putFile",
 	})
 
-	commons.MarkIRODSPathMap(put.updatedPathMap, targetPath)
+	defaultNotes := []string{"put"}
+
+	reportSimple := func(err error, additionalNotes ...string) {
+		now := time.Now()
+		newNotes := append(defaultNotes, additionalNotes...)
+		newNotes = append(newNotes, "file")
+
+		reportFile := &transfer.TransferReportFile{
+			Method:     transfer.TransferMethodPut,
+			StartAt:    now,
+			EndAt:      now,
+			SourcePath: sourcePath,
+			SourceSize: sourceStat.Size(),
+			DestPath:   targetPath,
+			Error:      err,
+			Notes:      newNotes,
+		}
+
+		put.transferReportManager.AddFile(reportFile)
+	}
+
+	reportOverwrite := func(startTime time.Time, endTime time.Time, err error, additionalNotes ...string) {
+		newNotes := append(defaultNotes, additionalNotes...)
+		newNotes = append(newNotes, "overwrite")
+
+		reportFile := &transfer.TransferReportFile{
+			Method:   transfer.TransferMethodDelete,
+			StartAt:  startTime,
+			EndAt:    endTime,
+			DestPath: targetPath,
+			Error:    err,
+			Notes:    newNotes,
+		}
+
+		put.transferReportManager.AddFile(reportFile)
+	}
+
+	put.mutex.Lock()
+	commons_path.MarkIRODSPathMap(put.updatedPathMap, targetPath)
+	put.mutex.Unlock()
 
 	if put.hiddenFileFlagValues.Exclude {
 		// exclude hidden
 		if strings.HasPrefix(sourceStat.Name(), ".") {
 			// skip
-			now := time.Now()
-			reportFile := &commons.TransferReportFile{
-				Method:     commons.TransferMethodPut,
-				StartAt:    now,
-				EndAt:      now,
-				SourcePath: sourcePath,
-				SourceSize: sourceStat.Size(),
-				DestPath:   targetPath,
-				Notes:      []string{"hidden", "skip"},
-			}
-
-			put.transferReportManager.AddFile(reportFile)
-
-			commons.Printf("skip uploading a file %q to %q. The file is hidden!\n", sourcePath, targetPath)
+			reportSimple(nil, "hidden", "skipped")
+			terminal.Printf("skip uploading a file %q to %q. The file is hidden!\n", sourcePath, targetPath)
 			logger.Debugf("skip uploading a file %q to %q. The file is hidden!", sourcePath, targetPath)
 			return nil
 		}
@@ -491,20 +830,8 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 		maxAge := time.Duration(put.syncFlagValues.Age) * time.Minute
 		if age > maxAge {
 			// skip
-			now := time.Now()
-			reportFile := &commons.TransferReportFile{
-				Method:     commons.TransferMethodPut,
-				StartAt:    now,
-				EndAt:      now,
-				SourcePath: sourcePath,
-				SourceSize: sourceStat.Size(),
-				DestPath:   targetPath,
-				Notes:      []string{"age", "skip"},
-			}
-
-			put.transferReportManager.AddFile(reportFile)
-
-			commons.Printf("skip uploading a file %q to %q. The file is too old (%s > %s)!\n", sourcePath, targetPath, age, maxAge)
+			reportSimple(nil, "age", "skipped")
+			terminal.Printf("skip uploading a file %q to %q. The file is too old (%s > %s)!\n", sourcePath, targetPath, age, maxAge)
 			logger.Debugf("skip uploading a file %q to %q. The file is too old (%s > %s)!", sourcePath, targetPath, age, maxAge)
 			return nil
 		}
@@ -515,9 +842,11 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 		if irodsclient_types.IsFileNotFoundError(err) {
 			// target does not exist
 			// target must be a file with new name
-			return put.schedulePut(sourceStat, sourcePath, tempPath, targetPath, requireEncryption, encryptionMode)
+			put.schedulePut(sourceStat, sourcePath, tempPath, targetPath, encryptionMode)
+			return nil
 		}
 
+		reportSimple(err)
 		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
 	}
 
@@ -527,50 +856,45 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 		if put.syncFlagValues.Sync {
 			// if it is sync, remove
 			if put.forceFlagValues.Force {
+				startTime := time.Now()
 				removeErr := put.filesystem.RemoveDir(targetPath, true, true)
-
-				now := time.Now()
-				reportFile := &commons.TransferReportFile{
-					Method:     commons.TransferMethodDelete,
-					StartAt:    now,
-					EndAt:      now,
-					SourcePath: targetPath,
-					Error:      removeErr,
-					Notes:      []string{"overwrite", "put", "dir"},
-				}
-
-				put.transferReportManager.AddFile(reportFile)
+				endTime := time.Now()
+				reportOverwrite(startTime, endTime, removeErr, "directory")
 
 				if removeErr != nil {
 					return removeErr
 				}
+
+				// fallthrough to put
 			} else {
 				// ask
-				overwrite := commons.InputYN(fmt.Sprintf("overwriting a file %q, but directory exists. Overwrite?", targetPath))
+				overwrite := terminal.InputYN(fmt.Sprintf("Overwriting a data object %q, but collection exists. Overwrite?", targetPath))
 				if overwrite {
+					startTime := time.Now()
 					removeErr := put.filesystem.RemoveDir(targetPath, true, true)
-
-					now := time.Now()
-					reportFile := &commons.TransferReportFile{
-						Method:     commons.TransferMethodDelete,
-						StartAt:    now,
-						EndAt:      now,
-						SourcePath: targetPath,
-						Error:      removeErr,
-						Notes:      []string{"overwrite", "put", "dir"},
-					}
-
-					put.transferReportManager.AddFile(reportFile)
+					endTime := time.Now()
+					reportOverwrite(startTime, endTime, removeErr, "directory")
 
 					if removeErr != nil {
 						return removeErr
 					}
+
+					// fallthrough to put
 				} else {
-					return commons.NewNotFileError(targetPath)
+					overwriteErr := types.NewNotFileError(targetPath)
+
+					now := time.Now()
+					reportOverwrite(now, now, overwriteErr, "directory", "declined", "skipped")
+					terminal.Printf("skip uploading a file %q to %q. Collection exists with the same name!\n", sourcePath, targetPath)
+					logger.Debugf("skip uploading a file %q to %q. Collection exists with the same name!", sourcePath, targetPath)
+					return nil
 				}
 			}
 		} else {
-			return commons.NewNotFileError(targetPath)
+			notFileErr := types.NewNotFileError(targetPath)
+			now := time.Now()
+			reportOverwrite(now, now, notFileErr, "directory")
+			return notFileErr
 		}
 	}
 
@@ -579,22 +903,22 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 			if targetEntry.Size == sourceStat.Size() {
 				// skip
 				now := time.Now()
-				reportFile := &commons.TransferReportFile{
-					Method:     commons.TransferMethodPut,
-					StartAt:    now,
-					EndAt:      now,
-					SourcePath: sourcePath,
-					SourceSize: sourceStat.Size(),
-
+				reportFile := &transfer.TransferReportFile{
+					Method:                transfer.TransferMethodPut,
+					StartAt:               now,
+					EndAt:                 now,
+					SourcePath:            sourcePath,
+					SourceSize:            sourceStat.Size(),
 					DestPath:              targetEntry.Path,
 					DestSize:              targetEntry.Size,
 					DestChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
-					Notes:                 []string{"differential", "no_hash", "same file size", "skip"},
+
+					Notes: []string{"put", "file", "differential", "no_hash", "same size", "skipped"},
 				}
 
 				put.transferReportManager.AddFile(reportFile)
 
-				commons.Printf("skip uploading a file %q to %q. The file already exists!\n", sourcePath, targetPath)
+				terminal.Printf("skip uploading a file %q to %q. The file already exists!\n", sourcePath, targetPath)
 				logger.Debugf("skip uploading a file %q to %q. The file already exists!", sourcePath, targetPath)
 				return nil
 			}
@@ -604,14 +928,15 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 				if len(targetEntry.CheckSum) > 0 {
 					localChecksum, err := irodsclient_util.HashLocalFile(sourcePath, string(targetEntry.CheckSumAlgorithm))
 					if err != nil {
+						reportSimple(err, "differential")
 						return xerrors.Errorf("failed to get hash for %q: %w", sourcePath, err)
 					}
 
 					if bytes.Equal(localChecksum, targetEntry.CheckSum) {
 						// skip
 						now := time.Now()
-						reportFile := &commons.TransferReportFile{
-							Method:                  commons.TransferMethodPut,
+						reportFile := &transfer.TransferReportFile{
+							Method:                  transfer.TransferMethodPut,
 							StartAt:                 now,
 							EndAt:                   now,
 							SourcePath:              sourcePath,
@@ -622,12 +947,13 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 							DestSize:                targetEntry.Size,
 							DestChecksum:            hex.EncodeToString(targetEntry.CheckSum),
 							DestChecksumAlgorithm:   string(targetEntry.CheckSumAlgorithm),
-							Notes:                   []string{"differential", "same checksum", "skip"},
+
+							Notes: []string{"put", "file", "differential", "same checksum", "skipped"},
 						}
 
 						put.transferReportManager.AddFile(reportFile)
 
-						commons.Printf("skip uploading a file %q to %q. The file with the same hash already exists!\n", sourcePath, targetPath)
+						terminal.Printf("skip uploading a file %q to %q. The file with the same hash already exists!\n", sourcePath, targetPath)
 						logger.Debugf("skip uploading a file %q to %q. The file with the same hash already exists!", sourcePath, targetPath)
 						return nil
 					}
@@ -637,12 +963,12 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 	} else {
 		if !put.forceFlagValues.Force {
 			// ask
-			overwrite := commons.InputYN(fmt.Sprintf("file %q already exists. Overwrite?", targetPath))
+			overwrite := terminal.InputYN(fmt.Sprintf("File %q already exists. Overwrite?", targetPath))
 			if !overwrite {
 				// skip
 				now := time.Now()
-				reportFile := &commons.TransferReportFile{
-					Method:                commons.TransferMethodPut,
+				reportFile := &transfer.TransferReportFile{
+					Method:                transfer.TransferMethodPut,
 					StartAt:               now,
 					EndAt:                 now,
 					SourcePath:            sourcePath,
@@ -651,12 +977,13 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 					DestSize:              targetEntry.Size,
 					DestChecksum:          hex.EncodeToString(targetEntry.CheckSum),
 					DestChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
-					Notes:                 []string{"no_overwrite", "skip"},
+
+					Notes: []string{"put", "file", "overwrite", "declined", "skipped"},
 				}
 
 				put.transferReportManager.AddFile(reportFile)
 
-				commons.Printf("skip uploading a file %q to %q. The data object already exists!\n", sourcePath, targetPath)
+				terminal.Printf("skip uploading a file %q to %q. The data object already exists!\n", sourcePath, targetPath)
 				logger.Debugf("skip uploading a file %q to %q. The data object already exists!", sourcePath, targetPath)
 				return nil
 			}
@@ -664,36 +991,67 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 	}
 
 	// schedule
-	return put.schedulePut(sourceStat, sourcePath, tempPath, targetPath, requireEncryption, encryptionMode)
+	put.schedulePut(sourceStat, sourcePath, tempPath, targetPath, encryptionMode)
+	return nil
 }
 
-func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetPath string, parentEncryption bool, parentEncryptionMode commons.EncryptionMode) error {
+func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetPath string, parentEncryptionMode encryption.EncryptionMode) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "PutCommand",
 		"function": "putDir",
 	})
 
-	commons.MarkIRODSPathMap(put.updatedPathMap, targetPath)
+	defaultNotes := []string{"put", "directory"}
+
+	report := func(startTime time.Time, endTime time.Time, err error, additionalNotes ...string) {
+		newNotes := append(defaultNotes, additionalNotes...)
+
+		reportFile := &transfer.TransferReportFile{
+			Method:     transfer.TransferMethodPut,
+			StartAt:    startTime,
+			EndAt:      endTime,
+			SourcePath: sourcePath,
+			SourceSize: sourceStat.Size(),
+			DestPath:   targetPath,
+			Error:      err,
+			Notes:      newNotes,
+		}
+
+		put.transferReportManager.AddFile(reportFile)
+	}
+
+	reportSimple := func(err error, additionalNotes ...string) {
+		now := time.Now()
+		report(now, now, err, additionalNotes...)
+	}
+
+	reportOverwrite := func(startTime time.Time, endTime time.Time, err error, additionalNotes ...string) {
+		newNotes := append(defaultNotes, additionalNotes...)
+		newNotes = append(newNotes, "overwrite")
+
+		reportFile := &transfer.TransferReportFile{
+			Method:   transfer.TransferMethodDelete,
+			StartAt:  startTime,
+			EndAt:    endTime,
+			DestPath: targetPath,
+			Error:    err,
+			Notes:    newNotes,
+		}
+
+		put.transferReportManager.AddFile(reportFile)
+	}
+
+	put.mutex.Lock()
+	commons_path.MarkIRODSPathMap(put.updatedPathMap, targetPath)
+	put.mutex.Unlock()
 
 	if put.hiddenFileFlagValues.Exclude {
 		// exclude hidden
 		if strings.HasPrefix(sourceStat.Name(), ".") {
 			// skip
-			now := time.Now()
-			reportFile := &commons.TransferReportFile{
-				Method:     commons.TransferMethodPut,
-				StartAt:    now,
-				EndAt:      now,
-				SourcePath: sourcePath,
-				SourceSize: sourceStat.Size(),
-				DestPath:   targetPath,
-				Notes:      []string{"hidden", "skip"},
-			}
-
-			put.transferReportManager.AddFile(reportFile)
-
-			commons.Printf("skip uploading a dir %q to %q. The dir is hidden!\n", sourcePath, targetPath)
+			reportSimple(nil, "hidden", "skipped")
+			terminal.Printf("skip uploading a dir %q to %q. The dir is hidden!\n", sourcePath, targetPath)
 			logger.Debugf("skip uploading a dir %q to %q. The dir is hidden!", sourcePath, targetPath)
 			return nil
 		}
@@ -704,23 +1062,17 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 		if irodsclient_types.IsFileNotFoundError(err) {
 			// target does not exist
 			// target must be a directory with new name
+			startTime := time.Now()
 			err = put.filesystem.MakeDir(targetPath, true)
+			endTime := time.Now()
+			report(startTime, endTime, err)
 			if err != nil {
 				return xerrors.Errorf("failed to make a collection %q: %w", targetPath, err)
 			}
 
-			now := time.Now()
-			reportFile := &commons.TransferReportFile{
-				Method:     commons.TransferMethodPut,
-				StartAt:    now,
-				EndAt:      now,
-				SourcePath: sourcePath,
-				DestPath:   targetPath,
-				Notes:      []string{"directory"},
-			}
-
-			put.transferReportManager.AddFile(reportFile)
+			// fallthrough to put entries
 		} else {
+			reportSimple(err)
 			return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
 		}
 	} else {
@@ -729,70 +1081,68 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 			if put.syncFlagValues.Sync {
 				// if it is sync, remove
 				if put.forceFlagValues.Force {
+					startTime := time.Now()
 					removeErr := put.filesystem.RemoveFile(targetPath, true)
-
-					now := time.Now()
-					reportFile := &commons.TransferReportFile{
-						Method:     commons.TransferMethodDelete,
-						StartAt:    now,
-						EndAt:      now,
-						SourcePath: targetPath,
-						Error:      removeErr,
-						Notes:      []string{"overwrite", "put"},
-					}
-
-					put.transferReportManager.AddFile(reportFile)
+					endTime := time.Now()
+					reportOverwrite(startTime, endTime, removeErr)
 
 					if removeErr != nil {
 						return removeErr
 					}
+
+					// fallthrough to put entries
 				} else {
 					// ask
-					overwrite := commons.InputYN(fmt.Sprintf("overwriting a directory %q, but file exists. Overwrite?", targetPath))
+					overwrite := terminal.InputYN(fmt.Sprintf("Overwriting a directory %q, but file exists. Overwrite?", targetPath))
 					if overwrite {
+						startTime := time.Now()
 						removeErr := put.filesystem.RemoveFile(targetPath, true)
+						endTime := time.Now()
 
-						now := time.Now()
-						reportFile := &commons.TransferReportFile{
-							Method:     commons.TransferMethodDelete,
-							StartAt:    now,
-							EndAt:      now,
-							SourcePath: targetPath,
-							Error:      removeErr,
-							Notes:      []string{"overwrite", "put"},
-						}
-
-						put.transferReportManager.AddFile(reportFile)
+						reportOverwrite(startTime, endTime, removeErr)
 
 						if removeErr != nil {
 							return removeErr
 						}
+
+						// fallthrough to put entries
 					} else {
-						return commons.NewNotDirError(targetPath)
+						overwriteErr := types.NewNotDirError(targetPath)
+
+						now := time.Now()
+						reportOverwrite(now, now, overwriteErr, "declined", "skipped")
+						terminal.Printf("skip uploading a dir %q to %q. The data object already exists!\n", sourcePath, targetPath)
+						logger.Debugf("skip uploading a dir %q to %q. The data object already exists!", sourcePath, targetPath)
+						return nil
 					}
 				}
 			} else {
-				return commons.NewNotDirError(targetPath)
+				notDirErr := types.NewNotDirError(targetPath)
+				now := time.Now()
+				reportOverwrite(now, now, notDirErr)
+				return notDirErr
 			}
 		}
 	}
 
-	requireEncryption, encryptionMode := put.requireEncryption(targetPath, parentEncryption, parentEncryptionMode)
+	// load encryption config
+	encryptionMode := put.getEncryptionMode(targetPath, parentEncryptionMode)
 
 	// get entries
 	entries, err := os.ReadDir(sourcePath)
 	if err != nil {
+		reportSimple(err)
 		return xerrors.Errorf("failed to list a directory %q: %w", sourcePath, err)
 	}
 
 	for _, entry := range entries {
-		newEntryPath := commons.MakeTargetIRODSFilePath(put.filesystem, entry.Name(), targetPath)
+		newEntryPath := commons_path.MakeIRODSTargetFilePath(put.filesystem, entry.Name(), targetPath)
 
 		entryPath := filepath.Join(sourcePath, entry.Name())
-
 		entryStat, err := os.Stat(entryPath)
 		if err != nil {
 			if os.IsNotExist(err) {
+				reportSimple(err)
 				return irodsclient_types.NewFileNotFoundError(entryPath)
 			}
 
@@ -801,25 +1151,26 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 
 		if entryStat.IsDir() {
 			// dir
-			err = put.putDir(entryStat, entryPath, newEntryPath, requireEncryption, encryptionMode)
+			err = put.putDir(entryStat, entryPath, newEntryPath, encryptionMode)
 			if err != nil {
 				return err
 			}
 		} else {
 			// file
-			if requireEncryption {
+			if encryptionMode != encryption.EncryptionModeNone {
 				// encrypt filename
 				tempPath, newTargetPath, err := put.getPathsForEncryption(entryPath, targetPath)
 				if err != nil {
+					reportSimple(err)
 					return xerrors.Errorf("failed to get encryption path for %q: %w", entryPath, err)
 				}
 
-				err = put.putFile(entryStat, entryPath, tempPath, newTargetPath, requireEncryption, encryptionMode)
+				err = put.putFile(entryStat, entryPath, tempPath, newTargetPath, encryptionMode)
 				if err != nil {
 					return err
 				}
 			} else {
-				err = put.putFile(entryStat, entryPath, "", newEntryPath, requireEncryption, encryptionMode)
+				err = put.putFile(entryStat, entryPath, "", newEntryPath, encryptionMode)
 				if err != nil {
 					return err
 				}
@@ -830,117 +1181,267 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 	return nil
 }
 
-func (put *PutCommand) deleteOnSuccess(sourcePath string) error {
-	sourceStat, err := os.Stat(sourcePath)
-	if err != nil {
-		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
-	}
-
-	if sourceStat.IsDir() {
-		return os.RemoveAll(sourcePath)
-	}
-
-	return os.Remove(sourcePath)
-}
-
-func (put *PutCommand) deleteExtra(targetPath string) error {
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
-	zone := put.account.ClientZone
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
-
-	return put.deleteExtraInternal(targetPath)
-}
-
-func (put *PutCommand) deleteExtraInternal(targetPath string) error {
+func (put *PutCommand) deleteFileOnSuccess(sourcePath string) error {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "PutCommand",
-		"function": "deleteExtraInternal",
+		"function": "deleteFileOnSuccess",
 	})
 
-	targetEntry, err := put.filesystem.Stat(targetPath)
-	if err != nil {
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
-	}
+	defaultNotes := []string{"put", "delete on success", "file"}
 
-	if !targetEntry.IsDir() {
-		// file
-		if _, ok := put.updatedPathMap[targetPath]; !ok {
-			// extra file
-			logger.Debugf("removing an extra data object %q", targetPath)
-
-			removeErr := put.filesystem.RemoveFile(targetPath, true)
-
-			now := time.Now()
-			reportFile := &commons.TransferReportFile{
-				Method:     commons.TransferMethodDelete,
-				StartAt:    now,
-				EndAt:      now,
-				SourcePath: targetPath,
-				Error:      removeErr,
-				Notes:      []string{"extra", "put"},
-			}
-
-			put.transferReportManager.AddFile(reportFile)
-
-			if removeErr != nil {
-				return removeErr
-			}
-		}
-
-		return nil
-	}
-
-	// target is dir
-	if _, ok := put.updatedPathMap[targetPath]; !ok {
-		// extra dir
-		logger.Debugf("removing an extra collection %q", targetPath)
-
-		removeErr := put.filesystem.RemoveDir(targetPath, true, true)
-
+	reportSimple := func(err error, additionalNotes ...string) {
 		now := time.Now()
-		reportFile := &commons.TransferReportFile{
-			Method:     commons.TransferMethodDelete,
+		newNotes := append(defaultNotes, additionalNotes...)
+
+		reportFile := &transfer.TransferReportFile{
+			Method:     transfer.TransferMethodDelete,
 			StartAt:    now,
 			EndAt:      now,
-			SourcePath: targetPath,
-			Error:      removeErr,
-			Notes:      []string{"extra", "put", "dir"},
+			SourcePath: sourcePath,
+			Error:      err,
+			Notes:      newNotes,
 		}
 
 		put.transferReportManager.AddFile(reportFile)
+	}
 
-		if removeErr != nil {
-			return removeErr
-		}
+	logger.Debugf("removing a file %q after upload", sourcePath)
+
+	if put.forceFlagValues.Force {
+		put.scheduleDeleteFileOnSuccess(sourcePath)
+		return nil
 	} else {
-		// non extra dir
-		// scan recursively
-		entries, err := put.filesystem.List(targetPath)
-		if err != nil {
-			return xerrors.Errorf("failed to list a collection %q: %w", targetPath, err)
+		// ask
+		overwrite := terminal.InputYN(fmt.Sprintf("Removing a file %q after upload. Remove?", sourcePath))
+		if overwrite {
+			put.scheduleDeleteFileOnSuccess(sourcePath)
+			return nil
+		} else {
+			// do not remove
+			reportSimple(nil, "declined", "skipped")
+			return nil
+		}
+	}
+}
+
+func (put *PutCommand) deleteDirOnSuccess(sourcePath string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"struct":   "PutCommand",
+		"function": "deleteDirOnSuccess",
+	})
+
+	defaultNotes := []string{"put", "delete on success", "directory"}
+
+	reportSimple := func(err error, additionalNotes ...string) {
+		now := time.Now()
+		newNotes := append(defaultNotes, additionalNotes...)
+
+		reportFile := &transfer.TransferReportFile{
+			Method:     transfer.TransferMethodDelete,
+			StartAt:    now,
+			EndAt:      now,
+			SourcePath: sourcePath,
+			Error:      err,
+			Notes:      newNotes,
 		}
 
-		for _, entry := range entries {
-			newTargetPath := path.Join(targetPath, entry.Name)
-			err = put.deleteExtraInternal(newTargetPath)
+		put.transferReportManager.AddFile(reportFile)
+	}
+
+	logger.Debugf("removing a directory %q after upload", sourcePath)
+
+	// scan recursively
+	entries, err := os.ReadDir(sourcePath)
+	if err != nil {
+		reportSimple(err)
+		return xerrors.Errorf("failed to list a directory %q: %w", sourcePath, err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			// dir
+			newSourcePath := filepath.Join(sourcePath, entry.Name())
+			err = put.deleteDirOnSuccess(newSourcePath)
+			if err != nil {
+				return err
+			}
+		} else {
+			// file
+			newSourcePath := filepath.Join(sourcePath, entry.Name())
+			err = put.deleteFileOnSuccess(newSourcePath)
 			if err != nil {
 				return err
 			}
 		}
 	}
 
+	// delete the directory itself
+	if put.forceFlagValues.Force {
+		put.scheduleDeleteDirOnSuccess(sourcePath)
+		return nil
+	} else {
+		// ask
+		overwrite := terminal.InputYN(fmt.Sprintf("Removing a directory %q after upload. Remove?", sourcePath))
+		if overwrite {
+			put.scheduleDeleteDirOnSuccess(sourcePath)
+			return nil
+		} else {
+			// do not remove
+			reportSimple(nil, "declined", "skipped")
+			return nil
+		}
+	}
+}
+
+func (put *PutCommand) deleteExtraFile(targetPath string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"struct":   "PutCommand",
+		"function": "deleteExtraFile",
+	})
+
+	defaultNotes := []string{"put", "extra", "file"}
+
+	report := func(startTime time.Time, endTime time.Time, err error, additionalNotes ...string) {
+		newNotes := append(defaultNotes, additionalNotes...)
+
+		reportFile := &transfer.TransferReportFile{
+			Method:   transfer.TransferMethodDelete,
+			StartAt:  startTime,
+			EndAt:    endTime,
+			DestPath: targetPath,
+			Error:    err,
+			Notes:    newNotes,
+		}
+
+		put.transferReportManager.AddFile(reportFile)
+	}
+
+	reportSimple := func(err error, additionalNotes ...string) {
+		now := time.Now()
+		report(now, now, err, additionalNotes...)
+	}
+
+	put.mutex.RLock()
+	isExtra := false
+	if _, ok := put.updatedPathMap[targetPath]; !ok {
+		isExtra = true
+	}
+	put.mutex.RUnlock()
+
+	if isExtra {
+		// extra file
+		logger.Debugf("removing an extra data object %q", targetPath)
+
+		if put.forceFlagValues.Force {
+			put.scheduleDeleteExtraFile(targetPath)
+			return nil
+		} else {
+			// ask
+			overwrite := terminal.InputYN(fmt.Sprintf("Removing an extra data object %q. Remove?", targetPath))
+			if overwrite {
+				put.scheduleDeleteExtraFile(targetPath)
+				return nil
+			} else {
+				// do not remove
+				reportSimple(nil, "declined", "skipped")
+				return nil
+			}
+		}
+	}
+
 	return nil
 }
 
-func (put *PutCommand) getEncryptionManagerForEncryption(mode commons.EncryptionMode) *commons.EncryptionManager {
-	manager := commons.NewEncryptionManager(mode)
+func (put *PutCommand) deleteExtraDir(targetPath string) error {
+	logger := log.WithFields(log.Fields{
+		"package":  "subcmd",
+		"struct":   "PutCommand",
+		"function": "deleteExtraDir",
+	})
+
+	defaultNotes := []string{"put", "extra", "directory"}
+
+	reportSimple := func(err error, additionalNotes ...string) {
+		now := time.Now()
+		newNotes := append(defaultNotes, additionalNotes...)
+
+		reportFile := &transfer.TransferReportFile{
+			Method:   transfer.TransferMethodDelete,
+			StartAt:  now,
+			EndAt:    now,
+			DestPath: targetPath,
+			Error:    err,
+			Notes:    newNotes,
+		}
+
+		put.transferReportManager.AddFile(reportFile)
+	}
+
+	// scan recursively
+	entries, err := put.filesystem.List(targetPath)
+	if err != nil {
+		reportSimple(err)
+		return xerrors.Errorf("failed to list a collection %q: %w", targetPath, err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			// dir
+			err = put.deleteExtraDir(entry.Path)
+			if err != nil {
+				return err
+			}
+		} else {
+			// file
+			err = put.deleteExtraFile(entry.Path)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// delete the directory itself
+	put.mutex.RLock()
+	isExtra := false
+	if _, ok := put.updatedPathMap[targetPath]; !ok {
+		isExtra = true
+	}
+	put.mutex.RUnlock()
+
+	if isExtra {
+		// extra dir
+		logger.Debugf("removing an extra collection %q", targetPath)
+
+		if put.forceFlagValues.Force {
+			put.scheduleDeleteExtraDir(targetPath)
+			return nil
+		} else {
+			// ask
+			overwrite := terminal.InputYN(fmt.Sprintf("Removing an extra collection %q. Remove?", targetPath))
+			if overwrite {
+				put.scheduleDeleteExtraDir(targetPath)
+				return nil
+			} else {
+				// do not remove
+				reportSimple(nil, "declined", "skipped")
+				return nil
+			}
+		}
+	}
+
+	return nil
+}
+
+func (put *PutCommand) getEncryptionManagerForEncryption(mode encryption.EncryptionMode) *encryption.EncryptionManager {
+	manager := encryption.NewEncryptionManager(mode)
 
 	switch mode {
-	case commons.EncryptionModeWinSCP, commons.EncryptionModePGP:
+	case encryption.EncryptionModeWinSCP, encryption.EncryptionModePGP:
 		manager.SetKey([]byte(put.encryptionFlagValues.Key))
-	case commons.EncryptionModeSSH:
+	case encryption.EncryptionModeSSH:
 		manager.SetPublicPrivateKey(put.encryptionFlagValues.PublicPrivateKeyPath)
 	}
 
@@ -948,35 +1449,35 @@ func (put *PutCommand) getEncryptionManagerForEncryption(mode commons.Encryption
 }
 
 func (put *PutCommand) getPathsForEncryption(sourcePath string, targetPath string) (string, string, error) {
-	if put.encryptionFlagValues.Mode != commons.EncryptionModeUnknown {
+	if put.encryptionFlagValues.Mode != encryption.EncryptionModeNone {
 		encryptManager := put.getEncryptionManagerForEncryption(put.encryptionFlagValues.Mode)
-		sourceFilename := commons.GetBasename(sourcePath)
+		sourceFilename := filepath.Base(sourcePath)
 
 		encryptedFilename, err := encryptManager.EncryptFilename(sourceFilename)
 		if err != nil {
 			return "", "", xerrors.Errorf("failed to encrypt filename %q: %w", sourcePath, err)
 		}
 
-		tempFilePath := commons.MakeTargetLocalFilePath(encryptedFilename, put.encryptionFlagValues.TempPath)
+		tempFilePath := commons_path.MakeLocalTargetFilePath(encryptedFilename, put.encryptionFlagValues.TempPath)
 
-		targetFilePath := commons.MakeTargetIRODSFilePath(put.filesystem, encryptedFilename, targetPath)
+		targetFilePath := commons_path.MakeIRODSTargetFilePath(put.filesystem, encryptedFilename, targetPath)
 
 		return tempFilePath, targetFilePath, nil
 	}
 
-	targetFilePath := commons.MakeTargetIRODSFilePath(put.filesystem, sourcePath, targetPath)
+	targetFilePath := commons_path.MakeIRODSTargetFilePath(put.filesystem, sourcePath, targetPath)
 
 	return "", targetFilePath, nil
 }
 
-func (put *PutCommand) encryptFile(sourcePath string, encryptedFilePath string, encryptionMode commons.EncryptionMode) (bool, error) {
+func (put *PutCommand) encryptFile(sourcePath string, encryptedFilePath string, encryptionMode encryption.EncryptionMode) (bool, error) {
 	logger := log.WithFields(log.Fields{
 		"package":  "subcmd",
 		"struct":   "PutCommand",
 		"function": "encryptFile",
 	})
 
-	if encryptionMode != commons.EncryptionModeUnknown {
+	if encryptionMode != encryption.EncryptionModeNone {
 		logger.Debugf("encrypt a file %q to %q", sourcePath, encryptedFilePath)
 
 		encryptManager := put.getEncryptionManagerForEncryption(encryptionMode)
@@ -992,49 +1493,26 @@ func (put *PutCommand) encryptFile(sourcePath string, encryptedFilePath string, 
 	return false, nil
 }
 
-func (put *PutCommand) calculateThreadForTransferJob(size int64) int {
-	threads := commons.CalculateThreadForTransferJob(size, put.parallelTransferFlagValues.ThreadNumberPerFile)
+func (put *PutCommand) determineTransferMethod(size int64) (transfer.TransferMode, int) {
+	threads := parallel.CalculateThreadForTransferJob(size, put.parallelTransferFlagValues.ThreadNumberPerFile)
 
 	// determine how to upload
-	if put.parallelTransferFlagValues.SingleThread || put.parallelTransferFlagValues.ThreadNumber == 1 || put.parallelTransferFlagValues.ThreadNumberPerFile == 1 {
-		return 1
-	} else if put.parallelTransferFlagValues.Icat && !put.filesystem.SupportParallelUpload() {
-		return 1
-	} else if put.parallelTransferFlagValues.RedirectToResource || put.parallelTransferFlagValues.Icat {
-		return threads
+	if put.parallelTransferFlagValues.SingleThread || put.parallelTransferFlagValues.ThreadNumber <= 2 || put.parallelTransferFlagValues.ThreadNumberPerFile == 1 || !put.filesystem.SupportParallelUpload() {
+		threads = 1
 	}
 
-	//if size < commons.RedirectToResourceMinSize && !put.filesystem.SupportParallelUpload() {
-	//	// icat
-	//	return 1
-	//}
-
-	if !put.filesystem.SupportParallelUpload() {
-		return 1
-	}
-
-	return threads
-}
-
-func (put *PutCommand) determineTransferMode(size int64) commons.TransferMode {
-	if put.parallelTransferFlagValues.RedirectToResource {
-		return commons.TransferModeRedirect
-	} else if put.parallelTransferFlagValues.Icat {
-		return commons.TransferModeICAT
+	if put.parallelTransferFlagValues.Icat {
+		return transfer.TransferModeICAT, threads
 	}
 
 	// sysconfig
-	systemConfig := commons.GetSystemConfig()
+	systemConfig := config.GetSystemConfig()
 	if systemConfig != nil && systemConfig.AdditionalConfig != nil {
-		if systemConfig.AdditionalConfig.TransferMode.Valid() {
-			return systemConfig.AdditionalConfig.TransferMode
+		mode := transfer.GetTransferMode(systemConfig.AdditionalConfig.TransferMode)
+		if mode.Valid() {
+			return mode, threads
 		}
 	}
 
-	// auto
-	//if size >= commons.RedirectToResourceMinSize {
-	//	return commons.TransferModeRedirect
-	//}
-
-	return commons.TransferModeICAT
+	return transfer.TransferModeICAT, threads
 }

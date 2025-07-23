@@ -4,7 +4,9 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/terminal"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -65,21 +67,21 @@ func (passwd *PasswdCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	// Create a file system
-	passwd.account = commons.GetSessionConfig().ToIRODSAccount()
-	passwd.filesystem, err = commons.GetIRODSFSClient(passwd.account, true, false)
+	passwd.account = config.GetSessionConfig().ToIRODSAccount()
+	passwd.filesystem, err = irods.GetIRODSFSClient(passwd.account, true, false)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer passwd.filesystem.Release()
 
 	if passwd.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(passwd.filesystem, passwd.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(passwd.filesystem, passwd.commonFlagValues.Timeout)
 	}
 
 	err = passwd.changePassword()
@@ -100,14 +102,14 @@ func (passwd *PasswdCommand) changePassword() error {
 
 	pass := false
 	for i := 0; i < 3; i++ {
-		currentPassword := commons.InputPassword("Current iRODS Password")
+		currentPassword := terminal.InputPassword("Current iRODS Password")
 		if currentPassword == passwd.account.Password {
 			pass = true
 			break
 		}
 
-		commons.Println("Wrong password")
-		commons.Println("")
+		terminal.Println("Wrong password")
+		terminal.Println("")
 	}
 
 	if !pass {
@@ -117,21 +119,21 @@ func (passwd *PasswdCommand) changePassword() error {
 	pass = false
 	newPassword := ""
 	for i := 0; i < 3; i++ {
-		newPassword = commons.InputPassword("New iRODS Password")
+		newPassword = terminal.InputPassword("New iRODS Password")
 		if newPassword != passwd.account.Password {
 			pass = true
 			break
 		}
 
-		commons.Println("Please provide new password")
-		commons.Println("")
+		terminal.Println("Please provide new password")
+		terminal.Println("")
 	}
 
 	if !pass {
 		return xerrors.Errorf("invalid password provided")
 	}
 
-	newPasswordConfirm := commons.InputPassword("Confirm New iRODS Password")
+	newPasswordConfirm := terminal.InputPassword("Confirm New iRODS Password")
 	if newPassword != newPasswordConfirm {
 		return xerrors.Errorf("password mismatched")
 	}

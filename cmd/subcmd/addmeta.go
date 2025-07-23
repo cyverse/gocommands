@@ -4,7 +4,9 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/path"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -84,21 +86,21 @@ func (addMeta *AddMetaCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	// Create a file system
-	addMeta.account = commons.GetSessionConfig().ToIRODSAccount()
-	addMeta.filesystem, err = commons.GetIRODSFSClient(addMeta.account, false, false)
+	addMeta.account = config.GetSessionConfig().ToIRODSAccount()
+	addMeta.filesystem, err = irods.GetIRODSFSClient(addMeta.account, false, false)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer addMeta.filesystem.Release()
 
 	if addMeta.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(addMeta.filesystem, addMeta.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(addMeta.filesystem, addMeta.commonFlagValues.Timeout)
 	}
 
 	// add meta
@@ -132,10 +134,10 @@ func (addMeta *AddMetaCommand) addMetaToPath(targetPath string, attribute string
 		"function": "addMetaToPath",
 	})
 
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := addMeta.account.ClientZone
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	targetPath = path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	logger.Debugf("add metadata to path %q (attr %q, value %q, unit %q)", targetPath, attribute, value, unit)
 

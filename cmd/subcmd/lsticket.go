@@ -6,7 +6,11 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/format"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/terminal"
+	"github.com/cyverse/gocommands/commons/types"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -76,21 +80,21 @@ func (lsTicket *LsTicketCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	// Create a file system
-	lsTicket.account = commons.GetSessionConfig().ToIRODSAccount()
-	lsTicket.filesystem, err = commons.GetIRODSFSClient(lsTicket.account, true, true)
+	lsTicket.account = config.GetSessionConfig().ToIRODSAccount()
+	lsTicket.filesystem, err = irods.GetIRODSFSClient(lsTicket.account, true, true)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer lsTicket.filesystem.Release()
 
 	if lsTicket.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(lsTicket.filesystem, lsTicket.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(lsTicket.filesystem, lsTicket.commonFlagValues.Timeout)
 	}
 
 	if len(lsTicket.tickets) == 0 {
@@ -114,7 +118,7 @@ func (lsTicket *LsTicketCommand) listTickets() error {
 	}
 
 	if len(tickets) == 0 {
-		commons.Printf("Found no tickets\n")
+		terminal.Printf("Found no tickets\n")
 	}
 
 	return lsTicket.printTickets(tickets)
@@ -152,28 +156,28 @@ func (lsTicket *LsTicketCommand) printTickets(tickets []*irodsclient_types.IRODS
 }
 
 func (lsTicket *LsTicketCommand) printTicketInternal(ticket *irodsclient_types.IRODSTicket) error {
-	commons.Printf("[%s]\n", ticket.Name)
-	commons.Printf("  id: %d\n", ticket.ID)
-	commons.Printf("  name: %s\n", ticket.Name)
-	commons.Printf("  type: %s\n", ticket.Type)
-	commons.Printf("  owner: %s\n", ticket.Owner)
-	commons.Printf("  owner zone: %s\n", ticket.OwnerZone)
-	commons.Printf("  object type: %s\n", ticket.ObjectType)
-	commons.Printf("  path: %s\n", ticket.Path)
-	commons.Printf("  uses limit: %d\n", ticket.UsesLimit)
-	commons.Printf("  uses count: %d\n", ticket.UsesCount)
-	commons.Printf("  write file limit: %d\n", ticket.WriteFileLimit)
-	commons.Printf("  write file count: %d\n", ticket.WriteFileCount)
-	commons.Printf("  write byte limit: %d\n", ticket.WriteByteLimit)
-	commons.Printf("  write byte count: %d\n", ticket.WriteByteCount)
+	terminal.Printf("[%s]\n", ticket.Name)
+	terminal.Printf("  id: %d\n", ticket.ID)
+	terminal.Printf("  name: %s\n", ticket.Name)
+	terminal.Printf("  type: %s\n", ticket.Type)
+	terminal.Printf("  owner: %s\n", ticket.Owner)
+	terminal.Printf("  owner zone: %s\n", ticket.OwnerZone)
+	terminal.Printf("  object type: %s\n", ticket.ObjectType)
+	terminal.Printf("  path: %s\n", ticket.Path)
+	terminal.Printf("  uses limit: %d\n", ticket.UsesLimit)
+	terminal.Printf("  uses count: %d\n", ticket.UsesCount)
+	terminal.Printf("  write file limit: %d\n", ticket.WriteFileLimit)
+	terminal.Printf("  write file count: %d\n", ticket.WriteFileCount)
+	terminal.Printf("  write byte limit: %d\n", ticket.WriteByteLimit)
+	terminal.Printf("  write byte count: %d\n", ticket.WriteByteCount)
 
 	if ticket.ExpirationTime.IsZero() {
-		commons.Print("  expiry time: none\n")
+		terminal.Print("  expiry time: none\n")
 	} else {
-		commons.Printf("  expiry time: %s\n", commons.MakeDateTimeString(ticket.ExpirationTime))
+		terminal.Printf("  expiry time: %s\n", types.MakeDateTimeString(ticket.ExpirationTime))
 	}
 
-	if lsTicket.listFlagValues.Format == commons.ListFormatLong || lsTicket.listFlagValues.Format == commons.ListFormatVeryLong {
+	if lsTicket.listFlagValues.Format == format.ListFormatLong || lsTicket.listFlagValues.Format == format.ListFormatVeryLong {
 		restrictions, err := lsTicket.filesystem.GetTicketRestrictions(ticket.ID)
 		if err != nil {
 			return xerrors.Errorf("failed to get ticket restrictions %q: %w", ticket.Name, err)
@@ -181,29 +185,29 @@ func (lsTicket *LsTicketCommand) printTicketInternal(ticket *irodsclient_types.I
 
 		if restrictions != nil {
 			if len(restrictions.AllowedHosts) == 0 {
-				commons.Printf("  No host restrictions\n")
+				terminal.Printf("  No host restrictions\n")
 			} else {
 				for _, host := range restrictions.AllowedHosts {
-					commons.Printf("  Allowed Hosts:\n")
-					commons.Printf("    - %s\n", host)
+					terminal.Printf("  Allowed Hosts:\n")
+					terminal.Printf("    - %s\n", host)
 				}
 			}
 
 			if len(restrictions.AllowedUserNames) == 0 {
-				commons.Printf("  No user restrictions\n")
+				terminal.Printf("  No user restrictions\n")
 			} else {
 				for _, user := range restrictions.AllowedUserNames {
-					commons.Printf("  Allowed Users:\n")
-					commons.Printf("    - %s\n", user)
+					terminal.Printf("  Allowed Users:\n")
+					terminal.Printf("    - %s\n", user)
 				}
 			}
 
 			if len(restrictions.AllowedGroupNames) == 0 {
-				commons.Printf("  No group restrictions\n")
+				terminal.Printf("  No group restrictions\n")
 			} else {
 				for _, group := range restrictions.AllowedGroupNames {
-					commons.Printf("  Allowed Groups:\n")
-					commons.Printf("    - %s\n", group)
+					terminal.Printf("  Allowed Groups:\n")
+					terminal.Printf("    - %s\n", group)
 				}
 			}
 		}
@@ -212,14 +216,14 @@ func (lsTicket *LsTicketCommand) printTicketInternal(ticket *irodsclient_types.I
 	return nil
 }
 
-func (lsTicket *LsTicketCommand) getTicketSortFunction(tickets []*irodsclient_types.IRODSTicket, sortOrder commons.ListSortOrder, sortReverse bool) func(i int, j int) bool {
+func (lsTicket *LsTicketCommand) getTicketSortFunction(tickets []*irodsclient_types.IRODSTicket, sortOrder format.ListSortOrder, sortReverse bool) func(i int, j int) bool {
 	if sortReverse {
 		switch sortOrder {
-		case commons.ListSortOrderName:
+		case format.ListSortOrderName:
 			return func(i int, j int) bool {
 				return tickets[i].Name > tickets[j].Name
 			}
-		case commons.ListSortOrderTime:
+		case format.ListSortOrderTime:
 			return func(i int, j int) bool {
 				return (tickets[i].ExpirationTime.After(tickets[j].ExpirationTime)) ||
 					(tickets[i].ExpirationTime.Equal(tickets[j].ExpirationTime) &&
@@ -234,11 +238,11 @@ func (lsTicket *LsTicketCommand) getTicketSortFunction(tickets []*irodsclient_ty
 	}
 
 	switch sortOrder {
-	case commons.ListSortOrderName:
+	case format.ListSortOrderName:
 		return func(i int, j int) bool {
 			return tickets[i].Name < tickets[j].Name
 		}
-	case commons.ListSortOrderTime:
+	case format.ListSortOrderTime:
 		return func(i int, j int) bool {
 			return (tickets[i].ExpirationTime.Before(tickets[j].ExpirationTime)) ||
 				(tickets[i].ExpirationTime.Equal(tickets[j].ExpirationTime) &&

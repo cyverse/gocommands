@@ -10,7 +10,10 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	common_path "github.com/cyverse/gocommands/commons/path"
+	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/gliderlabs/ssh"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -79,21 +82,21 @@ func (copy *CopySftpIdCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	// Create a file system
-	copy.account = commons.GetSessionConfig().ToIRODSAccount()
-	copy.filesystem, err = commons.GetIRODSFSClient(copy.account, false, false)
+	copy.account = config.GetSessionConfig().ToIRODSAccount()
+	copy.filesystem, err = irods.GetIRODSFSClient(copy.account, false, false)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer copy.filesystem.Release()
 
 	if copy.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(copy.filesystem, copy.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(copy.filesystem, copy.commonFlagValues.Timeout)
 	}
 
 	// run
@@ -114,7 +117,7 @@ func (copy *CopySftpIdCommand) Process() error {
 func (copy *CopySftpIdCommand) scanSSHIdentityFiles() ([]string, error) {
 	if len(copy.sftpIDFlagValues.IdentityFilePath) > 0 {
 		// if identity file is given via flag
-		identityFilePath := commons.MakeLocalPath(copy.sftpIDFlagValues.IdentityFilePath)
+		identityFilePath := common_path.MakeLocalPath(copy.sftpIDFlagValues.IdentityFilePath)
 		_, err := os.Stat(identityFilePath)
 		if err != nil {
 			return nil, err
@@ -263,7 +266,7 @@ func (copy *CopySftpIdCommand) copySftpId(identityFiles []string) error {
 		"function": "copySftpId",
 	})
 
-	home := commons.GetHomeDir()
+	home := config.GetHomeDir()
 	irodsSshPath := path.Join(home, ".ssh")
 	authorizedKeyPath := path.Join(irodsSshPath, "authorized_keys")
 
@@ -302,7 +305,7 @@ func (copy *CopySftpIdCommand) copySftpId(identityFiles []string) error {
 	if !copy.dryRunFlagValues.DryRun {
 		if !contentChanged {
 			logger.Debugf("skipping writing authorized_keys %q on iRODS for user %q, nothing changed", authorizedKeyPath, copy.account.ClientUser)
-			commons.Printf("SSH public key(s) are already set for user %q\n", copy.account.ClientUser)
+			terminal.Printf("SSH public key(s) are already set for user %q\n", copy.account.ClientUser)
 			return nil
 		}
 
@@ -313,7 +316,7 @@ func (copy *CopySftpIdCommand) copySftpId(identityFiles []string) error {
 			return xerrors.Errorf("failed to update keys in %q: %w", authorizedKeyPath, err)
 		}
 
-		commons.Printf("%d SSH public key(s) copied to iRODS for user %q\n", len(authorizedKeysUpdated), copy.account.ClientUser)
+		terminal.Printf("%d SSH public key(s) copied to iRODS for user %q\n", len(authorizedKeysUpdated), copy.account.ClientUser)
 	}
 
 	return nil

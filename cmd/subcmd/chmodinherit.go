@@ -6,7 +6,9 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/path"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
 )
@@ -87,21 +89,21 @@ func (chModInherit *ChModInheritCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	// Create a file system
-	chModInherit.account = commons.GetSessionConfig().ToIRODSAccount()
-	chModInherit.filesystem, err = commons.GetIRODSFSClient(chModInherit.account, true, true)
+	chModInherit.account = config.GetSessionConfig().ToIRODSAccount()
+	chModInherit.filesystem, err = irods.GetIRODSFSClient(chModInherit.account, true, true)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer chModInherit.filesystem.Release()
 
 	if chModInherit.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(chModInherit.filesystem, chModInherit.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(chModInherit.filesystem, chModInherit.commonFlagValues.Timeout)
 	}
 
 	for _, targetPath := range chModInherit.targetPaths {
@@ -115,10 +117,10 @@ func (chModInherit *ChModInheritCommand) Process() error {
 }
 
 func (chModInherit *ChModInheritCommand) changeOne(targetPath string) error {
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := chModInherit.account.ClientZone
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	targetPath = path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	targetEntry, err := chModInherit.filesystem.Stat(targetPath)
 	if err != nil {

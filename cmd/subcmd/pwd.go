@@ -2,7 +2,8 @@ package subcmd
 
 import (
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
 )
@@ -59,7 +60,7 @@ func (pwd *PwdCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
@@ -72,8 +73,8 @@ func (pwd *PwdCommand) Process() error {
 }
 
 func (pwd *PwdCommand) printCurrentWorkingDir() error {
-	cwd := commons.GetCWD()
-	commons.Printf("%s\n", cwd)
+	cwd := config.GetCWD()
+	terminal.Printf("%s\n", cwd)
 
 	return nil
 }

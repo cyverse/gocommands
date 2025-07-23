@@ -11,7 +11,14 @@ import (
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/encryption"
+	"github.com/cyverse/gocommands/commons/format"
+	"github.com/cyverse/gocommands/commons/irods"
+	commons_path "github.com/cyverse/gocommands/commons/path"
+	"github.com/cyverse/gocommands/commons/terminal"
+	"github.com/cyverse/gocommands/commons/types"
+	"github.com/cyverse/gocommands/commons/wildcard"
 	"github.com/dustin/go-humanize"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -111,26 +118,26 @@ func (ls *LsCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	// Create a file system
-	ls.account = commons.GetSessionConfig().ToIRODSAccount()
+	ls.account = config.GetSessionConfig().ToIRODSAccount()
 	if len(ls.ticketAccessFlagValues.Name) > 0 {
 		logger.Debugf("use ticket: %q", ls.ticketAccessFlagValues.Name)
 		ls.account.Ticket = ls.ticketAccessFlagValues.Name
 	}
 
-	ls.filesystem, err = commons.GetIRODSFSClient(ls.account, true, true)
+	ls.filesystem, err = irods.GetIRODSFSClient(ls.account, true, true)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer ls.filesystem.Release()
 
 	if ls.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(ls.filesystem, ls.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(ls.filesystem, ls.commonFlagValues.Timeout)
 	}
 
 	// set default key for decryption
@@ -140,7 +147,7 @@ func (ls *LsCommand) Process() error {
 
 	// Expand wildcards
 	if ls.wildcardSearchFlagValues.WildcardSearch {
-		expanded_results, err := commons.ExpandWildcards(ls.filesystem, ls.account, ls.sourcePaths, true, true)
+		expanded_results, err := wildcard.ExpandWildcards(ls.filesystem, ls.account, ls.sourcePaths, true, true)
 		if err != nil {
 			return xerrors.Errorf("failed to expand wildcards:  %w", err)
 		}
@@ -174,15 +181,15 @@ func (ls *LsCommand) requireDecryption(sourcePath string) bool {
 		return false
 	}
 
-	mode := commons.DetectEncryptionMode(sourcePath)
-	return mode != commons.EncryptionModeUnknown
+	mode := encryption.DetectEncryptionMode(sourcePath)
+	return mode != encryption.EncryptionModeNone
 }
 
 func (ls *LsCommand) listCollection(sourcePath string) error {
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := ls.account.ClientZone
-	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
+	sourcePath = commons_path.MakeIRODSPath(cwd, home, zone, sourcePath)
 
 	sourceEntry, err := ls.filesystem.Stat(sourcePath)
 	if err != nil {
@@ -193,7 +200,7 @@ func (ls *LsCommand) listCollection(sourcePath string) error {
 		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
 	}
 
-	connection, err := ls.filesystem.GetMetadataConnection()
+	connection, err := ls.filesystem.GetMetadataConnection(true)
 	if err != nil {
 		return xerrors.Errorf("failed to get connection: %w", err)
 	}
@@ -249,16 +256,16 @@ func (ls *LsCommand) listCollection(sourcePath string) error {
 	}
 	ls.printCollections(filtered_colls)
 
-	commons.Print("\n")
+	terminal.Print("\n")
 
 	return nil
 }
 
 func (ls *LsCommand) listDataObject(sourcePath string) error {
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := ls.account.ClientZone
-	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
+	sourcePath = commons_path.MakeIRODSPath(cwd, home, zone, sourcePath)
 
 	sourceEntry, err := ls.filesystem.Stat(sourcePath)
 	if err != nil {
@@ -269,7 +276,7 @@ func (ls *LsCommand) listDataObject(sourcePath string) error {
 		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
 	}
 
-	connection, err := ls.filesystem.GetMetadataConnection()
+	connection, err := ls.filesystem.GetMetadataConnection(true)
 	if err != nil {
 		return xerrors.Errorf("failed to get connection: %w", err)
 	}
@@ -338,7 +345,7 @@ func (ls *LsCommand) filterHiddenDataObjects(entries []*irodsclient_types.IRODSD
 }
 
 func (ls *LsCommand) printCurrentCollection(sourcePath string, accesses []*irodsclient_types.IRODSAccess, inherit *irodsclient_types.IRODSAccessInheritance) {
-	commons.Printf("%s:\n", sourcePath)
+	terminal.Printf("%s:\n", sourcePath)
 	if len(accesses) > 0 {
 		ls.printAccesses(accesses)
 	}
@@ -351,13 +358,13 @@ func (ls *LsCommand) printCurrentCollection(sourcePath string, accesses []*irods
 func (ls *LsCommand) printCollections(entries []*irodsclient_types.IRODSCollection) {
 	sort.SliceStable(entries, ls.getCollectionSortFunction(entries, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
 	for _, entry := range entries {
-		commons.Printf("  C- %s\n", entry.Path)
+		terminal.Printf("  C- %s\n", entry.Path)
 	}
 }
 
 func (ls *LsCommand) printDataObjects(entries []*irodsclient_types.IRODSDataObject, accesses []*irodsclient_types.IRODSAccess, showFullPath bool) {
 	// access is optional
-	if ls.listFlagValues.Format == commons.ListFormatNormal {
+	if ls.listFlagValues.Format == format.ListFormatNormal {
 		sort.SliceStable(entries, ls.getDataObjectSortFunction(entries, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
 		for _, entry := range entries {
 			accessesForEntry := []*irodsclient_types.IRODSAccess{}
@@ -389,26 +396,26 @@ func (ls *LsCommand) flattenReplicas(objects []*irodsclient_types.IRODSDataObjec
 	return result
 }
 
-func (ls *LsCommand) getFlatReplicaSortFunction(entries []*FlatReplica, sortOrder commons.ListSortOrder, sortReverse bool) func(i int, j int) bool {
+func (ls *LsCommand) getFlatReplicaSortFunction(entries []*FlatReplica, sortOrder format.ListSortOrder, sortReverse bool) func(i int, j int) bool {
 	if sortReverse {
 		switch sortOrder {
-		case commons.ListSortOrderName:
+		case format.ListSortOrderName:
 			return func(i int, j int) bool {
 				return entries[i].DataObject.Name > entries[j].DataObject.Name
 			}
-		case commons.ListSortOrderExt:
+		case format.ListSortOrderExt:
 			return func(i int, j int) bool {
 				return (path.Ext(entries[i].DataObject.Name) > path.Ext(entries[j].DataObject.Name)) ||
 					(path.Ext(entries[i].DataObject.Name) == path.Ext(entries[j].DataObject.Name) &&
 						entries[i].DataObject.Name < entries[j].DataObject.Name)
 			}
-		case commons.ListSortOrderTime:
+		case format.ListSortOrderTime:
 			return func(i int, j int) bool {
 				return (entries[i].Replica.ModifyTime.After(entries[j].Replica.ModifyTime)) ||
 					(entries[i].Replica.ModifyTime.Equal(entries[j].Replica.ModifyTime) &&
 						entries[i].DataObject.Name < entries[j].DataObject.Name)
 			}
-		case commons.ListSortOrderSize:
+		case format.ListSortOrderSize:
 			return func(i int, j int) bool {
 				return (entries[i].DataObject.Size > entries[j].DataObject.Size) ||
 					(entries[i].DataObject.Size == entries[j].DataObject.Size &&
@@ -422,23 +429,23 @@ func (ls *LsCommand) getFlatReplicaSortFunction(entries []*FlatReplica, sortOrde
 	}
 
 	switch sortOrder {
-	case commons.ListSortOrderName:
+	case format.ListSortOrderName:
 		return func(i int, j int) bool {
 			return entries[i].DataObject.Name < entries[j].DataObject.Name
 		}
-	case commons.ListSortOrderExt:
+	case format.ListSortOrderExt:
 		return func(i int, j int) bool {
 			return (path.Ext(entries[i].DataObject.Name) < path.Ext(entries[j].DataObject.Name)) ||
 				(path.Ext(entries[i].DataObject.Name) == path.Ext(entries[j].DataObject.Name) &&
 					entries[i].DataObject.Name < entries[j].DataObject.Name)
 		}
-	case commons.ListSortOrderTime:
+	case format.ListSortOrderTime:
 		return func(i int, j int) bool {
 			return (entries[i].Replica.ModifyTime.Before(entries[j].Replica.ModifyTime)) ||
 				(entries[i].Replica.ModifyTime.Equal(entries[j].Replica.ModifyTime) &&
 					entries[i].DataObject.Name < entries[j].DataObject.Name)
 		}
-	case commons.ListSortOrderSize:
+	case format.ListSortOrderSize:
 		return func(i int, j int) bool {
 			return (entries[i].DataObject.Size < entries[j].DataObject.Size) ||
 				(entries[i].DataObject.Size == entries[j].DataObject.Size &&
@@ -451,26 +458,26 @@ func (ls *LsCommand) getFlatReplicaSortFunction(entries []*FlatReplica, sortOrde
 	}
 }
 
-func (ls *LsCommand) getDataObjectSortFunction(entries []*irodsclient_types.IRODSDataObject, sortOrder commons.ListSortOrder, sortReverse bool) func(i int, j int) bool {
+func (ls *LsCommand) getDataObjectSortFunction(entries []*irodsclient_types.IRODSDataObject, sortOrder format.ListSortOrder, sortReverse bool) func(i int, j int) bool {
 	if sortReverse {
 		switch sortOrder {
-		case commons.ListSortOrderName:
+		case format.ListSortOrderName:
 			return func(i int, j int) bool {
 				return entries[i].Name > entries[j].Name
 			}
-		case commons.ListSortOrderExt:
+		case format.ListSortOrderExt:
 			return func(i int, j int) bool {
 				return (path.Ext(entries[i].Name) > path.Ext(entries[j].Name)) ||
 					(path.Ext(entries[i].Name) == path.Ext(entries[j].Name) &&
 						entries[i].Name < entries[j].Name)
 			}
-		case commons.ListSortOrderTime:
+		case format.ListSortOrderTime:
 			return func(i int, j int) bool {
 				return (ls.getDataObjectModifyTime(entries[i]).After(ls.getDataObjectModifyTime(entries[j]))) ||
 					(ls.getDataObjectModifyTime(entries[i]).Equal(ls.getDataObjectModifyTime(entries[j])) &&
 						entries[i].Name < entries[j].Name)
 			}
-		case commons.ListSortOrderSize:
+		case format.ListSortOrderSize:
 			return func(i int, j int) bool {
 				return (entries[i].Size > entries[j].Size) ||
 					(entries[i].Size == entries[j].Size &&
@@ -484,23 +491,23 @@ func (ls *LsCommand) getDataObjectSortFunction(entries []*irodsclient_types.IROD
 	}
 
 	switch sortOrder {
-	case commons.ListSortOrderName:
+	case format.ListSortOrderName:
 		return func(i int, j int) bool {
 			return entries[i].Name < entries[j].Name
 		}
-	case commons.ListSortOrderExt:
+	case format.ListSortOrderExt:
 		return func(i int, j int) bool {
 			return (path.Ext(entries[i].Name) < path.Ext(entries[j].Name)) ||
 				(path.Ext(entries[i].Name) == path.Ext(entries[j].Name) &&
 					entries[i].Name < entries[j].Name)
 		}
-	case commons.ListSortOrderTime:
+	case format.ListSortOrderTime:
 		return func(i int, j int) bool {
 			return (ls.getDataObjectModifyTime(entries[i]).Before(ls.getDataObjectModifyTime(entries[j]))) ||
 				(ls.getDataObjectModifyTime(entries[i]).Equal(ls.getDataObjectModifyTime(entries[j])) &&
 					entries[i].Name < entries[j].Name)
 		}
-	case commons.ListSortOrderSize:
+	case format.ListSortOrderSize:
 		return func(i int, j int) bool {
 			return (entries[i].Size < entries[j].Size) ||
 				(entries[i].Size == entries[j].Size &&
@@ -538,8 +545,8 @@ func (ls *LsCommand) printDataObjectShort(entry *irodsclient_types.IRODSDataObje
 
 	if ls.requireDecryption(entry.Path) {
 		// need to decrypt
-		encryptionMode := commons.DetectEncryptionMode(newName)
-		if encryptionMode != commons.EncryptionModeUnknown {
+		encryptionMode := encryption.DetectEncryptionMode(newName)
+		if encryptionMode != encryption.EncryptionModeNone {
 			encryptManager := ls.getEncryptionManagerForDecryption(encryptionMode)
 
 			decryptedFilename, err := encryptManager.DecryptFilename(newName)
@@ -552,14 +559,14 @@ func (ls *LsCommand) printDataObjectShort(entry *irodsclient_types.IRODSDataObje
 		}
 	}
 
-	commons.Printf("  %s\n", newName)
+	terminal.Printf("  %s\n", newName)
 	if len(accesses) > 0 {
 		ls.printAccesses(accesses)
 	}
 }
 
 func (ls *LsCommand) printAccesses(accesses []*irodsclient_types.IRODSAccess) {
-	commons.Print("        ACL - ")
+	terminal.Print("        ACL - ")
 
 	// group first then user
 	first := true
@@ -568,10 +575,10 @@ func (ls *LsCommand) printAccesses(accesses []*irodsclient_types.IRODSAccess) {
 			if first {
 				first = false
 			} else {
-				commons.Print("\t")
+				terminal.Print("\t")
 			}
 
-			commons.Printf("g:%s#%s:%s", access.UserName, access.UserZone, access.AccessLevel)
+			terminal.Printf("g:%s#%s:%s", access.UserName, access.UserZone, access.AccessLevel)
 		}
 	}
 
@@ -580,13 +587,13 @@ func (ls *LsCommand) printAccesses(accesses []*irodsclient_types.IRODSAccess) {
 			if first {
 				first = false
 			} else {
-				commons.Print("\t")
+				terminal.Print("\t")
 			}
 
-			commons.Printf("%s#%s:%s", access.UserName, access.UserZone, access.AccessLevel)
+			terminal.Printf("%s#%s:%s", access.UserName, access.UserZone, access.AccessLevel)
 		}
 	}
-	commons.Print("\n")
+	terminal.Print("\n")
 }
 
 func (ls *LsCommand) printInheritance(inherit *irodsclient_types.IRODSAccessInheritance) {
@@ -595,7 +602,7 @@ func (ls *LsCommand) printInheritance(inherit *irodsclient_types.IRODSAccessInhe
 		inheritance = "Enabled"
 	}
 
-	commons.Printf("        Inheritance - %s\n", inheritance)
+	terminal.Printf("        Inheritance - %s\n", inheritance)
 }
 
 func (ls *LsCommand) printReplicas(flatReplicas []*FlatReplica, accesses []*irodsclient_types.IRODSAccess) {
@@ -610,13 +617,13 @@ func (ls *LsCommand) printReplicas(flatReplicas []*FlatReplica, accesses []*irod
 	}
 }
 
-func (ls *LsCommand) getEncryptionManagerForDecryption(mode commons.EncryptionMode) *commons.EncryptionManager {
-	manager := commons.NewEncryptionManager(mode)
+func (ls *LsCommand) getEncryptionManagerForDecryption(mode encryption.EncryptionMode) *encryption.EncryptionManager {
+	manager := encryption.NewEncryptionManager(mode)
 
 	switch mode {
-	case commons.EncryptionModeWinSCP, commons.EncryptionModePGP:
+	case encryption.EncryptionModeWinSCP, encryption.EncryptionModePGP:
 		manager.SetKey([]byte(ls.decryptionFlagValues.Key))
-	case commons.EncryptionModeSSH:
+	case encryption.EncryptionModeSSH:
 		manager.SetPublicPrivateKey(ls.decryptionFlagValues.PrivateKeyPath)
 	}
 
@@ -634,8 +641,8 @@ func (ls *LsCommand) printReplica(flatReplica FlatReplica, accesses []*irodsclie
 
 	if ls.requireDecryption(flatReplica.DataObject.Path) {
 		// need to decrypt
-		encryptionMode := commons.DetectEncryptionMode(newName)
-		if encryptionMode != commons.EncryptionModeUnknown {
+		encryptionMode := encryption.DetectEncryptionMode(newName)
+		if encryptionMode != encryption.EncryptionModeNone {
 			encryptManager := ls.getEncryptionManagerForDecryption(encryptionMode)
 
 			decryptedFilename, err := encryptManager.DecryptFilename(newName)
@@ -654,19 +661,19 @@ func (ls *LsCommand) printReplica(flatReplica FlatReplica, accesses []*irodsclie
 	}
 
 	switch ls.listFlagValues.Format {
-	case commons.ListFormatNormal:
-		commons.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
-	case commons.ListFormatLong:
-		modTime := commons.MakeDateTimeStringHM(flatReplica.Replica.ModifyTime)
-		commons.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
+	case format.ListFormatNormal:
+		terminal.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
+	case format.ListFormatLong:
+		modTime := types.MakeDateTimeStringHM(flatReplica.Replica.ModifyTime)
+		terminal.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
 			size, modTime, ls.getStatusMark(flatReplica.Replica.Status), newName)
-	case commons.ListFormatVeryLong:
-		modTime := commons.MakeDateTimeStringHM(flatReplica.Replica.ModifyTime)
-		commons.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
+	case format.ListFormatVeryLong:
+		modTime := types.MakeDateTimeStringHM(flatReplica.Replica.ModifyTime)
+		terminal.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
 			size, modTime, ls.getStatusMark(flatReplica.Replica.Status), newName)
-		commons.Printf("    %s\t%s\n", flatReplica.Replica.Checksum.IRODSChecksumString, flatReplica.Replica.Path)
+		terminal.Printf("    %s\t%s\n", flatReplica.Replica.Checksum.IRODSChecksumString, flatReplica.Replica.Path)
 	default:
-		commons.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
+		terminal.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
 	}
 
 	if len(accesses) > 0 {
@@ -674,14 +681,14 @@ func (ls *LsCommand) printReplica(flatReplica FlatReplica, accesses []*irodsclie
 	}
 }
 
-func (ls *LsCommand) getCollectionSortFunction(entries []*irodsclient_types.IRODSCollection, sortOrder commons.ListSortOrder, sortReverse bool) func(i int, j int) bool {
+func (ls *LsCommand) getCollectionSortFunction(entries []*irodsclient_types.IRODSCollection, sortOrder format.ListSortOrder, sortReverse bool) func(i int, j int) bool {
 	if sortReverse {
 		switch sortOrder {
-		case commons.ListSortOrderName:
+		case format.ListSortOrderName:
 			return func(i int, j int) bool {
 				return entries[i].Name > entries[j].Name
 			}
-		case commons.ListSortOrderTime:
+		case format.ListSortOrderTime:
 			return func(i int, j int) bool {
 				return (entries[i].ModifyTime.After(entries[j].ModifyTime)) ||
 					(entries[i].ModifyTime.Equal(entries[j].ModifyTime) &&
@@ -696,11 +703,11 @@ func (ls *LsCommand) getCollectionSortFunction(entries []*irodsclient_types.IROD
 	}
 
 	switch sortOrder {
-	case commons.ListSortOrderName:
+	case format.ListSortOrderName:
 		return func(i int, j int) bool {
 			return entries[i].Name < entries[j].Name
 		}
-	case commons.ListSortOrderTime:
+	case format.ListSortOrderTime:
 		return func(i int, j int) bool {
 			return (entries[i].ModifyTime.Before(entries[j].ModifyTime)) ||
 				(entries[i].ModifyTime.Equal(entries[j].ModifyTime) &&

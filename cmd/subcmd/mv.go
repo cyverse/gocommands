@@ -6,7 +6,11 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	commons_path "github.com/cyverse/gocommands/commons/path"
+	"github.com/cyverse/gocommands/commons/types"
+	"github.com/cyverse/gocommands/commons/wildcard"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
@@ -76,21 +80,21 @@ func (mv *MvCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
 		return xerrors.Errorf("failed to input missing fields: %w", err)
 	}
 
 	// Create a file system
-	mv.account = commons.GetSessionConfig().ToIRODSAccount()
-	mv.filesystem, err = commons.GetIRODSFSClient(mv.account, false, true)
+	mv.account = config.GetSessionConfig().ToIRODSAccount()
+	mv.filesystem, err = irods.GetIRODSFSClient(mv.account, false, true)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer mv.filesystem.Release()
 
 	if mv.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(mv.filesystem, mv.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(mv.filesystem, mv.commonFlagValues.Timeout)
 	}
 
 	// run
@@ -98,13 +102,13 @@ func (mv *MvCommand) Process() error {
 		// multi-source, target must be a dir
 		err = mv.ensureTargetIsDir(mv.targetPath)
 		if err != nil {
-			return err
+			return xerrors.Errorf("target path %q is not a directory: %w", mv.targetPath, err)
 		}
 	}
 
 	// Expand wildcards
 	if mv.wildcardSearchFlagValues.WildcardSearch {
-		mv.sourcePaths, err = commons.ExpandWildcards(mv.filesystem, mv.account, mv.sourcePaths, true, true)
+		mv.sourcePaths, err = wildcard.ExpandWildcards(mv.filesystem, mv.account, mv.sourcePaths, true, true)
 		if err != nil {
 			return xerrors.Errorf("failed to expand wildcards:  %w", err)
 		}
@@ -121,41 +125,41 @@ func (mv *MvCommand) Process() error {
 }
 
 func (mv *MvCommand) ensureTargetIsDir(targetPath string) error {
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := mv.account.ClientZone
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	targetPath = commons_path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	targetEntry, err := mv.filesystem.Stat(targetPath)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
 			// not exist
-			return commons.NewNotDirError(targetPath)
+			return types.NewNotDirError(targetPath)
 		}
 
 		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
 	}
 
 	if !targetEntry.IsDir() {
-		return commons.NewNotDirError(targetPath)
+		return types.NewNotDirError(targetPath)
 	}
 
 	return nil
 }
 
 func (mv *MvCommand) moveOne(sourcePath string, targetPath string) error {
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := mv.account.ClientZone
-	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	sourcePath = commons_path.MakeIRODSPath(cwd, home, zone, sourcePath)
+	targetPath = commons_path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	sourceEntry, err := mv.filesystem.Stat(sourcePath)
 	if err != nil {
 		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
 	}
 
-	targetPath = commons.MakeTargetIRODSFilePath(mv.filesystem, sourcePath, targetPath)
+	targetPath = commons_path.MakeIRODSTargetFilePath(mv.filesystem, sourcePath, targetPath)
 
 	if sourceEntry.IsDir() {
 		// dir
@@ -193,7 +197,7 @@ func (mv *MvCommand) moveFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 	// target exists
 	// target must be a file
 	if targetEntry.IsDir() {
-		return commons.NewNotFileError(targetPath)
+		return types.NewNotFileError(targetPath)
 	}
 
 	// overwrite
