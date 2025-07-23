@@ -313,15 +313,6 @@ func (put *PutCommand) getEncryptionMode(targetPath string, parentEncryptionMode
 		}
 
 		encryptionConfig := encryption.GetEncryptionConfigFromMeta(put.filesystem, targetDir)
-
-		if encryptionConfig.Mode == encryption.EncryptionModeNone {
-			if put.encryptionFlagValues.Mode == encryption.EncryptionModeNone {
-				return encryption.EncryptionModeNone
-			}
-
-			return put.encryptionFlagValues.Mode
-		}
-
 		return encryptionConfig.Mode
 	}
 
@@ -1127,6 +1118,7 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 
 	// load encryption config
 	encryptionMode := put.getEncryptionMode(targetPath, parentEncryptionMode)
+	logger.Infof("encryption mode for %q is %s", targetPath, encryptionMode)
 
 	// get entries
 	entries, err := os.ReadDir(sourcePath)

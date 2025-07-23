@@ -371,15 +371,6 @@ func (bput *BputCommand) getEncryptionMode(targetPath string, parentEncryptionMo
 		}
 
 		encryptionConfig := encryption.GetEncryptionConfigFromMeta(bput.filesystem, targetDir)
-
-		if encryptionConfig.Mode == encryption.EncryptionModeNone {
-			if bput.encryptionFlagValues.Mode != encryption.EncryptionModeNone {
-				return encryption.EncryptionModeNone
-			}
-
-			return bput.encryptionFlagValues.Mode
-		}
-
 		return encryptionConfig.Mode
 	}
 
