@@ -212,12 +212,17 @@ func (bput *BputCommand) Process() error {
 	// bundle manager
 	bput.stagingPath = bput.bundleTransferFlagValues.IRODSTempPath
 	if len(bput.stagingPath) == 0 {
-		bput.stagingPath = bundle.GetStagingDirInTargetPath(bput.targetPath)
+		bput.stagingPath = bundle.GetStagingDirInTargetPath(bput.filesystem, bput.targetPath)
 	}
 
-	stagingDirErr := bundle.EnsureStagingDirPath(bput.filesystem, bput.stagingPath)
+	stagingDirMade, stagingDirErr := bundle.EnsureStagingDirPath(bput.filesystem, bput.stagingPath)
 	if stagingDirErr != nil {
 		return xerrors.Errorf("failed to prepare staging path %q: %w", bput.stagingPath, stagingDirErr)
+	}
+
+	if stagingDirMade {
+		// delete the staging directory if it was created
+		defer bput.filesystem.RemoveDir(bput.stagingPath, true, true)
 	}
 
 	bput.bundleManager = bundle.NewBundleManager(bput.bundleTransferFlagValues.MinFileNumInBundle, bput.bundleTransferFlagValues.MaxFileNumInBundle, bput.bundleTransferFlagValues.MaxBundleFileSize, bput.bundleTransferFlagValues.LocalTempPath, bput.stagingPath)
@@ -515,7 +520,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 	tarballPath := path.Join(bput.bundleManager.GetLocalTempDirPath(), bun.GetBundleFilename())
 	stagingTargetPath := path.Join(bput.bundleManager.GetIRODSStagingDirPath(), bun.GetBundleFilename())
 
-	_, threadsRequired := bput.determineTransferMethod(bun.GetSize())
+	_, threadsRequired := bput.determineTransferMethodForBundle(bun)
 
 	// task for bundling and uploading
 	bundleTask := func(job *parallel.ParallelJob) error {
@@ -558,7 +563,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 			}
 		}
 
-		logger.Debugf("making a bundle file %q", tarballPath)
+		logger.Debugf("creating a bundle file %q", tarballPath)
 
 		tarErr := tarball.CreateTarball(tarballPath, nil)
 		if tarErr != nil {
@@ -568,6 +573,8 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 			return xerrors.Errorf("failed to create a tarball %q for bundle %d: %w", tarballPath, bun.GetID(), tarErr)
 		}
 		defer os.Remove(tarballPath)
+
+		logger.Debugf("created a bundle file %q", tarballPath)
 
 		tarballStat, tarErr := os.Stat(tarballPath)
 		if tarErr != nil {
@@ -590,6 +597,8 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 			return xerrors.Errorf("failed to stat %q: %w", parentTargetPath, statErr)
 		}
 
+		logger.Debugf("uploading a bundle file %q to %q", tarballPath, stagingTargetPath)
+
 		notes = append(notes, fmt.Sprintf("staging path %q", stagingTargetPath))
 
 		uploadResult, uploadErr := bput.filesystem.UploadFileParallel(tarballPath, stagingTargetPath, "", threadsRequired, false, bput.checksumFlagValues.CalculateChecksum, bput.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
@@ -611,7 +620,26 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 		// extract the bundle in iRODS
 		logger.Debugf("extracting a bundle %q to %q", stagingTargetPath, bun.GetIRODSDir())
 
-		bput.filesystem.ExtractStructFile(stagingTargetPath, bun.GetIRODSDir(), "", irodsclient_types.TAR_FILE_DT, bput.forceFlagValues.Force, !bput.bundleTransferFlagValues.NoBulkRegistration)
+		extractErr := bput.filesystem.ExtractStructFile(stagingTargetPath, bun.GetIRODSDir(), "", irodsclient_types.TAR_FILE_DT, bput.forceFlagValues.Force, !bput.bundleTransferFlagValues.NoBulkRegistration)
+		if extractErr != nil {
+			job.Progress(-1, bun.GetSize(), true)
+
+			reportSimple(extractErr, "extract")
+			return xerrors.Errorf("failed to extract a bundle %q to %q: %w", stagingTargetPath, bun.GetIRODSDir(), extractErr)
+		}
+
+		logger.Debugf("extracted a bundle %q to %q", stagingTargetPath, bun.GetIRODSDir())
+
+		// remove the tarball
+		logger.Debugf("removing a bundle file %q", stagingTargetPath)
+		removeErr := bput.filesystem.RemoveFile(stagingTargetPath, true)
+		if removeErr != nil {
+			job.Progress(-1, bun.GetSize(), true)
+			reportSimple(removeErr, "remove")
+			return xerrors.Errorf("failed to remove a bundle file %q: %w", stagingTargetPath, removeErr)
+		}
+
+		logger.Debugf("removed a bundle file %q", stagingTargetPath)
 
 		return nil
 	}
@@ -1738,6 +1766,30 @@ func (bput *BputCommand) encryptFile(sourcePath string, encryptedFilePath string
 
 func (bput *BputCommand) determineTransferMethod(size int64) (transfer.TransferMode, int) {
 	threads := parallel.CalculateThreadForTransferJob(size, bput.parallelTransferFlagValues.ThreadNumberPerFile)
+
+	// determine how to upload
+	if bput.parallelTransferFlagValues.SingleThread || bput.parallelTransferFlagValues.ThreadNumber <= 2 || bput.parallelTransferFlagValues.ThreadNumberPerFile == 1 || !bput.filesystem.SupportParallelUpload() {
+		threads = 1
+	}
+
+	if bput.parallelTransferFlagValues.Icat {
+		return transfer.TransferModeICAT, threads
+	}
+
+	// sysconfig
+	systemConfig := config.GetSystemConfig()
+	if systemConfig != nil && systemConfig.AdditionalConfig != nil {
+		mode := transfer.GetTransferMode(systemConfig.AdditionalConfig.TransferMode)
+		if mode.Valid() {
+			return mode, threads
+		}
+	}
+
+	return transfer.TransferModeICAT, threads
+}
+
+func (bput *BputCommand) determineTransferMethodForBundle(bun *bundle.Bundle) (transfer.TransferMode, int) {
+	threads := parallel.CalculateThreadForTransferJob(bun.GetSize(), bput.parallelTransferFlagValues.ThreadNumberPerFile)
 
 	// determine how to upload
 	if bput.parallelTransferFlagValues.SingleThread || bput.parallelTransferFlagValues.ThreadNumber <= 2 || bput.parallelTransferFlagValues.ThreadNumberPerFile == 1 || !bput.filesystem.SupportParallelUpload() {

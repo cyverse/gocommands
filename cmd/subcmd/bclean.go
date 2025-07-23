@@ -109,7 +109,7 @@ func (bclean *BcleanCommand) cleanOne(targetPath string) {
 	// bundle manager
 	stagingPath := bclean.bundleTransferFlagValues.IRODSTempPath
 	if len(stagingPath) == 0 {
-		stagingPath = bundle.GetStagingDirInTargetPath(targetPath)
+		stagingPath = bundle.GetStagingDirInTargetPath(bclean.filesystem, targetPath)
 	}
 
 	bundleManager := bundle.NewBundleManager(bclean.bundleTransferFlagValues.MinFileNumInBundle, bclean.bundleTransferFlagValues.MaxFileNumInBundle, bclean.bundleTransferFlagValues.MaxBundleFileSize, bclean.bundleTransferFlagValues.LocalTempPath, stagingPath)

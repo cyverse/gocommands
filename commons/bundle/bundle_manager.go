@@ -12,7 +12,9 @@ import (
 
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
+	"github.com/cyverse/gocommands/commons/config"
 	"github.com/cyverse/gocommands/commons/encryption"
+	commons_path "github.com/cyverse/gocommands/commons/path"
 	"github.com/cyverse/gocommands/commons/terminal"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
@@ -408,50 +410,64 @@ func (manager *BundleManager) ClearIRODSBundles(fs *irodsclient_fs.FileSystem, r
 	return nil
 }
 
-func GetStagingDirInTargetPath(targetPath string) string {
-	return path.Join(targetPath, ".gocmd_staging")
+func GetStagingDirInTargetPath(fs *irodsclient_fs.FileSystem, targetPath string) string {
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
+	account := fs.GetAccount()
+	zone := account.ClientZone
+	stagingPath := path.Join(targetPath, ".gocmd_staging")
+	return commons_path.MakeIRODSPath(cwd, home, zone, stagingPath)
 }
 
-func EnsureStagingDirPath(fs *irodsclient_fs.FileSystem, stagingPath string) error {
+func EnsureStagingDirPath(fs *irodsclient_fs.FileSystem, stagingPath string) (bool, error) {
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	account := fs.GetAccount()
+	zone := account.ClientZone
+	stagingPath = commons_path.MakeIRODSPath(cwd, home, zone, stagingPath)
 
 	dirParts := strings.Split(stagingPath[1:], "/")
 	dirDepth := len(dirParts)
 
 	if dirDepth < 3 {
 		// no
-		return xerrors.Errorf("staging path %q is not safe!", stagingPath)
+		return false, xerrors.Errorf("staging path %q is not safe!", stagingPath)
 	}
 
 	// zone/home/user OR zone/home/shared (public)
 	if dirParts[0] != account.ClientZone {
-		return xerrors.Errorf("staging path %q is not safe, not in the correct zone", stagingPath)
+		return false, xerrors.Errorf("staging path %q is not safe, not in the correct zone", stagingPath)
 	}
 
 	if dirParts[1] != "home" {
-		return xerrors.Errorf("staging path %q is not safe", stagingPath)
+		return false, xerrors.Errorf("staging path %q is not safe", stagingPath)
 	}
 
 	if dirParts[2] == account.ClientUser {
 		if dirDepth <= 3 {
 			// /zone/home/user
-			return xerrors.Errorf("staging path %q is not safe!", stagingPath)
+			return false, xerrors.Errorf("staging path %q is not safe!", stagingPath)
 		}
 	} else {
 		// public or shared?
 		if dirDepth <= 4 {
 			// /zone/home/public/dataset1
-			return xerrors.Errorf("staging path %q is not safe!", stagingPath)
+			return false, xerrors.Errorf("staging path %q is not safe!", stagingPath)
 		}
 	}
 
 	// make dir if not exists
-	mkdirErr := fs.MakeDir(stagingPath, true)
-	if mkdirErr != nil {
-		return xerrors.Errorf("failed to make staging directory %q: %w", stagingPath, mkdirErr)
+	if fs.ExistsDir(stagingPath) {
+		// already exists
+		return false, nil
 	}
 
-	return nil
+	mkdirErr := fs.MakeDir(stagingPath, true)
+	if mkdirErr != nil {
+		return false, xerrors.Errorf("failed to make staging directory %q: %w", stagingPath, mkdirErr)
+	}
+
+	return true, nil
 }
 
 ///
