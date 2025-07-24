@@ -10,7 +10,7 @@ import (
 	"golang.org/x/term"
 )
 
-type ProgressTrackerCallback func(name string, processed int64, total int64, unit progress.Units, errored bool)
+type ProgressTrackerCallback func(taskType string, taskName string, processed int64, total int64, unit progress.Units, errored bool)
 
 const (
 	progressTrackerLength        int = 20
@@ -67,21 +67,46 @@ func GetProgressWriter(displayPath bool) progress.Writer {
 	return progressWriter
 }
 
-func GetShortPathMessage(name string, messageLen int) string {
-	msg := name
-	if messageLen < len(name) {
-		shortname := name[len(name)-messageLen+4:]
+func GetTrackerName(taskType string, taskName string) string {
+	switch strings.ToLower(taskType) {
+	case "upload":
+		taskType = "Up"
+	case "download":
+		taskType = "Dn"
+	case "copy":
+		taskType = "Cp"
+	case "checksum":
+		taskType = "Ck"
+	case "delete":
+		taskType = "Rm"
+	case "bundle":
+		taskType = "Bd"
+	case "extract":
+		taskType = "Ex"
+	}
 
+	return fmt.Sprintf("[%s] %s", taskType, taskName)
+}
+
+func GetShortTrackerMessage(taskType string, taskName string, messageLen int) string {
+	// ensure the message length is at least 20 characters
+	if messageLen < 20 {
+		messageLen = 20
+	}
+
+	messageLen -= 5
+
+	if messageLen < len(taskName) {
+		shortname := taskName[len(taskName)-messageLen+4:]
 		idx := firstPathSeparatorIndex(shortname)
 		if idx > 0 {
 			shortname = shortname[idx:]
-		} else {
-			shortname = fmt.Sprintf("/%s", getBasenameOfPath(name))
 		}
 
-		msg = fmt.Sprintf("...%s", shortname)
+		taskName = fmt.Sprintf("...%s", shortname)
 	}
 
+	msg := GetTrackerName(taskType, taskName)
 	return msg
 }
 

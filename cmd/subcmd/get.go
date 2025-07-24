@@ -433,7 +433,7 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 	getTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, sourceEntry.Size, true)
+			job.Progress("download", -1, sourceEntry.Size, true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for downloading %q to %q", sourceEntry.Path, targetPath)
@@ -442,11 +442,11 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 
 		logger.Debugf("downloading a data object %q to %q", sourceEntry.Path, targetPath)
 
-		progressCallbackGet := func(processed int64, total int64) {
-			job.Progress(processed, total, false)
+		progressCallbackGet := func(taskType string, processed int64, total int64) {
+			job.Progress(taskType, processed, total, false)
 		}
 
-		job.Progress(0, sourceEntry.Size, false)
+		job.Progress("download", 0, sourceEntry.Size, false)
 
 		downloadPath := targetPath
 		if len(tempPath) > 0 {
@@ -457,7 +457,7 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 		_, statErr := os.Stat(parentDownloadPath)
 		if statErr != nil {
 			// must exist, mkdir is performed at getDir
-			job.Progress(-1, sourceEntry.Size, true)
+			job.Progress("download", -1, sourceEntry.Size, true)
 
 			reportSimple(statErr)
 			return xerrors.Errorf("failed to stat %q: %w", parentDownloadPath, statErr)
@@ -470,7 +470,8 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 
 		downloadResult, downloadErr := get.filesystem.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, progressCallbackGet)
 		if downloadErr != nil {
-			job.Progress(-1, sourceEntry.Size, true)
+			job.Progress("download", -1, sourceEntry.Size, true)
+			job.Progress("checksum", -1, sourceEntry.Size, true)
 
 			reportTransfer(downloadResult, downloadErr, notes...)
 			return xerrors.Errorf("failed to download %q to %q: %w", sourceEntry.Path, targetPath, downloadErr)
@@ -478,20 +479,22 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 
 		// decrypt
 		if get.requireDecryption(sourceEntry.Path) {
+			job.Progress("decrypt", 0, sourceEntry.Size, false)
+
 			_, decryptErr := get.decryptFile(sourceEntry.Path, tempPath, targetPath)
 			if decryptErr != nil {
-				job.Progress(-1, sourceEntry.Size, true)
+				job.Progress("decrypt", -1, sourceEntry.Size, true)
 
 				reportTransfer(downloadResult, decryptErr, notes...)
 				return xerrors.Errorf("failed to decrypt file: %w", decryptErr)
 			}
+
+			job.Progress("decrypt", sourceEntry.Size, sourceEntry.Size, false)
 		}
 
 		reportTransfer(downloadResult, nil, notes...)
 
 		logger.Debugf("downloaded a data object %q to %q", sourceEntry.Path, targetPath)
-
-		job.Progress(sourceEntry.Size, sourceEntry.Size, false)
 
 		return nil
 	}
@@ -532,7 +535,7 @@ func (get *GetCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 	deleteTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for deleting data object %q", sourcePath)
@@ -541,7 +544,7 @@ func (get *GetCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 
 		logger.Debugf("deleting a data object %q", sourcePath)
 
-		job.Progress(0, 1, false)
+		job.Progress("delete", 0, 1, false)
 
 		startTime := time.Now()
 		removeErr := get.filesystem.RemoveFile(sourcePath, true)
@@ -549,12 +552,12 @@ func (get *GetCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 		report(startTime, endTime, removeErr)
 
 		if removeErr != nil {
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
 		}
 
 		logger.Debugf("deleted a data object %q", sourcePath)
-		job.Progress(1, 1, false)
+		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
@@ -594,7 +597,7 @@ func (get *GetCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 	deleteTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for deleting empty collection %q", sourcePath)
@@ -603,7 +606,7 @@ func (get *GetCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 
 		logger.Debugf("deleting an empty collection %q", sourcePath)
 
-		job.Progress(0, 1, false)
+		job.Progress("delete", 0, 1, false)
 
 		startTime := time.Now()
 		removeErr := get.filesystem.RemoveDir(sourcePath, false, false)
@@ -611,12 +614,12 @@ func (get *GetCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 		report(startTime, endTime, removeErr)
 
 		if removeErr != nil {
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
 		}
 
 		logger.Debugf("deleted an empty collection %q", sourcePath)
-		job.Progress(1, 1, false)
+		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
@@ -656,7 +659,7 @@ func (get *GetCommand) scheduleDeleteExtraFile(targetPath string) {
 	deleteTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for deleting extra file %q", targetPath)
@@ -665,18 +668,18 @@ func (get *GetCommand) scheduleDeleteExtraFile(targetPath string) {
 
 		logger.Debugf("deleting an extra file %q", targetPath)
 
-		job.Progress(0, 1, false)
+		job.Progress("delete", 0, 1, false)
 
 		removeErr := os.Remove(targetPath)
 		reportSimple(removeErr)
 
 		if removeErr != nil {
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
 		}
 
 		logger.Debugf("deleted an extra file %q", targetPath)
-		job.Progress(1, 1, false)
+		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
@@ -716,7 +719,7 @@ func (get *GetCommand) scheduleDeleteExtraDir(targetPath string) {
 	deleteTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for deleting extra directory %q", targetPath)
@@ -725,18 +728,18 @@ func (get *GetCommand) scheduleDeleteExtraDir(targetPath string) {
 
 		logger.Debugf("deleting an extra directory %q", targetPath)
 
-		job.Progress(0, 1, false)
+		job.Progress("delete", 0, 1, false)
 
 		removeErr := os.RemoveAll(targetPath)
 		reportSimple(removeErr)
 
 		if removeErr != nil {
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
 		}
 
 		logger.Debugf("deleted an extra directory %q", targetPath)
-		job.Progress(1, 1, false)
+		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
@@ -911,7 +914,7 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 			if targetStat.Size() == sourceEntry.Size {
 				// compare hash
 				if len(sourceEntry.CheckSum) > 0 {
-					localChecksum, err := irodsclient_util.HashLocalFile(targetPath, string(sourceEntry.CheckSumAlgorithm))
+					localChecksum, err := irodsclient_util.HashLocalFile(targetPath, string(sourceEntry.CheckSumAlgorithm), nil)
 					if err != nil {
 						reportSimple(err, "differential")
 						return xerrors.Errorf("failed to get hash of %q: %w", targetPath, err)

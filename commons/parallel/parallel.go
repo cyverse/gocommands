@@ -39,8 +39,8 @@ func (job *ParallelJob) GetManager() *ParallelJobManager {
 	return job.manager
 }
 
-func (job *ParallelJob) Progress(processed int64, total int64, errored bool) {
-	job.manager.progress(job.name, processed, total, job.progressUnit, errored)
+func (job *ParallelJob) Progress(taskType string, processed int64, total int64, errored bool) {
+	job.manager.progress(taskType, job.name, processed, total, job.progressUnit, errored)
 }
 
 func (job *ParallelJob) GetName() string {
@@ -124,9 +124,9 @@ func (manager *ParallelJobManager) getNextJobIndex() int64 {
 	return idx
 }
 
-func (manager *ParallelJobManager) progress(name string, processed int64, total int64, progressUnit progress.Units, errored bool) {
+func (manager *ParallelJobManager) progress(taskType string, taskName string, processed int64, total int64, progressUnit progress.Units, errored bool) {
 	if manager.progressTrackerCallback != nil {
-		manager.progressTrackerCallback(name, processed, total, progressUnit, errored)
+		manager.progressTrackerCallback(taskType, taskName, processed, total, progressUnit, errored)
 	}
 }
 
@@ -300,16 +300,18 @@ func (manager *ParallelJobManager) startProgress() {
 		go manager.progressWriter.Render()
 
 		// add progress tracker callback
-		manager.progressTrackerCallback = func(name string, processed int64, total int64, progressUnit progress.Units, errored bool) {
+		manager.progressTrackerCallback = func(taskType string, taskName string, processed int64, total int64, progressUnit progress.Units, errored bool) {
 			manager.mutex.Lock()
 			defer manager.mutex.Unlock()
 
+			trackerName := terminal.GetTrackerName(taskType, taskName)
+
 			var tracker *progress.Tracker
-			if t, ok := manager.progressTrackers[name]; !ok {
+			if t, ok := manager.progressTrackers[trackerName]; !ok {
 				// created a new tracker if not exists
-				msg := name
+				msg := trackerName
 				if !manager.showFullPath {
-					msg = terminal.GetShortPathMessage(name, messageWidth)
+					msg = terminal.GetShortTrackerMessage(taskType, taskName, messageWidth)
 				}
 
 				tracker = &progress.Tracker{
@@ -319,7 +321,7 @@ func (manager *ParallelJobManager) startProgress() {
 				}
 
 				manager.progressWriter.AppendTracker(tracker)
-				manager.progressTrackers[name] = tracker
+				manager.progressTrackers[trackerName] = tracker
 			} else {
 				tracker = t
 			}

@@ -333,7 +333,7 @@ func (cp *CpCommand) scheduleCopy(sourceEntry *irodsclient_fs.Entry, targetPath 
 	copyTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, 1, true)
+			job.Progress("copy", -1, 1, true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for copying %q to %q", sourceEntry.Path, targetPath)
@@ -342,14 +342,14 @@ func (cp *CpCommand) scheduleCopy(sourceEntry *irodsclient_fs.Entry, targetPath 
 
 		logger.Debugf("copying a data object %q to %q", sourceEntry.Path, targetPath)
 
-		job.Progress(0, 1, false)
+		job.Progress("copy", 0, 1, false)
 
 		startTime := time.Now()
 		copyErr := cp.filesystem.CopyFileToFile(sourceEntry.Path, targetPath, true)
 		endTime := time.Now()
 
 		if copyErr != nil {
-			job.Progress(-1, 1, true)
+			job.Progress("copy", -1, 1, true)
 
 			reportSimple(copyErr)
 			return xerrors.Errorf("failed to copy %q to %q: %w", sourceEntry.Path, targetPath, copyErr)
@@ -377,7 +377,7 @@ func (cp *CpCommand) scheduleCopy(sourceEntry *irodsclient_fs.Entry, targetPath 
 		cp.transferReportManager.AddFile(reportFile)
 
 		logger.Debugf("copied a data object %q to %q", sourceEntry.Path, targetPath)
-		job.Progress(1, 1, false)
+		job.Progress("copy", 1, 1, false)
 
 		return nil
 	}
@@ -418,7 +418,7 @@ func (cp *CpCommand) scheduleDeleteExtraFile(targetEntry *irodsclient_fs.Entry) 
 	deleteTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for deleting %q", targetEntry.Path)
@@ -427,7 +427,7 @@ func (cp *CpCommand) scheduleDeleteExtraFile(targetEntry *irodsclient_fs.Entry) 
 
 		logger.Debugf("deleting a data object %q", targetEntry.Path)
 
-		job.Progress(0, 1, false)
+		job.Progress("delete", 0, 1, false)
 
 		startTime := time.Now()
 		removeErr := cp.filesystem.RemoveFile(targetEntry.Path, true)
@@ -436,12 +436,12 @@ func (cp *CpCommand) scheduleDeleteExtraFile(targetEntry *irodsclient_fs.Entry) 
 		report(startTime, endTime, removeErr)
 
 		if removeErr != nil {
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 			return xerrors.Errorf("failed to delete %q: %w", targetEntry.Path, removeErr)
 		}
 
 		logger.Debugf("deleted a data object %q", targetEntry.Path)
-		job.Progress(1, 1, false)
+		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
@@ -481,7 +481,7 @@ func (cp *CpCommand) scheduleDeleteExtraDir(targetEntry *irodsclient_fs.Entry) {
 	deleteTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for deleting %q", targetEntry.Path)
@@ -490,7 +490,7 @@ func (cp *CpCommand) scheduleDeleteExtraDir(targetEntry *irodsclient_fs.Entry) {
 
 		logger.Debugf("deleting a collection %q", targetEntry.Path)
 
-		job.Progress(0, 1, false)
+		job.Progress("delete", 0, 1, false)
 
 		startTime := time.Now()
 		err := cp.filesystem.RemoveDir(targetEntry.Path, true, true)
@@ -499,12 +499,12 @@ func (cp *CpCommand) scheduleDeleteExtraDir(targetEntry *irodsclient_fs.Entry) {
 		report(startTime, endTime, err)
 
 		if err != nil {
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 			return xerrors.Errorf("failed to delete %q: %w", targetEntry.Path, err)
 		}
 
 		logger.Debugf("deleted a collection %q", targetEntry.Path)
-		job.Progress(1, 1, false)
+		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 

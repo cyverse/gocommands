@@ -436,7 +436,7 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 	putTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, sourceStat.Size(), true)
+			job.Progress("upload", -1, sourceStat.Size(), true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for uploading %q to %q", sourcePath, targetPath)
@@ -445,21 +445,17 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 
 		logger.Debugf("uploading a file %q to %q", sourcePath, targetPath)
 
-		progressCallbackPut := func(processed int64, total int64) {
-			job.Progress(processed, total, false)
-		}
-
-		job.Progress(0, sourceStat.Size(), false)
-
 		notes := []string{}
 
 		// encrypt
 		if encryptionMode != encryption.EncryptionModeNone {
 			notes = append(notes, "encrypt")
 
+			job.Progress("encrypt", 0, sourceStat.Size(), false)
+
 			_, encryptErr := put.encryptFile(sourcePath, tempPath, encryptionMode)
 			if encryptErr != nil {
-				job.Progress(-1, sourceStat.Size(), true)
+				job.Progress("encrypt", -1, sourceStat.Size(), true)
 
 				reportSimple(encryptErr, notes...)
 				return xerrors.Errorf("failed to encrypt file: %w", encryptErr)
@@ -474,6 +470,12 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 			}()
 		}
 
+		progressCallbackPut := func(taskType string, processed int64, total int64) {
+			job.Progress(taskType, processed, total, false)
+		}
+
+		job.Progress("upload", 0, sourceStat.Size(), false)
+
 		uploadSourcePath := sourcePath
 		if len(tempPath) > 0 {
 			uploadSourcePath = tempPath
@@ -483,7 +485,7 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 		_, statErr := put.filesystem.Stat(parentTargetPath)
 		if statErr != nil {
 			// must exist, mkdir is performed at putDir
-			job.Progress(-1, sourceStat.Size(), true)
+			job.Progress("upload", -1, sourceStat.Size(), true)
 
 			reportSimple(statErr)
 			return xerrors.Errorf("failed to stat %q: %w", parentTargetPath, statErr)
@@ -493,7 +495,8 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 		notes = append(notes, "icat", fmt.Sprintf("%d threads", threadsRequired))
 
 		if uploadErr != nil {
-			job.Progress(-1, sourceStat.Size(), true)
+			job.Progress("upload", -1, sourceStat.Size(), true)
+			job.Progress("checksum", -1, sourceStat.Size(), true)
 
 			reportTransfer(uploadResult, uploadErr, notes...)
 			return xerrors.Errorf("failed to upload %q to %q: %w", sourcePath, targetPath, uploadErr)
@@ -502,8 +505,6 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 		reportTransfer(uploadResult, nil, notes...)
 
 		logger.Debugf("uploaded a file %q to %q", sourcePath, targetPath)
-
-		job.Progress(sourceStat.Size(), sourceStat.Size(), false)
 
 		return nil
 	}
@@ -544,7 +545,7 @@ func (put *PutCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 	deleteTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for deleting empty directory %q", sourcePath)
@@ -553,18 +554,18 @@ func (put *PutCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 
 		logger.Debugf("deleting a file %q", sourcePath)
 
-		job.Progress(0, 1, false)
+		job.Progress("delete", 0, 1, false)
 
 		removeErr := os.Remove(sourcePath)
 		reportSimple(removeErr)
 
 		if removeErr != nil {
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
 		}
 
 		logger.Debugf("deleted a file %q", sourcePath)
-		job.Progress(1, 1, false)
+		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
@@ -604,7 +605,7 @@ func (put *PutCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 	deleteTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for deleting empty directory %q", sourcePath)
@@ -613,18 +614,18 @@ func (put *PutCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 
 		logger.Debugf("deleting an empty directory %q", sourcePath)
 
-		job.Progress(0, 1, false)
+		job.Progress("delete", 0, 1, false)
 
 		removeErr := os.Remove(sourcePath)
 		reportSimple(removeErr)
 
 		if removeErr != nil {
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
 		}
 
 		logger.Debugf("deleted an empty directory %q", sourcePath)
-		job.Progress(1, 1, false)
+		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
@@ -664,7 +665,7 @@ func (put *PutCommand) scheduleDeleteExtraFile(targetPath string) {
 	deleteTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for deleting extra data object %q", targetPath)
@@ -673,7 +674,7 @@ func (put *PutCommand) scheduleDeleteExtraFile(targetPath string) {
 
 		logger.Debugf("deleting an extra data object %q", targetPath)
 
-		job.Progress(0, 1, false)
+		job.Progress("delete", 0, 1, false)
 
 		startTime := time.Now()
 		removeErr := put.filesystem.RemoveFile(targetPath, true)
@@ -681,12 +682,12 @@ func (put *PutCommand) scheduleDeleteExtraFile(targetPath string) {
 		report(startTime, endTime, removeErr)
 
 		if removeErr != nil {
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
 		}
 
 		logger.Debugf("deleted an extra data object %q", targetPath)
-		job.Progress(1, 1, false)
+		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
@@ -726,7 +727,7 @@ func (put *PutCommand) scheduleDeleteExtraDir(targetPath string) {
 	deleteTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for deleting extra collection %q", targetPath)
@@ -735,7 +736,7 @@ func (put *PutCommand) scheduleDeleteExtraDir(targetPath string) {
 
 		logger.Debugf("deleting an extra collection %q", targetPath)
 
-		job.Progress(0, 1, false)
+		job.Progress("delete", 0, 1, false)
 
 		startTime := time.Now()
 		removeErr := put.filesystem.RemoveDir(targetPath, false, false)
@@ -743,12 +744,12 @@ func (put *PutCommand) scheduleDeleteExtraDir(targetPath string) {
 		report(startTime, endTime, removeErr)
 
 		if removeErr != nil {
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
 		}
 
 		logger.Debugf("deleted an extra collection %q", targetPath)
-		job.Progress(1, 1, false)
+		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
@@ -917,7 +918,7 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 			if targetEntry.Size == sourceStat.Size() {
 				// compare hash
 				if len(targetEntry.CheckSum) > 0 {
-					localChecksum, err := irodsclient_util.HashLocalFile(sourcePath, string(targetEntry.CheckSumAlgorithm))
+					localChecksum, err := irodsclient_util.HashLocalFile(sourcePath, string(targetEntry.CheckSumAlgorithm), nil)
 					if err != nil {
 						reportSimple(err, "differential")
 						return xerrors.Errorf("failed to get hash for %q: %w", sourcePath, err)

@@ -164,10 +164,10 @@ func testEncryptFilePGP(t *testing.T) {
 	assert.NoError(t, err)
 
 	// compare
-	sourceHash, err := irodsclient_util.HashLocalFile(filepath, "SHA-256")
+	sourceHash, err := irodsclient_util.HashLocalFile(filepath, "SHA-256", nil)
 	assert.NoError(t, err)
 
-	decHash, err := irodsclient_util.HashLocalFile(decFilePath, "SHA-256")
+	decHash, err := irodsclient_util.HashLocalFile(decFilePath, "SHA-256", nil)
 	assert.NoError(t, err)
 
 	assert.Equal(t, sourceHash, decHash)
@@ -207,10 +207,10 @@ func testEncryptFileWinSCP(t *testing.T) {
 	assert.NoError(t, err)
 
 	// compare
-	sourceHash, err := irodsclient_util.HashLocalFile(filepath, "SHA-256")
+	sourceHash, err := irodsclient_util.HashLocalFile(filepath, "SHA-256", nil)
 	assert.NoError(t, err)
 
-	decHash, err := irodsclient_util.HashLocalFile(decFilePath, "SHA-256")
+	decHash, err := irodsclient_util.HashLocalFile(decFilePath, "SHA-256", nil)
 	assert.NoError(t, err)
 
 	assert.Equal(t, sourceHash, decHash)
@@ -248,10 +248,10 @@ func testEncryptFileSSH(t *testing.T) {
 	assert.NoError(t, err)
 
 	// compare
-	sourceHash, err := irodsclient_util.HashLocalFile(filepath, "SHA-256")
+	sourceHash, err := irodsclient_util.HashLocalFile(filepath, "SHA-256", nil)
 	assert.NoError(t, err)
 
-	decHash, err := irodsclient_util.HashLocalFile(decFilePath, "SHA-256")
+	decHash, err := irodsclient_util.HashLocalFile(decFilePath, "SHA-256", nil)
 	assert.NoError(t, err)
 
 	assert.Equal(t, sourceHash, decHash)

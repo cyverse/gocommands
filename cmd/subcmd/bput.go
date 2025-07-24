@@ -526,7 +526,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 	bundleTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, bun.GetSize(), true)
+			job.Progress("upload", -1, bun.GetSize(), true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for bundle transfer %q  %q", bun.GetBundleFilename(), bun.GetIRODSDir())
@@ -535,13 +535,14 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 
 		logger.Debugf("bundling files in a bundle %d to %q", bun.GetID(), tarballPath)
 
-		progressCallbackPut := func(processed int64, total int64) {
-			job.Progress(processed, total, false)
+		progressCallbackPut := func(taskType string, processed int64, total int64) {
+			job.Progress(taskType, processed, total, false)
 		}
 
 		notes := []string{}
 
 		// create a bundle file
+		job.Progress("bundle", 0, bun.GetSize(), false)
 		tarball := bundle.NewTar()
 
 		for _, bundleEntry := range bun.GetEntries() {
@@ -551,7 +552,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 
 				_, encryptErr := bput.encryptFile(bundleEntry.LocalPath, bundleEntry.TempPath, bundleEntry.EncryptionMode)
 				if encryptErr != nil {
-					job.Progress(-1, bun.GetSize(), true)
+					job.Progress("bundle", -1, bun.GetSize(), true)
 
 					reportSimple(encryptErr, notes...)
 					return xerrors.Errorf("failed to encrypt file %s: %w", bundleEntry.LocalPath, encryptErr)
@@ -567,31 +568,32 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 
 		tarErr := tarball.CreateTarball(tarballPath, nil)
 		if tarErr != nil {
-			job.Progress(-1, bun.GetSize(), true)
+			job.Progress("bundle", -1, bun.GetSize(), true)
 
 			reportSimple(tarErr, "tar")
 			return xerrors.Errorf("failed to create a tarball %q for bundle %d: %w", tarballPath, bun.GetID(), tarErr)
 		}
 		defer os.Remove(tarballPath)
 
+		job.Progress("bundle", bun.GetSize(), bun.GetSize(), false)
 		logger.Debugf("created a bundle file %q", tarballPath)
 
 		tarballStat, tarErr := os.Stat(tarballPath)
 		if tarErr != nil {
-			job.Progress(-1, bun.GetSize(), true)
+			job.Progress("bundle", -1, bun.GetSize(), true)
 
 			reportSimple(tarErr, "tar")
 			return xerrors.Errorf("failed to create a tarball %q for bundle %d: %w", tarballPath, bun.GetID(), tarErr)
 		}
 
 		// tarball size
-		job.Progress(0, tarballStat.Size(), false)
+		job.Progress("upload", 0, tarballStat.Size(), false)
 
 		parentTargetPath := path.Dir(bun.GetIRODSDir())
 		_, statErr := bput.filesystem.Stat(parentTargetPath)
 		if statErr != nil {
 			// must exist, mkdir is performed at putDir
-			job.Progress(-1, bun.GetSize(), true)
+			job.Progress("upload", -1, tarballStat.Size(), true)
 
 			reportSimple(statErr)
 			return xerrors.Errorf("failed to stat %q: %w", parentTargetPath, statErr)
@@ -605,7 +607,8 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 		notes = append(notes, "icat", fmt.Sprintf("%d threads", threadsRequired))
 
 		if uploadErr != nil {
-			job.Progress(-1, bun.GetSize(), true)
+			job.Progress("upload", -1, tarballStat.Size(), true)
+			job.Progress("checksum", -1, tarballStat.Size(), true)
 
 			reportTransfer(uploadResult, uploadErr, notes...)
 			return xerrors.Errorf("failed to upload a bundle %q to %q: %w", tarballPath, stagingTargetPath, uploadErr)
@@ -615,14 +618,14 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 
 		logger.Debugf("uploaded a bundle %q to %q", tarballPath, stagingTargetPath)
 
-		job.Progress(bun.GetSize(), bun.GetSize(), false)
-
 		// extract the bundle in iRODS
 		logger.Debugf("extracting a bundle %q to %q", stagingTargetPath, bun.GetIRODSDir())
 
+		job.Progress("extract", 0, tarballStat.Size(), false)
+
 		extractErr := bput.filesystem.ExtractStructFile(stagingTargetPath, bun.GetIRODSDir(), "", irodsclient_types.TAR_FILE_DT, bput.forceFlagValues.Force, !bput.bundleTransferFlagValues.NoBulkRegistration)
 		if extractErr != nil {
-			job.Progress(-1, bun.GetSize(), true)
+			job.Progress("extract", -1, tarballStat.Size(), true)
 
 			reportSimple(extractErr, "extract")
 			return xerrors.Errorf("failed to extract a bundle %q to %q: %w", stagingTargetPath, bun.GetIRODSDir(), extractErr)
@@ -634,10 +637,12 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 		logger.Debugf("removing a bundle file %q", stagingTargetPath)
 		removeErr := bput.filesystem.RemoveFile(stagingTargetPath, true)
 		if removeErr != nil {
-			job.Progress(-1, bun.GetSize(), true)
+			job.Progress("extract", -1, tarballStat.Size(), true)
 			reportSimple(removeErr, "remove")
 			return xerrors.Errorf("failed to remove a bundle file %q: %w", stagingTargetPath, removeErr)
 		}
+
+		job.Progress("extract", tarballStat.Size(), tarballStat.Size(), false)
 
 		logger.Debugf("removed a bundle file %q", stagingTargetPath)
 
@@ -687,7 +692,7 @@ func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleE
 	putTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, bundleEntry.Size, true)
+			job.Progress("upload", -1, bundleEntry.Size, true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for uploading %q to %q", bundleEntry.LocalPath, bundleEntry.IRODSPath)
@@ -696,11 +701,11 @@ func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleE
 
 		logger.Debugf("uploading a file %q to %q", bundleEntry.LocalPath, bundleEntry.IRODSPath)
 
-		progressCallbackPut := func(processed int64, total int64) {
-			job.Progress(processed, total, false)
+		progressCallbackPut := func(taskType string, processed int64, total int64) {
+			job.Progress(taskType, processed, total, false)
 		}
 
-		job.Progress(0, bundleEntry.Size, false)
+		job.Progress("upload", 0, bundleEntry.Size, false)
 
 		notes := []string{}
 
@@ -710,7 +715,7 @@ func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleE
 
 			_, encryptErr := bput.encryptFile(bundleEntry.LocalPath, bundleEntry.TempPath, bundleEntry.EncryptionMode)
 			if encryptErr != nil {
-				job.Progress(-1, bundleEntry.Size, true)
+				job.Progress("upload", -1, bundleEntry.Size, true)
 
 				reportSimple(encryptErr, notes...)
 				return xerrors.Errorf("failed to encrypt file: %w", encryptErr)
@@ -734,7 +739,7 @@ func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleE
 		_, statErr := bput.filesystem.Stat(parentTargetPath)
 		if statErr != nil {
 			// must exist, mkdir is performed at putDir
-			job.Progress(-1, bundleEntry.Size, true)
+			job.Progress("upload", -1, bundleEntry.Size, true)
 
 			reportSimple(statErr)
 			return xerrors.Errorf("failed to stat %q: %w", parentTargetPath, statErr)
@@ -744,7 +749,8 @@ func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleE
 		notes = append(notes, "icat", fmt.Sprintf("%d threads", threadsRequired))
 
 		if uploadErr != nil {
-			job.Progress(-1, bundleEntry.Size, true)
+			job.Progress("upload", -1, bundleEntry.Size, true)
+			job.Progress("checksum", -1, bundleEntry.Size, true)
 
 			reportTransfer(uploadResult, uploadErr, notes...)
 			return xerrors.Errorf("failed to upload %q to %q: %w", bundleEntry.LocalPath, bundleEntry.IRODSPath, uploadErr)
@@ -753,8 +759,6 @@ func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleE
 		reportTransfer(uploadResult, nil, notes...)
 
 		logger.Debugf("uploaded a file %q to %q", bundleEntry.LocalPath, bundleEntry.IRODSPath)
-
-		job.Progress(bundleEntry.Size, bundleEntry.Size, false)
 
 		return nil
 	}
@@ -813,7 +817,7 @@ func (bput *BputCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 	deleteTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for deleting empty directory %q", sourcePath)
@@ -822,18 +826,18 @@ func (bput *BputCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 
 		logger.Debugf("deleting a file %q", sourcePath)
 
-		job.Progress(0, 1, false)
+		job.Progress("delete", 0, 1, false)
 
 		removeErr := os.Remove(sourcePath)
 		reportSimple(removeErr)
 
 		if removeErr != nil {
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
 		}
 
 		logger.Debugf("deleted a file %q", sourcePath)
-		job.Progress(1, 1, false)
+		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
@@ -873,7 +877,7 @@ func (bput *BputCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 	deleteTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for deleting empty directory %q", sourcePath)
@@ -882,18 +886,18 @@ func (bput *BputCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 
 		logger.Debugf("deleting an empty directory %q", sourcePath)
 
-		job.Progress(0, 1, false)
+		job.Progress("delete", 0, 1, false)
 
 		removeErr := os.Remove(sourcePath)
 		reportSimple(removeErr)
 
 		if removeErr != nil {
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
 		}
 
 		logger.Debugf("deleted an empty directory %q", sourcePath)
-		job.Progress(1, 1, false)
+		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
@@ -933,7 +937,7 @@ func (bput *BputCommand) scheduleDeleteExtraFile(targetPath string) {
 	deleteTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for deleting extra data object %q", targetPath)
@@ -942,7 +946,7 @@ func (bput *BputCommand) scheduleDeleteExtraFile(targetPath string) {
 
 		logger.Debugf("deleting an extra data object %q", targetPath)
 
-		job.Progress(0, 1, false)
+		job.Progress("delete", 0, 1, false)
 
 		startTime := time.Now()
 		removeErr := bput.filesystem.RemoveFile(targetPath, true)
@@ -950,12 +954,12 @@ func (bput *BputCommand) scheduleDeleteExtraFile(targetPath string) {
 		report(startTime, endTime, removeErr)
 
 		if removeErr != nil {
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
 		}
 
 		logger.Debugf("deleted an extra data object %q", targetPath)
-		job.Progress(1, 1, false)
+		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
@@ -995,7 +999,7 @@ func (bput *BputCommand) scheduleDeleteExtraDir(targetPath string) {
 	deleteTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
 			// job is canceled, do not run
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
 			logger.Debugf("canceled a task for deleting extra collection %q", targetPath)
@@ -1004,7 +1008,7 @@ func (bput *BputCommand) scheduleDeleteExtraDir(targetPath string) {
 
 		logger.Debugf("deleting an extra collection %q", targetPath)
 
-		job.Progress(0, 1, false)
+		job.Progress("delete", 0, 1, false)
 
 		startTime := time.Now()
 		removeErr := bput.filesystem.RemoveDir(targetPath, false, false)
@@ -1012,12 +1016,12 @@ func (bput *BputCommand) scheduleDeleteExtraDir(targetPath string) {
 		report(startTime, endTime, removeErr)
 
 		if removeErr != nil {
-			job.Progress(-1, 1, true)
+			job.Progress("delete", -1, 1, true)
 			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
 		}
 
 		logger.Debugf("deleted an extra collection %q", targetPath)
-		job.Progress(1, 1, false)
+		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
@@ -1185,7 +1189,7 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string, temp
 			if targetEntry.Size == sourceStat.Size() {
 				// compare hash
 				if len(targetEntry.CheckSum) > 0 {
-					localChecksum, err := irodsclient_util.HashLocalFile(sourcePath, string(targetEntry.CheckSumAlgorithm))
+					localChecksum, err := irodsclient_util.HashLocalFile(sourcePath, string(targetEntry.CheckSumAlgorithm), nil)
 					if err != nil {
 						reportSimple(err, "differential")
 						return xerrors.Errorf("failed to get hash for %q: %w", sourcePath, err)
