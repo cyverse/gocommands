@@ -36,8 +36,8 @@ func Execute() error {
 
 func processCommand(command *cobra.Command, args []string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "processCommand",
+		"command": command.Name(),
+		"args":    args,
 	})
 
 	cont, err := flag.ProcessCommonFlags(command)
@@ -64,12 +64,10 @@ func main() {
 	})
 
 	log.SetLevel(log.FatalLevel)
+	log.SetReportCaller(true)
 	log.SetOutput(terminal.GetTerminalWriter())
 
-	logger := log.WithFields(log.Fields{
-		"package":  "main",
-		"function": "main",
-	})
+	logger := log.WithFields(log.Fields{})
 
 	err := config.InitSystemConfig()
 	if err != nil {

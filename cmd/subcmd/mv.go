@@ -172,9 +172,8 @@ func (mv *MvCommand) moveOne(sourcePath string, targetPath string) error {
 
 func (mv *MvCommand) moveFile(sourceEntry *irodsclient_fs.Entry, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "MvCommand",
-		"function": "moveFile",
+		"source_path": sourceEntry.Path,
+		"target_path": targetPath,
 	})
 
 	targetEntry, err := mv.filesystem.Stat(targetPath)
@@ -182,7 +181,7 @@ func (mv *MvCommand) moveFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 		if irodsclient_types.IsFileNotFoundError(err) {
 			// target does not exist
 			// target must be a file with new name
-			logger.Debugf("renaming a data object %q to %q", sourceEntry.Path, targetPath)
+			logger.Debug("renaming a data object")
 			err = mv.filesystem.RenameFileToFile(sourceEntry.Path, targetPath)
 			if err != nil {
 				return xerrors.Errorf("failed to rename %q to %q: %w", sourceEntry.Path, targetPath, err)
@@ -206,7 +205,7 @@ func (mv *MvCommand) moveFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 		return xerrors.Errorf("failed to remove %q for overwriting: %w", targetPath, err)
 	}
 
-	logger.Debugf("renaming a data object %q to %q", sourceEntry.Path, targetPath)
+	logger.Debug("renaming a data object")
 	err = mv.filesystem.RenameFileToFile(sourceEntry.Path, targetPath)
 	if err != nil {
 		return xerrors.Errorf("failed to rename %q to %q: %w", sourceEntry.Path, targetPath, err)
@@ -217,9 +216,8 @@ func (mv *MvCommand) moveFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 
 func (mv *MvCommand) moveDir(sourceEntry *irodsclient_fs.Entry, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "MvCommand",
-		"function": "moveDir",
+		"source_path": sourceEntry.Path,
+		"target_path": targetPath,
 	})
 
 	targetEntry, err := mv.filesystem.Stat(targetPath)
@@ -227,7 +225,7 @@ func (mv *MvCommand) moveDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 		if irodsclient_types.IsFileNotFoundError(err) {
 			// target does not exist
 			// target must be a directorywith new name
-			logger.Debugf("renaming a collection %q to %q", sourceEntry.Path, targetPath)
+			logger.Debug("renaming a collection")
 			err = mv.filesystem.RenameDirToDir(sourceEntry.Path, targetPath)
 			if err != nil {
 				return xerrors.Errorf("failed to rename %q to %q: %w", sourceEntry.Path, targetPath, err)
@@ -242,7 +240,7 @@ func (mv *MvCommand) moveDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 	// target exist
 	if targetEntry.IsDir() {
 		targetDirPath := path.Join(targetPath, sourceEntry.Name)
-		logger.Debugf("renaming a collection %q to %q", sourceEntry.Path, targetDirPath)
+		logger.Debug("renaming a collection")
 		err = mv.filesystem.RenameDirToDir(sourceEntry.Path, targetDirPath)
 		if err != nil {
 			return xerrors.Errorf("failed to rename %q to %q: %w", sourceEntry.Path, targetDirPath, err)

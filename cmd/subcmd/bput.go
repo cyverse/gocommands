@@ -150,11 +150,7 @@ func NewBputCommand(command *cobra.Command, args []string) (*BputCommand, error)
 }
 
 func (bput *BputCommand) Process() error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "BputCommand",
-		"function": "Process",
-	})
+	logger := log.WithFields(log.Fields{})
 
 	cont, err := flag.ProcessCommonFlags(bput.command)
 	if err != nil {
@@ -463,10 +459,15 @@ func (bput *BputCommand) deleteExtraOne(targetPath string) error {
 }
 
 func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
+	tarballPath := path.Join(bput.bundleManager.GetLocalTempDirPath(), bun.GetBundleFilename())
+	stagingTargetPath := path.Join(bput.bundleManager.GetIRODSStagingDirPath(), bun.GetBundleFilename())
+
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "BputCommand",
-		"function": "scheduleBundleTransfer",
+		"bundle_id":          bun.GetID(),
+		"bundle_name":        bun.GetBundleFilename(),
+		"target_path":        bun.GetIRODSDir(),
+		"local_tarball_path": tarballPath,
+		"staging_path":       stagingTargetPath,
 	})
 
 	defaultNotes := []string{"bput"}
@@ -517,9 +518,6 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 		}
 	}
 
-	tarballPath := path.Join(bput.bundleManager.GetLocalTempDirPath(), bun.GetBundleFilename())
-	stagingTargetPath := path.Join(bput.bundleManager.GetIRODSStagingDirPath(), bun.GetBundleFilename())
-
 	_, threadsRequired := bput.determineTransferMethodForBundle(bun)
 
 	// task for bundling and uploading
@@ -529,11 +527,11 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 			job.Progress("upload", -1, bun.GetSize(), true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for bundle transfer %q  %q", bun.GetBundleFilename(), bun.GetIRODSDir())
+			logger.Debug("canceled a task for bundle transfer")
 			return nil
 		}
 
-		logger.Debugf("bundling files in a bundle %d to %q", bun.GetID(), tarballPath)
+		logger.Debug("creating a tarball")
 
 		progressCallbackPut := func(taskType string, processed int64, total int64) {
 			job.Progress(taskType, processed, total, false)
@@ -564,8 +562,6 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 			}
 		}
 
-		logger.Debugf("creating a bundle file %q", tarballPath)
-
 		tarErr := tarball.CreateTarball(tarballPath, nil)
 		if tarErr != nil {
 			job.Progress("bundle", -1, bun.GetSize(), true)
@@ -576,7 +572,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 		defer os.Remove(tarballPath)
 
 		job.Progress("bundle", bun.GetSize(), bun.GetSize(), false)
-		logger.Debugf("created a bundle file %q", tarballPath)
+		logger.Debug("created a tarball")
 
 		tarballStat, tarErr := os.Stat(tarballPath)
 		if tarErr != nil {
@@ -599,7 +595,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 			return xerrors.Errorf("failed to stat %q: %w", parentTargetPath, statErr)
 		}
 
-		logger.Debugf("uploading a bundle file %q to %q", tarballPath, stagingTargetPath)
+		logger.Debug("uploading a tarball")
 
 		notes = append(notes, fmt.Sprintf("staging path %q", stagingTargetPath))
 
@@ -611,15 +607,15 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 			job.Progress("checksum", -1, tarballStat.Size(), true)
 
 			reportTransfer(uploadResult, uploadErr, notes...)
-			return xerrors.Errorf("failed to upload a bundle %q to %q: %w", tarballPath, stagingTargetPath, uploadErr)
+			return xerrors.Errorf("failed to upload a tarball %q to %q: %w", tarballPath, stagingTargetPath, uploadErr)
 		}
 
 		reportTransfer(uploadResult, nil, notes...)
 
-		logger.Debugf("uploaded a bundle %q to %q", tarballPath, stagingTargetPath)
+		logger.Debug("uploaded a tarball")
 
 		// extract the bundle in iRODS
-		logger.Debugf("extracting a bundle %q to %q", stagingTargetPath, bun.GetIRODSDir())
+		logger.Debug("extracting a tarball")
 
 		job.Progress("extract", 0, tarballStat.Size(), false)
 
@@ -628,36 +624,37 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 			job.Progress("extract", -1, tarballStat.Size(), true)
 
 			reportSimple(extractErr, "extract")
-			return xerrors.Errorf("failed to extract a bundle %q to %q: %w", stagingTargetPath, bun.GetIRODSDir(), extractErr)
+			return xerrors.Errorf("failed to extract a tarball %q to %q: %w", stagingTargetPath, bun.GetIRODSDir(), extractErr)
 		}
 
-		logger.Debugf("extracted a bundle %q to %q", stagingTargetPath, bun.GetIRODSDir())
+		logger.Debug("extracted a tarball")
 
 		// remove the tarball
-		logger.Debugf("removing a bundle file %q", stagingTargetPath)
+		logger.Debug("removing a tarball")
 		removeErr := bput.filesystem.RemoveFile(stagingTargetPath, true)
 		if removeErr != nil {
 			job.Progress("extract", -1, tarballStat.Size(), true)
 			reportSimple(removeErr, "remove")
-			return xerrors.Errorf("failed to remove a bundle file %q: %w", stagingTargetPath, removeErr)
+			return xerrors.Errorf("failed to remove a tarball %q: %w", stagingTargetPath, removeErr)
 		}
 
 		job.Progress("extract", tarballStat.Size(), tarballStat.Size(), false)
 
-		logger.Debugf("removed a bundle file %q", stagingTargetPath)
+		logger.Debug("removed a tarball")
 
 		return nil
 	}
 
 	bput.parallelTransferJobManager.Schedule(bun.GetBundleFilename(), bundleTask, threadsRequired, progress.UnitsBytes)
-	logger.Debugf("scheduled a bundle file upload %q (%d files) for iRODS directory %q, %d threads", bun.GetBundleFilename(), bun.GetEntryNumber(), bun.GetIRODSDir(), threadsRequired)
+	logger.Debugf("scheduled a bundle file upload (with %d files), %d threads", bun.GetEntryNumber(), threadsRequired)
 }
 
 func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleEntry) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "BputCommand",
-		"function": "scheduleBundleEntryTransfer",
+		"bundle_entry": bundleEntry.IRODSPath,
+		"local_path":   bundleEntry.LocalPath,
+		"temp_path":    bundleEntry.TempPath,
+		"encryption":   bundleEntry.EncryptionMode,
 	})
 
 	defaultNotes := []string{"bput", "no bundle"}
@@ -695,11 +692,11 @@ func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleE
 			job.Progress("upload", -1, bundleEntry.Size, true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for uploading %q to %q", bundleEntry.LocalPath, bundleEntry.IRODSPath)
+			logger.Debug("canceled a task for uploading")
 			return nil
 		}
 
-		logger.Debugf("uploading a file %q to %q", bundleEntry.LocalPath, bundleEntry.IRODSPath)
+		logger.Debug("uploading a file")
 
 		progressCallbackPut := func(taskType string, processed int64, total int64) {
 			job.Progress(taskType, processed, total, false)
@@ -724,7 +721,7 @@ func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleE
 			defer func() {
 				if len(bundleEntry.TempPath) > 0 {
 					// remove temp file
-					logger.Debugf("removing a temporary file %q", bundleEntry.TempPath)
+					logger.Debug("removing a temporary file")
 					os.Remove(bundleEntry.TempPath)
 				}
 			}()
@@ -758,13 +755,13 @@ func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleE
 
 		reportTransfer(uploadResult, nil, notes...)
 
-		logger.Debugf("uploaded a file %q to %q", bundleEntry.LocalPath, bundleEntry.IRODSPath)
+		logger.Debug("uploaded a file")
 
 		return nil
 	}
 
 	bput.parallelTransferJobManager.Schedule(bundleEntry.LocalPath, putTask, threadsRequired, progress.UnitsBytes)
-	logger.Debugf("scheduled a file upload %q to %q, %d threads", bundleEntry.LocalPath, bundleEntry.IRODSPath, threadsRequired)
+	logger.Debugf("scheduled a file upload, %d threads", threadsRequired)
 }
 
 func (bput *BputCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, tempPath string, targetPath string, encryptionMode encryption.EncryptionMode) error {
@@ -787,9 +784,7 @@ func (bput *BputCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, 
 
 func (bput *BputCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "BputCommand",
-		"function": "scheduleDeleteFileOnSuccess",
+		"source_path": sourcePath,
 	})
 
 	defaultNotes := []string{"bput", "delete on success", "file"}
@@ -820,11 +815,11 @@ func (bput *BputCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for deleting empty directory %q", sourcePath)
+			logger.Debug("canceled a task for deleting empty directory")
 			return nil
 		}
 
-		logger.Debugf("deleting a file %q", sourcePath)
+		logger.Debug("deleting a file")
 
 		job.Progress("delete", 0, 1, false)
 
@@ -836,20 +831,18 @@ func (bput *BputCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
 		}
 
-		logger.Debugf("deleted a file %q", sourcePath)
+		logger.Debug("deleted a file")
 		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
 	bput.parallelPostProcessJobManager.Schedule("removing - "+sourcePath, deleteTask, 1, progress.UnitsDefault)
-	logger.Debugf("scheduled a file deletion %q", sourcePath)
+	logger.Debug("scheduled a file deletion")
 }
 
 func (bput *BputCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "BputCommand",
-		"function": "scheduleDeleteDirOnSuccess",
+		"source_path": sourcePath,
 	})
 
 	defaultNotes := []string{"bput", "delete on success", "directory"}
@@ -880,11 +873,11 @@ func (bput *BputCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for deleting empty directory %q", sourcePath)
+			logger.Debug("canceled a task for deleting an empty directory")
 			return nil
 		}
 
-		logger.Debugf("deleting an empty directory %q", sourcePath)
+		logger.Debug("deleting an empty directory")
 
 		job.Progress("delete", 0, 1, false)
 
@@ -896,20 +889,18 @@ func (bput *BputCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
 		}
 
-		logger.Debugf("deleted an empty directory %q", sourcePath)
+		logger.Debug("deleted an empty directory")
 		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
 	bput.parallelPostProcessJobManager.Schedule("removing - "+sourcePath, deleteTask, 1, progress.UnitsDefault)
-	logger.Debugf("scheduled an empty directory deletion %q", sourcePath)
+	logger.Debug("scheduled an empty directory deletion")
 }
 
 func (bput *BputCommand) scheduleDeleteExtraFile(targetPath string) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "BputCommand",
-		"function": "scheduleDeleteExtraFile",
+		"target_path": targetPath,
 	})
 
 	defaultNotes := []string{"bput", "extra", "file"}
@@ -940,11 +931,11 @@ func (bput *BputCommand) scheduleDeleteExtraFile(targetPath string) {
 			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for deleting extra data object %q", targetPath)
+			logger.Debug("canceled a task for deleting an extra data object")
 			return nil
 		}
 
-		logger.Debugf("deleting an extra data object %q", targetPath)
+		logger.Debug("deleting an extra data object")
 
 		job.Progress("delete", 0, 1, false)
 
@@ -958,20 +949,18 @@ func (bput *BputCommand) scheduleDeleteExtraFile(targetPath string) {
 			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
 		}
 
-		logger.Debugf("deleted an extra data object %q", targetPath)
+		logger.Debug("deleted an extra data object")
 		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
 	bput.parallelPostProcessJobManager.Schedule(targetPath, deleteTask, 1, progress.UnitsDefault)
-	logger.Debugf("scheduled an extra data object deletion %q", targetPath)
+	logger.Debug("scheduled an extra data object deletion")
 }
 
 func (bput *BputCommand) scheduleDeleteExtraDir(targetPath string) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "BputCommand",
-		"function": "scheduleDeleteExtraDir",
+		"target_path": targetPath,
 	})
 
 	defaultNotes := []string{"bput", "extra", "directory"}
@@ -1002,11 +991,11 @@ func (bput *BputCommand) scheduleDeleteExtraDir(targetPath string) {
 			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for deleting extra collection %q", targetPath)
+			logger.Debug("canceled a task for deleting an extra collection")
 			return nil
 		}
 
-		logger.Debugf("deleting an extra collection %q", targetPath)
+		logger.Debug("deleting an extra collection")
 
 		job.Progress("delete", 0, 1, false)
 
@@ -1020,20 +1009,21 @@ func (bput *BputCommand) scheduleDeleteExtraDir(targetPath string) {
 			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
 		}
 
-		logger.Debugf("deleted an extra collection %q", targetPath)
+		logger.Debug("deleted an extra collection")
 		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
 	bput.parallelPostProcessJobManager.Schedule(targetPath, deleteTask, 1, progress.UnitsDefault)
-	logger.Debugf("scheduled an extra collection deletion %q", targetPath)
+	logger.Debug("scheduled an extra collection deletion")
 }
 
 func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPath string, targetPath string, encryptionMode encryption.EncryptionMode) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "BputCommand",
-		"function": "putFile",
+		"source_path":     sourcePath,
+		"temp_path":       tempPath,
+		"target_path":     targetPath,
+		"encryption_mode": encryptionMode,
 	})
 
 	defaultNotes := []string{"bput"}
@@ -1083,7 +1073,7 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string, temp
 			// skip
 			reportSimple(nil, "hidden", "skipped")
 			terminal.Printf("skip uploading a file %q to %q. The file is hidden!\n", sourcePath, targetPath)
-			logger.Debugf("skip uploading a file %q to %q. The file is hidden!", sourcePath, targetPath)
+			logger.Debug("skip uploading a file. The file is hidden!")
 			return nil
 		}
 	}
@@ -1096,7 +1086,7 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string, temp
 			// skip
 			reportSimple(nil, "age", "skipped")
 			terminal.Printf("skip uploading a file %q to %q. The file is too old (%s > %s)!\n", sourcePath, targetPath, age, maxAge)
-			logger.Debugf("skip uploading a file %q to %q. The file is too old (%s > %s)!", sourcePath, targetPath, age, maxAge)
+			logger.Debugf("skip uploading a file. The file is too old (age %s > max_age %s)!", age, maxAge)
 			return nil
 		}
 	}
@@ -1149,7 +1139,7 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string, temp
 					now := time.Now()
 					reportOverwrite(now, now, overwriteErr, "directory", "declined", "skipped")
 					terminal.Printf("skip uploading a file %q to %q. Collection exists with the same name!\n", sourcePath, targetPath)
-					logger.Debugf("skip uploading a file %q to %q. Collection exists with the same name!", sourcePath, targetPath)
+					logger.Debug("skip uploading a file. Collection exists with the same name!")
 					return nil
 				}
 			}
@@ -1182,7 +1172,7 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string, temp
 				bput.transferReportManager.AddFile(reportFile)
 
 				terminal.Printf("skip uploading a file %q to %q. The file already exists!\n", sourcePath, targetPath)
-				logger.Debugf("skip uploading a file %q to %q. The file already exists!", sourcePath, targetPath)
+				logger.Debug("skip uploading a file. The file already exists!")
 				return nil
 			}
 		} else {
@@ -1216,8 +1206,8 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string, temp
 
 						bput.transferReportManager.AddFile(reportFile)
 
-						terminal.Printf("skip uploading a file %q to %q. The file with the same hash already exists!\n", sourcePath, targetPath)
-						logger.Debugf("skip uploading a file %q to %q. The file with the same hash already exists!", sourcePath, targetPath)
+						terminal.Printf("skip uploading a file %q to %q. The data object with the same hash already exists!\n", sourcePath, targetPath)
+						logger.Debug("skip uploading a file. The data object with the same hash already exists!")
 						return nil
 					}
 				}
@@ -1226,7 +1216,7 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string, temp
 	} else {
 		if !bput.forceFlagValues.Force {
 			// ask
-			overwrite := terminal.InputYN(fmt.Sprintf("File %q already exists. Overwrite?", targetPath))
+			overwrite := terminal.InputYN(fmt.Sprintf("Data object %q already exists. Overwrite?", targetPath))
 			if !overwrite {
 				// skip
 				now := time.Now()
@@ -1247,7 +1237,7 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string, temp
 				bput.transferReportManager.AddFile(reportFile)
 
 				terminal.Printf("skip uploading a file %q to %q. The data object already exists!\n", sourcePath, targetPath)
-				logger.Debugf("skip uploading a file %q to %q. The data object already exists!", sourcePath, targetPath)
+				logger.Debug("skip uploading a file. The data object already exists!")
 				return nil
 			}
 		}
@@ -1260,9 +1250,9 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string, temp
 
 func (bput *BputCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetPath string, parentEncryptionMode encryption.EncryptionMode) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "BputCommand",
-		"function": "putDir",
+		"source_path":            sourcePath,
+		"target_path":            targetPath,
+		"parent_encryption_mode": parentEncryptionMode,
 	})
 
 	defaultNotes := []string{"bput", "directory"}
@@ -1314,8 +1304,8 @@ func (bput *BputCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targe
 		if strings.HasPrefix(sourceStat.Name(), ".") {
 			// skip
 			reportSimple(nil, "hidden", "skipped")
-			terminal.Printf("skip uploading a dir %q to %q. The dir is hidden!\n", sourcePath, targetPath)
-			logger.Debugf("skip uploading a dir %q to %q. The dir is hidden!", sourcePath, targetPath)
+			terminal.Printf("skip uploading a directory %q to %q. The directory is hidden!\n", sourcePath, targetPath)
+			logger.Debug("skip uploading a directory. The directory is hidden!")
 			return nil
 		}
 	}
@@ -1356,7 +1346,7 @@ func (bput *BputCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targe
 					// fallthrough to put entries
 				} else {
 					// ask
-					overwrite := terminal.InputYN(fmt.Sprintf("Overwriting a directory %q, but file exists. Overwrite?", targetPath))
+					overwrite := terminal.InputYN(fmt.Sprintf("Overwriting a collection %q, but data object exists. Overwrite?", targetPath))
 					if overwrite {
 						startTime := time.Now()
 						removeErr := bput.filesystem.RemoveFile(targetPath, true)
@@ -1374,8 +1364,8 @@ func (bput *BputCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targe
 
 						now := time.Now()
 						reportOverwrite(now, now, overwriteErr, "declined", "skipped")
-						terminal.Printf("skip uploading a dir %q to %q. The data object already exists!\n", sourcePath, targetPath)
-						logger.Debugf("skip uploading a dir %q to %q. The data object already exists!", sourcePath, targetPath)
+						terminal.Printf("skip uploading a directory %q to %q. The data object already exists!\n", sourcePath, targetPath)
+						logger.Debug("skip uploading a directory. The data object already exists!")
 						return nil
 					}
 				}
@@ -1446,25 +1436,9 @@ func (bput *BputCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targe
 	return nil
 }
 
-// here
-func (bput *BputCommand) deleteOnSuccess(sourcePath string) error {
-	sourceStat, err := os.Stat(sourcePath)
-	if err != nil {
-		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
-	}
-
-	if sourceStat.IsDir() {
-		return os.RemoveAll(sourcePath)
-	}
-
-	return os.Remove(sourcePath)
-}
-
 func (bput *BputCommand) deleteFileOnSuccess(sourcePath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "BputCommand",
-		"function": "deleteFileOnSuccess",
+		"source_path": sourcePath,
 	})
 
 	defaultNotes := []string{"bput", "delete on success", "file"}
@@ -1485,7 +1459,7 @@ func (bput *BputCommand) deleteFileOnSuccess(sourcePath string) error {
 		bput.transferReportManager.AddFile(reportFile)
 	}
 
-	logger.Debugf("removing a file %q after upload", sourcePath)
+	logger.Debug("removing a file after upload")
 
 	if bput.forceFlagValues.Force {
 		bput.scheduleDeleteFileOnSuccess(sourcePath)
@@ -1506,9 +1480,7 @@ func (bput *BputCommand) deleteFileOnSuccess(sourcePath string) error {
 
 func (bput *BputCommand) deleteDirOnSuccess(sourcePath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "BputCommand",
-		"function": "deleteDirOnSuccess",
+		"source_path": sourcePath,
 	})
 
 	defaultNotes := []string{"bput", "delete on success", "directory"}
@@ -1529,7 +1501,7 @@ func (bput *BputCommand) deleteDirOnSuccess(sourcePath string) error {
 		bput.transferReportManager.AddFile(reportFile)
 	}
 
-	logger.Debugf("removing a directory %q after upload", sourcePath)
+	logger.Debug("removing a directory after upload")
 
 	// scan recursively
 	entries, err := os.ReadDir(sourcePath)
@@ -1576,9 +1548,7 @@ func (bput *BputCommand) deleteDirOnSuccess(sourcePath string) error {
 
 func (bput *BputCommand) deleteExtraFile(targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "BputCommand",
-		"function": "deleteExtraFile",
+		"target_path": targetPath,
 	})
 
 	defaultNotes := []string{"bput", "extra", "file"}
@@ -1612,7 +1582,7 @@ func (bput *BputCommand) deleteExtraFile(targetPath string) error {
 
 	if isExtra {
 		// extra file
-		logger.Debugf("removing an extra data object %q", targetPath)
+		logger.Debug("removing an extra data object")
 
 		if bput.forceFlagValues.Force {
 			bput.scheduleDeleteExtraFile(targetPath)
@@ -1636,9 +1606,7 @@ func (bput *BputCommand) deleteExtraFile(targetPath string) error {
 
 func (bput *BputCommand) deleteExtraDir(targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "BputCommand",
-		"function": "deleteExtraDir",
+		"target_path": targetPath,
 	})
 
 	defaultNotes := []string{"bput", "extra", "directory"}
@@ -1692,7 +1660,7 @@ func (bput *BputCommand) deleteExtraDir(targetPath string) error {
 
 	if isExtra {
 		// extra dir
-		logger.Debugf("removing an extra collection %q", targetPath)
+		logger.Debug("removing an extra collection")
 
 		if bput.forceFlagValues.Force {
 			bput.scheduleDeleteExtraDir(targetPath)
@@ -1747,13 +1715,13 @@ func (bput *BputCommand) getLocalPathForEncryption(sourcePath string) (string, e
 
 func (bput *BputCommand) encryptFile(sourcePath string, encryptedFilePath string, encryptionMode encryption.EncryptionMode) (bool, error) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "BputCommand",
-		"function": "encryptFile",
+		"source_path":     sourcePath,
+		"encrypted_path":  encryptedFilePath,
+		"encryption_mode": encryptionMode,
 	})
 
 	if encryptionMode != encryption.EncryptionModeNone {
-		logger.Debugf("encrypt a file %q to %q", sourcePath, encryptedFilePath)
+		logger.Debug("encrypt a file")
 
 		encryptManager := bput.getEncryptionManagerForEncryption(encryptionMode)
 

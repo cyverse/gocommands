@@ -154,11 +154,7 @@ func NewGetCommand(command *cobra.Command, args []string) (*GetCommand, error) {
 }
 
 func (get *GetCommand) Process() error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "GetCommand",
-		"function": "Process",
-	})
+	logger := log.WithFields(log.Fields{})
 
 	cont, err := flag.ProcessCommonFlags(get.command)
 	if err != nil {
@@ -316,11 +312,6 @@ func (get *GetCommand) hasTransferStatusFile(targetPath string) bool {
 	return err == nil
 }
 
-func (get *GetCommand) deleteTransferStatusFile(targetPath string) {
-	trxStatusFilePath := irodsclient_irodsfs.GetDataObjectTransferStatusFilePath(targetPath)
-	os.RemoveAll(trxStatusFilePath)
-}
-
 func (get *GetCommand) getOne(sourcePath string, targetPath string) error {
 	cwd := config.GetCWD()
 	home := config.GetHomeDir()
@@ -396,9 +387,9 @@ func (get *GetCommand) deleteExtraOne(targetPath string) error {
 
 func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath string, targetPath string) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "GetCommand",
-		"function": "scheduleGet",
+		"source_path": sourceEntry.Path,
+		"temp_path":   tempPath,
+		"target_path": targetPath,
 	})
 
 	defaultNotes := []string{"get"}
@@ -436,11 +427,11 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 			job.Progress("download", -1, sourceEntry.Size, true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for downloading %q to %q", sourceEntry.Path, targetPath)
+			logger.Debug("canceled a task for downloading a data object")
 			return nil
 		}
 
-		logger.Debugf("downloading a data object %q to %q", sourceEntry.Path, targetPath)
+		logger.Debug("downloading a data object")
 
 		progressCallbackGet := func(taskType string, processed int64, total int64) {
 			job.Progress(taskType, processed, total, false)
@@ -494,20 +485,18 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 
 		reportTransfer(downloadResult, nil, notes...)
 
-		logger.Debugf("downloaded a data object %q to %q", sourceEntry.Path, targetPath)
+		logger.Debug("downloaded a data object")
 
 		return nil
 	}
 
 	get.parallelTransferJobManager.Schedule(sourceEntry.Path, getTask, threadsRequired, progress.UnitsBytes)
-	logger.Debugf("scheduled a data object download %q to %q, %d threads", sourceEntry.Path, targetPath, threadsRequired)
+	logger.Debugf("scheduled a data object download, %d threads", threadsRequired)
 }
 
 func (get *GetCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "GetCommand",
-		"function": "scheduleDeleteFileOnSuccess",
+		"source_path": sourcePath,
 	})
 
 	defaultNotes := []string{"get", "delete on success", "file"}
@@ -538,11 +527,11 @@ func (get *GetCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for deleting data object %q", sourcePath)
+			logger.Debug("canceled a task for deleting a data object")
 			return nil
 		}
 
-		logger.Debugf("deleting a data object %q", sourcePath)
+		logger.Debug("deleting a data object")
 
 		job.Progress("delete", 0, 1, false)
 
@@ -556,20 +545,18 @@ func (get *GetCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
 		}
 
-		logger.Debugf("deleted a data object %q", sourcePath)
+		logger.Debug("deleted a data object")
 		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
 	get.parallelPostProcessJobManager.Schedule("removing - "+sourcePath, deleteTask, 1, progress.UnitsDefault)
-	logger.Debugf("scheduled a data object deletion %q", sourcePath)
+	logger.Debug("scheduled a data object deletion")
 }
 
 func (get *GetCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "GetCommand",
-		"function": "scheduleDeleteDirOnSuccess",
+		"source_path": sourcePath,
 	})
 
 	defaultNotes := []string{"get", "delete on success", "directory"}
@@ -600,11 +587,11 @@ func (get *GetCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for deleting empty collection %q", sourcePath)
+			logger.Debug("canceled a task for deleting an empty collection")
 			return nil
 		}
 
-		logger.Debugf("deleting an empty collection %q", sourcePath)
+		logger.Debug("deleting an empty collection")
 
 		job.Progress("delete", 0, 1, false)
 
@@ -618,20 +605,18 @@ func (get *GetCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
 		}
 
-		logger.Debugf("deleted an empty collection %q", sourcePath)
+		logger.Debug("deleted an empty collection")
 		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
 	get.parallelPostProcessJobManager.Schedule("removing - "+sourcePath, deleteTask, 1, progress.UnitsDefault)
-	logger.Debugf("scheduled an empty collection deletion %q", sourcePath)
+	logger.Debug("scheduled an empty collection deletion")
 }
 
 func (get *GetCommand) scheduleDeleteExtraFile(targetPath string) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "GetCommand",
-		"function": "scheduleDeleteExtraFile",
+		"target_path": targetPath,
 	})
 
 	defaultNotes := []string{"get", "extra", "file"}
@@ -662,11 +647,11 @@ func (get *GetCommand) scheduleDeleteExtraFile(targetPath string) {
 			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for deleting extra file %q", targetPath)
+			logger.Debug("canceled a task for deleting an extra file")
 			return nil
 		}
 
-		logger.Debugf("deleting an extra file %q", targetPath)
+		logger.Debug("deleting an extra file")
 
 		job.Progress("delete", 0, 1, false)
 
@@ -678,20 +663,18 @@ func (get *GetCommand) scheduleDeleteExtraFile(targetPath string) {
 			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
 		}
 
-		logger.Debugf("deleted an extra file %q", targetPath)
+		logger.Debug("deleted an extra file")
 		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
 	get.parallelPostProcessJobManager.Schedule(targetPath, deleteTask, 1, progress.UnitsDefault)
-	logger.Debugf("scheduled an extra file deletion %q", targetPath)
+	logger.Debug("scheduled an extra file deletion")
 }
 
 func (get *GetCommand) scheduleDeleteExtraDir(targetPath string) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "GetCommand",
-		"function": "scheduleDeleteExtraDir",
+		"target_path": targetPath,
 	})
 
 	defaultNotes := []string{"get", "extra", "directory"}
@@ -722,11 +705,11 @@ func (get *GetCommand) scheduleDeleteExtraDir(targetPath string) {
 			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for deleting extra directory %q", targetPath)
+			logger.Debug("canceled a task for deleting an extra directory")
 			return nil
 		}
 
-		logger.Debugf("deleting an extra directory %q", targetPath)
+		logger.Debug("deleting an extra directory")
 
 		job.Progress("delete", 0, 1, false)
 
@@ -738,20 +721,20 @@ func (get *GetCommand) scheduleDeleteExtraDir(targetPath string) {
 			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
 		}
 
-		logger.Debugf("deleted an extra directory %q", targetPath)
+		logger.Debug("deleted an extra directory")
 		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
 	get.parallelPostProcessJobManager.Schedule(targetPath, deleteTask, 1, progress.UnitsDefault)
-	logger.Debugf("scheduled an extra directory deletion %q", targetPath)
+	logger.Debug("scheduled an extra directory deletion")
 }
 
 func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath string, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "GetCommand",
-		"function": "getFile",
+		"source_path": sourceEntry.Path,
+		"temp_path":   tempPath,
+		"target_path": targetPath,
 	})
 
 	defaultNotes := []string{"get"}
@@ -802,7 +785,7 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 			// skip
 			reportSimple(nil, "hidden", "skipped")
 			terminal.Printf("skip downloading a data object %q to %q. The data object is hidden!\n", sourceEntry.Path, targetPath)
-			logger.Debugf("skip downloading a data object %q to %q. The data object is hidden!", sourceEntry.Path, targetPath)
+			logger.Debug("skip downloading a data object. The data object is hidden!")
 			return nil
 		}
 	}
@@ -815,7 +798,7 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 			// skip
 			reportSimple(nil, "age", "skipped")
 			terminal.Printf("skip downloading a data object %q to %q. The data object is too old (%s > %s)!\n", sourceEntry.Path, targetPath, age, maxAge)
-			logger.Debugf("skip downloading a data object %q to %q. The data object is too old (%s > %s)!", sourceEntry.Path, targetPath, age, maxAge)
+			logger.Debugf("skip downloading a data object. The data object is too old (%s > %s)!", age, maxAge)
 			return nil
 		}
 	}
@@ -864,7 +847,7 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 
 					reportOverwrite(overwriteErr, "directory", "declined", "skipped")
 					terminal.Printf("skip downloading a data object %q to %q. Directory exists with the same name!\n", sourceEntry.Path, targetPath)
-					logger.Debugf("skip downloading a data object %q to %q. Directory exists with the same name!", sourceEntry.Path, targetPath)
+					logger.Debug("skip downloading a data object. Directory exists with the same name!")
 					return nil
 				}
 			}
@@ -879,7 +862,7 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 	if get.hasTransferStatusFile(targetPath) {
 		// incomplete file - resume downloading
 		terminal.Printf("resume downloading a data object %q\n", targetPath)
-		logger.Debugf("resume downloading a data object %q", targetPath)
+		logger.Debug("resume downloading a data object")
 
 		get.scheduleGet(sourceEntry, tempPath, targetPath)
 		return nil
@@ -907,7 +890,7 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 				get.transferReportManager.AddFile(reportFile)
 
 				terminal.Printf("skip downloading a data object %q to %q. The file already exists!\n", sourceEntry.Path, targetPath)
-				logger.Debugf("skip downloading a data object %q to %q. The file already exists!", sourceEntry.Path, targetPath)
+				logger.Debug("skip downloading a data object. The file already exists!")
 				return nil
 			}
 		} else {
@@ -942,7 +925,7 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 						get.transferReportManager.AddFile(reportFile)
 
 						terminal.Printf("skip downloading a data object %q to %q. The file with the same hash already exists!\n", sourceEntry.Path, targetPath)
-						logger.Debugf("skip downloading a data object %q to %q. The file with the same hash already exists!", sourceEntry.Path, targetPath)
+						logger.Debug("skip downloading a data object. The file with the same hash already exists!")
 						return nil
 					}
 				}
@@ -972,7 +955,7 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 				get.transferReportManager.AddFile(reportFile)
 
 				terminal.Printf("skip downloading a data object %q to %q. The file already exists!\n", sourceEntry.Path, targetPath)
-				logger.Debugf("skip downloading a data object %q to %q. The file already exists!", sourceEntry.Path, targetPath)
+				logger.Debug("skip downloading a data object. The file already exists!")
 				return nil
 			}
 		}
@@ -985,9 +968,8 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 
 func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "GetCommand",
-		"function": "getDir",
+		"source_path": sourceEntry.Path,
+		"target_path": targetPath,
 	})
 
 	defaultNotes := []string{"get", "directory"}
@@ -1037,7 +1019,7 @@ func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath stri
 			// skip
 			reportSimple(nil, "hidden", "skipped")
 			terminal.Printf("skip downloading a collection %q to %q. The collection is hidden!\n", sourceEntry.Path, targetPath)
-			logger.Debugf("skip downloading a collection %q to %q. The collection is hidden!!", sourceEntry.Path, targetPath)
+			logger.Debug("skip downloading a collection. The collection is hidden!")
 			return nil
 		}
 	}
@@ -1088,8 +1070,8 @@ func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath stri
 						overwriteErr := types.NewNotDirError(targetPath)
 
 						reportOverwrite(overwriteErr, "declined", "skipped")
-						terminal.Printf("skip downloading a dir %q to %q. File exists with the same name!\n", sourceEntry.Path, targetPath)
-						logger.Debugf("skip downloading a dir %q to %q. File exists with the same name!", sourceEntry.Path, targetPath)
+						terminal.Printf("skip downloading a collection %q to %q. File exists with the same name!\n", sourceEntry.Path, targetPath)
+						logger.Debug("skip downloading a collection. File exists with the same name!")
 						return nil
 					}
 				}
@@ -1148,9 +1130,7 @@ func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath stri
 
 func (get *GetCommand) deleteFileOnSuccess(sourcePath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "GetCommand",
-		"function": "deleteFileOnSuccess",
+		"source_path": sourcePath,
 	})
 
 	defaultNotes := []string{"get", "delete on success", "file"}
@@ -1171,7 +1151,7 @@ func (get *GetCommand) deleteFileOnSuccess(sourcePath string) error {
 		get.transferReportManager.AddFile(reportFile)
 	}
 
-	logger.Debugf("removing a data object %q after download", sourcePath)
+	logger.Debug("removing a data object after download")
 
 	if get.forceFlagValues.Force {
 		get.scheduleDeleteFileOnSuccess(sourcePath)
@@ -1192,9 +1172,7 @@ func (get *GetCommand) deleteFileOnSuccess(sourcePath string) error {
 
 func (get *GetCommand) deleteDirOnSuccess(sourcePath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "GetCommand",
-		"function": "deleteDirOnSuccess",
+		"source_path": sourcePath,
 	})
 
 	defaultNotes := []string{"get", "delete on success", "directory"}
@@ -1215,7 +1193,7 @@ func (get *GetCommand) deleteDirOnSuccess(sourcePath string) error {
 		get.transferReportManager.AddFile(reportFile)
 	}
 
-	logger.Debugf("removing a collection %q after download", sourcePath)
+	logger.Debug("removing a collection after download")
 
 	// scan recursively
 	entries, err := get.filesystem.List(sourcePath)
@@ -1260,9 +1238,7 @@ func (get *GetCommand) deleteDirOnSuccess(sourcePath string) error {
 
 func (get *GetCommand) deleteExtraFile(targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "GetCommand",
-		"function": "deleteExtraFile",
+		"target_path": targetPath,
 	})
 
 	defaultNotes := []string{"get", "extra", "file"}
@@ -1292,7 +1268,7 @@ func (get *GetCommand) deleteExtraFile(targetPath string) error {
 
 	if isExtra {
 		// extra file
-		logger.Debugf("removing an extra file %q", targetPath)
+		logger.Debug("removing an extra file")
 
 		if get.forceFlagValues.Force {
 			get.scheduleDeleteExtraFile(targetPath)
@@ -1316,9 +1292,7 @@ func (get *GetCommand) deleteExtraFile(targetPath string) error {
 
 func (get *GetCommand) deleteExtraDir(targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "GetCommand",
-		"function": "deleteExtraDir",
+		"target_path": targetPath,
 	})
 
 	defaultNotes := []string{"get", "extra", "directory"}
@@ -1374,7 +1348,7 @@ func (get *GetCommand) deleteExtraDir(targetPath string) error {
 
 	if isExtra {
 		// extra dir
-		logger.Debugf("removing an extra directory %q", targetPath)
+		logger.Debug("removing an extra directory")
 
 		if get.forceFlagValues.Force {
 			get.scheduleDeleteExtraDir(targetPath)
@@ -1436,15 +1410,15 @@ func (get *GetCommand) getPathsForDecryption(sourcePath string, targetPath strin
 
 func (get *GetCommand) decryptFile(sourcePath string, encryptedFilePath string, targetPath string) (bool, error) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "GetCommand",
-		"function": "decryptFile",
+		"source_path": sourcePath,
+		"temp_path":   encryptedFilePath,
+		"target_path": targetPath,
 	})
 
 	encryptionMode := encryption.DetectEncryptionMode(sourcePath)
 
 	if encryptionMode != encryption.EncryptionModeNone {
-		logger.Debugf("decrypt a data object %q to %q", encryptedFilePath, targetPath)
+		logger.Debug("decrypt a data object")
 
 		encryptManager := get.getEncryptionManagerForDecryption(encryptionMode)
 
@@ -1453,7 +1427,7 @@ func (get *GetCommand) decryptFile(sourcePath string, encryptedFilePath string, 
 			return false, xerrors.Errorf("failed to decrypt %q to %q: %w", encryptedFilePath, targetPath, err)
 		}
 
-		logger.Debugf("removing a temp file %q", encryptedFilePath)
+		logger.Debug("removing a temp file")
 		os.Remove(encryptedFilePath)
 
 		return true, nil

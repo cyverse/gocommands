@@ -93,12 +93,10 @@ func (passwd *PasswdCommand) Process() error {
 
 func (passwd *PasswdCommand) changePassword() error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "PasswdCommand",
-		"function": "changePassword",
+		"user": passwd.account.ClientUser,
 	})
 
-	logger.Debugf("changing password for user %q", passwd.account.ClientUser)
+	logger.Debug("changing password")
 
 	pass := false
 	for i := 0; i < 3; i++ {

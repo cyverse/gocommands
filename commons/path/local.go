@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
-	log "github.com/sirupsen/logrus"
 	"golang.org/x/xerrors"
 )
 
@@ -40,11 +39,6 @@ func MakeLocalTargetFilePath(source string, target string) string {
 
 // GetLocalParentDirPaths returns all parent dirs
 func GetLocalParentDirPaths(p string) []string {
-	logger := log.WithFields(log.Fields{
-		"package":  "path",
-		"function": "GetLocalParentDirPaths",
-	})
-
 	parents := []string{}
 
 	if p == string(os.PathSeparator) {
@@ -57,7 +51,6 @@ func GetLocalParentDirPaths(p string) []string {
 	}
 
 	curPath := absPath
-	logger.Infof("curPath = %s", curPath)
 
 	for len(curPath) > 0 {
 		curDir := filepath.Dir(curPath)

@@ -99,12 +99,10 @@ func (rmTicket *RmTicketCommand) Process() error {
 
 func (rmTicket *RmTicketCommand) removeTicket(ticketName string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "RmTicketCommand",
-		"function": "removeTicket",
+		"ticket_name": ticketName,
 	})
 
-	logger.Debugf("remove ticket %q", ticketName)
+	logger.Debug("remove a ticket")
 
 	err := rmTicket.filesystem.DeleteTicket(ticketName)
 	if err != nil {

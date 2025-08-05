@@ -194,16 +194,14 @@ func (sync *SyncCommand) getNewCommandArgs() ([]string, error) {
 }
 
 func (sync *SyncCommand) syncLocalToIRODS() error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "SyncCommand",
-		"function": "syncLocalToIRODS",
-	})
-
 	newArgs, err := sync.getNewCommandArgs()
 	if err != nil {
 		return xerrors.Errorf("failed to get new command args for retry: %w", err)
 	}
+
+	logger := log.WithFields(log.Fields{
+		"args": newArgs,
+	})
 
 	useBput := false
 
@@ -221,52 +219,48 @@ func (sync *SyncCommand) syncLocalToIRODS() error {
 
 	if useBput {
 		// run bput
-		logger.Debugf("run bput with args: %v", newArgs)
+		logger.Debug("run bput")
 		bputCmd.ParseFlags(newArgs)
 		argWoFlags := bputCmd.Flags().Args()
 		return bputCmd.RunE(bputCmd, argWoFlags)
 	}
 
 	// run put
-	logger.Debugf("run put with args: %v", newArgs)
+	logger.Debug("run put")
 	putCmd.ParseFlags(newArgs)
 	argWoFlags := putCmd.Flags().Args()
 	return putCmd.RunE(putCmd, argWoFlags)
 }
 
 func (sync *SyncCommand) syncIRODSToIRODS() error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "SyncCommand",
-		"function": "syncIRODSToIRODS",
-	})
-
 	newArgs, err := sync.getNewCommandArgs()
 	if err != nil {
 		return xerrors.Errorf("failed to get new command args for retry: %w", err)
 	}
 
+	logger := log.WithFields(log.Fields{
+		"args": newArgs,
+	})
+
 	// run cp
-	logger.Debugf("run cp with args: %v", newArgs)
+	logger.Debug("run cp")
 	cpCmd.ParseFlags(newArgs)
 	argWoFlags := cpCmd.Flags().Args()
 	return cpCmd.RunE(cpCmd, argWoFlags)
 }
 
 func (sync *SyncCommand) syncIRODSToLocal() error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "SyncCommand",
-		"function": "syncIRODSToLocal",
-	})
-
 	newArgs, err := sync.getNewCommandArgs()
 	if err != nil {
 		return xerrors.Errorf("failed to get new command args for retry: %w", err)
 	}
 
+	logger := log.WithFields(log.Fields{
+		"args": newArgs,
+	})
+
 	// run get
-	logger.Debugf("run get with args: %v", newArgs)
+	logger.Debug("run get")
 	getCmd.ParseFlags(newArgs)
 	argWoFlags := getCmd.Flags().Args()
 	return getCmd.RunE(getCmd, argWoFlags)

@@ -126,12 +126,10 @@ func (lsTicket *LsTicketCommand) listTickets() error {
 
 func (lsTicket *LsTicketCommand) printTicket(ticketName string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "LsTicketCommand",
-		"function": "printTicket",
+		"ticket_name": ticketName,
 	})
 
-	logger.Debugf("print ticket %q", ticketName)
+	logger.Debug("print ticket")
 
 	ticket, err := lsTicket.filesystem.GetTicket(ticketName)
 	if err != nil {

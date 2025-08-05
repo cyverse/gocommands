@@ -166,9 +166,8 @@ func (bun *BunCommand) getDataType(irodsPath string, dataType string) (irodsclie
 
 func (bun *BunCommand) extractOne(sourcePath string, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "BunCommand",
-		"function": "extractOne",
+		"source_path": sourcePath,
+		"target_path": targetPath,
 	})
 
 	cwd := config.GetCWD()
@@ -198,7 +197,7 @@ func (bun *BunCommand) extractOne(sourcePath string, targetPath string) error {
 	}
 
 	// file
-	logger.Debugf("extracting a data object %q to %q", sourcePath, targetPath)
+	logger.Debug("extracting a data object")
 
 	dt, err := bun.getDataType(sourcePath, bun.bundleFlagValues.DataType)
 	if err != nil {

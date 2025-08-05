@@ -249,9 +249,8 @@ func (manager *BundleManager) GetIRODSStagingDirPath() string {
 
 func (manager *BundleManager) Add(bundleEntry BundleEntry) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "bundle",
-		"struct":   "BundleManager",
-		"function": "Add",
+		"local_path": bundleEntry.LocalPath,
+		"irods_path": bundleEntry.IRODSPath,
 	})
 
 	manager.mutex.Lock()
@@ -273,7 +272,7 @@ func (manager *BundleManager) Add(bundleEntry BundleEntry) error {
 	}
 
 	if !currentBundle.IsSameDir(bundleEntry) {
-		logger.Debugf("current bundle %d has different directory %q, creating a new bundle", currentBundle.index, currentBundle.irodsDir)
+		logger.Debugf("current bundle %d has different directory (%q vs %q), creating a new bundle", currentBundle.index, currentBundle.irodsDir, path.Dir(bundleEntry.IRODSPath))
 		currentBundle.Seal()
 
 		currentBundle = NewBundle(manager, manager.getNextBundleIndex())
@@ -285,7 +284,7 @@ func (manager *BundleManager) Add(bundleEntry BundleEntry) error {
 		return xerrors.Errorf("failed to add local file %q to bundle %d: %w", bundleEntry.LocalPath, currentBundle.index, err)
 	}
 
-	logger.Debugf("added a local file %q to a bundle %d", bundleEntry.LocalPath, currentBundle.index)
+	logger.Debug("added a local file to a bundle")
 	return nil
 }
 
@@ -321,16 +320,14 @@ func (manager *BundleManager) IsBundleFilename(p string) bool {
 
 func (manager *BundleManager) ClearLocalBundles() error {
 	logger := log.WithFields(log.Fields{
-		"package":  "bundle",
-		"struct":   "BundleManager",
-		"function": "ClearLocalBundles",
+		"local_temp_dir": manager.localTempDirPath,
 	})
 
-	logger.Debugf("clearing local bundle files in %q", manager.localTempDirPath)
+	logger.Debug("clearing local bundle files")
 
 	entries, err := os.ReadDir(manager.localTempDirPath)
 	if err != nil {
-		return xerrors.Errorf("failed to read a local temp directory %q: %w", manager.localTempDirPath, err)
+		return xerrors.Errorf("failed to read a local temp directory: %w", err)
 	}
 
 	bundleEntries := []string{}
@@ -352,22 +349,21 @@ func (manager *BundleManager) ClearLocalBundles() error {
 	}
 
 	terminal.Printf("deleted %d of %d local bundles in %q\n", deletedCount, len(bundleEntries), manager.localTempDirPath)
-	logger.Debugf("deleted %d of %d local bundles in %q", deletedCount, len(bundleEntries), manager.localTempDirPath)
+	logger.Debugf("deleted %d of %d local bundles", deletedCount, len(bundleEntries))
 
 	return nil
 }
 
 func (manager *BundleManager) ClearIRODSBundles(fs *irodsclient_fs.FileSystem, removeDir bool) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "bundle",
-		"struct":   "BundleManager",
-		"function": "ClearIRODSBundles",
+		"irods_staging_dir": manager.irodsStagingDirPath,
+		"remove_dir":        removeDir,
 	})
 
-	logger.Debugf("clearing irods bundle files in %q", manager.irodsStagingDirPath)
+	logger.Debug("clearing irods bundle files in")
 
 	if !fs.ExistsDir(manager.irodsStagingDirPath) {
-		return xerrors.Errorf("staging dir %q does not exist", manager.irodsStagingDirPath)
+		return xerrors.Errorf("staging collection %q does not exist", manager.irodsStagingDirPath)
 	}
 
 	entries, err := fs.List(manager.irodsStagingDirPath)
@@ -392,18 +388,18 @@ func (manager *BundleManager) ClearIRODSBundles(fs *irodsclient_fs.FileSystem, r
 	}
 
 	terminal.Printf("deleted %d of %d irods bundles in %q\n", deletedCount, len(entries), manager.irodsStagingDirPath)
-	logger.Debugf("deleted %d of %d irods bundles in %q", deletedCount, len(entries), manager.irodsStagingDirPath)
+	logger.Debugf("deleted %d of %d irods bundles", deletedCount, len(entries))
 
 	if removeDir {
 		if len(entries) != deletedCount {
 			// not all entries are deleted, so we do not remove the directory
-			logger.Debugf("not all entries are deleted, not removing the staging directory %q", manager.irodsStagingDirPath)
+			logger.Debug("not all entries are deleted, not removing the staging directory")
 			return nil
 		}
 
 		rmdirErr := fs.RemoveDir(manager.irodsStagingDirPath, true, true)
 		if rmdirErr != nil {
-			return xerrors.Errorf("failed to remove staging directory %q: %w", manager.irodsStagingDirPath, rmdirErr)
+			return xerrors.Errorf("failed to remove a staging collection %q: %w", manager.irodsStagingDirPath, rmdirErr)
 		}
 	}
 
@@ -464,7 +460,7 @@ func EnsureStagingDirPath(fs *irodsclient_fs.FileSystem, stagingPath string) (bo
 
 	mkdirErr := fs.MakeDir(stagingPath, true)
 	if mkdirErr != nil {
-		return false, xerrors.Errorf("failed to make staging directory %q: %w", stagingPath, mkdirErr)
+		return false, xerrors.Errorf("failed to make a staging collection %q: %w", stagingPath, mkdirErr)
 	}
 
 	return true, nil
@@ -483,7 +479,7 @@ func GetResourceServersForDir(fs *irodsclient_fs.FileSystem, targetDir string) (
 	if !fs.ExistsDir(targetDir) {
 		err := fs.MakeDir(targetDir, true)
 		if err != nil {
-			return nil, xerrors.Errorf("failed to make a directory %q: %w", targetDir, err)
+			return nil, xerrors.Errorf("failed to make a collection %q: %w", targetDir, err)
 		}
 		dirCreated = true
 	}
@@ -493,7 +489,7 @@ func GetResourceServersForDir(fs *irodsclient_fs.FileSystem, targetDir string) (
 
 	filehandle, err := fs.CreateFile(testFilePath, "", "w+")
 	if err != nil {
-		return nil, xerrors.Errorf("failed to create file %q: %w", testFilePath, err)
+		return nil, xerrors.Errorf("failed to create data object %q: %w", testFilePath, err)
 	}
 
 	_, err = filehandle.Write([]byte("resource server test\n"))
@@ -503,7 +499,7 @@ func GetResourceServersForDir(fs *irodsclient_fs.FileSystem, targetDir string) (
 
 	err = filehandle.Close()
 	if err != nil {
-		return nil, xerrors.Errorf("failed to close file: %w", err)
+		return nil, xerrors.Errorf("failed to close data object %q: %w", testFilePath, err)
 	}
 
 	// data object
@@ -531,8 +527,8 @@ func GetResourceServersForDir(fs *irodsclient_fs.FileSystem, targetDir string) (
 
 func IsSameResourceServer(fs *irodsclient_fs.FileSystem, path1 string, path2 string) (bool, error) {
 	logger := log.WithFields(log.Fields{
-		"package":  "bundle_manager",
-		"function": "IsSameResourceServer",
+		"path1": path1,
+		"path2": path2,
 	})
 
 	path1RS, err := GetResourceServersForDir(fs, path1)
@@ -540,14 +536,14 @@ func IsSameResourceServer(fs *irodsclient_fs.FileSystem, path1 string, path2 str
 		return false, xerrors.Errorf("failed to get resource servers for %q: %w", path1, err)
 	}
 
-	logger.Debugf("resource servers for path %q - %v", path1, path1RS)
+	logger.Debugf("resource servers for path1 - %v", path1RS)
 
 	path2RS, err := GetResourceServersForDir(fs, path2)
 	if err != nil {
 		return false, xerrors.Errorf("failed to get resource servers for %q: %w", path2, err)
 	}
 
-	logger.Debugf("staging resource servers for path %q - %v", path2, path2RS)
+	logger.Debugf("resource servers for path2 - %v", path2RS)
 
 	for _, stagingResourceServer := range path2RS {
 		for _, targetResourceServer := range path1RS {

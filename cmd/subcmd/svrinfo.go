@@ -9,7 +9,6 @@ import (
 	"github.com/cyverse/gocommands/commons/config"
 	"github.com/cyverse/gocommands/commons/irods"
 	"github.com/jedib0t/go-pretty/v6/table"
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/xerrors"
 )
@@ -96,14 +95,6 @@ func (svrInfo *SvrInfoCommand) Process() error {
 }
 
 func (svrInfo *SvrInfoCommand) displayInfo() error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "SvrInfoCommand",
-		"function": "displayInfo",
-	})
-
-	logger.Debug("displaying version")
-
 	ver, err := svrInfo.filesystem.GetServerVersion()
 	if err != nil {
 		return xerrors.Errorf("failed to get server version: %w", err)

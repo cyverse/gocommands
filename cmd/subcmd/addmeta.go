@@ -129,9 +129,10 @@ func (addMeta *AddMetaCommand) Process() error {
 
 func (addMeta *AddMetaCommand) addMetaToPath(targetPath string, attribute string, value string, unit string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "AddMetaCommand",
-		"function": "addMetaToPath",
+		"targetPath": targetPath,
+		"attribute":  attribute,
+		"value":      value,
+		"unit":       unit,
 	})
 
 	cwd := config.GetCWD()
@@ -139,7 +140,7 @@ func (addMeta *AddMetaCommand) addMetaToPath(targetPath string, attribute string
 	zone := addMeta.account.ClientZone
 	targetPath = path.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	logger.Debugf("add metadata to path %q (attr %q, value %q, unit %q)", targetPath, attribute, value, unit)
+	logger.Debug("add metadata to path")
 
 	err := addMeta.filesystem.AddMetadata(targetPath, attribute, value, unit)
 	if err != nil {
@@ -151,12 +152,13 @@ func (addMeta *AddMetaCommand) addMetaToPath(targetPath string, attribute string
 
 func (addMeta *AddMetaCommand) addMetaToUser(username string, attribute string, value string, unit string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "AddMetaCommand",
-		"function": "addMetaToUser",
+		"username":  username,
+		"attribute": attribute,
+		"value":     value,
+		"unit":      unit,
 	})
 
-	logger.Debugf("add metadata to user %q (attr %q, value %q, unit %q)", username, attribute, value, unit)
+	logger.Debug("add metadata to user")
 
 	err := addMeta.filesystem.AddUserMetadata(username, addMeta.account.ClientZone, attribute, value, unit)
 	if err != nil {
@@ -168,12 +170,13 @@ func (addMeta *AddMetaCommand) addMetaToUser(username string, attribute string, 
 
 func (addMeta *AddMetaCommand) addMetaToResource(resource string, attribute string, value string, unit string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "AddMetaCommand",
-		"function": "addMetaToResource",
+		"resource":  resource,
+		"attribute": attribute,
+		"value":     value,
+		"unit":      unit,
 	})
 
-	logger.Debugf("add metadata to resource %q (attr %q, value %q, unit %q)", resource, attribute, value, unit)
+	logger.Debug("add metadata to resource")
 
 	err := addMeta.filesystem.AddUserMetadata(resource, addMeta.account.ClientZone, attribute, value, unit)
 	if err != nil {

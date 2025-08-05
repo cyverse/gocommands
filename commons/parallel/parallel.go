@@ -222,11 +222,7 @@ func (manager *ParallelJobManager) Schedule(name string, task ParallelJobTask, w
 
 // Start starts the job manager to run the scheduled jobs in parallel
 func (manager *ParallelJobManager) Start() error {
-	logger := log.WithFields(log.Fields{
-		"package":  "parallel",
-		"struct":   "ParallelJobManager",
-		"function": "Start",
-	})
+	logger := log.WithFields(log.Fields{})
 
 	manager.startProgress()
 	defer manager.endProgress()
@@ -252,6 +248,12 @@ func (manager *ParallelJobManager) Start() error {
 		logger.Debugf("Run job id %d, name %q, canceled %t", job.index, job.name, job.canceled)
 
 		go func() {
+			taskLogger := log.WithFields(log.Fields{
+				"job_index": job.index,
+				"job_name":  job.name,
+				"canceled":  job.canceled,
+			})
+
 			err := job.task(job)
 			if err != nil {
 				// increase jobs errored counter
@@ -259,17 +261,17 @@ func (manager *ParallelJobManager) Start() error {
 
 				// mark error
 				manager.setLastError(err)
-				logger.Error(err)
+				taskLogger.Error(err)
 				// don't stop here
 			} else {
 				if job.IsCanceled() {
 					// increase jobs canceled counter
 					atomic.AddInt64(&manager.jobsCanceledCounter, 1)
-					logger.Debugf("Job %d, %q is canceled", job.index, job.name)
+					taskLogger.Debug("Job canceled")
 				} else {
 					// increase jobs done counter
 					atomic.AddInt64(&manager.jobsDoneCounter, 1)
-					logger.Debugf("Job %d, %q completed successfully", job.index, job.name)
+					taskLogger.Debug("Job completed successfully")
 				}
 			}
 

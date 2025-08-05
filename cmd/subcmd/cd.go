@@ -106,9 +106,7 @@ func (cd *CdCommand) Process() error {
 
 func (cd *CdCommand) changeWorkingDir(collectionPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "CdCommand",
-		"function": "changeWorkingDir",
+		"collection_path": collectionPath,
 	})
 
 	cwd := config.GetCWD()
@@ -131,7 +129,7 @@ func (cd *CdCommand) changeWorkingDir(collectionPath string) error {
 		return xerrors.Errorf("%q is not a directory", collectionPath)
 	}
 
-	logger.Debugf("changing working directory to %q", collectionPath)
+	logger.Debug("changing working directory")
 
 	err = config.SetCWD(collectionPath)
 	if err != nil {

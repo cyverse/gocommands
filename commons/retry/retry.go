@@ -14,8 +14,8 @@ import (
 
 func RunWithRetry(retry int, retryInterval int) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "retry",
-		"function": "RunWithRetry",
+		"retry":          retry,
+		"retry_interval": retryInterval,
 	})
 
 	var err error
@@ -30,7 +30,7 @@ func RunWithRetry(retry int, retryInterval int) error {
 		logger.Errorf("%+v", err)
 		terminal.PrintErrorf("%+v\n", err)
 
-		logger.Errorf("Waiting %d seconds for next try...", retryInterval)
+		logger.Errorf("Waiting for next try...")
 		terminal.PrintErrorf("Waiting %d seconds for next try...", retryInterval)
 
 		sleepTime := time.Duration(retryInterval * int(time.Second))

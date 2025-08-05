@@ -121,7 +121,7 @@ func (init *InitCommand) Process() error {
 
 		err = manager.SetEnvironmentDirPath(irodsclient_config.GetDefaultEnvironmentDirPath())
 		if err != nil {
-			return xerrors.Errorf("failed to set environment dir path: %w", err)
+			return xerrors.Errorf("failed to set environment directory path: %w", err)
 		}
 
 		err = manager.SaveEnvironment()

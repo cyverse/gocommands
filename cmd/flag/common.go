@@ -158,8 +158,7 @@ func getLogWriter(logFile string) io.WriteCloser {
 
 func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	logger := log.WithFields(log.Fields{
-		"package":  "flag",
-		"function": "ProcessCommonFlags",
+		"command": command.Name(),
 	})
 
 	myCommonFlagValues := GetCommonFlagValues(command)

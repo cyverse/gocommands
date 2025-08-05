@@ -101,12 +101,11 @@ func (ps *PsCommand) Process() error {
 
 func (ps *PsCommand) listProcesses() error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "PsCommand",
-		"function": "listProcesses",
+		"address": ps.processFilterFlagValues.Address,
+		"zone":    ps.processFilterFlagValues.Zone,
 	})
 
-	logger.Debugf("listing processes - addr: %q, zone: %q", ps.processFilterFlagValues.Address, ps.processFilterFlagValues.Zone)
+	logger.Debug("listing processes")
 
 	processes, err := ps.filesystem.StatProcess(ps.processFilterFlagValues.Address, ps.processFilterFlagValues.Zone)
 	if err != nil {

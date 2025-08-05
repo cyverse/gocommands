@@ -199,12 +199,11 @@ func (rmMeta *RmMetaCommand) removeOneByAVU(attribute string, value string, unit
 
 func (rmMeta *RmMetaCommand) removeMetaFromPathByID(targetPath string, avuID int64) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "RmMetaCommand",
-		"function": "removeMetaFromPathByID",
+		"target_path": targetPath,
+		"avu_id":      avuID,
 	})
 
-	logger.Debugf("remove metadata (id: %d) from path %q", avuID, targetPath)
+	logger.Debug("remove metadata from path")
 
 	cwd := config.GetCWD()
 	home := config.GetHomeDir()
@@ -221,12 +220,11 @@ func (rmMeta *RmMetaCommand) removeMetaFromPathByID(targetPath string, avuID int
 
 func (rmMeta *RmMetaCommand) removeMetaFromUserByID(username string, avuID int64) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "RmMetaCommand",
-		"function": "removeMetaFromUserByID",
+		"username": username,
+		"avu_id":   avuID,
 	})
 
-	logger.Debugf("remove metadata (id: %d) from user %q", avuID, username)
+	logger.Debug("remove metadata from user")
 
 	err := rmMeta.filesystem.DeleteUserMetadata(username, rmMeta.account.ClientZone, avuID)
 	if err != nil {
@@ -238,12 +236,11 @@ func (rmMeta *RmMetaCommand) removeMetaFromUserByID(username string, avuID int64
 
 func (rmMeta *RmMetaCommand) removeMetaFromResourceByID(resource string, avuID int64) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "RmMetaCommand",
-		"function": "removeMetaFromResourceByID",
+		"resource": resource,
+		"avu_id":   avuID,
 	})
 
-	logger.Debugf("remove metadata (id: %d) from resource %q", avuID, resource)
+	logger.Debug("remove metadata from resource")
 
 	err := rmMeta.filesystem.DeleteResourceMetadata(resource, avuID)
 	if err != nil {
@@ -255,12 +252,13 @@ func (rmMeta *RmMetaCommand) removeMetaFromResourceByID(resource string, avuID i
 
 func (rmMeta *RmMetaCommand) removeMetaFromPathByAVU(targetPath string, attr string, val string, unit string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "RmMetaCommand",
-		"function": "removeMetaFromPathByAVU",
+		"target_path": targetPath,
+		"attr":        attr,
+		"val":         val,
+		"unit":        unit,
 	})
 
-	logger.Debugf("remove metadata (attr: %q, val: %q, unit: %q) from path %q", attr, val, unit, targetPath)
+	logger.Debug("remove metadata from path")
 
 	cwd := config.GetCWD()
 	home := config.GetHomeDir()
@@ -277,12 +275,13 @@ func (rmMeta *RmMetaCommand) removeMetaFromPathByAVU(targetPath string, attr str
 
 func (rmMeta *RmMetaCommand) removeMetaFromUserByAVU(username string, attr string, val string, unit string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "RmMetaCommand",
-		"function": "removeMetaFromUserByAVU",
+		"username": username,
+		"attr":     attr,
+		"val":      val,
+		"unit":     unit,
 	})
 
-	logger.Debugf("remove metadata (attr: %q, val: %q, unit: %q) from user %q", attr, val, unit, username)
+	logger.Debug("remove metadata from user")
 
 	err := rmMeta.filesystem.DeleteUserMetadataByAVU(username, rmMeta.account.ClientZone, attr, val, unit)
 	if err != nil {
@@ -294,12 +293,13 @@ func (rmMeta *RmMetaCommand) removeMetaFromUserByAVU(username string, attr strin
 
 func (rmMeta *RmMetaCommand) removeMetaFromResourceByAVU(resource string, attr string, val string, unit string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "RmMetaCommand",
-		"function": "removeMetaFromResourceByAVU",
+		"resource": resource,
+		"attr":     attr,
+		"val":      val,
+		"unit":     unit,
 	})
 
-	logger.Debugf("remove metadata (attr: %q, val: %q, unit: %q) from resource %q", attr, val, unit, resource)
+	logger.Debug("remove metadata from resource")
 
 	err := rmMeta.filesystem.DeleteResourceMetadataByAVU(resource, attr, val, unit)
 	if err != nil {

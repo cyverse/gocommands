@@ -92,8 +92,8 @@ func GetHomeDir() string {
 // SetCWD sets current workding directory
 func SetCWD(cwd string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "config",
-		"function": "SetCWD",
+		"ppid": environmentManager.PPID,
+		"cwd":  cwd,
 	})
 
 	session := environmentManager.Session
@@ -104,7 +104,7 @@ func SetCWD(cwd string) error {
 
 	session.CurrentWorkingDir = path.Clean(cwd)
 
-	logger.Debugf("save session to file - id %d", environmentManager.PPID)
+	logger.Debug("save session")
 	err := environmentManager.SaveSession()
 	if err != nil {
 		return xerrors.Errorf("failed to save session: %w", err)
@@ -183,10 +183,7 @@ func InputMissingFieldsFromStdin() error {
 
 // InputFieldsForInit inputs fields
 func InputFieldsForInit() (bool, error) {
-	logger := log.WithFields(log.Fields{
-		"package":  "config",
-		"function": "InputFieldsForInit",
-	})
+	logger := log.WithFields(log.Fields{})
 
 	updated := false
 

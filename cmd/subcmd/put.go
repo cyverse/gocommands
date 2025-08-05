@@ -149,11 +149,7 @@ func NewPutCommand(command *cobra.Command, args []string) (*PutCommand, error) {
 }
 
 func (put *PutCommand) Process() error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "PutCommand",
-		"function": "Process",
-	})
+	logger := log.WithFields(log.Fields{})
 
 	cont, err := flag.ProcessCommonFlags(put.command)
 	if err != nil {
@@ -399,9 +395,10 @@ func (put *PutCommand) deleteExtraOne(targetPath string) error {
 
 func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, tempPath string, targetPath string, encryptionMode encryption.EncryptionMode) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "PutCommand",
-		"function": "schedulePut",
+		"source_path":     sourcePath,
+		"temp_path":       tempPath,
+		"target_path":     targetPath,
+		"encryption_mode": encryptionMode,
 	})
 
 	defaultNotes := []string{"put"}
@@ -439,11 +436,11 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 			job.Progress("upload", -1, sourceStat.Size(), true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for uploading %q to %q", sourcePath, targetPath)
+			logger.Debug("canceled a task for uploading a file")
 			return nil
 		}
 
-		logger.Debugf("uploading a file %q to %q", sourcePath, targetPath)
+		logger.Debug("uploading a file")
 
 		notes := []string{}
 
@@ -464,7 +461,7 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 			defer func() {
 				if len(tempPath) > 0 {
 					// remove temp file
-					logger.Debugf("removing a temporary file %q", tempPath)
+					logger.Debug("removing a temporary file")
 					os.Remove(tempPath)
 				}
 			}()
@@ -504,20 +501,18 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 
 		reportTransfer(uploadResult, nil, notes...)
 
-		logger.Debugf("uploaded a file %q to %q", sourcePath, targetPath)
+		logger.Debug("uploaded a file")
 
 		return nil
 	}
 
 	put.parallelTransferJobManager.Schedule(sourcePath, putTask, threadsRequired, progress.UnitsBytes)
-	logger.Debugf("scheduled a file upload %q to %q, %d threads", sourcePath, targetPath, threadsRequired)
+	logger.Debugf("scheduled a file upload, %d threads", threadsRequired)
 }
 
 func (put *PutCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "PutCommand",
-		"function": "scheduleDeleteFileOnSuccess",
+		"source_path": sourcePath,
 	})
 
 	defaultNotes := []string{"put", "delete on success", "file"}
@@ -548,11 +543,11 @@ func (put *PutCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for deleting empty directory %q", sourcePath)
+			logger.Debug("canceled a task for deleting a file")
 			return nil
 		}
 
-		logger.Debugf("deleting a file %q", sourcePath)
+		logger.Debug("deleting a file")
 
 		job.Progress("delete", 0, 1, false)
 
@@ -564,20 +559,18 @@ func (put *PutCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
 		}
 
-		logger.Debugf("deleted a file %q", sourcePath)
+		logger.Debug("deleted a file")
 		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
 	put.parallelPostProcessJobManager.Schedule("removing - "+sourcePath, deleteTask, 1, progress.UnitsDefault)
-	logger.Debugf("scheduled a file deletion %q", sourcePath)
+	logger.Debug("scheduled a file deletion")
 }
 
 func (put *PutCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "PutCommand",
-		"function": "scheduleDeleteDirOnSuccess",
+		"source_path": sourcePath,
 	})
 
 	defaultNotes := []string{"put", "delete on success", "directory"}
@@ -608,11 +601,11 @@ func (put *PutCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for deleting empty directory %q", sourcePath)
+			logger.Debug("canceled a task for deleting an empty directory")
 			return nil
 		}
 
-		logger.Debugf("deleting an empty directory %q", sourcePath)
+		logger.Debug("deleting an empty directory")
 
 		job.Progress("delete", 0, 1, false)
 
@@ -624,20 +617,18 @@ func (put *PutCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
 		}
 
-		logger.Debugf("deleted an empty directory %q", sourcePath)
+		logger.Debug("deleted an empty directory")
 		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
 	put.parallelPostProcessJobManager.Schedule("removing - "+sourcePath, deleteTask, 1, progress.UnitsDefault)
-	logger.Debugf("scheduled an empty directory deletion %q", sourcePath)
+	logger.Debug("scheduled an empty directory deletion")
 }
 
 func (put *PutCommand) scheduleDeleteExtraFile(targetPath string) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "PutCommand",
-		"function": "scheduleDeleteExtraFile",
+		"target_path": targetPath,
 	})
 
 	defaultNotes := []string{"put", "extra", "file"}
@@ -668,11 +659,11 @@ func (put *PutCommand) scheduleDeleteExtraFile(targetPath string) {
 			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for deleting extra data object %q", targetPath)
+			logger.Debug("canceled a task for deleting extra data object")
 			return nil
 		}
 
-		logger.Debugf("deleting an extra data object %q", targetPath)
+		logger.Debug("deleting an extra data object")
 
 		job.Progress("delete", 0, 1, false)
 
@@ -686,20 +677,18 @@ func (put *PutCommand) scheduleDeleteExtraFile(targetPath string) {
 			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
 		}
 
-		logger.Debugf("deleted an extra data object %q", targetPath)
+		logger.Debug("deleted an extra data object")
 		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
 	put.parallelPostProcessJobManager.Schedule(targetPath, deleteTask, 1, progress.UnitsDefault)
-	logger.Debugf("scheduled an extra data object deletion %q", targetPath)
+	logger.Debug("scheduled an extra data object deletion")
 }
 
 func (put *PutCommand) scheduleDeleteExtraDir(targetPath string) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "PutCommand",
-		"function": "scheduleDeleteExtraDir",
+		"target_path": targetPath,
 	})
 
 	defaultNotes := []string{"put", "extra", "directory"}
@@ -730,11 +719,11 @@ func (put *PutCommand) scheduleDeleteExtraDir(targetPath string) {
 			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for deleting extra collection %q", targetPath)
+			logger.Debug("canceled a task for deleting an extra collection")
 			return nil
 		}
 
-		logger.Debugf("deleting an extra collection %q", targetPath)
+		logger.Debug("deleting an extra collection")
 
 		job.Progress("delete", 0, 1, false)
 
@@ -748,20 +737,21 @@ func (put *PutCommand) scheduleDeleteExtraDir(targetPath string) {
 			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
 		}
 
-		logger.Debugf("deleted an extra collection %q", targetPath)
+		logger.Debug("deleted an extra collection")
 		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
 	put.parallelPostProcessJobManager.Schedule(targetPath, deleteTask, 1, progress.UnitsDefault)
-	logger.Debugf("scheduled an extra collection deletion %q", targetPath)
+	logger.Debug("scheduled an extra collection deletion")
 }
 
 func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPath string, targetPath string, encryptionMode encryption.EncryptionMode) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "PutCommand",
-		"function": "putFile",
+		"source_path":     sourcePath,
+		"temp_path":       tempPath,
+		"target_path":     targetPath,
+		"encryption_mode": encryptionMode,
 	})
 
 	defaultNotes := []string{"put"}
@@ -811,7 +801,7 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 			// skip
 			reportSimple(nil, "hidden", "skipped")
 			terminal.Printf("skip uploading a file %q to %q. The file is hidden!\n", sourcePath, targetPath)
-			logger.Debugf("skip uploading a file %q to %q. The file is hidden!", sourcePath, targetPath)
+			logger.Debug("skip uploading a file. The file is hidden!")
 			return nil
 		}
 	}
@@ -824,7 +814,7 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 			// skip
 			reportSimple(nil, "age", "skipped")
 			terminal.Printf("skip uploading a file %q to %q. The file is too old (%s > %s)!\n", sourcePath, targetPath, age, maxAge)
-			logger.Debugf("skip uploading a file %q to %q. The file is too old (%s > %s)!", sourcePath, targetPath, age, maxAge)
+			logger.Debugf("skip uploading a file. The file is too old (%s > %s)!", age, maxAge)
 			return nil
 		}
 	}
@@ -878,7 +868,7 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 					now := time.Now()
 					reportOverwrite(now, now, overwriteErr, "directory", "declined", "skipped")
 					terminal.Printf("skip uploading a file %q to %q. Collection exists with the same name!\n", sourcePath, targetPath)
-					logger.Debugf("skip uploading a file %q to %q. Collection exists with the same name!", sourcePath, targetPath)
+					logger.Debug("skip uploading a file. Collection exists with the same name!")
 					return nil
 				}
 			}
@@ -910,8 +900,8 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 
 				put.transferReportManager.AddFile(reportFile)
 
-				terminal.Printf("skip uploading a file %q to %q. The file already exists!\n", sourcePath, targetPath)
-				logger.Debugf("skip uploading a file %q to %q. The file already exists!", sourcePath, targetPath)
+				terminal.Printf("skip uploading a file %q to %q. The data object already exists!\n", sourcePath, targetPath)
+				logger.Debug("skip uploading a file. The data object already exists!")
 				return nil
 			}
 		} else {
@@ -945,8 +935,8 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 
 						put.transferReportManager.AddFile(reportFile)
 
-						terminal.Printf("skip uploading a file %q to %q. The file with the same hash already exists!\n", sourcePath, targetPath)
-						logger.Debugf("skip uploading a file %q to %q. The file with the same hash already exists!", sourcePath, targetPath)
+						terminal.Printf("skip uploading a file %q to %q. The data object with the same hash already exists!\n", sourcePath, targetPath)
+						logger.Debug("skip uploading a file. The data object with the same hash already exists!")
 						return nil
 					}
 				}
@@ -955,7 +945,7 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 	} else {
 		if !put.forceFlagValues.Force {
 			// ask
-			overwrite := terminal.InputYN(fmt.Sprintf("File %q already exists. Overwrite?", targetPath))
+			overwrite := terminal.InputYN(fmt.Sprintf("Data object %q already exists. Overwrite?", targetPath))
 			if !overwrite {
 				// skip
 				now := time.Now()
@@ -976,7 +966,7 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 				put.transferReportManager.AddFile(reportFile)
 
 				terminal.Printf("skip uploading a file %q to %q. The data object already exists!\n", sourcePath, targetPath)
-				logger.Debugf("skip uploading a file %q to %q. The data object already exists!", sourcePath, targetPath)
+				logger.Debug("skip uploading a file. The data object already exists!")
 				return nil
 			}
 		}
@@ -989,9 +979,9 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 
 func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetPath string, parentEncryptionMode encryption.EncryptionMode) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "PutCommand",
-		"function": "putDir",
+		"source_path":            sourcePath,
+		"target_path":            targetPath,
+		"parent_encryption_mode": parentEncryptionMode,
 	})
 
 	defaultNotes := []string{"put", "directory"}
@@ -1043,8 +1033,8 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 		if strings.HasPrefix(sourceStat.Name(), ".") {
 			// skip
 			reportSimple(nil, "hidden", "skipped")
-			terminal.Printf("skip uploading a dir %q to %q. The dir is hidden!\n", sourcePath, targetPath)
-			logger.Debugf("skip uploading a dir %q to %q. The dir is hidden!", sourcePath, targetPath)
+			terminal.Printf("skip uploading a directory %q to %q. The directory is hidden!\n", sourcePath, targetPath)
+			logger.Debug("skip uploading a directory. The directory is hidden!")
 			return nil
 		}
 	}
@@ -1103,8 +1093,8 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 
 						now := time.Now()
 						reportOverwrite(now, now, overwriteErr, "declined", "skipped")
-						terminal.Printf("skip uploading a dir %q to %q. The data object already exists!\n", sourcePath, targetPath)
-						logger.Debugf("skip uploading a dir %q to %q. The data object already exists!", sourcePath, targetPath)
+						terminal.Printf("skip uploading a directory %q to %q. Data object exists with the same name!\n", sourcePath, targetPath)
+						logger.Debug("skip uploading a directory. Data object exists with the same name!")
 						return nil
 					}
 				}
@@ -1176,9 +1166,7 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 
 func (put *PutCommand) deleteFileOnSuccess(sourcePath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "PutCommand",
-		"function": "deleteFileOnSuccess",
+		"source_path": sourcePath,
 	})
 
 	defaultNotes := []string{"put", "delete on success", "file"}
@@ -1199,7 +1187,7 @@ func (put *PutCommand) deleteFileOnSuccess(sourcePath string) error {
 		put.transferReportManager.AddFile(reportFile)
 	}
 
-	logger.Debugf("removing a file %q after upload", sourcePath)
+	logger.Debug("removing a file after upload", sourcePath)
 
 	if put.forceFlagValues.Force {
 		put.scheduleDeleteFileOnSuccess(sourcePath)
@@ -1220,9 +1208,7 @@ func (put *PutCommand) deleteFileOnSuccess(sourcePath string) error {
 
 func (put *PutCommand) deleteDirOnSuccess(sourcePath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "PutCommand",
-		"function": "deleteDirOnSuccess",
+		"source_path": sourcePath,
 	})
 
 	defaultNotes := []string{"put", "delete on success", "directory"}
@@ -1243,7 +1229,7 @@ func (put *PutCommand) deleteDirOnSuccess(sourcePath string) error {
 		put.transferReportManager.AddFile(reportFile)
 	}
 
-	logger.Debugf("removing a directory %q after upload", sourcePath)
+	logger.Debug("removing a directory after upload", sourcePath)
 
 	// scan recursively
 	entries, err := os.ReadDir(sourcePath)
@@ -1290,9 +1276,7 @@ func (put *PutCommand) deleteDirOnSuccess(sourcePath string) error {
 
 func (put *PutCommand) deleteExtraFile(targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "PutCommand",
-		"function": "deleteExtraFile",
+		"target_path": targetPath,
 	})
 
 	defaultNotes := []string{"put", "extra", "file"}
@@ -1326,7 +1310,7 @@ func (put *PutCommand) deleteExtraFile(targetPath string) error {
 
 	if isExtra {
 		// extra file
-		logger.Debugf("removing an extra data object %q", targetPath)
+		logger.Debug("removing an extra data object", targetPath)
 
 		if put.forceFlagValues.Force {
 			put.scheduleDeleteExtraFile(targetPath)
@@ -1350,9 +1334,7 @@ func (put *PutCommand) deleteExtraFile(targetPath string) error {
 
 func (put *PutCommand) deleteExtraDir(targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "PutCommand",
-		"function": "deleteExtraDir",
+		"target_path": targetPath,
 	})
 
 	defaultNotes := []string{"put", "extra", "directory"}
@@ -1406,7 +1388,7 @@ func (put *PutCommand) deleteExtraDir(targetPath string) error {
 
 	if isExtra {
 		// extra dir
-		logger.Debugf("removing an extra collection %q", targetPath)
+		logger.Debug("removing an extra collection")
 
 		if put.forceFlagValues.Force {
 			put.scheduleDeleteExtraDir(targetPath)
@@ -1465,13 +1447,13 @@ func (put *PutCommand) getPathsForEncryption(sourcePath string, targetPath strin
 
 func (put *PutCommand) encryptFile(sourcePath string, encryptedFilePath string, encryptionMode encryption.EncryptionMode) (bool, error) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "PutCommand",
-		"function": "encryptFile",
+		"source_path":     sourcePath,
+		"temp_path":       encryptedFilePath,
+		"encryption_mode": encryptionMode,
 	})
 
 	if encryptionMode != encryption.EncryptionModeNone {
-		logger.Debugf("encrypt a file %q to %q", sourcePath, encryptedFilePath)
+		logger.Debug("encrypt a file")
 
 		encryptManager := put.getEncryptionManagerForEncryption(encryptionMode)
 

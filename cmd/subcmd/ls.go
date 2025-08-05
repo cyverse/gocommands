@@ -102,11 +102,7 @@ func NewLsCommand(command *cobra.Command, args []string) (*LsCommand, error) {
 }
 
 func (ls *LsCommand) Process() error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "LsCommand",
-		"function": "Process",
-	})
+	logger := log.WithFields(log.Fields{})
 
 	cont, err := flag.ProcessCommonFlags(ls.command)
 	if err != nil {
@@ -533,9 +529,8 @@ func (ls *LsCommand) getDataObjectModifyTime(object *irodsclient_types.IRODSData
 
 func (ls *LsCommand) printDataObjectShort(entry *irodsclient_types.IRODSDataObject, accesses []*irodsclient_types.IRODSAccess, showFullPath bool) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "LsCommand",
-		"function": "printDataObjectShort",
+		"path":           entry.Path,
+		"show_full_path": showFullPath,
 	})
 
 	newName := entry.Name
@@ -632,9 +627,7 @@ func (ls *LsCommand) getEncryptionManagerForDecryption(mode encryption.Encryptio
 
 func (ls *LsCommand) printReplica(flatReplica FlatReplica, accesses []*irodsclient_types.IRODSAccess) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "LsCommand",
-		"function": "printReplica",
+		"path": flatReplica.DataObject.Path,
 	})
 
 	newName := flatReplica.DataObject.Name

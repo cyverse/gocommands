@@ -76,13 +76,11 @@ func (up *UpgradeCommand) Process() error {
 
 func (up *UpgradeCommand) upgrade(checkOnly bool) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "commons",
-		"struct":   "UpgradeCommand",
-		"function": "upgrade",
+		"check_only": checkOnly,
 	})
 
 	myVersion := commons.GetClientVersion()
-	logger.Infof("Current cilent version installed: %s\n", myVersion)
+	logger.Infof("Current cilent version installed: %s", myVersion)
 	terminal.Printf("Current cilent version installed: %s\n", myVersion)
 
 	newRelease, err := upgrade.CheckNewRelease()
@@ -90,16 +88,16 @@ func (up *UpgradeCommand) upgrade(checkOnly bool) error {
 		return xerrors.Errorf("failed to check new release: %w", err)
 	}
 
-	logger.Infof("Latest release version available for %s/%s: v%s\n", runtime.GOOS, runtime.GOARCH, newRelease.Version())
-	logger.Infof("Latest release URL: %s\n", newRelease.URL)
+	logger.Infof("Latest release version available for %s/%s: v%s", runtime.GOOS, runtime.GOARCH, newRelease.Version())
+	logger.Infof("Latest release URL: %s", newRelease.URL)
 	terminal.Printf("Latest release version available for %s/%s: v%s\n", runtime.GOOS, runtime.GOARCH, newRelease.Version())
 	terminal.Printf("Latest release URL: %s\n", newRelease.URL)
 
 	if up.hasNewRelease(myVersion, newRelease.Version()) {
-		logger.Infof("Need upgrading to latest version v%s\n", newRelease.Version())
+		logger.Infof("Need upgrading to latest version v%s", newRelease.Version())
 		terminal.Printf("Need upgrading to latest version v%s\n", newRelease.Version())
 	} else {
-		logger.Infof("Current client version installed is up-to-date [%s]\n", myVersion)
+		logger.Infof("Current client version installed is up-to-date [%s]", myVersion)
 		terminal.Printf("Current client version installed is up-to-date [%s]\n", myVersion)
 		return nil
 	}

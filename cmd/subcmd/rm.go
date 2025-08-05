@@ -120,9 +120,7 @@ func (rm *RmCommand) Process() error {
 
 func (rm *RmCommand) removeOne(targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "RmCommand",
-		"function": "removeOne",
+		"target_path": targetPath,
 	})
 
 	cwd := config.GetCWD()
@@ -132,7 +130,7 @@ func (rm *RmCommand) removeOne(targetPath string) error {
 
 	targetEntry, err := rm.filesystem.Stat(targetPath)
 	if err != nil {
-		logger.Debugf("failed to find a data object %q, but trying to remove", targetPath)
+		logger.Debug("failed to find a data object, but trying to remove")
 		err = rm.filesystem.RemoveFile(targetPath, rm.forceFlagValues.Force)
 		if err != nil {
 			return xerrors.Errorf("failed to remove %q: %w", targetPath, err)
@@ -146,17 +144,17 @@ func (rm *RmCommand) removeOne(targetPath string) error {
 			return xerrors.Errorf("cannot remove a collection, recurse is not set")
 		}
 
-		logger.Debugf("removing a collection %q", targetPath)
+		logger.Debug("removing a collection")
 		err = rm.filesystem.RemoveDir(targetPath, rm.recursiveFlagValues.Recursive, rm.forceFlagValues.Force)
 		if err != nil {
-			return xerrors.Errorf("failed to remove a directory %q: %w", targetPath, err)
+			return xerrors.Errorf("failed to remove a collection %q: %w", targetPath, err)
 		}
 
 		return nil
 	}
 
 	// file
-	logger.Debugf("removing a data object %q", targetPath)
+	logger.Debug("removing a data object")
 	err = rm.filesystem.RemoveFile(targetPath, rm.forceFlagValues.Force)
 	if err != nil {
 		return xerrors.Errorf("failed to remove %q: %w", targetPath, err)

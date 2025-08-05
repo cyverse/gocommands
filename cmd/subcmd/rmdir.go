@@ -122,9 +122,7 @@ func (rmDir *RmDirCommand) Process() error {
 
 func (rmDir *RmDirCommand) removeOne(targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "RmDirCommand",
-		"function": "removeOne",
+		"target_path": targetPath,
 	})
 
 	cwd := config.GetCWD()
@@ -143,10 +141,10 @@ func (rmDir *RmDirCommand) removeOne(targetPath string) error {
 	}
 
 	// dir
-	logger.Debugf("removing a directory %q", targetPath)
+	logger.Debug("removing a directory")
 	err = rmDir.filesystem.RemoveDir(targetPath, rmDir.recursiveFlagValues.Recursive, rmDir.forceFlagValues.Force)
 	if err != nil {
-		return xerrors.Errorf("failed to remove a directory %q: %w", targetPath, err)
+		return xerrors.Errorf("failed to remove a collection %q: %w", targetPath, err)
 	}
 
 	return nil

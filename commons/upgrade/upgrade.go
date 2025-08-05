@@ -13,11 +13,12 @@ import (
 
 func CheckNewRelease() (*selfupdate.Release, error) {
 	logger := log.WithFields(log.Fields{
-		"package":  "upgrade",
-		"function": "CheckNewVersion",
+		"GOOS":       runtime.GOOS,
+		"GOARCH":     runtime.GOARCH,
+		"GithubRepo": constant.GoCommandsRepoPackagePath,
 	})
 
-	logger.Infof("checking latest version for %s/%s", runtime.GOOS, runtime.GOARCH)
+	logger.Infof("checking latest version")
 
 	latest, found, err := selfupdate.DetectLatest(context.Background(), selfupdate.ParseSlug(constant.GoCommandsRepoPackagePath))
 	if err != nil {
@@ -25,7 +26,7 @@ func CheckNewRelease() (*selfupdate.Release, error) {
 	}
 
 	if !found {
-		return nil, xerrors.Errorf("latest version for %s/%s is not found from github repository %q", runtime.GOOS, runtime.GOARCH, constant.GoCommandsRepoPackagePath)
+		return nil, xerrors.Errorf("latest version is not found from github repository")
 	}
 
 	return latest, nil
@@ -33,11 +34,12 @@ func CheckNewRelease() (*selfupdate.Release, error) {
 
 func SelfUpgrade(release *selfupdate.Release) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "upgrade",
-		"function": "SelfUpgrade",
+		"version":    release.Version(),
+		"asset_url":  release.AssetURL,
+		"asset_name": release.AssetName,
 	})
 
-	logger.Infof("updating to version v%s, url=%s, name=%s", release.Version(), release.AssetURL, release.AssetName)
+	logger.Info("updating")
 
 	exe, err := os.Executable()
 	if err != nil {
@@ -48,6 +50,6 @@ func SelfUpgrade(release *selfupdate.Release) error {
 		return xerrors.Errorf("error occurred while updating binary: %w", err)
 	}
 
-	logger.Infof("updated to version v%s successfully", release.Version())
+	logger.Info("updated successfully")
 	return nil
 }

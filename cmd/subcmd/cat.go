@@ -69,11 +69,7 @@ func NewCatCommand(command *cobra.Command, args []string) (*CatCommand, error) {
 }
 
 func (cat *CatCommand) Process() error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "CatCommand",
-		"function": "Process",
-	})
+	logger := log.WithFields(log.Fields{})
 
 	cont, err := flag.ProcessCommonFlags(cat.command)
 	if err != nil {

@@ -505,14 +505,14 @@ func (manager *BundleTransferManager) Start() error {
 	if !manager.filesystem.ExistsDir(manager.irodsDestPath) {
 		err := manager.filesystem.MakeDir(manager.irodsDestPath, true)
 		if err != nil {
-			return xerrors.Errorf("failed to create destination directory %q: %w", manager.irodsDestPath, err)
+			return xerrors.Errorf("failed to make a destination directory %q: %w", manager.irodsDestPath, err)
 		}
 	}
 
 	if !manager.filesystem.ExistsDir(manager.irodsTempDirPath) {
 		err := manager.filesystem.MakeDir(manager.irodsTempDirPath, true)
 		if err != nil {
-			return xerrors.Errorf("failed to create temporary directory %q: %w", manager.irodsTempDirPath, err)
+			return xerrors.Errorf("failed to make a temporary directory %q: %w", manager.irodsTempDirPath, err)
 		}
 	}
 
@@ -1066,7 +1066,7 @@ func (manager *BundleTransferManager) processBundleUploadWithoutTar(bundle *Bund
 			err := manager.filesystem.MakeDir(parentDir, true)
 			if err != nil {
 				manager.progress(progressName, 0, bundle.size, progress.UnitsBytes, true)
-				return xerrors.Errorf("failed to create a directory %q to upload file %q in bundle %d to %q: %w", parentDir, file.localPath, bundle.index, file.irodsPath, err)
+				return xerrors.Errorf("failed to make a collection %q to upload file %q in bundle %d to %q: %w", parentDir, file.localPath, bundle.index, file.irodsPath, err)
 			}
 		}
 

@@ -130,11 +130,7 @@ func NewCpCommand(command *cobra.Command, args []string) (*CpCommand, error) {
 }
 
 func (cp *CpCommand) Process() error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "CpCommand",
-		"function": "Process",
-	})
+	logger := log.WithFields(log.Fields{})
 
 	cont, err := flag.ProcessCommonFlags(cp.command)
 	if err != nil {
@@ -201,11 +197,11 @@ func (cp *CpCommand) Process() error {
 
 	// delete extra
 	if cp.syncFlagValues.Delete {
-		logger.Infof("deleting extra files and directories under %q", cp.targetPath)
+		logger.Infof("deleting extra data objects and collections under %q", cp.targetPath)
 
 		err = cp.deleteExtraOne(cp.targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to delete extra files or directories: %w", err)
+			return xerrors.Errorf("failed to delete extra data objects or collections: %w", err)
 		}
 	}
 
@@ -305,9 +301,8 @@ func (cp *CpCommand) deleteExtraOne(targetPath string) error {
 
 func (cp *CpCommand) scheduleCopy(sourceEntry *irodsclient_fs.Entry, targetPath string, targetEntry *irodsclient_fs.Entry) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "CpCommand",
-		"function": "scheduleCopy",
+		"source_path": sourceEntry.Path,
+		"target_path": targetPath,
 	})
 
 	defaultNotes := []string{"cp", "file"}
@@ -336,11 +331,11 @@ func (cp *CpCommand) scheduleCopy(sourceEntry *irodsclient_fs.Entry, targetPath 
 			job.Progress("copy", -1, 1, true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for copying %q to %q", sourceEntry.Path, targetPath)
+			logger.Debug("canceled a task for copying")
 			return nil
 		}
 
-		logger.Debugf("copying a data object %q to %q", sourceEntry.Path, targetPath)
+		logger.Debug("copying a data object")
 
 		job.Progress("copy", 0, 1, false)
 
@@ -376,21 +371,19 @@ func (cp *CpCommand) scheduleCopy(sourceEntry *irodsclient_fs.Entry, targetPath 
 
 		cp.transferReportManager.AddFile(reportFile)
 
-		logger.Debugf("copied a data object %q to %q", sourceEntry.Path, targetPath)
+		logger.Debug("copied a data object")
 		job.Progress("copy", 1, 1, false)
 
 		return nil
 	}
 
 	cp.parallelTransferJobManager.Schedule(sourceEntry.Path, copyTask, 1, progress.UnitsDefault)
-	logger.Debugf("scheduled a data object copy %q to %q", sourceEntry.Path, targetPath)
+	logger.Debug("scheduled a data object copy")
 }
 
 func (cp *CpCommand) scheduleDeleteExtraFile(targetEntry *irodsclient_fs.Entry) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "CpCommand",
-		"function": "scheduleDeleteExtraFile",
+		"target_path": targetEntry.Path,
 	})
 
 	defaultNotes := []string{"cp", "extra", "file"}
@@ -421,11 +414,11 @@ func (cp *CpCommand) scheduleDeleteExtraFile(targetEntry *irodsclient_fs.Entry) 
 			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for deleting %q", targetEntry.Path)
+			logger.Debug("canceled a task for deleting")
 			return nil
 		}
 
-		logger.Debugf("deleting a data object %q", targetEntry.Path)
+		logger.Debug("deleting a data object")
 
 		job.Progress("delete", 0, 1, false)
 
@@ -440,20 +433,18 @@ func (cp *CpCommand) scheduleDeleteExtraFile(targetEntry *irodsclient_fs.Entry) 
 			return xerrors.Errorf("failed to delete %q: %w", targetEntry.Path, removeErr)
 		}
 
-		logger.Debugf("deleted a data object %q", targetEntry.Path)
+		logger.Debug("deleted a data object")
 		job.Progress("delete", 1, 1, false)
 		return nil
 	}
 
 	cp.parallelPostProcessJobManager.Schedule(targetEntry.Path, deleteTask, 1, progress.UnitsDefault)
-	logger.Debugf("scheduled a data object deletion %q", targetEntry.Path)
+	logger.Debug("scheduled a data object deletion")
 }
 
 func (cp *CpCommand) scheduleDeleteExtraDir(targetEntry *irodsclient_fs.Entry) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "CpCommand",
-		"function": "scheduleDeleteExtraDir",
+		"target_path": targetEntry.Path,
 	})
 
 	defaultNotes := []string{"cp", "extra", "directory"}
@@ -484,11 +475,11 @@ func (cp *CpCommand) scheduleDeleteExtraDir(targetEntry *irodsclient_fs.Entry) {
 			job.Progress("delete", -1, 1, true)
 
 			reportSimple(nil, "canceled")
-			logger.Debugf("canceled a task for deleting %q", targetEntry.Path)
+			logger.Debug("canceled a task for deleting extra collection")
 			return nil
 		}
 
-		logger.Debugf("deleting a collection %q", targetEntry.Path)
+		logger.Debug("deleting an extra collection")
 
 		job.Progress("delete", 0, 1, false)
 
@@ -503,7 +494,7 @@ func (cp *CpCommand) scheduleDeleteExtraDir(targetEntry *irodsclient_fs.Entry) {
 			return xerrors.Errorf("failed to delete %q: %w", targetEntry.Path, err)
 		}
 
-		logger.Debugf("deleted a collection %q", targetEntry.Path)
+		logger.Debug("deleted an extra collection")
 		job.Progress("delete", 1, 1, false)
 		return nil
 	}
@@ -514,9 +505,8 @@ func (cp *CpCommand) scheduleDeleteExtraDir(targetEntry *irodsclient_fs.Entry) {
 
 func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "CpCommand",
-		"function": "copyFile",
+		"source_path": sourceEntry.Path,
+		"target_path": targetPath,
 	})
 
 	defaultNotes := []string{"cp"}
@@ -565,8 +555,8 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 		if strings.HasPrefix(sourceEntry.Name, ".") {
 			// skip
 			reportSimple(nil, "hidden", "skipped")
-			terminal.Printf("skip copying a file %q to %q. The file is hidden!\n", sourceEntry.Path, targetPath)
-			logger.Debugf("skip copying a file %q to %q. The file is hidden!", sourceEntry.Path, targetPath)
+			terminal.Printf("skip copying a data object %q to %q. The data object is hidden!\n", sourceEntry.Path, targetPath)
+			logger.Debug("skip copying a data object. The data object is hidden!", sourceEntry)
 			return nil
 		}
 	}
@@ -578,8 +568,8 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 		if age > maxAge {
 			// skip
 			reportSimple(nil, "age", "skipped")
-			terminal.Printf("skip copying a file %q to %q. The file is too old (%s > %s)!\n", sourceEntry.Path, targetPath, age, maxAge)
-			logger.Debugf("skip copying a file %q to %q. The file is too old (%s > %s)!", sourceEntry.Path, targetPath, age, maxAge)
+			terminal.Printf("skip copying a data object %q to %q. The data object is too old (%s > %s)!\n", sourceEntry.Path, targetPath, age, maxAge)
+			logger.Debugf("skip copying a data object. The data object is too old (%s > %s)!", age, maxAge)
 			return nil
 		}
 	}
@@ -616,7 +606,7 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 				// fallthrough to copy
 			} else {
 				// ask
-				overwrite := terminal.InputYN(fmt.Sprintf("Overwriting a file %q, but directory exists. Overwrite?", targetPath))
+				overwrite := terminal.InputYN(fmt.Sprintf("Overwriting a data object %q, but collection exists. Overwrite?", targetPath))
 				if overwrite {
 					startTime := time.Now()
 					removeErr := cp.filesystem.RemoveDir(targetPath, true, true)
@@ -669,8 +659,8 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 
 				cp.transferReportManager.AddFile(reportFile)
 
-				terminal.Printf("skip copying a file %q to %q. The file already exists!\n", sourceEntry.Path, targetPath)
-				logger.Debugf("skip copying a file %q to %q. The file already exists!", sourceEntry.Path, targetPath)
+				terminal.Printf("skip copying a data object %q to %q. The data object already exists!\n", sourceEntry.Path, targetPath)
+				logger.Debugf("skip copying a data object. The data object already exists!")
 				return nil
 			}
 		} else {
@@ -696,8 +686,8 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 
 					cp.transferReportManager.AddFile(reportFile)
 
-					terminal.Printf("skip copying a file %q to %q. The file with the same hash already exists!\n", sourceEntry.Path, targetPath)
-					logger.Debugf("skip copying a file %q to %q. The file with the same hash already exists!", sourceEntry.Path, targetPath)
+					terminal.Printf("skip copying a data object %q to %q. The data object with the same hash already exists!\n", sourceEntry.Path, targetPath)
+					logger.Debugf("skip copying a data object %q to %q. The data object with the same hash already exists!", sourceEntry.Path, targetPath)
 					return nil
 				}
 			}
@@ -705,7 +695,7 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 	} else {
 		if !cp.forceFlagValues.Force {
 			// ask
-			overwrite := terminal.InputYN(fmt.Sprintf("File %q already exists. Overwrite?", targetPath))
+			overwrite := terminal.InputYN(fmt.Sprintf("Data object %q already exists. Overwrite?", targetPath))
 			if !overwrite {
 				now := time.Now()
 				reportFile := &transfer.TransferReportFile{
@@ -726,8 +716,8 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 
 				cp.transferReportManager.AddFile(reportFile)
 
-				terminal.Printf("skip copying a file %q to %q. The file already exists!\n", sourceEntry.Path, targetPath)
-				logger.Debugf("skip copying a file %q to %q. The file already exists!", sourceEntry.Path, targetPath)
+				terminal.Printf("skip copying a data object %q to %q. The data object already exists!\n", sourceEntry.Path, targetPath)
+				logger.Debugf("skip copying a data object %q to %q. The data object already exists!", sourceEntry.Path, targetPath)
 				return nil
 			}
 		}
@@ -740,9 +730,8 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 
 func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "CpCommand",
-		"function": "copyDir",
+		"source_path": sourceEntry.Path,
+		"target_path": targetPath,
 	})
 
 	defaultNotes := []string{"cp", "directory"}
@@ -790,8 +779,8 @@ func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 		if strings.HasPrefix(sourceEntry.Name, ".") {
 			// skip
 			reportSimple(nil, "hidden", "skipped")
-			terminal.Printf("skip copying a dir %q to %q. The dir is hidden!\n", sourceEntry.Path, targetPath)
-			logger.Debugf("skip copying a dir %q to %q. The dir is hidden!", sourceEntry.Path, targetPath)
+			terminal.Printf("skip copying a collection %q to %q. The collection is hidden!\n", sourceEntry.Path, targetPath)
+			logger.Debug("skip copying a collection. The collection is hidden!")
 			return nil
 		}
 	}
@@ -804,7 +793,7 @@ func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 			err = cp.filesystem.MakeDir(targetPath, true)
 			reportSimple(err)
 			if err != nil {
-				return xerrors.Errorf("failed to make a directory %q: %w", targetPath, err)
+				return xerrors.Errorf("failed to make a collection %q: %w", targetPath, err)
 			}
 
 			// fallthrough to copy entries
@@ -831,7 +820,7 @@ func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 					// fallthrough to copy entries
 				} else {
 					// ask
-					overwrite := terminal.InputYN(fmt.Sprintf("Overwriting a directory %q, but file exists. Overwrite?", targetPath))
+					overwrite := terminal.InputYN(fmt.Sprintf("Overwriting a collection %q, but data object exists. Overwrite?", targetPath))
 					if overwrite {
 						startTime := time.Now()
 						removeErr := cp.filesystem.RemoveFile(targetPath, true)
@@ -849,7 +838,9 @@ func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 						now := time.Now()
 
 						reportOverwrite(now, now, overwriteErr, "declined")
-						return overwriteErr
+						terminal.Printf("skip copying a collection %q to %q. The data object already exists!\n", sourceEntry.Path, targetPath)
+						logger.Debug("skip copying a collection. The data object already exists!")
+						return nil
 					}
 				}
 			} else {
@@ -892,9 +883,7 @@ func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 
 func (cp *CpCommand) deleteExtraFile(targetEntry *irodsclient_fs.Entry) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "CpCommand",
-		"function": "deleteExtraFile",
+		"target_path": targetEntry.Path,
 	})
 
 	defaultNotes := []string{"cp", "extra", "file"}
@@ -924,14 +913,14 @@ func (cp *CpCommand) deleteExtraFile(targetEntry *irodsclient_fs.Entry) error {
 
 	if isExtra {
 		// extra file
-		logger.Debugf("removing an extra data object %q", targetEntry.Path)
+		logger.Debug("removing an extra data object")
 
 		if cp.forceFlagValues.Force {
 			cp.scheduleDeleteExtraFile(targetEntry)
 			return nil
 		} else {
 			// ask
-			overwrite := terminal.InputYN(fmt.Sprintf("Removing an extra file %q. Remove?", targetEntry.Path))
+			overwrite := terminal.InputYN(fmt.Sprintf("Removing an extra data object %q. Remove?", targetEntry.Path))
 			if overwrite {
 				cp.scheduleDeleteExtraFile(targetEntry)
 				return nil
@@ -948,9 +937,7 @@ func (cp *CpCommand) deleteExtraFile(targetEntry *irodsclient_fs.Entry) error {
 
 func (cp *CpCommand) deleteExtraDir(targetEntry *irodsclient_fs.Entry) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "CpCommand",
-		"function": "deleteExtraDir",
+		"target_path": targetEntry.Path,
 	})
 
 	defaultNotes := []string{"cp", "extra", "directory"}
@@ -981,7 +968,7 @@ func (cp *CpCommand) deleteExtraDir(targetEntry *irodsclient_fs.Entry) error {
 
 	if isExtra {
 		// extra dir
-		logger.Debugf("removing an extra collection %q", targetEntry.Path)
+		logger.Debug("removing an extra collection")
 
 		if cp.forceFlagValues.Force {
 			cp.scheduleDeleteExtraDir(targetEntry)
@@ -1004,7 +991,7 @@ func (cp *CpCommand) deleteExtraDir(targetEntry *irodsclient_fs.Entry) error {
 	entries, err := cp.filesystem.List(targetEntry.Path)
 	if err != nil {
 		reportSimple(err)
-		return xerrors.Errorf("failed to list a directory %q: %w", targetEntry.Path, err)
+		return xerrors.Errorf("failed to list a collection %q: %w", targetEntry.Path, err)
 	}
 
 	for _, entry := range entries {

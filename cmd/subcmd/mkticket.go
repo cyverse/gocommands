@@ -103,12 +103,12 @@ func (mkTicket *MkTicketCommand) Process() error {
 
 func (mkTicket *MkTicketCommand) makeTicket(ticketName string, ticketType irodsclient_types.TicketType, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "MkTicketCommand",
-		"function": "makeTicket",
+		"ticket_name": ticketName,
+		"ticket_type": ticketType,
+		"target_path": targetPath,
 	})
 
-	logger.Debugf("make ticket %q", ticketName)
+	logger.Debug("create a ticket")
 
 	cwd := config.GetCWD()
 	home := config.GetHomeDir()

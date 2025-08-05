@@ -97,7 +97,7 @@ func (mkDir *MkDirCommand) Process() error {
 	for _, targetPath := range mkDir.targetPaths {
 		err = mkDir.makeOne(targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to make a directory %q: %w", targetPath, err)
+			return xerrors.Errorf("failed to make a collection %q: %w", targetPath, err)
 		}
 	}
 	return nil
@@ -105,9 +105,7 @@ func (mkDir *MkDirCommand) Process() error {
 
 func (mkDir *MkDirCommand) makeOne(targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "MkDirCommand",
-		"function": "makeOne",
+		"target_path": targetPath,
 	})
 
 	cwd := config.GetCWD()
@@ -116,10 +114,10 @@ func (mkDir *MkDirCommand) makeOne(targetPath string) error {
 	targetPath = path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	// dir or not exist
-	logger.Debugf("making a directory %q", targetPath)
+	logger.Debug("making a collection")
 	err := mkDir.filesystem.MakeDir(targetPath, mkDir.parentsFlagValues.MakeParents)
 	if err != nil {
-		return xerrors.Errorf("failed to create a directory %q: %w", targetPath, err)
+		return xerrors.Errorf("failed to make a collection %q: %w", targetPath, err)
 	}
 
 	return nil
