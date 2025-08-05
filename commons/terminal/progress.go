@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jedib0t/go-pretty/v6/progress"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/term"
 )
 
@@ -20,15 +21,23 @@ const (
 )
 
 func getTerminalWidth() int {
+	logger := log.WithFields(log.Fields{})
+
 	width, _, err := term.GetSize(int(os.Stdin.Fd()))
 	if err != nil {
 		width = progressTerminalWidthDefault
 	}
 
+	logger.Debugf("Terminal width: %d", width)
+
 	return width
 }
 
 func GetProgressMessageWidth(displayPath bool) int {
+	logger := log.WithFields(log.Fields{
+		"display_path": displayPath,
+	})
+
 	if displayPath {
 		twidth := getTerminalWidth()
 
@@ -37,8 +46,12 @@ func GetProgressMessageWidth(displayPath bool) int {
 			messageWidth = progressMessageLengthMin
 		}
 
+		logger.Debugf("message width: %d", messageWidth)
+
 		return messageWidth
 	} else {
+		logger.Debugf("message width (default): %d", progressMessageLengthDefault)
+
 		return progressMessageLengthDefault
 	}
 }
@@ -47,8 +60,7 @@ func GetProgressWriter(displayPath bool) progress.Writer {
 	progressWriter := progress.NewWriter()
 	progressWriter.SetOutputWriter(GetTerminalWriter())
 	progressWriter.SetAutoStop(false)
-	progressWriter.SetTrackerLength(progressTrackerLength)
-	progressWriter.SetMessageLength(GetProgressMessageWidth(displayPath))
+	progressWriter.SetTerminalWidth(getTerminalWidth())
 	progressWriter.SetStyle(progress.StyleDefault)
 	progressWriter.SetTrackerPosition(progress.PositionRight)
 	progressWriter.SetUpdateFrequency(time.Millisecond * 100)
@@ -83,6 +95,10 @@ func GetTrackerName(taskType string, taskName string) string {
 		taskType = "Bd"
 	case "extract":
 		taskType = "Ex"
+	case "encrypt":
+		taskType = "Ec"
+	case "decrypt":
+		taskType = "Dc"
 	}
 
 	return fmt.Sprintf("[%s] %s", taskType, taskName)
