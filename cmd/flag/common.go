@@ -28,10 +28,6 @@ type CommonFlagValues struct {
 	ResourceUpdated bool
 }
 
-const (
-	IRODSEnvironmentFileEnvKey string = "IRODS_ENVIRONMENT_FILE"
-)
-
 var (
 	commonFlagValues CommonFlagValues
 )
@@ -195,13 +191,6 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	environmentManager.SetPPID(myCommonFlagValues.SessionID)
 
 	configFilePath := ""
-
-	// find config file location from env
-	if irodsEnvironmentFileEnvVal, ok := os.LookupEnv(IRODSEnvironmentFileEnvKey); ok {
-		if len(irodsEnvironmentFileEnvVal) > 0 {
-			configFilePath = irodsEnvironmentFileEnvVal
-		}
-	}
 
 	// user defined config file
 	if len(myCommonFlagValues.ConfigFilePath) > 0 {

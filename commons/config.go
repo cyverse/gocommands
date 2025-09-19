@@ -1,18 +1,31 @@
 package commons
 
 import (
+	"os"
+
 	"golang.org/x/xerrors"
 
 	"gopkg.in/yaml.v3"
 )
 
-// GetDefaultIRODSConfigPath returns default config path
+const (
+	IRODSEnvironmentFileEnvKey string = "IRODS_ENVIRONMENT_FILE"
+)
+
+// GetDefaultIRODSConfigPath returns default config path for the process environment
 func GetDefaultIRODSConfigPath() string {
+	// use the path specified in the environment if present
+	if irodsEnvironmentFileEnvVal, ok := os.LookupEnv(IRODSEnvironmentFileEnvKey); ok {
+		if len(irodsEnvironmentFileEnvVal) > 0 {
+			return irodsEnvironmentFileEnvVal
+		}
+	}
+
+	// fall back to the default path
 	irodsConfigPath, err := ExpandHomeDir("~/.irods")
 	if err != nil {
 		return ""
 	}
-
 	return irodsConfigPath
 }
 
