@@ -80,11 +80,15 @@ func (touch *TouchCommand) Process() error {
 
 	// Create a file system
 	touch.account = commons.GetSessionConfig().ToIRODSAccount()
-	touch.filesystem, err = commons.GetIRODSFSClientForSingleOperation(touch.account)
+	touch.filesystem, err = commons.GetIRODSFSClient(touch.account, true, false)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer touch.filesystem.Release()
+
+	if touch.commonFlagValues.TimeoutUpdated {
+		commons.UpdateIRODSFSClientTimeout(touch.filesystem, touch.commonFlagValues.Timeout)
+	}
 
 	// run
 	for _, targetPath := range touch.targetPaths {

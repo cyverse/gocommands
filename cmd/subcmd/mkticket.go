@@ -81,11 +81,15 @@ func (mkTicket *MkTicketCommand) Process() error {
 
 	// Create a file system
 	mkTicket.account = commons.GetSessionConfig().ToIRODSAccount()
-	mkTicket.filesystem, err = commons.GetIRODSFSClientForSingleOperation(mkTicket.account)
+	mkTicket.filesystem, err = commons.GetIRODSFSClient(mkTicket.account, true, false)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer mkTicket.filesystem.Release()
+
+	if mkTicket.commonFlagValues.TimeoutUpdated {
+		commons.UpdateIRODSFSClientTimeout(mkTicket.filesystem, mkTicket.commonFlagValues.Timeout)
+	}
 
 	// make ticket
 	err = mkTicket.makeTicket(mkTicket.ticketFlagValues.Name, mkTicket.ticketFlagValues.Type, mkTicket.sourcePath)

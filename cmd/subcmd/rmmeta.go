@@ -103,11 +103,15 @@ func (rmMeta *RmMetaCommand) Process() error {
 
 	// Create a file system
 	rmMeta.account = commons.GetSessionConfig().ToIRODSAccount()
-	rmMeta.filesystem, err = commons.GetIRODSFSClientForSingleOperation(rmMeta.account)
+	rmMeta.filesystem, err = commons.GetIRODSFSClient(rmMeta.account, true, false)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer rmMeta.filesystem.Release()
+
+	if rmMeta.commonFlagValues.TimeoutUpdated {
+		commons.UpdateIRODSFSClientTimeout(rmMeta.filesystem, rmMeta.commonFlagValues.Timeout)
+	}
 
 	// remove
 	if rmMeta.metadataByIDFlagValues.ByID {

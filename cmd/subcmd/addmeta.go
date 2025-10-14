@@ -91,11 +91,15 @@ func (addMeta *AddMetaCommand) Process() error {
 
 	// Create a file system
 	addMeta.account = commons.GetSessionConfig().ToIRODSAccount()
-	addMeta.filesystem, err = commons.GetIRODSFSClientForSingleOperation(addMeta.account)
+	addMeta.filesystem, err = commons.GetIRODSFSClient(addMeta.account, false, false)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer addMeta.filesystem.Release()
+
+	if addMeta.commonFlagValues.TimeoutUpdated {
+		commons.UpdateIRODSFSClientTimeout(addMeta.filesystem, addMeta.commonFlagValues.Timeout)
+	}
 
 	// add meta
 	if addMeta.targetObjectFlagValues.Path {

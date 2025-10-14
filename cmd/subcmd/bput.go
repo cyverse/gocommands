@@ -176,6 +176,10 @@ func (bput *BputCommand) Process() error {
 	}
 	defer bput.filesystem.Release()
 
+	if bput.commonFlagValues.TimeoutUpdated {
+		commons.UpdateIRODSFSClientTimeout(bput.filesystem, bput.commonFlagValues.Timeout)
+	}
+
 	// transfer report
 	bput.transferReportManager, err = commons.NewTransferReportManager(bput.transferReportFlagValues.Report, bput.transferReportFlagValues.ReportPath, bput.transferReportFlagValues.ReportToStdout)
 	if err != nil {

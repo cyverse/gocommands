@@ -26,6 +26,8 @@ type CommonFlagValues struct {
 	SessionID       int
 	Resource        string
 	ResourceUpdated bool
+	Timeout         int
+	TimeoutUpdated  bool
 }
 
 var (
@@ -43,6 +45,7 @@ func SetCommonFlags(command *cobra.Command, hideResource bool) {
 	command.Flags().BoolVarP(&commonFlagValues.LogTerminal, "log_terminal", "", false, "Enable logging to terminal")
 	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Specify session identifier for tracking operations")
 	command.Flags().StringVarP(&commonFlagValues.Resource, "resource", "R", "", "Target specific iRODS resource server for operations")
+	command.Flags().IntVarP(&commonFlagValues.Timeout, "timeout", "", commons.GetDefaultFilesystemTimeout(), "Specify timeout duration in seconds")
 
 	command.MarkFlagsMutuallyExclusive("quiet", "version")
 	command.MarkFlagsMutuallyExclusive("log_level", "version")
@@ -67,6 +70,7 @@ func SetCommonFlagsWithoutResource(command *cobra.Command) {
 	command.Flags().StringVar(&commonFlagValues.LogFile, "log_file", "", "Specify file path for logging output")
 	command.Flags().BoolVarP(&commonFlagValues.LogTerminal, "log_terminal", "", false, "Enable logging to terminal")
 	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Set session ID")
+	command.Flags().IntVarP(&commonFlagValues.Timeout, "timeout", "", commons.GetDefaultFilesystemTimeout(), "Specify timeout duration in seconds")
 
 	command.MarkFlagsMutuallyExclusive("quiet", "version")
 	command.MarkFlagsMutuallyExclusive("log_level", "version")
@@ -87,6 +91,10 @@ func GetCommonFlagValues(command *cobra.Command) *CommonFlagValues {
 
 	if command.Flags().Changed("resource") {
 		commonFlagValues.ResourceUpdated = true
+	}
+
+	if command.Flags().Changed("timeout") {
+		commonFlagValues.TimeoutUpdated = true
 	}
 
 	return &commonFlagValues

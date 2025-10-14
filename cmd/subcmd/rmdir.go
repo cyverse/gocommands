@@ -87,11 +87,15 @@ func (rmDir *RmDirCommand) Process() error {
 
 	// Create a file system
 	rmDir.account = commons.GetSessionConfig().ToIRODSAccount()
-	rmDir.filesystem, err = commons.GetIRODSFSClientForLongSingleOperation(rmDir.account)
+	rmDir.filesystem, err = commons.GetIRODSFSClient(rmDir.account, true, true)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer rmDir.filesystem.Release()
+
+	if rmDir.commonFlagValues.TimeoutUpdated {
+		commons.UpdateIRODSFSClientTimeout(rmDir.filesystem, rmDir.commonFlagValues.Timeout)
+	}
 
 	// Expand wildcards
 	if rmDir.wildcardSearchFlagValues.WildcardSearch {

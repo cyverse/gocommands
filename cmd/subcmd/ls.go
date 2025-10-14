@@ -123,11 +123,15 @@ func (ls *LsCommand) Process() error {
 		ls.account.Ticket = ls.ticketAccessFlagValues.Name
 	}
 
-	ls.filesystem, err = commons.GetIRODSFSClientForLongSingleOperation(ls.account)
+	ls.filesystem, err = commons.GetIRODSFSClient(ls.account, true, true)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer ls.filesystem.Release()
+
+	if ls.commonFlagValues.TimeoutUpdated {
+		commons.UpdateIRODSFSClientTimeout(ls.filesystem, ls.commonFlagValues.Timeout)
+	}
 
 	// set default key for decryption
 	if len(ls.decryptionFlagValues.Key) == 0 {

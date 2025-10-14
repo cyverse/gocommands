@@ -182,6 +182,10 @@ func (put *PutCommand) Process() error {
 	}
 	defer put.filesystem.Release()
 
+	if put.commonFlagValues.TimeoutUpdated {
+		commons.UpdateIRODSFSClientTimeout(put.filesystem, put.commonFlagValues.Timeout)
+	}
+
 	// transfer report
 	put.transferReportManager, err = commons.NewTransferReportManager(put.transferReportFlagValues.Report, put.transferReportFlagValues.ReportPath, put.transferReportFlagValues.ReportToStdout)
 	if err != nil {

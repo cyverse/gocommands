@@ -10,7 +10,7 @@ const (
 	goCommandsRepoPackagePath string = "cyverse/gocommands"
 
 	ClientProgramName               string                     = "gocommands"
-	FilesystemTimeout               irodsclient_types.Duration = irodsclient_types.Duration(1 * time.Minute)
+	FilesystemTimeout               irodsclient_types.Duration = irodsclient_types.Duration(5 * time.Minute)
 	LongFilesystemTimeout           irodsclient_types.Duration = irodsclient_types.Duration(10 * time.Minute) // exceptionally long timeout for listing dirs or users
 	transferThreadNumDefault        int                        = 5
 	transferThreadNumPerFileDefault int                        = 5
@@ -18,6 +18,10 @@ const (
 	bputForSyncDefaut               bool                       = false
 	//RedirectToResourceMinSize  int64                      = 1024 * 1024 * 1024 // 1GB
 )
+
+func GetDefaultFilesystemTimeout() int {
+	return int(FilesystemTimeout / irodsclient_types.Duration(time.Second))
+}
 
 func GetDefaultTCPBufferSize() int {
 	size, _ := ParseSize(GetDefaultTCPBufferSizeString())

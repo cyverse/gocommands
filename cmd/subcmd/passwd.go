@@ -72,9 +72,14 @@ func (passwd *PasswdCommand) Process() error {
 
 	// Create a file system
 	passwd.account = commons.GetSessionConfig().ToIRODSAccount()
-	passwd.filesystem, err = commons.GetIRODSFSClientForSingleOperation(passwd.account)
+	passwd.filesystem, err = commons.GetIRODSFSClient(passwd.account, true, false)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+	}
+	defer passwd.filesystem.Release()
+
+	if passwd.commonFlagValues.TimeoutUpdated {
+		commons.UpdateIRODSFSClientTimeout(passwd.filesystem, passwd.commonFlagValues.Timeout)
 	}
 
 	err = passwd.changePassword()

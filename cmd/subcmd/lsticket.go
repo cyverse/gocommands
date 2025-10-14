@@ -83,11 +83,15 @@ func (lsTicket *LsTicketCommand) Process() error {
 
 	// Create a file system
 	lsTicket.account = commons.GetSessionConfig().ToIRODSAccount()
-	lsTicket.filesystem, err = commons.GetIRODSFSClientForLongSingleOperation(lsTicket.account)
+	lsTicket.filesystem, err = commons.GetIRODSFSClient(lsTicket.account, true, true)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer lsTicket.filesystem.Release()
+
+	if lsTicket.commonFlagValues.TimeoutUpdated {
+		commons.UpdateIRODSFSClientTimeout(lsTicket.filesystem, lsTicket.commonFlagValues.Timeout)
+	}
 
 	if len(lsTicket.tickets) == 0 {
 		return lsTicket.listTickets()

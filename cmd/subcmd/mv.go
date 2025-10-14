@@ -83,11 +83,15 @@ func (mv *MvCommand) Process() error {
 
 	// Create a file system
 	mv.account = commons.GetSessionConfig().ToIRODSAccount()
-	mv.filesystem, err = commons.GetIRODSFSClient(mv.account)
+	mv.filesystem, err = commons.GetIRODSFSClient(mv.account, false, true)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer mv.filesystem.Release()
+
+	if mv.commonFlagValues.TimeoutUpdated {
+		commons.UpdateIRODSFSClientTimeout(mv.filesystem, mv.commonFlagValues.Timeout)
+	}
 
 	// run
 	if len(mv.sourcePaths) >= 2 {

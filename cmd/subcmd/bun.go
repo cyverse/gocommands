@@ -96,11 +96,15 @@ func (bun *BunCommand) Process() error {
 
 	// Create a file system
 	bun.account = commons.GetSessionConfig().ToIRODSAccount()
-	bun.filesystem, err = commons.GetIRODSFSClient(bun.account)
+	bun.filesystem, err = commons.GetIRODSFSClient(bun.account, false, true)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer bun.filesystem.Release()
+
+	if bun.commonFlagValues.TimeoutUpdated {
+		commons.UpdateIRODSFSClientTimeout(bun.filesystem, bun.commonFlagValues.Timeout)
+	}
 
 	// Expand wildcards
 	if bun.wildcardSearchFlagValues.WildcardSearch {

@@ -85,11 +85,15 @@ func (lsMeta *LsMetaCommand) Process() error {
 
 	// Create a file system
 	lsMeta.account = commons.GetSessionConfig().ToIRODSAccount()
-	lsMeta.filesystem, err = commons.GetIRODSFSClientForLongSingleOperation(lsMeta.account)
+	lsMeta.filesystem, err = commons.GetIRODSFSClient(lsMeta.account, true, true)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer lsMeta.filesystem.Release()
+
+	if lsMeta.commonFlagValues.TimeoutUpdated {
+		commons.UpdateIRODSFSClientTimeout(lsMeta.filesystem, lsMeta.commonFlagValues.Timeout)
+	}
 
 	for _, targetObject := range lsMeta.targetObjects {
 		if lsMeta.targetObjectFlagValues.Path {

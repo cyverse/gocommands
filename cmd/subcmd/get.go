@@ -186,6 +186,10 @@ func (get *GetCommand) Process() error {
 	}
 	defer get.filesystem.Release()
 
+	if get.commonFlagValues.TimeoutUpdated {
+		commons.UpdateIRODSFSClientTimeout(get.filesystem, get.commonFlagValues.Timeout)
+	}
+
 	// transfer report
 	get.transferReportManager, err = commons.NewTransferReportManager(get.transferReportFlagValues.Report, get.transferReportFlagValues.ReportPath, get.transferReportFlagValues.ReportToStdout)
 	if err != nil {

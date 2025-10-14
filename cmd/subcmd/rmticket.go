@@ -77,11 +77,15 @@ func (rmTicket *RmTicketCommand) Process() error {
 
 	// Create a file system
 	rmTicket.account = commons.GetSessionConfig().ToIRODSAccount()
-	rmTicket.filesystem, err = commons.GetIRODSFSClientForSingleOperation(rmTicket.account)
+	rmTicket.filesystem, err = commons.GetIRODSFSClient(rmTicket.account, true, false)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer rmTicket.filesystem.Release()
+
+	if rmTicket.commonFlagValues.TimeoutUpdated {
+		commons.UpdateIRODSFSClientTimeout(rmTicket.filesystem, rmTicket.commonFlagValues.Timeout)
+	}
 
 	for _, ticketName := range rmTicket.tickets {
 		err = rmTicket.removeTicket(ticketName)

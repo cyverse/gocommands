@@ -86,11 +86,15 @@ func (copy *CopySftpIdCommand) Process() error {
 
 	// Create a file system
 	copy.account = commons.GetSessionConfig().ToIRODSAccount()
-	copy.filesystem, err = commons.GetIRODSFSClient(copy.account)
+	copy.filesystem, err = commons.GetIRODSFSClient(copy.account, false, false)
 	if err != nil {
 		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
 	}
 	defer copy.filesystem.Release()
+
+	if copy.commonFlagValues.TimeoutUpdated {
+		commons.UpdateIRODSFSClientTimeout(copy.filesystem, copy.commonFlagValues.Timeout)
+	}
 
 	// run
 	// search identity files to be copied
