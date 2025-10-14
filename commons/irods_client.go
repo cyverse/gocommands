@@ -58,7 +58,7 @@ func GetIRODSFSClientForLargeFileIO(account *irodsclient_types.IRODSAccount, max
 	fsConfig.IOConnection.OperationTimeout = FilesystemTimeout
 
 	// max connection for io
-	if maxIOConnection < irodsclient_fs.FileSystemIOConnectionMaxNumberDefault {
+	if maxIOConnection <= 0 {
 		maxIOConnection = irodsclient_fs.FileSystemIOConnectionMaxNumberDefault
 	}
 	fsConfig.IOConnection.MaxNumber = maxIOConnection
