@@ -159,6 +159,14 @@ func (env *EnvCommand) printEnvironment() error {
 			envMgr.Environment.SSLCACertificatePath,
 		},
 		{
+			"SSL Certificate Chain File",
+			envMgr.Environment.SSLCertificateChainFile,
+		},
+		{
+			"SSL Certificate Key File",
+			envMgr.Environment.SSLCertificateKeyFile,
+		},
+		{
 			"SSL Verify Server",
 			envMgr.Environment.SSLVerifyServer,
 		},
