@@ -311,7 +311,7 @@ func (copy *CopySftpIdCommand) copySftpId(identityFiles []string) error {
 
 		logger.Debug("writing authorized_keys")
 
-		_, err := copy.filesystem.UploadFileFromBuffer(&contentBuf, authorizedKeyPath, "", false, true, true, false, nil)
+		_, err := copy.filesystem.UploadFileFromBuffer(&contentBuf, authorizedKeyPath, "", false, true, false, nil)
 		if err != nil {
 			return xerrors.Errorf("failed to update keys in %q: %w", authorizedKeyPath, err)
 		}

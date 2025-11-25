@@ -51,7 +51,7 @@ func AddPutCommand(rootCmd *cobra.Command) {
 	flag.SetProgressFlags(putCmd)
 	flag.SetRetryFlags(putCmd)
 	flag.SetDifferentialTransferFlags(putCmd, false)
-	flag.SetChecksumFlags(putCmd, false, false)
+	flag.SetChecksumFlags(putCmd)
 	flag.SetNoRootFlags(putCmd)
 	flag.SetSyncFlags(putCmd, true)
 	flag.SetEncryptionFlags(putCmd)
@@ -488,7 +488,7 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 			return xerrors.Errorf("failed to stat %q: %w", parentTargetPath, statErr)
 		}
 
-		uploadResult, uploadErr := put.filesystem.UploadFileParallel(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.CalculateChecksum, put.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
+		uploadResult, uploadErr := put.filesystem.UploadFileParallel(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
 		notes = append(notes, "icat", fmt.Sprintf("%d threads", threadsRequired))
 
 		if uploadErr != nil {

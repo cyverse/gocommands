@@ -52,7 +52,7 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	flag.SetProgressFlags(getCmd)
 	flag.SetRetryFlags(getCmd)
 	flag.SetDifferentialTransferFlags(getCmd, false)
-	flag.SetChecksumFlags(getCmd, true, false)
+	flag.SetChecksumFlags(getCmd)
 	flag.SetNoRootFlags(getCmd)
 	flag.SetSyncFlags(getCmd, true)
 	flag.SetDecryptionFlags(getCmd)

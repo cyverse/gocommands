@@ -51,7 +51,7 @@ func AddBputCommand(rootCmd *cobra.Command) {
 	flag.SetProgressFlags(bputCmd)
 	flag.SetRetryFlags(bputCmd)
 	flag.SetDifferentialTransferFlags(bputCmd, false)
-	flag.SetChecksumFlags(bputCmd, true, false)
+	flag.SetChecksumFlags(bputCmd)
 	flag.SetNoRootFlags(bputCmd)
 	flag.SetSyncFlags(bputCmd, true)
 	flag.SetEncryptionFlags(bputCmd)
@@ -599,7 +599,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 
 		notes = append(notes, fmt.Sprintf("staging path %q", stagingTargetPath))
 
-		uploadResult, uploadErr := bput.filesystem.UploadFileParallel(tarballPath, stagingTargetPath, "", threadsRequired, false, bput.checksumFlagValues.CalculateChecksum, bput.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
+		uploadResult, uploadErr := bput.filesystem.UploadFileParallel(tarballPath, stagingTargetPath, "", threadsRequired, false, bput.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
 		notes = append(notes, "icat", fmt.Sprintf("%d threads", threadsRequired))
 
 		if uploadErr != nil {
@@ -742,7 +742,7 @@ func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleE
 			return xerrors.Errorf("failed to stat %q: %w", parentTargetPath, statErr)
 		}
 
-		uploadResult, uploadErr := bput.filesystem.UploadFileParallel(uploadSourcePath, bundleEntry.IRODSPath, "", threadsRequired, false, bput.checksumFlagValues.CalculateChecksum, bput.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
+		uploadResult, uploadErr := bput.filesystem.UploadFileParallel(uploadSourcePath, bundleEntry.IRODSPath, "", threadsRequired, false, bput.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
 		notes = append(notes, "icat", fmt.Sprintf("%d threads", threadsRequired))
 
 		if uploadErr != nil {
