@@ -65,8 +65,21 @@ func NewAddMetaCommand(command *cobra.Command, args []string) (*AddMetaCommand, 
 
 	// get avu
 	addMeta.targetObject = args[0]
-	addMeta.attribute = args[1]
-	addMeta.value = args[2]
+
+	addMeta.attribute = ""
+	if len(args) >= 2 {
+		addMeta.attribute = args[1]
+	} else {
+		return nil, xerrors.Errorf("metadata attribute is required")
+	}
+
+	addMeta.value = ""
+	if len(args) >= 3 {
+		addMeta.value = args[2]
+	} else {
+		return nil, xerrors.Errorf("metadata value is required")
+	}
+
 	addMeta.unit = ""
 	if len(args) >= 4 {
 		addMeta.unit = args[3]

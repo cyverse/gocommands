@@ -77,7 +77,12 @@ func NewRmMetaCommand(command *cobra.Command, args []string) (*RmMetaCommand, er
 		rmMeta.avuIDs = args[1:]
 	} else {
 		rmMeta.attribute = args[1]
-		rmMeta.value = args[2]
+
+		rmMeta.value = ""
+		if len(args) >= 3 {
+			rmMeta.value = args[2]
+		}
+
 		rmMeta.unit = ""
 		if len(args) >= 4 {
 			rmMeta.unit = args[3]
