@@ -5,8 +5,9 @@ go 1.24.9
 toolchain go1.24.10
 
 require (
+	github.com/cockroachdb/errors v1.12.0
 	github.com/creativeprojects/go-selfupdate v1.0.1
-	github.com/cyverse/go-irodsclient v0.19.0
+	github.com/cyverse/go-irodsclient v0.19.1
 	github.com/dustin/go-humanize v1.0.1
 	github.com/gliderlabs/ssh v0.3.5
 	github.com/jedib0t/go-pretty/v6 v6.6.7
@@ -16,7 +17,6 @@ require (
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.43.0
 	golang.org/x/term v0.36.0
-	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -25,7 +25,6 @@ require (
 	code.gitea.io/sdk/gitea v0.15.1 // indirect
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/anmitsu/go-shlex v0.0.0-20200514113438-38f4b401e2be // indirect
-	github.com/cockroachdb/errors v1.12.0 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
 	github.com/cockroachdb/redact v1.1.5 // indirect
 	github.com/danwakefield/fnmatch v0.0.0-20160403171240-cbb64ac3d964 // indirect

@@ -41,8 +41,8 @@ func processTouchCommand(command *cobra.Command, args []string) error {
 type TouchCommand struct {
 	command *cobra.Command
 
-	commonFlagValues   *flag.CommonFlagValues
-	noCreateFlagValues *flag.NoCreateFlagValues
+	commonFlagValues *flag.CommonFlagValues
+	touchFlagValues  *flag.TouchFlagValues
 
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
@@ -54,8 +54,8 @@ func NewTouchCommand(command *cobra.Command, args []string) (*TouchCommand, erro
 	touch := &TouchCommand{
 		command: command,
 
-		commonFlagValues:   flag.GetCommonFlagValues(command),
-		noCreateFlagValues: flag.GetNoCreateFlagValues(),
+		commonFlagValues: flag.GetCommonFlagValues(command),
+		touchFlagValues:  flag.GetTouchFlagValues(command),
 	}
 
 	// path
@@ -109,7 +109,17 @@ func (touch *TouchCommand) touchOne(targetPath string) error {
 	zone := touch.account.ClientZone
 	targetPath = path.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	err := touch.filesystem.Touch(targetPath, "", touch.noCreateFlagValues.NoCreate)
+	var replicaNumber *int = nil
+	if touch.touchFlagValues.ReplicaNumberUpdated {
+		replicaNumber = &touch.touchFlagValues.ReplicaNumber
+	}
+
+	var seconds *int = nil
+	if touch.touchFlagValues.SecondsSinceEpochUpdated {
+		seconds = &touch.touchFlagValues.SecondsSinceEpoch
+	}
+
+	err := touch.filesystem.Touch(targetPath, touch.commonFlagValues.Resource, touch.touchFlagValues.NoCreate, replicaNumber, touch.touchFlagValues.ReferencePath, seconds)
 	if err != nil {
 		return errors.Wrapf(err, "failed to touch file %q", targetPath)
 	}
