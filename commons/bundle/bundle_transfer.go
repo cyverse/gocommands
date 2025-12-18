@@ -18,7 +18,7 @@ import (
 	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/xerrors"
+	"github.com/cockroachdb/errors"
 )
 
 const (
@@ -134,7 +134,7 @@ func (bundle *Bundle) Add(sourceStat fs.FileInfo, sourcePath string) error {
 
 	irodsPath, err := bundle.manager.GetTargetPath(sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to get target path for %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to get target path for %q", sourcePath)
 	}
 
 	entry := BundleEntry{
@@ -164,7 +164,7 @@ func (bundle *Bundle) Seal() error {
 
 	filename, err := bundle.makeBundleFilename()
 	if err != nil {
-		return xerrors.Errorf("failed to get bundle filename: %w", err)
+		return errors.Wrap(err, "failed to get bundle filename")
 	}
 
 	bundle.bundleFilename = filename
@@ -313,7 +313,7 @@ func (manager *BundleTransferManager) progress(name string, processed int64, tot
 func (manager *BundleTransferManager) GetTargetPath(localPath string) (string, error) {
 	relPath, err := filepath.Rel(manager.localBundleRootPath, localPath)
 	if err != nil {
-		return "", xerrors.Errorf("failed to compute relative path %q to %q: %w", localPath, manager.localBundleRootPath, err)
+		return "", errors.Wrapf(err, "failed to compute relative path %q to %q", localPath, manager.localBundleRootPath)
 	}
 
 	return path.Join(manager.irodsDestPath, filepath.ToSlash(relPath)), nil
@@ -353,7 +353,7 @@ func (manager *BundleTransferManager) Schedule(sourceStat fs.FileInfo, sourcePat
 		// add new
 		bundle, err := newBundle(manager)
 		if err != nil {
-			return xerrors.Errorf("failed to create a new bundle for %q: %w", sourcePath, err)
+			return errors.Wrapf(err, "failed to create a new bundle for %q", sourcePath)
 		}
 
 		manager.currentBundleToAdd = bundle
@@ -406,7 +406,7 @@ func (manager *BundleTransferManager) Wait() error {
 	}
 
 	if manager.bundlesDoneCounter != manager.bundlesScheduledCounter {
-		return xerrors.Errorf("%d bundles were done out of %d! Some bundles failed!", manager.bundlesDoneCounter, manager.bundlesScheduledCounter)
+		return errors.Errorf("%d bundles were done out of %d! Some bundles failed!", manager.bundlesDoneCounter, manager.bundlesScheduledCounter)
 	}
 
 	return nil
@@ -505,14 +505,14 @@ func (manager *BundleTransferManager) Start() error {
 	if !manager.filesystem.ExistsDir(manager.irodsDestPath) {
 		err := manager.filesystem.MakeDir(manager.irodsDestPath, true)
 		if err != nil {
-			return xerrors.Errorf("failed to make a destination directory %q: %w", manager.irodsDestPath, err)
+			return errors.Wrapf(err, "failed to make a destination directory %q", manager.irodsDestPath)
 		}
 	}
 
 	if !manager.filesystem.ExistsDir(manager.irodsTempDirPath) {
 		err := manager.filesystem.MakeDir(manager.irodsTempDirPath, true)
 		if err != nil {
-			return xerrors.Errorf("failed to make a temporary directory %q: %w", manager.irodsTempDirPath, err)
+			return errors.Wrapf(err, "failed to make a temporary directory %q", manager.irodsTempDirPath)
 		}
 	}
 
@@ -819,7 +819,7 @@ func (manager *BundleTransferManager) processBundleRemoveFilesAndMakeDirs(bundle
 		if err != nil {
 			if !irodsclient_types.IsFileNotFoundError(err) {
 				manager.progress(progressName, processedFiles, totalFileNum, progress.UnitsDefault, true)
-				return xerrors.Errorf("failed to stat data object or collection %q: %w", bundleEntry.irodsPath, err)
+				return errors.Wrapf(err, "failed to stat data object or collection %q", bundleEntry.irodsPath)
 			}
 		}
 
@@ -830,7 +830,7 @@ func (manager *BundleTransferManager) processBundleRemoveFilesAndMakeDirs(bundle
 					err := manager.filesystem.RemoveDir(bundleEntry.irodsPath, true, true)
 					if err != nil {
 						manager.progress(progressName, processedFiles, totalFileNum, progress.UnitsDefault, true)
-						return xerrors.Errorf("failed to delete existing collection %q: %w", bundleEntry.irodsPath, err)
+						return errors.Wrapf(err, "failed to delete existing collection %q", bundleEntry.irodsPath)
 					}
 				}
 			} else {
@@ -840,7 +840,7 @@ func (manager *BundleTransferManager) processBundleRemoveFilesAndMakeDirs(bundle
 				err := manager.filesystem.RemoveFile(bundleEntry.irodsPath, true)
 				if err != nil {
 					manager.progress(progressName, processedFiles, totalFileNum, progress.UnitsDefault, true)
-					return xerrors.Errorf("failed to delete existing data object %q: %w", bundleEntry.irodsPath, err)
+					return errors.Wrapf(err, "failed to delete existing data object %q", bundleEntry.irodsPath)
 				}
 			}
 		}
@@ -892,7 +892,7 @@ func (manager *BundleTransferManager) processBundleTar(bundle *Bundle) error {
 	err := Tar(manager.localBundleRootPath, entries, bundle.localBundlePath, callbackTar)
 	if err != nil {
 		manager.progress(progressName, 0, totalFileNum, progress.UnitsDefault, true)
-		return xerrors.Errorf("failed to create a tarball for bundle %d to %q (bundle root %q): %w", bundle.index, bundle.localBundlePath, bundle.manager.localBundleRootPath, err)
+		return errors.Wrapf(err, "failed to create a tarball for bundle %d to %q (bundle root %q)", bundle.index, bundle.localBundlePath, bundle.manager.localBundleRootPath)
 	}
 
 	manager.progress(progressName, totalFileNum, totalFileNum, progress.UnitsDefault, false)
@@ -943,7 +943,7 @@ func (manager *BundleTransferManager) processBundleUploadWithTar(bundle *Bundle)
 			return irodsclient_types.NewFileNotFoundError(bundle.localBundlePath)
 		}
 
-		return xerrors.Errorf("failed to stat %q: %w", bundle.localBundlePath, err)
+		return errors.Wrapf(err, "failed to stat %q", bundle.localBundlePath)
 	}
 
 	// check irods bundle file of previous run
@@ -951,7 +951,7 @@ func (manager *BundleTransferManager) processBundleUploadWithTar(bundle *Bundle)
 	if err != nil {
 		if !irodsclient_types.IsFileNotFoundError(err) {
 			manager.progress(progressName, 0, bundle.size, progress.UnitsBytes, true)
-			return xerrors.Errorf("failed to stat existing bundle %q: %w", bundle.irodsBundlePath, err)
+			return errors.Wrapf(err, "failed to stat existing bundle %q", bundle.irodsBundlePath)
 		}
 	} else {
 		if bundleEntry.Size == localBundleStat.Size() {
@@ -977,7 +977,7 @@ func (manager *BundleTransferManager) processBundleUploadWithTar(bundle *Bundle)
 
 	if err != nil {
 		manager.progress(progressName, 0, bundle.size, progress.UnitsBytes, true)
-		return xerrors.Errorf("failed to upload bundle %d to %q: %w", bundle.index, bundle.irodsBundlePath, err)
+		return errors.Wrapf(err, "failed to upload bundle %d to %q", bundle.index, bundle.irodsBundlePath)
 	}
 
 	endTime := time.Now()
@@ -997,7 +997,7 @@ func (manager *BundleTransferManager) processBundleUploadWithTar(bundle *Bundle)
 		err = manager.transferReportManager.AddTransfer(&uploadResult, TransferMethodBput, err, notes)
 		if err != nil {
 			manager.progress(progressName, 0, bundle.size, progress.UnitsBytes, true)
-			return xerrors.Errorf("failed to add transfer report: %w", err)
+			return errors.Wrapf(err, "failed to add transfer report")
 		}
 	}
 
@@ -1039,7 +1039,7 @@ func (manager *BundleTransferManager) processBundleUploadWithoutTar(bundle *Bund
 			err := manager.filesystem.MakeDir(file.irodsPath, true)
 			if err != nil {
 				manager.progress(progressName, 0, bundle.size, progress.UnitsBytes, true)
-				return xerrors.Errorf("failed to upload a directory %q in bundle %d to %q: %w", file.localPath, bundle.index, file.irodsPath, err)
+				return errors.Wrapf(err, "failed to upload a directory %q in bundle %d to %q", file.localPath, bundle.index, file.irodsPath)
 			}
 
 			now := time.Now()
@@ -1066,7 +1066,7 @@ func (manager *BundleTransferManager) processBundleUploadWithoutTar(bundle *Bund
 			err := manager.filesystem.MakeDir(parentDir, true)
 			if err != nil {
 				manager.progress(progressName, 0, bundle.size, progress.UnitsBytes, true)
-				return xerrors.Errorf("failed to make a collection %q to upload file %q in bundle %d to %q: %w", parentDir, file.localPath, bundle.index, file.irodsPath, err)
+				return errors.Wrapf(err, "failed to make a collection %q to upload file %q in bundle %d to %q", parentDir, file.localPath, bundle.index, file.irodsPath)
 			}
 		}
 
@@ -1081,7 +1081,7 @@ func (manager *BundleTransferManager) processBundleUploadWithoutTar(bundle *Bund
 
 		if err != nil {
 			manager.progress(progressName, 0, bundle.size, progress.UnitsBytes, true)
-			return xerrors.Errorf("failed to upload file %q in bundle %d to %q: %w", file.localPath, bundle.index, file.irodsPath, err)
+			return errors.Wrapf(err, "failed to upload file %q in bundle %d to %q", file.localPath, bundle.index, file.irodsPath)
 		}
 
 		notes = append(notes, fmt.Sprintf("bundle_idx:%d", bundle.index))
@@ -1089,7 +1089,7 @@ func (manager *BundleTransferManager) processBundleUploadWithoutTar(bundle *Bund
 		err = manager.transferReportManager.AddTransfer(uploadResult, TransferMethodBput, err, notes)
 		if err != nil {
 			manager.progress(progressName, 0, bundle.size, progress.UnitsBytes, true)
-			return xerrors.Errorf("failed to add transfer report: %w", err)
+			return errors.Wrapf(err, "failed to add transfer report")
 		}
 
 		manager.progress(progressName, file.size, bundle.size, progress.UnitsBytes, false)
@@ -1124,7 +1124,7 @@ func (manager *BundleTransferManager) processBundleExtract(bundle *Bundle) error
 		err := manager.filesystem.ExtractStructFile(bundle.irodsBundlePath, manager.irodsDestPath, "", irodsclient_types.TAR_FILE_DT, true, !manager.noBulkRegistration)
 		if err != nil {
 			manager.progress(progressName, 0, totalFileNum, progress.UnitsDefault, true)
-			return xerrors.Errorf("failed to extract bundle %d at %q to %q: %w", bundle.index, bundle.irodsBundlePath, manager.irodsDestPath, err)
+			return errors.Wrapf(err, "failed to extract bundle %d at %q to %q", bundle.index, bundle.irodsBundlePath, manager.irodsDestPath)
 		}
 
 		// remove irods bundle file

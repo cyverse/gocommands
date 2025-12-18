@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"golang.org/x/xerrors"
+	"github.com/cockroachdb/errors"
 )
 
 // For WinSCP encryption
@@ -26,7 +26,7 @@ func EncryptFilenameWinSCP(filename string, key []byte) (string, error) {
 	salt := make([]byte, AesSaltLen)
 	_, err := rand.Read(salt)
 	if err != nil {
-		return "", xerrors.Errorf("failed to generate salt: %w", err)
+		return "", errors.Wrapf(err, "failed to generate salt")
 	}
 
 	// convert to utf8
@@ -35,7 +35,7 @@ func EncryptFilenameWinSCP(filename string, key []byte) (string, error) {
 	// encrypt with aes 256 ctr
 	encryptedFilename, err := EncryptAESCTR([]byte(utf8Filename), salt, key)
 	if err != nil {
-		return "", xerrors.Errorf("failed to encrypt filename: %w", err)
+		return "", errors.Wrapf(err, "failed to encrypt filename")
 	}
 
 	// add salt in front
@@ -63,11 +63,11 @@ func DecryptFilenameWinSCP(filename string, key []byte) (string, error) {
 	// base64 decode
 	concatenatedFilename, err := base64.RawStdEncoding.DecodeString(string(filename))
 	if err != nil {
-		return "", xerrors.Errorf("failed to base64 decode filename: %w", err)
+		return "", errors.Wrapf(err, "failed to base64 decode filename")
 	}
 
 	if len(concatenatedFilename) < AesSaltLen {
-		return "", xerrors.Errorf("failed to extract salt from filename")
+		return "", errors.New("failed to extract salt from filename")
 	}
 
 	salt := concatenatedFilename[:AesSaltLen]
@@ -76,11 +76,11 @@ func DecryptFilenameWinSCP(filename string, key []byte) (string, error) {
 	// decrypt with aes 256 ctr
 	decryptedFilename, err := DecryptAESCTR(encryptedFilename, salt, key)
 	if err != nil {
-		return "", xerrors.Errorf("failed to decrypt filename: %w", err)
+		return "", errors.Wrapf(err, "failed to decrypt filename")
 	}
 
 	if !IsCorrectFilename(decryptedFilename) {
-		return "", xerrors.Errorf("failed to decrypt filename with wrong key")
+		return "", errors.New("failed to decrypt filename with wrong key")
 	}
 
 	return string(decryptedFilename), nil
@@ -89,21 +89,21 @@ func DecryptFilenameWinSCP(filename string, key []byte) (string, error) {
 func EncryptFileWinSCP(source string, target string, key []byte) error {
 	sourceFileHandle, err := os.Open(source)
 	if err != nil {
-		return xerrors.Errorf("failed to open file %q: %w", source, err)
+		return errors.Wrapf(err, "failed to open file %q", source)
 	}
 
 	defer sourceFileHandle.Close()
 
 	targetFileHandle, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
-		return xerrors.Errorf("failed to create file %q: %w", target, err)
+		return errors.Wrapf(err, "failed to create file %q", target)
 	}
 
 	defer targetFileHandle.Close()
 
 	stat, err := sourceFileHandle.Stat()
 	if err != nil {
-		return xerrors.Errorf("failed to stat file %q: %w", source, err)
+		return errors.Wrapf(err, "failed to stat file %q", source)
 	}
 
 	if stat.Size() == 0 {
@@ -114,7 +114,7 @@ func EncryptFileWinSCP(source string, target string, key []byte) error {
 	// write header
 	_, err = targetFileHandle.Write([]byte(WinSCPAesCtrHeader))
 	if err != nil {
-		return xerrors.Errorf("failed to write header: %w", err)
+		return errors.Wrapf(err, "failed to write header")
 	}
 
 	// generate salt
@@ -123,18 +123,18 @@ func EncryptFileWinSCP(source string, target string, key []byte) error {
 	_, err = rand.Read(salt)
 	// Note that err == nil only if we read len(b) bytes.
 	if err != nil {
-		return xerrors.Errorf("failed to read random data: %w", err)
+		return errors.Wrapf(err, "failed to read random data")
 	}
 
 	// write salt
 	_, err = targetFileHandle.Write(salt)
 	if err != nil {
-		return xerrors.Errorf("failed to write salt: %w", err)
+		return errors.Wrapf(err, "failed to write salt")
 	}
 
 	err = EncryptAESCTRReaderWriter(sourceFileHandle, targetFileHandle, salt, key)
 	if err != nil {
-		return xerrors.Errorf("failed to encrypt file content: %w", err)
+		return errors.Wrapf(err, "failed to encrypt file content")
 	}
 
 	return nil
@@ -143,14 +143,14 @@ func EncryptFileWinSCP(source string, target string, key []byte) error {
 func DecryptFileWinSCP(source string, target string, key []byte) error {
 	sourceFileHandle, err := os.Open(source)
 	if err != nil {
-		return xerrors.Errorf("failed to open file %q: %w", source, err)
+		return errors.Wrapf(err, "failed to open file %q", source)
 	}
 
 	defer sourceFileHandle.Close()
 
 	targetFileHandle, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
-		return xerrors.Errorf("failed to create file %q: %w", target, err)
+		return errors.Wrapf(err, "failed to create file %q", target)
 	}
 
 	defer targetFileHandle.Close()
@@ -163,26 +163,26 @@ func DecryptFileWinSCP(source string, target string, key []byte) error {
 	}
 
 	if err != nil {
-		return xerrors.Errorf("failed to read AES CTR header: %w", err)
+		return errors.Wrapf(err, "failed to read AES CTR header")
 	}
 
 	if !bytes.Equal(header, []byte(WinSCPAesCtrHeader)) {
-		return xerrors.Errorf("failed to read AES CTR header")
+		return errors.New("failed to read AES CTR header")
 	}
 
 	salt := make([]byte, AesSaltLen)
 	readLen, err = sourceFileHandle.Read(salt)
 	if err != nil {
-		return xerrors.Errorf("failed to read salt: %w", err)
+		return errors.Wrapf(err, "failed to read salt")
 	}
 
 	if readLen != AesSaltLen {
-		return xerrors.Errorf("failed to read salt, read len %d: %w", readLen, err)
+		return errors.Wrapf(err, "failed to read salt, read len %d", readLen)
 	}
 
 	err = DecryptAESCTRReaderWriter(sourceFileHandle, targetFileHandle, salt, key)
 	if err != nil {
-		return xerrors.Errorf("failed to decrypt file content: %w", err)
+		return errors.Wrapf(err, "failed to decrypt file content")
 	}
 
 	return nil

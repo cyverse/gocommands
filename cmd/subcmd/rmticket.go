@@ -1,6 +1,7 @@
 package subcmd
 
 import (
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -8,7 +9,6 @@ import (
 	"github.com/cyverse/gocommands/commons/irods"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var rmticketCmd = &cobra.Command{
@@ -63,7 +63,7 @@ func NewRmTicketCommand(command *cobra.Command, args []string) (*RmTicketCommand
 func (rmTicket *RmTicketCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(rmTicket.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -73,14 +73,14 @@ func (rmTicket *RmTicketCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
 	rmTicket.account = config.GetSessionConfig().ToIRODSAccount()
 	rmTicket.filesystem, err = irods.GetIRODSFSClient(rmTicket.account, true, false)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer rmTicket.filesystem.Release()
 
@@ -106,7 +106,7 @@ func (rmTicket *RmTicketCommand) removeTicket(ticketName string) error {
 
 	err := rmTicket.filesystem.DeleteTicket(ticketName)
 	if err != nil {
-		return xerrors.Errorf("failed to delete ticket %q: %w", ticketName, err)
+		return errors.Wrapf(err, "failed to delete ticket %q", ticketName)
 	}
 
 	return nil

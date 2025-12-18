@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/xerrors"
+	"github.com/cockroachdb/errors"
 )
 
 const (
@@ -29,7 +29,7 @@ func MakeDateTimeFromString(str string) (time.Time, error) {
 		// duration
 		dur, err := time.ParseDuration(str[1:])
 		if err != nil {
-			return time.Time{}, xerrors.Errorf("failed to parse duration: %w", err)
+			return time.Time{}, errors.Wrapf(err, "failed to parse duration")
 		}
 
 		return time.Now().Add(dur), nil
@@ -40,7 +40,7 @@ func MakeDateTimeFromString(str string) (time.Time, error) {
 		// try second
 		t2, err2 := time.Parse(datetimeLayout2, str)
 		if err2 != nil {
-			return time.Time{}, xerrors.Errorf("failed to parse time %q: %w", str, err1)
+			return time.Time{}, errors.Wrapf(err2, "failed to parse time %q", str)
 		} else {
 			return t2, nil
 		}

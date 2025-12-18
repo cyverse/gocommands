@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -22,7 +23,6 @@ import (
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var cpCmd = &cobra.Command{
@@ -123,7 +123,7 @@ func NewCpCommand(command *cobra.Command, args []string) (*CpCommand, error) {
 	cp.sourcePaths = args[:len(args)-1]
 
 	if cp.noRootFlagValues.NoRoot && len(cp.sourcePaths) > 1 {
-		return nil, xerrors.Errorf("failed to copy multiple source collections without creating root directory")
+		return nil, errors.New("failed to copy multiple source collections without creating root directory")
 	}
 
 	return cp, nil
@@ -134,7 +134,7 @@ func (cp *CpCommand) Process() error {
 
 	cont, err := flag.ProcessCommonFlags(cp.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -144,14 +144,14 @@ func (cp *CpCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
 	cp.account = config.GetSessionConfig().ToIRODSAccount()
 	cp.filesystem, err = irods.GetIRODSFSClient(cp.account, false, true)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer cp.filesystem.Release()
 
@@ -162,7 +162,7 @@ func (cp *CpCommand) Process() error {
 	// transfer report
 	cp.transferReportManager, err = transfer.NewTransferReportManager(cp.transferReportFlagValues.Report, cp.transferReportFlagValues.ReportPath, cp.transferReportFlagValues.ReportToStdout)
 	if err != nil {
-		return xerrors.Errorf("failed to create transfer report manager: %w", err)
+		return errors.Wrapf(err, "failed to create transfer report manager")
 	}
 	defer cp.transferReportManager.Release()
 
@@ -175,7 +175,7 @@ func (cp *CpCommand) Process() error {
 	if cp.wildcardSearchFlagValues.WildcardSearch {
 		cp.sourcePaths, err = wildcard.ExpandWildcards(cp.filesystem, cp.account, cp.sourcePaths, true, true)
 		if err != nil {
-			return xerrors.Errorf("failed to expand wildcards:  %w", err)
+			return errors.Wrapf(err, "failed to expand wildcards")
 		}
 	}
 
@@ -184,14 +184,14 @@ func (cp *CpCommand) Process() error {
 		// multi-source, target must be a dir
 		err = cp.ensureTargetIsDir(cp.targetPath)
 		if err != nil {
-			return xerrors.Errorf("target path %q is not a directory: %w", cp.targetPath, err)
+			return errors.Wrapf(err, "target path %q is not a directory", cp.targetPath)
 		}
 	}
 
 	for _, sourcePath := range cp.sourcePaths {
 		err = cp.copyOne(sourcePath, cp.targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to copy %q to %q: %w", sourcePath, cp.targetPath, err)
+			return errors.Wrapf(err, "failed to copy %q to %q", sourcePath, cp.targetPath)
 		}
 	}
 
@@ -201,7 +201,7 @@ func (cp *CpCommand) Process() error {
 
 		err = cp.deleteExtraOne(cp.targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to delete extra data objects or collections: %w", err)
+			return errors.Wrapf(err, "failed to delete extra data objects or collections")
 		}
 	}
 
@@ -216,11 +216,11 @@ func (cp *CpCommand) Process() error {
 	postProcessErr := cp.parallelPostProcessJobManager.Start()
 
 	if transferErr != nil {
-		return xerrors.Errorf("failed to perform transfer jobs: %w", transferErr)
+		return errors.Wrapf(transferErr, "failed to perform transfer jobs")
 	}
 
 	if postProcessErr != nil {
-		return xerrors.Errorf("failed to perform post process jobs: %w", err)
+		return errors.Wrapf(postProcessErr, "failed to perform post process jobs")
 	}
 
 	return nil
@@ -239,7 +239,7 @@ func (cp *CpCommand) ensureTargetIsDir(targetPath string) error {
 			return types.NewNotDirError(targetPath)
 		}
 
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	if !targetEntry.IsDir() {
@@ -258,13 +258,13 @@ func (cp *CpCommand) copyOne(sourcePath string, targetPath string) error {
 
 	sourceEntry, err := cp.filesystem.Stat(sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to stat %q", sourcePath)
 	}
 
 	if sourceEntry.IsDir() {
 		// dir
 		if !cp.recursiveFlagValues.Recursive {
-			return xerrors.Errorf("cannot copy a collection, turn on 'recurse' option")
+			return errors.New("cannot copy a collection, turn on 'recurse' option")
 		}
 
 		if !cp.noRootFlagValues.NoRoot {
@@ -287,7 +287,7 @@ func (cp *CpCommand) deleteExtraOne(targetPath string) error {
 
 	targetEntry, err := cp.filesystem.Stat(targetPath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	if targetEntry.IsDir() {
@@ -347,7 +347,7 @@ func (cp *CpCommand) scheduleCopy(sourceEntry *irodsclient_fs.Entry, targetPath 
 			job.Progress("copy", -1, 1, true)
 
 			reportSimple(copyErr)
-			return xerrors.Errorf("failed to copy %q to %q: %w", sourceEntry.Path, targetPath, copyErr)
+			return errors.Wrapf(copyErr, "failed to copy %q to %q", sourceEntry.Path, targetPath)
 		}
 
 		reportFile := &transfer.TransferReportFile{
@@ -430,7 +430,7 @@ func (cp *CpCommand) scheduleDeleteExtraFile(targetEntry *irodsclient_fs.Entry) 
 
 		if removeErr != nil {
 			job.Progress("delete", -1, 1, true)
-			return xerrors.Errorf("failed to delete %q: %w", targetEntry.Path, removeErr)
+			return errors.Wrapf(removeErr, "failed to delete %q", targetEntry.Path)
 		}
 
 		logger.Debug("deleted a data object")
@@ -491,7 +491,7 @@ func (cp *CpCommand) scheduleDeleteExtraDir(targetEntry *irodsclient_fs.Entry) {
 
 		if err != nil {
 			job.Progress("delete", -1, 1, true)
-			return xerrors.Errorf("failed to delete %q: %w", targetEntry.Path, err)
+			return errors.Wrapf(err, "failed to delete %q", targetEntry.Path)
 		}
 
 		logger.Debug("deleted an extra collection")
@@ -584,7 +584,7 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 		}
 
 		reportSimple(err)
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	// target exists
@@ -793,13 +793,13 @@ func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 			err = cp.filesystem.MakeDir(targetPath, true)
 			reportSimple(err)
 			if err != nil {
-				return xerrors.Errorf("failed to make a collection %q: %w", targetPath, err)
+				return errors.Wrapf(err, "failed to make a collection %q", targetPath)
 			}
 
 			// fallthrough to copy entries
 		} else {
 			reportSimple(err)
-			return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+			return errors.Wrapf(err, "failed to stat %q", targetPath)
 		}
 	} else {
 		// target exists
@@ -857,7 +857,7 @@ func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 	entries, err := cp.filesystem.List(sourceEntry.Path)
 	if err != nil {
 		reportSimple(err)
-		return xerrors.Errorf("failed to list a directory %q: %w", sourceEntry.Path, err)
+		return errors.Wrapf(err, "failed to list a directory %q", sourceEntry.Path)
 	}
 
 	for _, entry := range entries {
@@ -991,7 +991,7 @@ func (cp *CpCommand) deleteExtraDir(targetEntry *irodsclient_fs.Entry) error {
 	entries, err := cp.filesystem.List(targetEntry.Path)
 	if err != nil {
 		reportSimple(err)
-		return xerrors.Errorf("failed to list a collection %q: %w", targetEntry.Path, err)
+		return errors.Wrapf(err, "failed to list a collection %q", targetEntry.Path)
 	}
 
 	for _, entry := range entries {

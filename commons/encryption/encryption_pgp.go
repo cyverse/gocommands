@@ -8,10 +8,10 @@ import (
 
 	_ "crypto/sha256"
 
+	"github.com/cockroachdb/errors"
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/packet"
 	_ "golang.org/x/crypto/ripemd160"
-	"golang.org/x/xerrors"
 )
 
 const (
@@ -32,14 +32,14 @@ func DecryptFilenamePGP(filename string) string {
 func EncryptFilePGP(source string, target string, key []byte) error {
 	sourceFileHandle, err := os.Open(source)
 	if err != nil {
-		return xerrors.Errorf("failed to open file %q: %w", source, err)
+		return errors.Wrapf(err, "failed to open file %q", source)
 	}
 
 	defer sourceFileHandle.Close()
 
 	targetFileHandle, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
-		return xerrors.Errorf("failed to create file %q: %w", target, err)
+		return errors.Wrapf(err, "failed to create file %q", target)
 	}
 
 	defer targetFileHandle.Close()
@@ -50,14 +50,14 @@ func EncryptFilePGP(source string, target string, key []byte) error {
 
 	writeHandle, err := openpgp.SymmetricallyEncrypt(targetFileHandle, key, nil, encryptionConfig)
 	if err != nil {
-		return xerrors.Errorf("failed to create a encrypt writer for %q: %w", target, err)
+		return errors.Wrapf(err, "failed to create a encrypt writer for %q", target)
 	}
 
 	defer writeHandle.Close()
 
 	_, err = io.Copy(writeHandle, sourceFileHandle)
 	if err != nil {
-		return xerrors.Errorf("failed to encrypt data: %w", err)
+		return errors.Wrapf(err, "failed to encrypt data")
 	}
 
 	return nil
@@ -66,14 +66,14 @@ func EncryptFilePGP(source string, target string, key []byte) error {
 func DecryptFilePGP(source string, target string, key []byte) error {
 	sourceFileHandle, err := os.Open(source)
 	if err != nil {
-		return xerrors.Errorf("failed to open file %q: %w", source, err)
+		return errors.Wrapf(err, "failed to open file %q", source)
 	}
 
 	defer sourceFileHandle.Close()
 
 	targetFileHandle, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
-		return xerrors.Errorf("failed to create file %q: %w", target, err)
+		return errors.Wrapf(err, "failed to create file %q", target)
 	}
 
 	defer targetFileHandle.Close()
@@ -85,7 +85,7 @@ func DecryptFilePGP(source string, target string, key []byte) error {
 	failed := false
 	prompt := func(keys []openpgp.Key, symmetric bool) ([]byte, error) {
 		if failed {
-			return nil, xerrors.New("decryption failed")
+			return nil, errors.New("decryption failed")
 		}
 		failed = true
 		return key, nil
@@ -93,12 +93,12 @@ func DecryptFilePGP(source string, target string, key []byte) error {
 
 	messageDetail, err := openpgp.ReadMessage(sourceFileHandle, nil, prompt, encryptionConfig)
 	if err != nil {
-		return xerrors.Errorf("failed to decrypt for %q: %w", source, err)
+		return errors.Wrapf(err, "failed to decrypt for %q", source)
 	}
 
 	_, err = io.Copy(targetFileHandle, messageDetail.UnverifiedBody)
 	if err != nil {
-		return xerrors.Errorf("failed to decrypt data: %w", err)
+		return errors.Wrapf(err, "failed to decrypt data for %q", source)
 	}
 
 	return nil

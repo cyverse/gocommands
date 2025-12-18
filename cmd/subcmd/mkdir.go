@@ -1,6 +1,7 @@
 package subcmd
 
 import (
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -9,7 +10,6 @@ import (
 	"github.com/cyverse/gocommands/commons/path"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var mkdirCmd = &cobra.Command{
@@ -68,7 +68,7 @@ func NewMkDirCommand(command *cobra.Command, args []string) (*MkDirCommand, erro
 func (mkDir *MkDirCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(mkDir.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -78,14 +78,14 @@ func (mkDir *MkDirCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
 	mkDir.account = config.GetSessionConfig().ToIRODSAccount()
 	mkDir.filesystem, err = irods.GetIRODSFSClient(mkDir.account, true, false)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer mkDir.filesystem.Release()
 
@@ -97,7 +97,7 @@ func (mkDir *MkDirCommand) Process() error {
 	for _, targetPath := range mkDir.targetPaths {
 		err = mkDir.makeOne(targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to make a collection %q: %w", targetPath, err)
+			return errors.Wrapf(err, "failed to make a collection %q", targetPath)
 		}
 	}
 	return nil
@@ -117,7 +117,7 @@ func (mkDir *MkDirCommand) makeOne(targetPath string) error {
 	logger.Debug("making a collection")
 	err := mkDir.filesystem.MakeDir(targetPath, mkDir.parentsFlagValues.MakeParents)
 	if err != nil {
-		return xerrors.Errorf("failed to make a collection %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to make a collection %q", targetPath)
 	}
 
 	return nil

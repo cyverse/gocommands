@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
@@ -27,7 +28,6 @@ import (
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var putCmd = &cobra.Command{
@@ -142,7 +142,7 @@ func NewPutCommand(command *cobra.Command, args []string) (*PutCommand, error) {
 	}
 
 	if put.noRootFlagValues.NoRoot && len(put.sourcePaths) > 1 {
-		return nil, xerrors.Errorf("failed to put multiple source collections without creating root directory")
+		return nil, errors.New("failed to put multiple source collections without creating root directory")
 	}
 
 	return put, nil
@@ -153,7 +153,7 @@ func (put *PutCommand) Process() error {
 
 	cont, err := flag.ProcessCommonFlags(put.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -163,7 +163,7 @@ func (put *PutCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrap(err, "failed to input missing fields")
 	}
 
 	// Create a file system
@@ -175,7 +175,7 @@ func (put *PutCommand) Process() error {
 
 	put.filesystem, err = irods.GetIRODSFSClientForLargeFileIO(put.account, put.maxConnectionNum, put.parallelTransferFlagValues.TCPBufferSize)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrap(err, "failed to get iRODS FS Client")
 	}
 	defer put.filesystem.Release()
 
@@ -186,7 +186,7 @@ func (put *PutCommand) Process() error {
 	// transfer report
 	put.transferReportManager, err = transfer.NewTransferReportManager(put.transferReportFlagValues.Report, put.transferReportFlagValues.ReportPath, put.transferReportFlagValues.ReportToStdout)
 	if err != nil {
-		return xerrors.Errorf("failed to create transfer report manager: %w", err)
+		return errors.Wrap(err, "failed to create transfer report manager")
 	}
 	defer put.transferReportManager.Release()
 
@@ -205,14 +205,14 @@ func (put *PutCommand) Process() error {
 		// multi-source, target must be a dir
 		err = put.ensureTargetIsDir(put.targetPath)
 		if err != nil {
-			return xerrors.Errorf("target path %q is not a directory: %w", put.targetPath, err)
+			return errors.Wrapf(err, "target path %q is not a directory", put.targetPath)
 		}
 	}
 
 	for _, sourcePath := range put.sourcePaths {
 		err = put.putOne(sourcePath, put.targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to put %q to %q: %w", sourcePath, put.targetPath, err)
+			return errors.Wrapf(err, "failed to put %q to %q", sourcePath, put.targetPath)
 		}
 	}
 
@@ -223,7 +223,7 @@ func (put *PutCommand) Process() error {
 
 			err = put.deleteOnSuccessOne(sourcePath)
 			if err != nil {
-				return xerrors.Errorf("failed to delete source %q after upload: %w", sourcePath, err)
+				return errors.Wrapf(err, "failed to delete source %q after upload", sourcePath)
 			}
 		}
 	}
@@ -234,7 +234,7 @@ func (put *PutCommand) Process() error {
 
 		err = put.deleteExtraOne(put.targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to delete extra data objects or collections: %w", err)
+			return errors.Wrap(err, "failed to delete extra data objects or collections")
 		}
 	}
 
@@ -249,11 +249,11 @@ func (put *PutCommand) Process() error {
 	postProcessErr := put.parallelPostProcessJobManager.Start()
 
 	if transferErr != nil {
-		return xerrors.Errorf("failed to perform transfer jobs: %w", transferErr)
+		return errors.Wrap(transferErr, "failed to perform transfer jobs")
 	}
 
 	if postProcessErr != nil {
-		return xerrors.Errorf("failed to perform post process jobs: %w", err)
+		return errors.Wrap(postProcessErr, "failed to perform post process jobs")
 	}
 
 	return nil
@@ -272,7 +272,7 @@ func (put *PutCommand) ensureTargetIsDir(targetPath string) error {
 			return types.NewNotDirError(targetPath)
 		}
 
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	if !targetEntry.IsDir() {
@@ -328,7 +328,7 @@ func (put *PutCommand) putOne(sourcePath string, targetPath string) error {
 			return irodsclient_types.NewFileNotFoundError(sourcePath)
 		}
 
-		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to stat %q", sourcePath)
 	}
 
 	if sourceStat.IsDir() {
@@ -346,7 +346,7 @@ func (put *PutCommand) putOne(sourcePath string, targetPath string) error {
 		// encrypt filename
 		tempPath, newTargetPath, err := put.getPathsForEncryption(sourcePath, targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to get encryption path for %q: %w", sourcePath, err)
+			return errors.Wrapf(err, "failed to get encryption path for %q", sourcePath)
 		}
 
 		return put.putFile(sourceStat, sourcePath, tempPath, newTargetPath, encryptionMode)
@@ -361,7 +361,7 @@ func (put *PutCommand) deleteOnSuccessOne(sourcePath string) error {
 
 	sourceStat, err := os.Stat(sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to stat %q", sourcePath)
 	}
 
 	if sourceStat.IsDir() {
@@ -381,7 +381,7 @@ func (put *PutCommand) deleteExtraOne(targetPath string) error {
 
 	targetEntry, err := put.filesystem.Stat(targetPath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	if targetEntry.IsDir() {
@@ -455,7 +455,7 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 				job.Progress("encrypt", -1, sourceStat.Size(), true)
 
 				reportSimple(encryptErr, notes...)
-				return xerrors.Errorf("failed to encrypt file: %w", encryptErr)
+				return errors.Wrap(encryptErr, "failed to encrypt file")
 			}
 
 			defer func() {
@@ -485,7 +485,7 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 			job.Progress("upload", -1, sourceStat.Size(), true)
 
 			reportSimple(statErr)
-			return xerrors.Errorf("failed to stat %q: %w", parentTargetPath, statErr)
+			return errors.Wrapf(statErr, "failed to stat %q", parentTargetPath)
 		}
 
 		uploadResult, uploadErr := put.filesystem.UploadFileParallel(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
@@ -496,7 +496,7 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 			job.Progress("checksum", -1, sourceStat.Size(), true)
 
 			reportTransfer(uploadResult, uploadErr, notes...)
-			return xerrors.Errorf("failed to upload %q to %q: %w", sourcePath, targetPath, uploadErr)
+			return errors.Wrapf(uploadErr, "failed to upload %q to %q", sourcePath, targetPath)
 		}
 
 		reportTransfer(uploadResult, nil, notes...)
@@ -556,7 +556,7 @@ func (put *PutCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 
 		if removeErr != nil {
 			job.Progress("delete", -1, 1, true)
-			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
+			return errors.Wrapf(removeErr, "failed to delete %q", sourcePath)
 		}
 
 		logger.Debug("deleted a file")
@@ -614,7 +614,7 @@ func (put *PutCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 
 		if removeErr != nil {
 			job.Progress("delete", -1, 1, true)
-			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
+			return errors.Wrapf(removeErr, "failed to delete %q", sourcePath)
 		}
 
 		logger.Debug("deleted an empty directory")
@@ -674,7 +674,7 @@ func (put *PutCommand) scheduleDeleteExtraFile(targetPath string) {
 
 		if removeErr != nil {
 			job.Progress("delete", -1, 1, true)
-			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
+			return errors.Wrapf(removeErr, "failed to delete %q", targetPath)
 		}
 
 		logger.Debug("deleted an extra data object")
@@ -734,7 +734,7 @@ func (put *PutCommand) scheduleDeleteExtraDir(targetPath string) {
 
 		if removeErr != nil {
 			job.Progress("delete", -1, 1, true)
-			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
+			return errors.Wrapf(removeErr, "failed to delete %q", targetPath)
 		}
 
 		logger.Debug("deleted an extra collection")
@@ -829,7 +829,7 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 		}
 
 		reportSimple(err)
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	// target exists
@@ -911,7 +911,7 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 					localChecksum, err := irodsclient_util.HashLocalFile(sourcePath, string(targetEntry.CheckSumAlgorithm), nil)
 					if err != nil {
 						reportSimple(err, "differential")
-						return xerrors.Errorf("failed to get hash for %q: %w", sourcePath, err)
+						return errors.Wrapf(err, "failed to get hash for %q", sourcePath)
 					}
 
 					if bytes.Equal(localChecksum, targetEntry.CheckSum) {
@@ -1049,13 +1049,13 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 			endTime := time.Now()
 			report(startTime, endTime, err)
 			if err != nil {
-				return xerrors.Errorf("failed to make a collection %q: %w", targetPath, err)
+				return errors.Wrapf(err, "failed to make a collection %q", targetPath)
 			}
 
 			// fallthrough to put entries
 		} else {
 			reportSimple(err)
-			return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+			return errors.Wrapf(err, "failed to stat %q", targetPath)
 		}
 	} else {
 		// target exists
@@ -1115,7 +1115,7 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 	entries, err := os.ReadDir(sourcePath)
 	if err != nil {
 		reportSimple(err)
-		return xerrors.Errorf("failed to list a directory %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to list a directory %q", sourcePath)
 	}
 
 	for _, entry := range entries {
@@ -1129,7 +1129,7 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 				return irodsclient_types.NewFileNotFoundError(entryPath)
 			}
 
-			return xerrors.Errorf("failed to stat %q: %w", entryPath, err)
+			return errors.Wrapf(err, "failed to stat %q", entryPath)
 		}
 
 		if entryStat.IsDir() {
@@ -1145,7 +1145,7 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 				tempPath, newTargetPath, err := put.getPathsForEncryption(entryPath, targetPath)
 				if err != nil {
 					reportSimple(err)
-					return xerrors.Errorf("failed to get encryption path for %q: %w", entryPath, err)
+					return errors.Wrapf(err, "failed to get encryption path for %q", entryPath)
 				}
 
 				err = put.putFile(entryStat, entryPath, tempPath, newTargetPath, encryptionMode)
@@ -1235,7 +1235,7 @@ func (put *PutCommand) deleteDirOnSuccess(sourcePath string) error {
 	entries, err := os.ReadDir(sourcePath)
 	if err != nil {
 		reportSimple(err)
-		return xerrors.Errorf("failed to list a directory %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to list a directory %q", sourcePath)
 	}
 
 	for _, entry := range entries {
@@ -1359,7 +1359,7 @@ func (put *PutCommand) deleteExtraDir(targetPath string) error {
 	entries, err := put.filesystem.List(targetPath)
 	if err != nil {
 		reportSimple(err)
-		return xerrors.Errorf("failed to list a collection %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to list a collection %q", targetPath)
 	}
 
 	for _, entry := range entries {
@@ -1430,7 +1430,7 @@ func (put *PutCommand) getPathsForEncryption(sourcePath string, targetPath strin
 
 		encryptedFilename, err := encryptManager.EncryptFilename(sourceFilename)
 		if err != nil {
-			return "", "", xerrors.Errorf("failed to encrypt filename %q: %w", sourcePath, err)
+			return "", "", errors.Wrapf(err, "failed to encrypt filename %q", sourcePath)
 		}
 
 		tempFilePath := commons_path.MakeLocalTargetFilePath(encryptedFilename, put.encryptionFlagValues.TempPath)
@@ -1459,7 +1459,7 @@ func (put *PutCommand) encryptFile(sourcePath string, encryptedFilePath string, 
 
 		err := encryptManager.EncryptFile(sourcePath, encryptedFilePath)
 		if err != nil {
-			return false, xerrors.Errorf("failed to encrypt %q to %q: %w", sourcePath, encryptedFilePath, err)
+			return false, errors.Wrapf(err, "failed to encrypt %q to %q", sourcePath, encryptedFilePath)
 		}
 
 		return true, nil

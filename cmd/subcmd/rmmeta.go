@@ -3,6 +3,7 @@ package subcmd
 import (
 	"strconv"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -11,7 +12,6 @@ import (
 	"github.com/cyverse/gocommands/commons/path"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var rmmetaCmd = &cobra.Command{
@@ -95,7 +95,7 @@ func NewRmMetaCommand(command *cobra.Command, args []string) (*RmMetaCommand, er
 func (rmMeta *RmMetaCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(rmMeta.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -105,14 +105,14 @@ func (rmMeta *RmMetaCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
 	rmMeta.account = config.GetSessionConfig().ToIRODSAccount()
 	rmMeta.filesystem, err = irods.GetIRODSFSClient(rmMeta.account, true, false)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer rmMeta.filesystem.Release()
 
@@ -126,14 +126,14 @@ func (rmMeta *RmMetaCommand) Process() error {
 		for _, avuIDString := range rmMeta.avuIDs {
 			err = rmMeta.removeOneByID(avuIDString)
 			if err != nil {
-				return xerrors.Errorf("failed to remove meta for avuID %q: %w", avuIDString, err)
+				return errors.Wrapf(err, "failed to remove meta for avuID %q", avuIDString)
 			}
 		}
 	} else {
 		// avu
 		err = rmMeta.removeOneByAVU(rmMeta.attribute, rmMeta.value, rmMeta.unit)
 		if err != nil {
-			return xerrors.Errorf("failed to remove meta for attr %q, val %q, unit %q: %w", rmMeta.attribute, rmMeta.value, rmMeta.unit, err)
+			return errors.Wrapf(err, "failed to remove meta for attr %q, val %q, unit %q", rmMeta.attribute, rmMeta.value, rmMeta.unit)
 		}
 	}
 
@@ -144,7 +144,7 @@ func (rmMeta *RmMetaCommand) removeOneByID(avuIDString string) error {
 	// avu ID
 	avuID, err := strconv.ParseInt(avuIDString, 10, 64)
 	if err != nil {
-		return xerrors.Errorf("failed to parse AVUID: %w", err)
+		return errors.Wrapf(err, "failed to parse AVUID")
 	}
 
 	if rmMeta.targetObjectFlagValues.Path {
@@ -171,7 +171,7 @@ func (rmMeta *RmMetaCommand) removeOneByID(avuIDString string) error {
 	}
 
 	// nothing updated
-	return xerrors.Errorf("one of path, user, or resource must be selected")
+	return errors.New("one of path, user, or resource must be selected")
 }
 
 func (rmMeta *RmMetaCommand) removeOneByAVU(attribute string, value string, unit string) error {
@@ -199,7 +199,7 @@ func (rmMeta *RmMetaCommand) removeOneByAVU(attribute string, value string, unit
 	}
 
 	// nothing updated
-	return xerrors.Errorf("one of path, user, or resource must be selected")
+	return errors.New("one of path, user, or resource must be selected")
 }
 
 func (rmMeta *RmMetaCommand) removeMetaFromPathByID(targetPath string, avuID int64) error {
@@ -217,7 +217,7 @@ func (rmMeta *RmMetaCommand) removeMetaFromPathByID(targetPath string, avuID int
 
 	err := rmMeta.filesystem.DeleteMetadata(targetPath, avuID)
 	if err != nil {
-		return xerrors.Errorf("failed to delete metadata (id: %d) from path %q: %w", avuID, targetPath, err)
+		return errors.Wrapf(err, "failed to delete metadata (id %d) from path %q", avuID, targetPath)
 	}
 
 	return nil
@@ -233,7 +233,7 @@ func (rmMeta *RmMetaCommand) removeMetaFromUserByID(username string, avuID int64
 
 	err := rmMeta.filesystem.DeleteUserMetadata(username, rmMeta.account.ClientZone, avuID)
 	if err != nil {
-		return xerrors.Errorf("failed to delete metadata (id: %d) from user %q: %w", avuID, username, err)
+		return errors.Wrapf(err, "failed to delete metadata (id %d) from user %q", avuID, username)
 	}
 
 	return nil
@@ -249,7 +249,7 @@ func (rmMeta *RmMetaCommand) removeMetaFromResourceByID(resource string, avuID i
 
 	err := rmMeta.filesystem.DeleteResourceMetadata(resource, avuID)
 	if err != nil {
-		return xerrors.Errorf("failed to delete metadata (id: %d) from resource %q: %w", avuID, resource, err)
+		return errors.Wrapf(err, "failed to delete metadata (id %d) from resource %q", avuID, resource)
 	}
 
 	return nil
@@ -272,7 +272,7 @@ func (rmMeta *RmMetaCommand) removeMetaFromPathByAVU(targetPath string, attr str
 
 	err := rmMeta.filesystem.DeleteMetadataByAVU(targetPath, attr, val, unit)
 	if err != nil {
-		return xerrors.Errorf("failed to delete metadata (attr: %q, val: %q, unit: %q) from path %q: %w", attr, val, unit, targetPath, err)
+		return errors.Wrapf(err, "failed to delete metadata (attr: %q, val: %q, unit: %q) from path %q", attr, val, unit, targetPath)
 	}
 
 	return nil
@@ -290,7 +290,7 @@ func (rmMeta *RmMetaCommand) removeMetaFromUserByAVU(username string, attr strin
 
 	err := rmMeta.filesystem.DeleteUserMetadataByAVU(username, rmMeta.account.ClientZone, attr, val, unit)
 	if err != nil {
-		return xerrors.Errorf("failed to delete metadata (attr: %q, val: %q, unit: %q) from user %q: %w", attr, val, unit, username, err)
+		return errors.Wrapf(err, "failed to delete metadata (attr: %q, val: %q, unit: %q) from user %q", attr, val, unit, username)
 	}
 
 	return nil
@@ -308,7 +308,7 @@ func (rmMeta *RmMetaCommand) removeMetaFromResourceByAVU(resource string, attr s
 
 	err := rmMeta.filesystem.DeleteResourceMetadataByAVU(resource, attr, val, unit)
 	if err != nil {
-		return xerrors.Errorf("failed to delete metadata (attr: %q, val: %q, unit: %q) from resource %q: %w", attr, val, unit, resource, err)
+		return errors.Wrapf(err, "failed to delete metadata (attr: %q, val: %q, unit: %q) from resource %q", attr, val, unit, resource)
 	}
 
 	return nil

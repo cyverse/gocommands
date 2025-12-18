@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
@@ -28,7 +29,6 @@ import (
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var getCmd = &cobra.Command{
@@ -147,7 +147,7 @@ func NewGetCommand(command *cobra.Command, args []string) (*GetCommand, error) {
 	}
 
 	if get.noRootFlagValues.NoRoot && len(get.sourcePaths) > 1 {
-		return nil, xerrors.Errorf("failed to get multiple source collections without creating root directory")
+		return nil, errors.New("failed to get multiple source collections without creating root directory")
 	}
 
 	return get, nil
@@ -158,7 +158,7 @@ func (get *GetCommand) Process() error {
 
 	cont, err := flag.ProcessCommonFlags(get.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrap(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -168,7 +168,7 @@ func (get *GetCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrap(err, "failed to input missing fields")
 	}
 
 	// Create a file system
@@ -180,7 +180,7 @@ func (get *GetCommand) Process() error {
 
 	get.filesystem, err = irods.GetIRODSFSClientForLargeFileIO(get.account, get.maxConnectionNum, get.parallelTransferFlagValues.TCPBufferSize)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrap(err, "failed to get iRODS FS Client")
 	}
 	defer get.filesystem.Release()
 
@@ -191,7 +191,7 @@ func (get *GetCommand) Process() error {
 	// transfer report
 	get.transferReportManager, err = transfer.NewTransferReportManager(get.transferReportFlagValues.Report, get.transferReportFlagValues.ReportPath, get.transferReportFlagValues.ReportToStdout)
 	if err != nil {
-		return xerrors.Errorf("failed to create transfer report manager: %w", err)
+		return errors.Wrap(err, "failed to create transfer report manager")
 	}
 	defer get.transferReportManager.Release()
 
@@ -209,7 +209,7 @@ func (get *GetCommand) Process() error {
 	if get.wildcardSearchFlagValues.WildcardSearch {
 		get.sourcePaths, err = wildcard.ExpandWildcards(get.filesystem, get.account, get.sourcePaths, true, true)
 		if err != nil {
-			return xerrors.Errorf("failed to expand wildcards:  %w", err)
+			return errors.Wrap(err, "failed to expand wildcards")
 		}
 	}
 
@@ -218,14 +218,14 @@ func (get *GetCommand) Process() error {
 		// multi-source, target must be a dir
 		err = get.ensureTargetIsDir(get.targetPath)
 		if err != nil {
-			return xerrors.Errorf("target path %q is not a directory: %w", get.targetPath, err)
+			return errors.Wrapf(err, "target path %q is not a directory", get.targetPath)
 		}
 	}
 
 	for _, sourcePath := range get.sourcePaths {
 		err = get.getOne(sourcePath, get.targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to get %q to %q: %w", sourcePath, get.targetPath, err)
+			return errors.Wrapf(err, "failed to get %q to %q", sourcePath, get.targetPath)
 		}
 	}
 
@@ -236,7 +236,7 @@ func (get *GetCommand) Process() error {
 
 			err = get.deleteOnSuccessOne(sourcePath)
 			if err != nil {
-				return xerrors.Errorf("failed to delete %q after download: %w", sourcePath, err)
+				return errors.Wrapf(err, "failed to delete %q after download", sourcePath)
 			}
 		}
 	}
@@ -247,7 +247,7 @@ func (get *GetCommand) Process() error {
 
 		err := get.deleteExtraOne(get.targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to delete extra files or directories: %w", err)
+			return errors.Wrap(err, "failed to delete extra files or directories")
 		}
 	}
 
@@ -262,11 +262,11 @@ func (get *GetCommand) Process() error {
 	postProcessErr := get.parallelPostProcessJobManager.Start()
 
 	if transferErr != nil {
-		return xerrors.Errorf("failed to perform transfer jobs: %w", transferErr)
+		return errors.Wrap(transferErr, "failed to perform transfer jobs")
 	}
 
 	if postProcessErr != nil {
-		return xerrors.Errorf("failed to perform post process jobs: %w", err)
+		return errors.Wrap(postProcessErr, "failed to perform post process jobs")
 	}
 
 	return nil
@@ -282,7 +282,7 @@ func (get *GetCommand) ensureTargetIsDir(targetPath string) error {
 			return types.NewNotDirError(targetPath)
 		}
 
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	if !targetStat.IsDir() {
@@ -321,7 +321,7 @@ func (get *GetCommand) getOne(sourcePath string, targetPath string) error {
 
 	sourceEntry, err := get.filesystem.Stat(sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to stat %q", sourcePath)
 	}
 
 	if sourceEntry.IsDir() {
@@ -338,7 +338,7 @@ func (get *GetCommand) getOne(sourcePath string, targetPath string) error {
 		// decrypt filename
 		tempPath, newTargetPath, err := get.getPathsForDecryption(sourceEntry.Path, targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to get decryption path for %q: %w", sourceEntry.Path, err)
+			return errors.Wrapf(err, "failed to get decryption path for %q", sourceEntry.Path)
 		}
 
 		return get.getFile(sourceEntry, tempPath, newTargetPath)
@@ -356,7 +356,7 @@ func (get *GetCommand) deleteOnSuccessOne(sourcePath string) error {
 
 	sourceEntry, err := get.filesystem.Stat(sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to stat %q", sourcePath)
 	}
 
 	if sourceEntry.IsDir() {
@@ -373,7 +373,7 @@ func (get *GetCommand) deleteExtraOne(targetPath string) error {
 
 	targetStat, err := os.Stat(targetPath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	if targetStat.IsDir() {
@@ -451,7 +451,7 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 			job.Progress("download", -1, sourceEntry.Size, true)
 
 			reportSimple(statErr)
-			return xerrors.Errorf("failed to stat %q: %w", parentDownloadPath, statErr)
+			return errors.Wrapf(statErr, "failed to stat %q", parentDownloadPath)
 		}
 
 		notes := []string{"icat", fmt.Sprintf("%d threads", threadsRequired)}
@@ -465,7 +465,7 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 			job.Progress("checksum", -1, sourceEntry.Size, true)
 
 			reportTransfer(downloadResult, downloadErr, notes...)
-			return xerrors.Errorf("failed to download %q to %q: %w", sourceEntry.Path, targetPath, downloadErr)
+			return errors.Wrapf(downloadErr, "failed to download %q to %q", sourceEntry.Path, targetPath)
 		}
 
 		// decrypt
@@ -477,7 +477,7 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 				job.Progress("decrypt", -1, sourceEntry.Size, true)
 
 				reportTransfer(downloadResult, decryptErr, notes...)
-				return xerrors.Errorf("failed to decrypt file: %w", decryptErr)
+				return errors.Wrap(decryptErr, "failed to decrypt file")
 			}
 
 			job.Progress("decrypt", sourceEntry.Size, sourceEntry.Size, false)
@@ -542,7 +542,7 @@ func (get *GetCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 
 		if removeErr != nil {
 			job.Progress("delete", -1, 1, true)
-			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
+			return errors.Wrapf(removeErr, "failed to delete %q", sourcePath)
 		}
 
 		logger.Debug("deleted a data object")
@@ -602,7 +602,7 @@ func (get *GetCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 
 		if removeErr != nil {
 			job.Progress("delete", -1, 1, true)
-			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
+			return errors.Wrapf(removeErr, "failed to delete %q", sourcePath)
 		}
 
 		logger.Debug("deleted an empty collection")
@@ -660,7 +660,7 @@ func (get *GetCommand) scheduleDeleteExtraFile(targetPath string) {
 
 		if removeErr != nil {
 			job.Progress("delete", -1, 1, true)
-			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
+			return errors.Wrapf(removeErr, "failed to delete %q", targetPath)
 		}
 
 		logger.Debug("deleted an extra file")
@@ -718,7 +718,7 @@ func (get *GetCommand) scheduleDeleteExtraDir(targetPath string) {
 
 		if removeErr != nil {
 			job.Progress("delete", -1, 1, true)
-			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
+			return errors.Wrapf(removeErr, "failed to delete %q", targetPath)
 		}
 
 		logger.Debug("deleted an extra directory")
@@ -813,7 +813,7 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 		}
 
 		reportSimple(err)
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	// target exists
@@ -900,7 +900,7 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 					localChecksum, err := irodsclient_util.HashLocalFile(targetPath, string(sourceEntry.CheckSumAlgorithm), nil)
 					if err != nil {
 						reportSimple(err, "differential")
-						return xerrors.Errorf("failed to get hash of %q: %w", targetPath, err)
+						return errors.Wrapf(err, "failed to get hash of %q", targetPath)
 					}
 
 					if bytes.Equal(sourceEntry.CheckSum, localChecksum) {
@@ -1032,13 +1032,13 @@ func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath stri
 			err = os.MkdirAll(targetPath, 0766)
 			reportSimple(err)
 			if err != nil {
-				return xerrors.Errorf("failed to make a directory %q: %w", targetPath, err)
+				return errors.Wrapf(err, "failed to make a directory %q", targetPath)
 			}
 
 			// fallthrough to get entries
 		} else {
 			reportSimple(err)
-			return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+			return errors.Wrapf(err, "failed to stat %q", targetPath)
 		}
 	} else {
 		// target exists
@@ -1090,7 +1090,7 @@ func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath stri
 	entries, err := get.filesystem.List(sourceEntry.Path)
 	if err != nil {
 		reportSimple(err)
-		return xerrors.Errorf("failed to list a directory %q: %w", sourceEntry.Path, err)
+		return errors.Wrapf(err, "failed to list a directory %q", sourceEntry.Path)
 	}
 
 	for _, entry := range entries {
@@ -1109,7 +1109,7 @@ func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath stri
 				tempPath, newTargetPath, err := get.getPathsForDecryption(entry.Path, targetPath)
 				if err != nil {
 					reportSimple(err)
-					return xerrors.Errorf("failed to get decryption path for %q: %w", entry.Path, err)
+					return errors.Wrapf(err, "failed to get decryption path for %q", entry.Path)
 				}
 
 				err = get.getFile(entry, tempPath, newTargetPath)
@@ -1199,7 +1199,7 @@ func (get *GetCommand) deleteDirOnSuccess(sourcePath string) error {
 	entries, err := get.filesystem.List(sourcePath)
 	if err != nil {
 		reportSimple(err)
-		return xerrors.Errorf("failed to list a collection %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to list a collection %q", sourcePath)
 	}
 
 	for _, entry := range entries {
@@ -1317,7 +1317,7 @@ func (get *GetCommand) deleteExtraDir(targetPath string) error {
 	entries, err := os.ReadDir(targetPath)
 	if err != nil {
 		reportSimple(err)
-		return xerrors.Errorf("failed to list a directory %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to list a directory %q", targetPath)
 	}
 
 	for _, entry := range entries {
@@ -1395,7 +1395,7 @@ func (get *GetCommand) getPathsForDecryption(sourcePath string, targetPath strin
 
 		decryptedFilename, err := encryptManager.DecryptFilename(sourceFilename)
 		if err != nil {
-			return "", "", xerrors.Errorf("failed to decrypt filename %q: %w", sourcePath, err)
+			return "", "", errors.Wrapf(err, "failed to decrypt filename %q", sourcePath)
 		}
 
 		targetFilePath := commons_path.MakeLocalTargetFilePath(decryptedFilename, targetPath)
@@ -1424,7 +1424,7 @@ func (get *GetCommand) decryptFile(sourcePath string, encryptedFilePath string, 
 
 		err := encryptManager.DecryptFile(encryptedFilePath, targetPath)
 		if err != nil {
-			return false, xerrors.Errorf("failed to decrypt %q to %q: %w", encryptedFilePath, targetPath, err)
+			return false, errors.Wrapf(err, "failed to decrypt %q to %q", encryptedFilePath, targetPath)
 		}
 
 		logger.Debug("removing a temp file")

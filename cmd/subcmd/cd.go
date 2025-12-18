@@ -1,6 +1,7 @@
 package subcmd
 
 import (
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -9,7 +10,6 @@ import (
 	"github.com/cyverse/gocommands/commons/path"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var cdCmd = &cobra.Command{
@@ -70,7 +70,7 @@ func NewCdCommand(command *cobra.Command, args []string) (*CdCommand, error) {
 func (cd *CdCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(cd.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -80,14 +80,14 @@ func (cd *CdCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
 	cd.account = config.GetSessionConfig().ToIRODSAccount()
 	cd.filesystem, err = irods.GetIRODSFSClient(cd.account, false, false)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer cd.filesystem.Release()
 
@@ -98,7 +98,7 @@ func (cd *CdCommand) Process() error {
 	// run
 	err = cd.changeWorkingDir(cd.targetPath)
 	if err != nil {
-		return xerrors.Errorf("failed to change working directory to %q: %w", cd.targetPath, err)
+		return errors.Wrapf(err, "failed to change working directory to %q", cd.targetPath)
 	}
 
 	return nil
@@ -118,22 +118,22 @@ func (cd *CdCommand) changeWorkingDir(collectionPath string) error {
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
 			// not exist
-			return xerrors.Errorf("directory %q does not exist: %w", collectionPath, err)
+			return errors.Wrapf(err, "directory %q does not exist", collectionPath)
 		} else {
-			return xerrors.Errorf("failed to stat %q: %w", collectionPath, err)
+			return errors.Wrapf(err, "failed to stat %q", collectionPath)
 		}
 	}
 
 	if !entry.IsDir() {
 		// not a directory
-		return xerrors.Errorf("%q is not a directory", collectionPath)
+		return errors.Errorf("%q is not a directory", collectionPath)
 	}
 
 	logger.Debug("changing working directory")
 
 	err = config.SetCWD(collectionPath)
 	if err != nil {
-		return xerrors.Errorf("failed to set current working collection to %q: %w", collectionPath, err)
+		return errors.Wrapf(err, "failed to set current working collection to %q", collectionPath)
 	}
 
 	return nil

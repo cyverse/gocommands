@@ -3,12 +3,12 @@ package irods
 import (
 	"time"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_conn "github.com/cyverse/go-irodsclient/irods/connection"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/commons/config"
 	"github.com/cyverse/gocommands/commons/constant"
-	"golang.org/x/xerrors"
 )
 
 func UpdateIRODSFSClientTimeout(fs *irodsclient_fs.FileSystem, timeout int) {
@@ -88,12 +88,12 @@ func GetIRODSConnection(account *irodsclient_types.IRODSAccount) (*irodsclient_c
 
 	conn, err := irodsclient_conn.NewIRODSConnection(account, &config)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to create connection: %w", err)
+		return nil, errors.Wrapf(err, "failed to create connection")
 	}
 
 	err = conn.Connect()
 	if err != nil {
-		return nil, xerrors.Errorf("failed to connect: %w", err)
+		return nil, errors.Wrapf(err, "failed to connect")
 	}
 
 	return conn, nil

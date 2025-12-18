@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -14,7 +15,6 @@ import (
 	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/cyverse/gocommands/commons/types"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var lsmetaCmd = &cobra.Command{
@@ -75,7 +75,7 @@ func NewLsMetaCommand(command *cobra.Command, args []string) (*LsMetaCommand, er
 func (lsMeta *LsMetaCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(lsMeta.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -85,14 +85,14 @@ func (lsMeta *LsMetaCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
 	lsMeta.account = config.GetSessionConfig().ToIRODSAccount()
 	lsMeta.filesystem, err = irods.GetIRODSFSClient(lsMeta.account, true, true)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer lsMeta.filesystem.Release()
 
@@ -111,7 +111,7 @@ func (lsMeta *LsMetaCommand) Process() error {
 	}
 
 	// nothing updated
-	return xerrors.Errorf("path, user, or resource must be given")
+	return errors.Errorf("path, user, or resource must be given")
 }
 
 func (lsMeta *LsMetaCommand) listMetaForPath(targetPath string) error {
@@ -122,7 +122,7 @@ func (lsMeta *LsMetaCommand) listMetaForPath(targetPath string) error {
 
 	metas, err := lsMeta.filesystem.ListMetadata(targetPath)
 	if err != nil {
-		return xerrors.Errorf("failed to list meta for path %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to list meta for path %q", targetPath)
 	}
 
 	if len(metas) == 0 {
@@ -136,7 +136,7 @@ func (lsMeta *LsMetaCommand) listMetaForPath(targetPath string) error {
 func (lsMeta *LsMetaCommand) listMetaForUser(username string) error {
 	metas, err := lsMeta.filesystem.ListUserMetadata(username, lsMeta.account.ClientZone)
 	if err != nil {
-		return xerrors.Errorf("failed to list meta for user %q: %w", username, err)
+		return errors.Wrapf(err, "failed to list meta for user %q", username)
 	}
 
 	if len(metas) == 0 {
@@ -150,7 +150,7 @@ func (lsMeta *LsMetaCommand) listMetaForUser(username string) error {
 func (lsMeta *LsMetaCommand) listMetaForResource(resource string) error {
 	metas, err := lsMeta.filesystem.ListResourceMetadata(resource)
 	if err != nil {
-		return xerrors.Errorf("failed to list meta for resource %q: %w", resource, err)
+		return errors.Wrapf(err, "failed to list meta for resource %q", resource)
 	}
 
 	if len(metas) == 0 {

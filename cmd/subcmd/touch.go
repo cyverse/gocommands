@@ -1,6 +1,7 @@
 package subcmd
 
 import (
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -8,7 +9,6 @@ import (
 	"github.com/cyverse/gocommands/commons/irods"
 	"github.com/cyverse/gocommands/commons/path"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var touchCmd = &cobra.Command{
@@ -67,7 +67,7 @@ func NewTouchCommand(command *cobra.Command, args []string) (*TouchCommand, erro
 func (touch *TouchCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(touch.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -77,14 +77,14 @@ func (touch *TouchCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
 	touch.account = config.GetSessionConfig().ToIRODSAccount()
 	touch.filesystem, err = irods.GetIRODSFSClient(touch.account, true, false)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer touch.filesystem.Release()
 
@@ -96,7 +96,7 @@ func (touch *TouchCommand) Process() error {
 	for _, targetPath := range touch.targetPaths {
 		err = touch.touchOne(targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to touch %q: %w", targetPath, err)
+			return errors.Wrapf(err, "failed to touch %q", targetPath)
 		}
 	}
 
@@ -111,7 +111,7 @@ func (touch *TouchCommand) touchOne(targetPath string) error {
 
 	err := touch.filesystem.Touch(targetPath, "", touch.noCreateFlagValues.NoCreate)
 	if err != nil {
-		return xerrors.Errorf("failed to touch file %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to touch file %q", targetPath)
 	}
 
 	return nil

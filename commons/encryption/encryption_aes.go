@@ -6,7 +6,7 @@ import (
 	"crypto/cipher"
 	"io"
 
-	"golang.org/x/xerrors"
+	"github.com/cockroachdb/errors"
 )
 
 const (
@@ -53,7 +53,7 @@ func EncryptAESCTRReaderWriter(reader io.Reader, writer io.Writer, salt []byte, 
 	paddedKey := PadPkcs7(key, 32)
 	block, err := aes.NewCipher([]byte(paddedKey))
 	if err != nil {
-		return xerrors.Errorf("failed to create AES cipher: %w", err)
+		return errors.Wrapf(err, "failed to create AES cipher")
 	}
 
 	decrypter := cipher.NewCTR(block, salt)
@@ -76,7 +76,7 @@ func EncryptAESCTRReaderWriter(reader io.Reader, writer io.Writer, salt []byte, 
 		}
 
 		if writeLen != readLen {
-			return xerrors.Errorf("failed to write")
+			return errors.Errorf("failed to write")
 		}
 	}
 }
@@ -85,7 +85,7 @@ func DecryptAESCTRReaderWriter(reader io.Reader, writer io.Writer, salt []byte, 
 	paddedKey := PadPkcs7(key, 32)
 	block, err := aes.NewCipher([]byte(paddedKey))
 	if err != nil {
-		return xerrors.Errorf("failed to create AES cipher: %w", err)
+		return errors.Wrapf(err, "failed to create AES cipher")
 	}
 
 	decrypter := cipher.NewCTR(block, salt)
@@ -108,7 +108,7 @@ func DecryptAESCTRReaderWriter(reader io.Reader, writer io.Writer, salt []byte, 
 		}
 
 		if writeLen != readLen {
-			return xerrors.Errorf("failed to write")
+			return errors.Errorf("failed to write")
 		}
 	}
 }

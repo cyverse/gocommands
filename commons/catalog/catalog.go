@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_config "github.com/cyverse/go-irodsclient/config"
 	constant "github.com/cyverse/gocommands/commons/constant"
-	"golang.org/x/xerrors"
 )
 
 // GetConfigCatalogURL returns the URL of the catalog file
@@ -33,26 +33,26 @@ func NewConfigCatalog() (*ConfigCatalog, error) {
 	// Make the GET request
 	resp, err := client.Get(catalogURL)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to make GET request to %s: %w", catalogURL, err)
+		return nil, errors.Wrapf(err, "failed to make GET request to %s", catalogURL)
 	}
 	defer resp.Body.Close()
 
 	// Check the status code
 	if resp.StatusCode != http.StatusOK {
-		return nil, xerrors.Errorf("unexpected status code: %d", resp.StatusCode)
+		return nil, errors.Errorf("unexpected status code %d", resp.StatusCode)
 	}
 
 	// Read the response body
 	jsonBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to read response body: %w", err)
+		return nil, errors.Wrapf(err, "failed to read response body")
 	}
 
 	configCatalog := ConfigCatalog{}
 
 	err = json.Unmarshal(jsonBytes, &configCatalog)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to unmarshal config catalog: %w", err)
+		return nil, errors.Wrapf(err, "failed to unmarshal config catalog")
 	}
 
 	return &configCatalog, nil

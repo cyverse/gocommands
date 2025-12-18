@@ -1,6 +1,7 @@
 package subcmd
 
 import (
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -9,7 +10,6 @@ import (
 	"github.com/cyverse/gocommands/commons/irods"
 	"github.com/cyverse/gocommands/commons/path"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var bcleanCmd = &cobra.Command{
@@ -67,7 +67,7 @@ func NewBcleanCommand(command *cobra.Command, args []string) (*BcleanCommand, er
 func (bclean *BcleanCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(bclean.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -77,14 +77,14 @@ func (bclean *BcleanCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
 	bclean.account = config.GetSessionConfig().ToIRODSAccount()
 	bclean.filesystem, err = irods.GetIRODSFSClient(bclean.account, false, false)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer bclean.filesystem.Release()
 

@@ -3,6 +3,7 @@ package subcmd
 import (
 	"io"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -12,7 +13,6 @@ import (
 	"github.com/cyverse/gocommands/commons/terminal"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var catCmd = &cobra.Command{
@@ -73,7 +73,7 @@ func (cat *CatCommand) Process() error {
 
 	cont, err := flag.ProcessCommonFlags(cat.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -83,7 +83,7 @@ func (cat *CatCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
@@ -95,7 +95,7 @@ func (cat *CatCommand) Process() error {
 
 	cat.filesystem, err = irods.GetIRODSFSClient(cat.account, false, false)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer cat.filesystem.Release()
 
@@ -107,7 +107,7 @@ func (cat *CatCommand) Process() error {
 	for _, sourcePath := range cat.sourcePaths {
 		err = cat.catOne(sourcePath)
 		if err != nil {
-			return xerrors.Errorf("failed to display content of %q: %w", sourcePath, err)
+			return errors.Wrapf(err, "failed to display content of %q", sourcePath)
 		}
 	}
 
@@ -122,17 +122,17 @@ func (cat *CatCommand) catOne(sourcePath string) error {
 
 	sourceEntry, err := cat.filesystem.Stat(sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to stat %q", sourcePath)
 	}
 
 	if sourceEntry.IsDir() {
-		return xerrors.Errorf("cannot show the content of a collection")
+		return errors.Errorf("cannot show the content of a collection %q", sourcePath)
 	}
 
 	// file
 	fh, err := cat.filesystem.OpenFile(sourcePath, "", "r")
 	if err != nil {
-		return xerrors.Errorf("failed to open file %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to open file %q", sourcePath)
 	}
 	defer fh.Close()
 

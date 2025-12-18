@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_config "github.com/cyverse/go-irodsclient/config"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/cyverse/gocommands/commons/config"
@@ -11,7 +12,6 @@ import (
 	"github.com/cyverse/gocommands/commons/terminal"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -192,7 +192,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	// init config
 	err := config.InitEnvironmentManagerFromSystemConfig()
 	if err != nil {
-		return false, xerrors.Errorf("failed to init environment manager: %w", err)
+		return false, errors.Wrapf(err, "failed to init environment manager")
 	}
 
 	environmentManager := config.GetEnvironmentManager()
@@ -211,29 +211,28 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	if len(configFilePath) > 0 {
 		configFilePath, err = path.ExpandLocalHomeDirPath(configFilePath)
 		if err != nil {
-			return false, xerrors.Errorf("failed to expand home directory for %q: %w", configFilePath, err)
+			return false, errors.Wrapf(err, "failed to expand home directory for %q", configFilePath)
 		}
 
 		status, err := os.Stat(configFilePath)
 		if err != nil {
 			if os.IsNotExist(err) {
-				//return false, xerrors.Errorf("config path %q does not exist", configFilePath)
 				logger.Debugf("failed to find config path %q as it does not exist", configFilePath)
 			} else {
-				return false, xerrors.Errorf("failed to stat %q: %w", configFilePath, err)
+				return false, errors.Wrapf(err, "failed to stat %q", configFilePath)
 			}
 		} else {
 			if status.IsDir() {
 				// config root
 				err = environmentManager.SetEnvironmentDirPath(configFilePath)
 				if err != nil {
-					return false, xerrors.Errorf("failed to set configuration root directory %q: %w", configFilePath, err)
+					return false, errors.Wrapf(err, "failed to set configuration root directory %q", configFilePath)
 				}
 			} else {
 				// config file
 				err = environmentManager.SetEnvironmentFilePath(configFilePath)
 				if err != nil {
-					return false, xerrors.Errorf("failed to set configuration root directory %q: %w", configFilePath, err)
+					return false, errors.Wrapf(err, "failed to set configuration root directory %q", configFilePath)
 				}
 			}
 		}
@@ -241,21 +240,21 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		// load
 		err = environmentManager.Load()
 		if err != nil {
-			return false, xerrors.Errorf("failed to load configuration file %q: %w", environmentManager.EnvironmentFilePath, err)
+			return false, errors.Wrapf(err, "failed to load configuration file %q", environmentManager.EnvironmentFilePath)
 		}
 	} else {
 		// default
 		// load
 		err = environmentManager.Load()
 		if err != nil {
-			return false, xerrors.Errorf("failed to load configuration file %q: %w", environmentManager.EnvironmentFilePath, err)
+			return false, errors.Wrapf(err, "failed to load configuration file %q", environmentManager.EnvironmentFilePath)
 		}
 	}
 
 	// load config from env
 	envConfig, err := irodsclient_config.NewConfigFromEnv(environmentManager.Environment)
 	if err != nil {
-		return false, xerrors.Errorf("failed to load config from environment: %w", err)
+		return false, errors.Wrapf(err, "failed to load config from environment")
 	}
 
 	// overwrite
@@ -263,7 +262,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 
 	sessionConfig, err := environmentManager.GetSessionConfig()
 	if err != nil {
-		return false, xerrors.Errorf("failed to get session config: %w", err)
+		return false, errors.Wrapf(err, "failed to get session config")
 	}
 
 	if sessionConfig.LogLevel > 0 {
@@ -278,7 +277,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		// read from stdin
 		err := config.InputMissingFieldsFromStdin()
 		if err != nil {
-			return false, xerrors.Errorf("failed to load config from stdin: %w", err) // stop here
+			return false, errors.Wrapf(err, "failed to load config from stdin")
 		}
 	}
 
@@ -293,7 +292,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 func printVersion() error {
 	info, err := commons.GetVersionJSON()
 	if err != nil {
-		return xerrors.Errorf("failed to get version json: %w", err)
+		return errors.Wrapf(err, "failed to get version json")
 	}
 
 	terminal.Println(info)

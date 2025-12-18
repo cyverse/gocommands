@@ -3,6 +3,7 @@ package subcmd
 import (
 	"os"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -10,7 +11,6 @@ import (
 	"github.com/cyverse/gocommands/commons/irods"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var svrinfoCmd = &cobra.Command{
@@ -60,7 +60,7 @@ func NewSvrInfoCommand(command *cobra.Command, args []string) (*SvrInfoCommand, 
 func (svrInfo *SvrInfoCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(svrInfo.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -70,14 +70,14 @@ func (svrInfo *SvrInfoCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
 	svrInfo.account = config.GetSessionConfig().ToIRODSAccount()
 	svrInfo.filesystem, err = irods.GetIRODSFSClient(svrInfo.account, true, false)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer svrInfo.filesystem.Release()
 
@@ -88,7 +88,7 @@ func (svrInfo *SvrInfoCommand) Process() error {
 	// run
 	err = svrInfo.displayInfo()
 	if err != nil {
-		return xerrors.Errorf("failed to display server info: %w", err)
+		return errors.Wrapf(err, "failed to display server info")
 	}
 
 	return nil
@@ -97,7 +97,7 @@ func (svrInfo *SvrInfoCommand) Process() error {
 func (svrInfo *SvrInfoCommand) displayInfo() error {
 	ver, err := svrInfo.filesystem.GetServerVersion()
 	if err != nil {
-		return xerrors.Errorf("failed to get server version: %w", err)
+		return errors.Wrapf(err, "failed to get server version")
 	}
 
 	t := table.NewWriter()

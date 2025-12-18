@@ -3,17 +3,17 @@ package wildcard
 import (
 	"sort"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	"github.com/cyverse/go-irodsclient/irods/types"
 	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
 	"github.com/cyverse/gocommands/commons/config"
 	"github.com/cyverse/gocommands/commons/path"
-	"golang.org/x/xerrors"
 )
 
 func ExpandWildcards(fs *irodsclient_fs.FileSystem, account *types.IRODSAccount, targetPaths []string, expandCollections bool, expandDataobjects bool) ([]string, error) {
 	if !expandCollections && !expandDataobjects {
-		return nil, xerrors.Errorf("Need to enable data objects or collections (or both) for wildcard expansion.")
+		return nil, errors.New("Need to enable data objects or collections (or both) for wildcard expansion.")
 	}
 
 	outputPaths := []string{}
@@ -30,7 +30,7 @@ func ExpandWildcards(fs *irodsclient_fs.FileSystem, account *types.IRODSAccount,
 			if expandCollections {
 				searchResults, err := fs.SearchDirUnixWildcard(absPath)
 				if err != nil {
-					return nil, xerrors.Errorf("failed to perform collection query for wildcard expansion: %w", err)
+					return nil, errors.Wrapf(err, "failed to perform collection query for wildcard expansion")
 				}
 
 				for _, searchResult := range searchResults {
@@ -41,7 +41,7 @@ func ExpandWildcards(fs *irodsclient_fs.FileSystem, account *types.IRODSAccount,
 			if expandDataobjects {
 				searchResults, err := fs.SearchFileUnixWildcard(absPath)
 				if err != nil {
-					return nil, xerrors.Errorf("failed to perform data object query for wildcard expansion: %w", err)
+					return nil, errors.Wrapf(err, "failed to perform data object query for wildcard expansion")
 				}
 
 				for _, searchResult := range searchResults {

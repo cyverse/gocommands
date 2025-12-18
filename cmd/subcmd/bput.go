@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
@@ -28,7 +29,6 @@ import (
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var bputCmd = &cobra.Command{
@@ -143,7 +143,7 @@ func NewBputCommand(command *cobra.Command, args []string) (*BputCommand, error)
 	}
 
 	if bput.noRootFlagValues.NoRoot && len(bput.sourcePaths) > 1 {
-		return nil, xerrors.Errorf("failed to put multiple source collections without creating root directory")
+		return nil, errors.New("failed to put multiple source collections without creating root directory")
 	}
 
 	return bput, nil
@@ -154,7 +154,7 @@ func (bput *BputCommand) Process() error {
 
 	cont, err := flag.ProcessCommonFlags(bput.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrap(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -164,14 +164,14 @@ func (bput *BputCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrap(err, "failed to input missing fields")
 	}
 
 	// Create a file system
 	bput.account = config.GetSessionConfig().ToIRODSAccount()
 	bput.filesystem, err = irods.GetIRODSFSClientForLargeFileIO(bput.account, bput.maxConnectionNum, bput.parallelTransferFlagValues.TCPBufferSize)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrap(err, "failed to get iRODS FS Client")
 	}
 	defer bput.filesystem.Release()
 
@@ -182,7 +182,7 @@ func (bput *BputCommand) Process() error {
 	// transfer report
 	bput.transferReportManager, err = transfer.NewTransferReportManager(bput.transferReportFlagValues.Report, bput.transferReportFlagValues.ReportPath, bput.transferReportFlagValues.ReportToStdout)
 	if err != nil {
-		return xerrors.Errorf("failed to create transfer report manager: %w", err)
+		return errors.Wrap(err, "failed to create transfer report manager")
 	}
 	defer bput.transferReportManager.Release()
 
@@ -201,7 +201,7 @@ func (bput *BputCommand) Process() error {
 		// multi-source, target must be a dir
 		err = bput.ensureTargetIsDir(bput.targetPath)
 		if err != nil {
-			return xerrors.Errorf("target path %q is not a directory: %w", bput.targetPath, err)
+			return errors.Wrapf(err, "target path %q is not a directory", bput.targetPath)
 		}
 	}
 
@@ -213,7 +213,7 @@ func (bput *BputCommand) Process() error {
 
 	stagingDirMade, stagingDirErr := bundle.EnsureStagingDirPath(bput.filesystem, bput.stagingPath)
 	if stagingDirErr != nil {
-		return xerrors.Errorf("failed to prepare staging path %q: %w", bput.stagingPath, stagingDirErr)
+		return errors.Wrapf(stagingDirErr, "failed to prepare staging path %q", bput.stagingPath)
 	}
 
 	if stagingDirMade {
@@ -228,13 +228,13 @@ func (bput *BputCommand) Process() error {
 		logger.Debugf("clearing a local temp directory %q", bput.bundleTransferFlagValues.LocalTempPath)
 		clearErr := bput.bundleManager.ClearLocalBundles()
 		if err != nil {
-			return xerrors.Errorf("failed to clear local bundle files: %w", clearErr)
+			return errors.Wrapf(clearErr, "failed to clear local bundle files")
 		}
 
 		logger.Debugf("clearing an irods temp directory %q", bput.stagingPath)
 		err = bput.bundleManager.ClearIRODSBundles(bput.filesystem, false)
 		if err != nil {
-			return xerrors.Errorf("failed to clear irods bundle files in %q: %w", bput.stagingPath, err)
+			return errors.Wrapf(err, "failed to clear irods bundle files in %q", bput.stagingPath)
 		}
 	}
 
@@ -242,14 +242,14 @@ func (bput *BputCommand) Process() error {
 	for _, sourcePath := range bput.sourcePaths {
 		err = bput.putOne(sourcePath, bput.targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to bundle-put %q to %q: %w", sourcePath, bput.targetPath, err)
+			return errors.Wrapf(err, "failed to bundle-put %q to %q", sourcePath, bput.targetPath)
 		}
 	}
 
 	// process bput
 	err = bput.bput()
 	if err != nil {
-		return xerrors.Errorf("failed to bundle-put files: %w", err)
+		return errors.Wrap(err, "failed to bundle-put files")
 	}
 
 	// delete on success
@@ -259,7 +259,7 @@ func (bput *BputCommand) Process() error {
 
 			err = bput.deleteOnSuccessOne(sourcePath)
 			if err != nil {
-				return xerrors.Errorf("failed to delete source %q after upload: %w", sourcePath, err)
+				return errors.Wrapf(err, "failed to delete source %q after upload", sourcePath)
 			}
 		}
 	}
@@ -270,7 +270,7 @@ func (bput *BputCommand) Process() error {
 
 		err = bput.deleteExtraOne(bput.targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to delete extra data objects or collections: %w", err)
+			return errors.Wrap(err, "failed to delete extra data objects or collections")
 		}
 	}
 
@@ -285,11 +285,11 @@ func (bput *BputCommand) Process() error {
 	postProcessErr := bput.parallelPostProcessJobManager.Start()
 
 	if transferErr != nil {
-		return xerrors.Errorf("failed to perform transfer jobs: %w", transferErr)
+		return errors.Wrapf(transferErr, "failed to perform transfer jobs")
 	}
 
 	if postProcessErr != nil {
-		return xerrors.Errorf("failed to perform post process jobs: %w", err)
+		return errors.Wrap(postProcessErr, "failed to perform post process jobs")
 	}
 
 	return nil
@@ -307,7 +307,7 @@ func (bput *BputCommand) bput() error {
 		}
 
 		if !bundle.IsSealed() {
-			return xerrors.Errorf("bundle %d (%q) is not sealed, cannot process", bundle.GetID(), bundle.GetBundleFilename())
+			return errors.Errorf("bundle %d (%q) is not sealed, cannot process", bundle.GetID(), bundle.GetBundleFilename())
 		}
 
 		if bundle.RequireTar() {
@@ -335,7 +335,7 @@ func (bput *BputCommand) ensureTargetIsDir(targetPath string) error {
 			return types.NewNotDirError(targetPath)
 		}
 
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	if !targetEntry.IsDir() {
@@ -391,7 +391,7 @@ func (bput *BputCommand) putOne(sourcePath string, targetPath string) error {
 			return irodsclient_types.NewFileNotFoundError(sourcePath)
 		}
 
-		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to stat %q", sourcePath)
 	}
 
 	if sourceStat.IsDir() {
@@ -409,7 +409,7 @@ func (bput *BputCommand) putOne(sourcePath string, targetPath string) error {
 		// encrypt filename
 		tempPath, err := bput.getLocalPathForEncryption(sourcePath)
 		if err != nil {
-			return xerrors.Errorf("failed to get encryption path for %q: %w", sourcePath, err)
+			return errors.Wrapf(err, "failed to get encryption path for %q", sourcePath)
 		}
 
 		newTargetPath := path.Join(path.Dir(targetPath), path.Base(tempPath))
@@ -426,7 +426,7 @@ func (bput *BputCommand) deleteOnSuccessOne(sourcePath string) error {
 
 	sourceStat, err := os.Stat(sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to stat %q", sourcePath)
 	}
 
 	if sourceStat.IsDir() {
@@ -446,7 +446,7 @@ func (bput *BputCommand) deleteExtraOne(targetPath string) error {
 
 	targetEntry, err := bput.filesystem.Stat(targetPath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	if targetEntry.IsDir() {
@@ -541,7 +541,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 
 		// create a bundle file
 		job.Progress("bundle", 0, bun.GetSize(), false)
-		tarball := bundle.NewTar()
+		tarball := bundle.NewTar(bun.GetIRODSDir())
 
 		for _, bundleEntry := range bun.GetEntries() {
 			// encrypt if needed
@@ -553,7 +553,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 					job.Progress("bundle", -1, bun.GetSize(), true)
 
 					reportSimple(encryptErr, notes...)
-					return xerrors.Errorf("failed to encrypt file %s: %w", bundleEntry.LocalPath, encryptErr)
+					return errors.Wrapf(encryptErr, "failed to encrypt file %s", bundleEntry.LocalPath)
 				}
 
 				tarball.AddEntry(bundleEntry.TempPath, bundleEntry.IRODSPath)
@@ -567,7 +567,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 			job.Progress("bundle", -1, bun.GetSize(), true)
 
 			reportSimple(tarErr, "tar")
-			return xerrors.Errorf("failed to create a tarball %q for bundle %d: %w", tarballPath, bun.GetID(), tarErr)
+			return errors.Wrapf(tarErr, "failed to create a tarball %q for bundle %d", tarballPath, bun.GetID())
 		}
 		defer os.Remove(tarballPath)
 
@@ -579,7 +579,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 			job.Progress("bundle", -1, bun.GetSize(), true)
 
 			reportSimple(tarErr, "tar")
-			return xerrors.Errorf("failed to create a tarball %q for bundle %d: %w", tarballPath, bun.GetID(), tarErr)
+			return errors.Wrapf(tarErr, "failed to create a tarball %q for bundle %d", tarballPath, bun.GetID())
 		}
 
 		// tarball size
@@ -592,7 +592,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 			job.Progress("upload", -1, tarballStat.Size(), true)
 
 			reportSimple(statErr)
-			return xerrors.Errorf("failed to stat %q: %w", parentTargetPath, statErr)
+			return errors.Wrapf(statErr, "failed to stat %q", parentTargetPath)
 		}
 
 		logger.Debug("uploading a tarball")
@@ -607,7 +607,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 			job.Progress("checksum", -1, tarballStat.Size(), true)
 
 			reportTransfer(uploadResult, uploadErr, notes...)
-			return xerrors.Errorf("failed to upload a tarball %q to %q: %w", tarballPath, stagingTargetPath, uploadErr)
+			return errors.Wrapf(uploadErr, "failed to upload a tarball %q to %q", tarballPath, stagingTargetPath)
 		}
 
 		reportTransfer(uploadResult, nil, notes...)
@@ -624,7 +624,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 			job.Progress("extract", -1, tarballStat.Size(), true)
 
 			reportSimple(extractErr, "extract")
-			return xerrors.Errorf("failed to extract a tarball %q to %q: %w", stagingTargetPath, bun.GetIRODSDir(), extractErr)
+			return errors.Wrapf(extractErr, "failed to extract a tarball %q to %q", stagingTargetPath, bun.GetIRODSDir())
 		}
 
 		logger.Debug("extracted a tarball")
@@ -635,7 +635,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 		if removeErr != nil {
 			job.Progress("extract", -1, tarballStat.Size(), true)
 			reportSimple(removeErr, "remove")
-			return xerrors.Errorf("failed to remove a tarball %q: %w", stagingTargetPath, removeErr)
+			return errors.Wrapf(removeErr, "failed to remove a tarball %q", stagingTargetPath)
 		}
 
 		job.Progress("extract", tarballStat.Size(), tarballStat.Size(), false)
@@ -715,7 +715,7 @@ func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleE
 				job.Progress("upload", -1, bundleEntry.Size, true)
 
 				reportSimple(encryptErr, notes...)
-				return xerrors.Errorf("failed to encrypt file: %w", encryptErr)
+				return errors.Wrapf(encryptErr, "failed to encrypt file %s", bundleEntry.LocalPath)
 			}
 
 			defer func() {
@@ -739,7 +739,7 @@ func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleE
 			job.Progress("upload", -1, bundleEntry.Size, true)
 
 			reportSimple(statErr)
-			return xerrors.Errorf("failed to stat %q: %w", parentTargetPath, statErr)
+			return errors.Wrapf(statErr, "failed to stat %q", parentTargetPath)
 		}
 
 		uploadResult, uploadErr := bput.filesystem.UploadFileParallel(uploadSourcePath, bundleEntry.IRODSPath, "", threadsRequired, false, bput.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
@@ -750,7 +750,7 @@ func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleE
 			job.Progress("checksum", -1, bundleEntry.Size, true)
 
 			reportTransfer(uploadResult, uploadErr, notes...)
-			return xerrors.Errorf("failed to upload %q to %q: %w", bundleEntry.LocalPath, bundleEntry.IRODSPath, uploadErr)
+			return errors.Wrapf(uploadErr, "failed to upload %q to %q", bundleEntry.LocalPath, bundleEntry.IRODSPath)
 		}
 
 		reportTransfer(uploadResult, nil, notes...)
@@ -776,7 +776,7 @@ func (bput *BputCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, 
 
 	bundleErr := bput.bundleManager.Add(bundleEntry)
 	if bundleErr != nil {
-		return xerrors.Errorf("failed to add %q to bundle: %w", sourcePath, bundleErr)
+		return errors.Wrapf(bundleErr, "failed to add %q to bundle", sourcePath)
 	}
 
 	return nil
@@ -828,7 +828,7 @@ func (bput *BputCommand) scheduleDeleteFileOnSuccess(sourcePath string) {
 
 		if removeErr != nil {
 			job.Progress("delete", -1, 1, true)
-			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
+			return errors.Wrapf(removeErr, "failed to delete %q", sourcePath)
 		}
 
 		logger.Debug("deleted a file")
@@ -886,7 +886,7 @@ func (bput *BputCommand) scheduleDeleteDirOnSuccess(sourcePath string) {
 
 		if removeErr != nil {
 			job.Progress("delete", -1, 1, true)
-			return xerrors.Errorf("failed to delete %q: %w", sourcePath, removeErr)
+			return errors.Wrapf(removeErr, "failed to delete %q", sourcePath)
 		}
 
 		logger.Debug("deleted an empty directory")
@@ -946,7 +946,7 @@ func (bput *BputCommand) scheduleDeleteExtraFile(targetPath string) {
 
 		if removeErr != nil {
 			job.Progress("delete", -1, 1, true)
-			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
+			return errors.Wrapf(removeErr, "failed to delete %q", targetPath)
 		}
 
 		logger.Debug("deleted an extra data object")
@@ -1006,7 +1006,7 @@ func (bput *BputCommand) scheduleDeleteExtraDir(targetPath string) {
 
 		if removeErr != nil {
 			job.Progress("delete", -1, 1, true)
-			return xerrors.Errorf("failed to delete %q: %w", targetPath, removeErr)
+			return errors.Wrapf(removeErr, "failed to delete %q", targetPath)
 		}
 
 		logger.Debug("deleted an extra collection")
@@ -1100,7 +1100,7 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string, temp
 			return nil
 		}
 
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	// target exists
@@ -1182,7 +1182,7 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string, temp
 					localChecksum, err := irodsclient_util.HashLocalFile(sourcePath, string(targetEntry.CheckSumAlgorithm), nil)
 					if err != nil {
 						reportSimple(err, "differential")
-						return xerrors.Errorf("failed to get hash for %q: %w", sourcePath, err)
+						return errors.Wrapf(err, "failed to get hash for %q", sourcePath)
 					}
 
 					if bytes.Equal(localChecksum, targetEntry.CheckSum) {
@@ -1320,13 +1320,13 @@ func (bput *BputCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targe
 			endTime := time.Now()
 			report(startTime, endTime, err)
 			if err != nil {
-				return xerrors.Errorf("failed to make a collection %q: %w", targetPath, err)
+				return errors.Wrapf(err, "failed to make a collection %q", targetPath)
 			}
 
 			// fallthrough to put entries
 		} else {
 			reportSimple(err)
-			return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+			return errors.Wrapf(err, "failed to stat %q", targetPath)
 		}
 	} else {
 		// target exists
@@ -1385,7 +1385,7 @@ func (bput *BputCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targe
 	entries, err := os.ReadDir(sourcePath)
 	if err != nil {
 		reportSimple(err)
-		return xerrors.Errorf("failed to list a directory %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to list a directory %q", sourcePath)
 	}
 
 	for _, entry := range entries {
@@ -1399,7 +1399,7 @@ func (bput *BputCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targe
 				return irodsclient_types.NewFileNotFoundError(entryPath)
 			}
 
-			return xerrors.Errorf("failed to stat %q: %w", entryPath, err)
+			return errors.Wrapf(err, "failed to stat %q", entryPath)
 		}
 
 		if entryStat.IsDir() {
@@ -1415,7 +1415,7 @@ func (bput *BputCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targe
 				tempPath, err := bput.getLocalPathForEncryption(entryPath)
 				if err != nil {
 					reportSimple(err)
-					return xerrors.Errorf("failed to get encryption path for %q: %w", entryPath, err)
+					return errors.Wrapf(err, "failed to get encryption path for %q", entryPath)
 				}
 
 				newTargetPath := path.Join(path.Dir(newEntryPath), path.Base(tempPath))
@@ -1507,7 +1507,7 @@ func (bput *BputCommand) deleteDirOnSuccess(sourcePath string) error {
 	entries, err := os.ReadDir(sourcePath)
 	if err != nil {
 		reportSimple(err)
-		return xerrors.Errorf("failed to list a directory %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to list a directory %q", sourcePath)
 	}
 
 	for _, entry := range entries {
@@ -1631,7 +1631,7 @@ func (bput *BputCommand) deleteExtraDir(targetPath string) error {
 	entries, err := bput.filesystem.List(targetPath)
 	if err != nil {
 		reportSimple(err)
-		return xerrors.Errorf("failed to list a collection %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to list a collection %q", targetPath)
 	}
 
 	for _, entry := range entries {
@@ -1702,7 +1702,7 @@ func (bput *BputCommand) getLocalPathForEncryption(sourcePath string) (string, e
 
 		encryptedFilename, err := encryptManager.EncryptFilename(sourceFilename)
 		if err != nil {
-			return "", xerrors.Errorf("failed to encrypt filename %q: %w", sourcePath, err)
+			return "", errors.Wrapf(err, "failed to encrypt filename %q", sourcePath)
 		}
 
 		tempFilePath := commons_path.MakeLocalTargetFilePath(encryptedFilename, bput.encryptionFlagValues.TempPath)
@@ -1727,7 +1727,7 @@ func (bput *BputCommand) encryptFile(sourcePath string, encryptedFilePath string
 
 		err := encryptManager.EncryptFile(sourcePath, encryptedFilePath)
 		if err != nil {
-			return false, xerrors.Errorf("failed to encrypt %q to %q: %w", sourcePath, encryptedFilePath, err)
+			return false, errors.Wrapf(err, "failed to encrypt %q to %q", sourcePath, encryptedFilePath)
 		}
 
 		return true, nil
@@ -1782,27 +1782,4 @@ func (bput *BputCommand) determineTransferMethodForBundle(bun *bundle.Bundle) (t
 	}
 
 	return transfer.TransferModeICAT, threads
-}
-
-func (bput *BputCommand) createTarball(bun *bundle.Bundle) (string, int64, error) {
-	if !bun.IsSealed() {
-		return "", 0, xerrors.Errorf("bundle %d is not sealed, cannot create tarball", bun.GetID())
-	}
-
-	tar := bundle.NewTar()
-	for _, entry := range bun.GetEntries() {
-		addErr := tar.AddEntry(entry.LocalPath, entry.IRODSPath)
-		if addErr != nil {
-			return "", 0, xerrors.Errorf("failed to add entry %q to tarball: %w", entry.LocalPath, addErr)
-		}
-	}
-
-	localTargetPath := path.Join(bput.bundleManager.GetLocalTempDirPath(), bun.GetBundleFilename())
-
-	tarballErr := tar.CreateTarball(localTargetPath, nil)
-	if tarballErr != nil {
-		return "", 0, xerrors.Errorf("failed to create tarball for bundle %d at %s: %w", bun.GetID(), localTargetPath, tarballErr)
-	}
-
-	return localTargetPath, tar.GetSize(), nil
 }

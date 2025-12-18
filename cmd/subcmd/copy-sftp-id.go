@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -17,7 +18,6 @@ import (
 	"github.com/gliderlabs/ssh"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var copySftpIdCmd = &cobra.Command{
@@ -74,7 +74,7 @@ func NewCopySftpIdCommand(command *cobra.Command, args []string) (*CopySftpIdCom
 func (copy *CopySftpIdCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(copy.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -84,14 +84,14 @@ func (copy *CopySftpIdCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
 	copy.account = config.GetSessionConfig().ToIRODSAccount()
 	copy.filesystem, err = irods.GetIRODSFSClient(copy.account, false, false)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer copy.filesystem.Release()
 
@@ -103,12 +103,12 @@ func (copy *CopySftpIdCommand) Process() error {
 	// search identity files to be copied
 	identityFiles, err := copy.scanSSHIdentityFiles()
 	if err != nil {
-		return xerrors.Errorf("failed to find SSH identity files: %w", err)
+		return errors.Wrapf(err, "failed to find SSH identity files")
 	}
 
 	err = copy.copySftpId(identityFiles)
 	if err != nil {
-		return xerrors.Errorf("failed to copy sftp public key: %w", err)
+		return errors.Wrapf(err, "failed to copy sftp public key")
 	}
 
 	return nil
@@ -133,7 +133,7 @@ func (copy *CopySftpIdCommand) scanSSHIdentityFiles() ([]string, error) {
 	}
 
 	if len(identityFiles) == 0 {
-		return nil, xerrors.Errorf("failed to find SSH identity files")
+		return nil, errors.Errorf("failed to find SSH identity files")
 	}
 
 	return identityFiles, nil
@@ -143,14 +143,14 @@ func (copy *CopySftpIdCommand) scanDefaultSSHIdentityFiles() ([]string, error) {
 	// ~/.ssh/*.pub
 	homePath, err := os.UserHomeDir()
 	if err != nil {
-		return nil, xerrors.Errorf("failed to get user home directory: %w", err)
+		return nil, errors.Wrapf(err, "failed to get user home directory")
 	}
 
 	sshPath := filepath.Join(homePath, ".ssh")
 
 	sshDirEntries, err := os.ReadDir(sshPath)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to read a directory %q: %w", sshPath, err)
+		return nil, errors.Wrapf(err, "failed to read a directory %q", sshPath)
 	}
 
 	identityFiles := []string{}
@@ -181,7 +181,7 @@ func (copy *CopySftpIdCommand) readAuthorizedKeys(authorizedKeyPath string) ([]s
 
 		_, err := copy.filesystem.DownloadFileToBuffer(authorizedKeyPath, "", &contentBuffer, true, nil)
 		if err != nil {
-			return nil, xerrors.Errorf("failed to read file %q: %w", authorizedKeyPath, err)
+			return nil, errors.Wrapf(err, "failed to read file %q", authorizedKeyPath)
 		}
 
 		existingAuthorizedKeysContent := contentBuffer.String()
@@ -215,12 +215,12 @@ func (copy *CopySftpIdCommand) updateAuthorizedKeys(identityFiles []string, auth
 		// read the identity file first
 		identityFileContent, err := os.ReadFile(identityFile)
 		if err != nil {
-			return newAuthorizedKeys, contentChanged, xerrors.Errorf("failed to read file %q: %w", identityFile, err)
+			return newAuthorizedKeys, contentChanged, errors.Wrapf(err, "failed to read file %q", identityFile)
 		}
 
 		userKey, _, _, _, err := ssh.ParseAuthorizedKey(identityFileContent)
 		if err != nil {
-			return newAuthorizedKeys, contentChanged, xerrors.Errorf("failed to parse a SSH public key %q for user %q: %w", identityFile, copy.account.ClientUser, err)
+			return newAuthorizedKeys, contentChanged, errors.Wrapf(err, "failed to parse a SSH public key %q for user %q", identityFile, copy.account.ClientUser)
 		}
 
 		// check if exists, add only if it doesn't
@@ -277,7 +277,7 @@ func (copy *CopySftpIdCommand) copySftpId(identityFiles []string) error {
 			// create ssh dir
 			err := copy.filesystem.MakeDir(irodsSshPath, true)
 			if err != nil {
-				return xerrors.Errorf("failed to make a collection %q: %w", irodsSshPath, err)
+				return errors.Wrapf(err, "failed to make a collection %q", irodsSshPath)
 			}
 		}
 	}
@@ -285,12 +285,12 @@ func (copy *CopySftpIdCommand) copySftpId(identityFiles []string) error {
 	// read existing authorized_keys
 	authorizedKeys, err := copy.readAuthorizedKeys(authorizedKeyPath)
 	if err != nil {
-		return xerrors.Errorf("failed to read authorized_keys %q: %w", authorizedKeyPath, err)
+		return errors.Wrapf(err, "failed to read authorized_keys %q", authorizedKeyPath)
 	}
 
 	authorizedKeysUpdated, contentChanged, err := copy.updateAuthorizedKeys(identityFiles, authorizedKeys)
 	if err != nil {
-		return xerrors.Errorf("failed to update authorized_keys: %w", err)
+		return errors.Wrapf(err, "failed to update authorized_keys %q", authorizedKeyPath)
 	}
 
 	contentBuf := bytes.Buffer{}
@@ -313,7 +313,7 @@ func (copy *CopySftpIdCommand) copySftpId(identityFiles []string) error {
 
 		_, err := copy.filesystem.UploadFileFromBuffer(&contentBuf, authorizedKeyPath, "", false, true, false, nil)
 		if err != nil {
-			return xerrors.Errorf("failed to update keys in %q: %w", authorizedKeyPath, err)
+			return errors.Wrapf(err, "failed to update keys in %q", authorizedKeyPath)
 		}
 
 		terminal.Printf("%d SSH public key(s) copied to iRODS for user %q\n", len(authorizedKeysUpdated), copy.account.ClientUser)

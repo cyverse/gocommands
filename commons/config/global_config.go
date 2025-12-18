@@ -7,11 +7,11 @@ import (
 	"path"
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_config "github.com/cyverse/go-irodsclient/config"
 	"github.com/cyverse/gocommands/commons/catalog"
 	terminal "github.com/cyverse/gocommands/commons/terminal"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/xerrors"
 )
 
 var (
@@ -107,7 +107,7 @@ func SetCWD(cwd string) error {
 	logger.Debug("save session")
 	err := environmentManager.SaveSession()
 	if err != nil {
-		return xerrors.Errorf("failed to save session: %w", err)
+		return errors.Wrapf(err, "failed to save session")
 	}
 	return nil
 }
@@ -162,12 +162,12 @@ func InputMissingFieldsFromStdin() error {
 	// read from stdin
 	stdinBytes, err := io.ReadAll(os.Stdin)
 	if err != nil {
-		return xerrors.Errorf("failed to read missing config values from stdin: %w", err)
+		return errors.Wrapf(err, "failed to read missing config values from stdin")
 	}
 
 	configTypeIn, err := NewConfigTypeInFromYAML(stdinBytes)
 	if err != nil {
-		return xerrors.Errorf("failed to read missing config values: %w", err)
+		return errors.Wrapf(err, "failed to read missing config values from stdin")
 	}
 
 	environmentManager.Environment.Host = configTypeIn.Host

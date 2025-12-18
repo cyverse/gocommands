@@ -3,13 +3,13 @@ package subcmd
 import (
 	"os"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons/config"
 	"github.com/cyverse/gocommands/commons/irods"
 	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 
 	irodsclient_config "github.com/cyverse/go-irodsclient/config"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
@@ -65,7 +65,7 @@ func NewInitCommand(command *cobra.Command, args []string) (*InitCommand, error)
 func (init *InitCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(init.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -80,20 +80,20 @@ func (init *InitCommand) Process() error {
 		// set config manually
 		_, err = config.InputMissingFields()
 		if err != nil {
-			return xerrors.Errorf("failed to input missing fields: %w", err)
+			return errors.Wrapf(err, "failed to input missing fields")
 		}
 
 		updated = true
 	} else {
 		updated, err = config.InputFieldsForInit()
 		if err != nil {
-			return xerrors.Errorf("failed to input fields: %w", err)
+			return errors.Wrapf(err, "failed to input fields")
 		}
 	}
 
 	init.account, err = init.environmentManager.ToIRODSAccount()
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS account info from iCommands Environment: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS account info from iCommands Environment")
 	}
 
 	// clear PAM token as it will be overwritten
@@ -105,7 +105,7 @@ func (init *InitCommand) Process() error {
 	// test connect
 	conn, err := irods.GetIRODSConnection(init.account)
 	if err != nil {
-		return xerrors.Errorf("failed to connect to iRODS server: %w", err)
+		return errors.Wrapf(err, "failed to connect to iRODS server")
 	}
 	defer conn.Disconnect()
 
@@ -121,18 +121,18 @@ func (init *InitCommand) Process() error {
 
 		err = manager.SetEnvironmentDirPath(irodsclient_config.GetDefaultEnvironmentDirPath())
 		if err != nil {
-			return xerrors.Errorf("failed to set environment directory path: %w", err)
+			return errors.Wrapf(err, "failed to set environment directory path")
 		}
 
 		err = manager.SaveEnvironment()
 		if err != nil {
-			return xerrors.Errorf("failed to save iCommands Environment: %w", err)
+			return errors.Wrapf(err, "failed to save iCommands Environment")
 		}
 	} else {
 		terminal.Println("gocommands is already configured for following account:")
 		err = init.PrintAccount()
 		if err != nil {
-			return xerrors.Errorf("failed to print account info: %w", err)
+			return errors.Wrapf(err, "failed to print account info")
 		}
 	}
 
@@ -142,7 +142,7 @@ func (init *InitCommand) Process() error {
 func (init *InitCommand) PrintAccount() error {
 	envMgr := config.GetEnvironmentManager()
 	if envMgr == nil {
-		return xerrors.Errorf("environment is not set")
+		return errors.Errorf("environment is not set")
 	}
 
 	t := table.NewWriter()

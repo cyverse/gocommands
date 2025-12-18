@@ -3,13 +3,13 @@ package subcmd
 import (
 	"runtime"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
 	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/cyverse/gocommands/commons/upgrade"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var upgradeCmd = &cobra.Command{
@@ -59,7 +59,7 @@ func NewUpgradeCommand(command *cobra.Command, args []string) (*UpgradeCommand, 
 func (up *UpgradeCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(up.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -68,7 +68,7 @@ func (up *UpgradeCommand) Process() error {
 
 	err = up.upgrade(up.checkVersionFlagValues.Check)
 	if err != nil {
-		return xerrors.Errorf("failed to upgrade to new release: %w", err)
+		return errors.Wrapf(err, "failed to upgrade to new release")
 	}
 
 	return nil
@@ -85,7 +85,7 @@ func (up *UpgradeCommand) upgrade(checkOnly bool) error {
 
 	newRelease, err := upgrade.CheckNewRelease()
 	if err != nil {
-		return xerrors.Errorf("failed to check new release: %w", err)
+		return errors.Wrapf(err, "failed to check new release")
 	}
 
 	logger.Infof("Latest release version available for %s/%s: v%s", runtime.GOOS, runtime.GOARCH, newRelease.Version())
@@ -110,7 +110,7 @@ func (up *UpgradeCommand) upgrade(checkOnly bool) error {
 
 	err = upgrade.SelfUpgrade(newRelease)
 	if err != nil {
-		return xerrors.Errorf("failed to upgrade to new release: %w", err)
+		return errors.Wrapf(err, "failed to upgrade to new release")
 	}
 
 	terminal.Printf("Upgraded successfully! [%s => v%s]\n", myVersion, newRelease.Version())

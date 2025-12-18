@@ -4,7 +4,7 @@ import (
 	"crypto/rsa"
 	"strings"
 
-	"golang.org/x/xerrors"
+	"github.com/cockroachdb/errors"
 )
 
 // EncryptionMode determines encryption mode
@@ -98,7 +98,7 @@ func (manager *EncryptionManager) getPublicKey() (*rsa.PublicKey, error) {
 		return pub, nil
 	}
 
-	return nil, xerrors.Errorf("failed to load public key, public or private key path is not given")
+	return nil, errors.Errorf("failed to load public key, public or private key path is not given")
 }
 
 func (manager *EncryptionManager) getPrivateKey() (*rsa.PrivateKey, error) {
@@ -111,7 +111,7 @@ func (manager *EncryptionManager) getPrivateKey() (*rsa.PrivateKey, error) {
 		return priv, nil
 	}
 
-	return nil, xerrors.Errorf("failed to load private key, private key path is not given")
+	return nil, errors.Errorf("failed to load private key, private key path is not given")
 }
 
 // EncryptFilename encrypts filename
@@ -130,7 +130,7 @@ func (manager *EncryptionManager) EncryptFilename(filename string) (string, erro
 
 		return EncryptFilenameSSH(filename, publicKey)
 	default:
-		return "", xerrors.Errorf("unknown encryption mode")
+		return "", errors.Errorf("unknown encryption mode")
 	}
 }
 
@@ -150,7 +150,7 @@ func (manager *EncryptionManager) DecryptFilename(filename string) (string, erro
 
 		return DecryptFilenameSSH(filename, privateKey)
 	default:
-		return "", xerrors.Errorf("unknown encryption mode")
+		return "", errors.Errorf("unknown encryption mode")
 	}
 }
 
@@ -170,7 +170,7 @@ func (manager *EncryptionManager) EncryptFile(source string, target string) erro
 
 		return EncryptFileSSH(source, target, publicKey)
 	default:
-		return xerrors.Errorf("unknown encryption mode")
+		return errors.Errorf("unknown encryption mode")
 	}
 }
 
@@ -190,6 +190,6 @@ func (manager *EncryptionManager) DecryptFile(source string, target string) erro
 
 		return DecryptFileSSH(source, target, privateKey)
 	default:
-		return xerrors.Errorf("unknown encryption mode")
+		return errors.Errorf("unknown encryption mode")
 	}
 }

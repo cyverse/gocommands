@@ -3,6 +3,7 @@ package subcmd
 import (
 	"sort"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -13,7 +14,6 @@ import (
 	"github.com/cyverse/gocommands/commons/types"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var lsticketCmd = &cobra.Command{
@@ -72,7 +72,7 @@ func NewLsTicketCommand(command *cobra.Command, args []string) (*LsTicketCommand
 func (lsTicket *LsTicketCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(lsTicket.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -82,14 +82,14 @@ func (lsTicket *LsTicketCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
 	lsTicket.account = config.GetSessionConfig().ToIRODSAccount()
 	lsTicket.filesystem, err = irods.GetIRODSFSClient(lsTicket.account, true, true)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer lsTicket.filesystem.Release()
 
@@ -104,7 +104,7 @@ func (lsTicket *LsTicketCommand) Process() error {
 	for _, ticketName := range lsTicket.tickets {
 		err = lsTicket.printTicket(ticketName)
 		if err != nil {
-			return xerrors.Errorf("failed to print ticket %q: %w", ticketName, err)
+			return errors.Wrapf(err, "failed to print ticket %q", ticketName)
 		}
 	}
 
@@ -114,7 +114,7 @@ func (lsTicket *LsTicketCommand) Process() error {
 func (lsTicket *LsTicketCommand) listTickets() error {
 	tickets, err := lsTicket.filesystem.ListTickets()
 	if err != nil {
-		return xerrors.Errorf("failed to list tickets: %w", err)
+		return errors.Wrapf(err, "failed to list tickets")
 	}
 
 	if len(tickets) == 0 {
@@ -133,7 +133,7 @@ func (lsTicket *LsTicketCommand) printTicket(ticketName string) error {
 
 	ticket, err := lsTicket.filesystem.GetTicket(ticketName)
 	if err != nil {
-		return xerrors.Errorf("failed to get ticket %q: %w", ticketName, err)
+		return errors.Wrapf(err, "failed to get ticket %q", ticketName)
 	}
 
 	tickets := []*irodsclient_types.IRODSTicket{ticket}
@@ -146,7 +146,7 @@ func (lsTicket *LsTicketCommand) printTickets(tickets []*irodsclient_types.IRODS
 	for _, ticket := range tickets {
 		err := lsTicket.printTicketInternal(ticket)
 		if err != nil {
-			return xerrors.Errorf("failed to print ticket %q: %w", ticket, err)
+			return errors.Wrapf(err, "failed to print ticket %q", ticket.Name)
 		}
 	}
 
@@ -178,7 +178,7 @@ func (lsTicket *LsTicketCommand) printTicketInternal(ticket *irodsclient_types.I
 	if lsTicket.listFlagValues.Format == format.ListFormatLong || lsTicket.listFlagValues.Format == format.ListFormatVeryLong {
 		restrictions, err := lsTicket.filesystem.GetTicketRestrictions(ticket.ID)
 		if err != nil {
-			return xerrors.Errorf("failed to get ticket restrictions %q: %w", ticket.Name, err)
+			return errors.Wrapf(err, "failed to get ticket restrictions %q", ticket.Name)
 		}
 
 		if restrictions != nil {

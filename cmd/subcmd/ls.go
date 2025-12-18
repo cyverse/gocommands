@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
@@ -22,7 +23,6 @@ import (
 	"github.com/dustin/go-humanize"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 // FlatReplica is a struct containing a replica and its data object. Used so that we can easily sort
@@ -106,7 +106,7 @@ func (ls *LsCommand) Process() error {
 
 	cont, err := flag.ProcessCommonFlags(ls.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -116,7 +116,7 @@ func (ls *LsCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
@@ -128,7 +128,7 @@ func (ls *LsCommand) Process() error {
 
 	ls.filesystem, err = irods.GetIRODSFSClient(ls.account, true, true)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer ls.filesystem.Release()
 
@@ -145,7 +145,7 @@ func (ls *LsCommand) Process() error {
 	if ls.wildcardSearchFlagValues.WildcardSearch {
 		expanded_results, err := wildcard.ExpandWildcards(ls.filesystem, ls.account, ls.sourcePaths, true, true)
 		if err != nil {
-			return xerrors.Errorf("failed to expand wildcards:  %w", err)
+			return errors.Wrapf(err, "failed to expand wildcards")
 		}
 		ls.sourcePaths = expanded_results
 	}
@@ -154,14 +154,14 @@ func (ls *LsCommand) Process() error {
 	for _, sourcePath := range ls.sourcePaths {
 		err = ls.listDataObject(sourcePath)
 		if err != nil {
-			return xerrors.Errorf("failed to list path %q: %w", sourcePath, err)
+			return errors.Wrapf(err, "failed to list path %q", sourcePath)
 		}
 	}
 
 	for _, sourcePath := range ls.sourcePaths {
 		err = ls.listCollection(sourcePath)
 		if err != nil {
-			return xerrors.Errorf("failed to list path %q: %w", sourcePath, err)
+			return errors.Wrapf(err, "failed to list path %q", sourcePath)
 		}
 	}
 
@@ -190,15 +190,15 @@ func (ls *LsCommand) listCollection(sourcePath string) error {
 	sourceEntry, err := ls.filesystem.Stat(sourcePath)
 	if err != nil {
 		if !irodsclient_types.IsFileNotFoundError(err) {
-			return xerrors.Errorf("failed to find data-object/collection %q: %w", sourcePath, err)
+			return errors.Wrapf(err, "failed to find data-object/collection %q", sourcePath)
 		}
 
-		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to stat %q", sourcePath)
 	}
 
 	connection, err := ls.filesystem.GetMetadataConnection(true)
 	if err != nil {
-		return xerrors.Errorf("failed to get connection: %w", err)
+		return errors.Wrapf(err, "failed to get connection")
 	}
 	defer ls.filesystem.ReturnMetadataConnection(connection)
 
@@ -212,12 +212,12 @@ func (ls *LsCommand) listCollection(sourcePath string) error {
 		// get access
 		accesses, err := irodsclient_irodsfs.ListCollectionAccesses(connection, sourcePath)
 		if err != nil {
-			return xerrors.Errorf("failed to get access for collection %q: %w", sourcePath, err)
+			return errors.Wrapf(err, "failed to get access for collection %q", sourcePath)
 		}
 
 		inherit, err := irodsclient_irodsfs.GetCollectionAccessInheritance(connection, sourcePath)
 		if err != nil {
-			return xerrors.Errorf("failed to get access inheritance for collection %q: %w", sourcePath, err)
+			return errors.Wrapf(err, "failed to get access inheritance for collection %q", sourcePath)
 		}
 
 		ls.printCurrentCollection(sourcePath, accesses, inherit)
@@ -227,12 +227,12 @@ func (ls *LsCommand) listCollection(sourcePath string) error {
 
 	colls, err := irodsclient_irodsfs.ListSubCollections(connection, sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to list sub-collections in %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to list sub-collections in %q", sourcePath)
 	}
 
 	objs, err := irodsclient_irodsfs.ListDataObjects(connection, sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to list data-objects in %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to list data-objects in %q", sourcePath)
 	}
 
 	// filter out hidden files
@@ -243,7 +243,7 @@ func (ls *LsCommand) listCollection(sourcePath string) error {
 		// get access
 		accesses, err := irodsclient_irodsfs.ListAccessesForDataObjectsInCollection(connection, sourcePath)
 		if err != nil {
-			return xerrors.Errorf("failed to get access for data-object %q: %w", sourcePath, err)
+			return errors.Wrapf(err, "failed to get access for data-object %q", sourcePath)
 		}
 
 		ls.printDataObjects(filtered_objs, accesses, false)
@@ -266,15 +266,15 @@ func (ls *LsCommand) listDataObject(sourcePath string) error {
 	sourceEntry, err := ls.filesystem.Stat(sourcePath)
 	if err != nil {
 		if !irodsclient_types.IsFileNotFoundError(err) {
-			return xerrors.Errorf("failed to find data-object/collection %q: %w", sourcePath, err)
+			return errors.Wrapf(err, "failed to find data-object/collection %q", sourcePath)
 		}
 
-		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to stat %q", sourcePath)
 	}
 
 	connection, err := ls.filesystem.GetMetadataConnection(true)
 	if err != nil {
-		return xerrors.Errorf("failed to get connection: %w", err)
+		return errors.Wrapf(err, "failed to get connection")
 	}
 	defer ls.filesystem.ReturnMetadataConnection(connection)
 
@@ -286,7 +286,7 @@ func (ls *LsCommand) listDataObject(sourcePath string) error {
 	// data object
 	entry, err := irodsclient_irodsfs.GetDataObject(connection, sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to get data-object %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to get data-object %q", sourcePath)
 	}
 
 	entries := []*irodsclient_types.IRODSDataObject{entry}
@@ -295,7 +295,7 @@ func (ls *LsCommand) listDataObject(sourcePath string) error {
 		// get access
 		accesses, err := irodsclient_irodsfs.ListDataObjectAccessesWithoutCollection(connection, sourcePath)
 		if err != nil {
-			return xerrors.Errorf("failed to get access for data-object %q: %w", sourcePath, err)
+			return errors.Wrapf(err, "failed to get access for data-object %q", sourcePath)
 		}
 
 		ls.printDataObjects(entries, accesses, true)

@@ -1,6 +1,7 @@
 package subcmd
 
 import (
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -9,7 +10,6 @@ import (
 	"github.com/cyverse/gocommands/commons/terminal"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var passwdCmd = &cobra.Command{
@@ -59,7 +59,7 @@ func NewPasswdCommand(command *cobra.Command, args []string) (*PasswdCommand, er
 func (passwd *PasswdCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(passwd.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -69,14 +69,14 @@ func (passwd *PasswdCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
 	passwd.account = config.GetSessionConfig().ToIRODSAccount()
 	passwd.filesystem, err = irods.GetIRODSFSClient(passwd.account, true, false)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer passwd.filesystem.Release()
 
@@ -86,7 +86,7 @@ func (passwd *PasswdCommand) Process() error {
 
 	err = passwd.changePassword()
 	if err != nil {
-		return xerrors.Errorf("failed to change password: %w", err)
+		return errors.Wrapf(err, "failed to change password")
 	}
 	return nil
 }
@@ -111,7 +111,7 @@ func (passwd *PasswdCommand) changePassword() error {
 	}
 
 	if !pass {
-		return xerrors.Errorf("password mismatched")
+		return errors.Errorf("password mismatched")
 	}
 
 	pass = false
@@ -128,17 +128,17 @@ func (passwd *PasswdCommand) changePassword() error {
 	}
 
 	if !pass {
-		return xerrors.Errorf("invalid password provided")
+		return errors.Errorf("invalid password provided")
 	}
 
 	newPasswordConfirm := terminal.InputPassword("Confirm New iRODS Password")
 	if newPassword != newPasswordConfirm {
-		return xerrors.Errorf("password mismatched")
+		return errors.Errorf("password mismatched")
 	}
 
 	err := passwd.filesystem.ChangeUserPassword(passwd.account.ClientUser, passwd.account.ClientZone, newPassword)
 	if err != nil {
-		return xerrors.Errorf("failed to change user password for user %q: %w", passwd.account.ClientUser, err)
+		return errors.Wrapf(err, "failed to change user password for user %q", passwd.account.ClientUser)
 	}
 
 	return nil

@@ -1,11 +1,11 @@
 package subcmd
 
 import (
+	"github.com/cockroachdb/errors"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons/config"
 	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var pwdCmd = &cobra.Command{
@@ -52,7 +52,7 @@ func NewPwdCommand(command *cobra.Command, args []string) (*PwdCommand, error) {
 func (pwd *PwdCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(pwd.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -62,12 +62,12 @@ func (pwd *PwdCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	err = pwd.printCurrentWorkingDir()
 	if err != nil {
-		return xerrors.Errorf("failed to print current working directory: %w", err)
+		return errors.Wrapf(err, "failed to print current working directory")
 	}
 	return nil
 }

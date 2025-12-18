@@ -4,11 +4,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons/config"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var syncCmd = &cobra.Command{
@@ -79,7 +79,7 @@ func NewSyncCommand(command *cobra.Command, args []string) (*SyncCommand, error)
 func (sync *SyncCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(sync.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -89,7 +89,7 @@ func (sync *SyncCommand) Process() error {
 	// handle local flags
 	//_, err = config.InputMissingFields()
 	//if err != nil {
-	//	return xerrors.Errorf("failed to input missing fields: %w", err)
+	//	return errors.Wrapf(err, "failed to input missing fields")
 	//}
 
 	localSourcePaths := []string{}
@@ -108,14 +108,14 @@ func (sync *SyncCommand) Process() error {
 	if len(localSourcePaths) > 0 {
 		err := sync.syncLocal(sync.targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to sync (from local): %w", err)
+			return errors.Wrapf(err, "failed to sync (from local)")
 		}
 	}
 
 	if len(irodsSourcePaths) > 0 {
 		err := sync.syncIRODS(sync.targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to sync (from iRODS): %w", err)
+			return errors.Wrapf(err, "failed to sync (from iRODS)")
 		}
 	}
 
@@ -125,14 +125,14 @@ func (sync *SyncCommand) Process() error {
 func (sync *SyncCommand) syncLocal(targetPath string) error {
 	if !strings.HasPrefix(targetPath, "i:") {
 		// local to local
-		return xerrors.Errorf("syncing local to local is not supported")
+		return errors.New("syncing local to local is not supported")
 	}
 
 	// local to iRODS
 	// target must starts with "i:"
 	err := sync.syncLocalToIRODS()
 	if err != nil {
-		return xerrors.Errorf("failed to sync (from local to iRODS): %w", err)
+		return errors.Wrapf(err, "failed to sync (from local to iRODS)")
 	}
 
 	return nil
@@ -143,7 +143,7 @@ func (sync *SyncCommand) syncIRODS(targetPath string) error {
 		// iRODS to iRODS
 		err := sync.syncIRODSToIRODS()
 		if err != nil {
-			return xerrors.Errorf("failed to sync (from iRODS to iRODS): %w", err)
+			return errors.Wrapf(err, "failed to sync (from iRODS to iRODS)")
 		}
 
 		return nil
@@ -152,7 +152,7 @@ func (sync *SyncCommand) syncIRODS(targetPath string) error {
 	// iRODS to local
 	err := sync.syncIRODSToLocal()
 	if err != nil {
-		return xerrors.Errorf("failed to sync (from iRODS to local): %w", err)
+		return errors.Wrapf(err, "failed to sync (from iRODS to local)")
 	}
 
 	return nil
@@ -173,7 +173,7 @@ func (sync *SyncCommand) getNewCommandArgs() ([]string, error) {
 	}
 
 	if commandIdx < 0 {
-		return nil, xerrors.Errorf("failed to find command location")
+		return nil, errors.Errorf("failed to find command location")
 	}
 
 	newArgs = append(newArgs, osArgs[:commandIdx]...)
@@ -196,7 +196,7 @@ func (sync *SyncCommand) getNewCommandArgs() ([]string, error) {
 func (sync *SyncCommand) syncLocalToIRODS() error {
 	newArgs, err := sync.getNewCommandArgs()
 	if err != nil {
-		return xerrors.Errorf("failed to get new command args for retry: %w", err)
+		return errors.Wrapf(err, "failed to get new command args for retry")
 	}
 
 	logger := log.WithFields(log.Fields{
@@ -235,7 +235,7 @@ func (sync *SyncCommand) syncLocalToIRODS() error {
 func (sync *SyncCommand) syncIRODSToIRODS() error {
 	newArgs, err := sync.getNewCommandArgs()
 	if err != nil {
-		return xerrors.Errorf("failed to get new command args for retry: %w", err)
+		return errors.Wrapf(err, "failed to get new command args for retry")
 	}
 
 	logger := log.WithFields(log.Fields{
@@ -252,7 +252,7 @@ func (sync *SyncCommand) syncIRODSToIRODS() error {
 func (sync *SyncCommand) syncIRODSToLocal() error {
 	newArgs, err := sync.getNewCommandArgs()
 	if err != nil {
-		return xerrors.Errorf("failed to get new command args for retry: %w", err)
+		return errors.Wrapf(err, "failed to get new command args for retry")
 	}
 
 	logger := log.WithFields(log.Fields{

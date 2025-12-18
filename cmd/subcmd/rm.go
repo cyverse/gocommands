@@ -1,6 +1,7 @@
 package subcmd
 
 import (
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
@@ -10,7 +11,6 @@ import (
 	"github.com/cyverse/gocommands/commons/wildcard"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var rmCmd = &cobra.Command{
@@ -75,7 +75,7 @@ func NewRmCommand(command *cobra.Command, args []string) (*RmCommand, error) {
 func (rm *RmCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(rm.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -85,14 +85,14 @@ func (rm *RmCommand) Process() error {
 	// handle local flags
 	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
 	rm.account = config.GetSessionConfig().ToIRODSAccount()
 	rm.filesystem, err = irods.GetIRODSFSClient(rm.account, true, true)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer rm.filesystem.Release()
 
@@ -104,7 +104,7 @@ func (rm *RmCommand) Process() error {
 	if rm.wildcardSearchFlagValues.WildcardSearch {
 		rm.targetPaths, err = wildcard.ExpandWildcards(rm.filesystem, rm.account, rm.targetPaths, true, true)
 		if err != nil {
-			return xerrors.Errorf("failed to expand wildcards:  %w", err)
+			return errors.Wrapf(err, "failed to expand wildcards")
 		}
 	}
 
@@ -112,7 +112,7 @@ func (rm *RmCommand) Process() error {
 	for _, targetPath := range rm.targetPaths {
 		err = rm.removeOne(targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to remove %q: %w", targetPath, err)
+			return errors.Wrapf(err, "failed to remove %q", targetPath)
 		}
 	}
 	return nil
@@ -133,7 +133,7 @@ func (rm *RmCommand) removeOne(targetPath string) error {
 		logger.Debug("failed to find a data object, but trying to remove")
 		err = rm.filesystem.RemoveFile(targetPath, rm.forceFlagValues.Force)
 		if err != nil {
-			return xerrors.Errorf("failed to remove %q: %w", targetPath, err)
+			return errors.Wrapf(err, "failed to remove %q", targetPath)
 		}
 		return nil
 	}
@@ -141,13 +141,13 @@ func (rm *RmCommand) removeOne(targetPath string) error {
 	if targetEntry.IsDir() {
 		// dir
 		if !rm.recursiveFlagValues.Recursive {
-			return xerrors.Errorf("cannot remove a collection, recurse is not set")
+			return errors.New("cannot remove a collection, recurse is not set")
 		}
 
 		logger.Debug("removing a collection")
 		err = rm.filesystem.RemoveDir(targetPath, rm.recursiveFlagValues.Recursive, rm.forceFlagValues.Force)
 		if err != nil {
-			return xerrors.Errorf("failed to remove a collection %q: %w", targetPath, err)
+			return errors.Wrapf(err, "failed to remove a collection %q", targetPath)
 		}
 
 		return nil
@@ -157,7 +157,7 @@ func (rm *RmCommand) removeOne(targetPath string) error {
 	logger.Debug("removing a data object")
 	err = rm.filesystem.RemoveFile(targetPath, rm.forceFlagValues.Force)
 	if err != nil {
-		return xerrors.Errorf("failed to remove %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to remove %q", targetPath)
 	}
 
 	return nil

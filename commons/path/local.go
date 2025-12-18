@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
-	"golang.org/x/xerrors"
 )
 
 func MakeLocalPath(localPath string) string {
@@ -81,7 +81,7 @@ func GetLocalCommonRootDirPath(paths []string) (string, error) {
 	for idx, path := range paths {
 		absPath, err := filepath.Abs(path)
 		if err != nil {
-			return "", xerrors.Errorf("failed to compute absolute path for %q: %w", path, err)
+			return "", errors.Wrapf(err, "failed to compute absolute path for %q", path)
 		}
 		absPaths[idx] = absPath
 	}
@@ -95,7 +95,7 @@ func GetLocalCommonRootDirPath(paths []string) (string, error) {
 			return "", irodsclient_types.NewFileNotFoundError(commonRoot)
 		}
 
-		return "", xerrors.Errorf("failed to stat %q: %w", commonRoot, err)
+		return "", errors.Wrapf(err, "failed to stat %q", commonRoot)
 	}
 
 	if commonRootStat.IsDir() {
@@ -149,14 +149,14 @@ func ExpandLocalHomeDirPath(p string) (string, error) {
 	if p == "~" {
 		homedir, err := os.UserHomeDir()
 		if err != nil {
-			return "", xerrors.Errorf("failed to get user home directory: %w", err)
+			return "", errors.Wrapf(err, "failed to get user home directory")
 		}
 
 		return filepath.Abs(homedir)
 	} else if strings.HasPrefix(p, "~/") {
 		homedir, err := os.UserHomeDir()
 		if err != nil {
-			return "", xerrors.Errorf("failed to get user home directory: %w", err)
+			return "", errors.Wrapf(err, "failed to get user home directory")
 		}
 
 		p = filepath.Join(homedir, p[2:])
@@ -179,20 +179,20 @@ func MarkLocalPathMap(pathMap map[string]bool, p string) {
 func ResolveLocalSymlink(p string) (string, error) {
 	st, err := os.Lstat(p)
 	if err != nil {
-		return "", xerrors.Errorf("failed to lstat path %q: %w", p, err)
+		return "", errors.Wrapf(err, "failed to lstat path %q", p)
 	}
 
 	if st.Mode()&os.ModeSymlink == os.ModeSymlink {
 		// symlink
 		new_p, err := filepath.EvalSymlinks(p)
 		if err != nil {
-			return "", xerrors.Errorf("failed to evaluate symlink path %q: %w", p, err)
+			return "", errors.Wrapf(err, "failed to evaluate symlink path %q", p)
 		}
 
 		// follow recursively
 		new_pp, err := ResolveLocalSymlink(new_p)
 		if err != nil {
-			return "", xerrors.Errorf("failed to evaluate symlink path %q: %w", new_p, err)
+			return "", errors.Wrapf(err, "failed to evaluate symlink path %q", new_p)
 		}
 
 		return new_pp, nil

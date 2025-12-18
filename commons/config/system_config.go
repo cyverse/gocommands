@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_config "github.com/cyverse/go-irodsclient/config"
-	"golang.org/x/xerrors"
 )
 
 var (
@@ -65,7 +65,7 @@ func GetSystemConfig() *SystemConfig {
 func NewSystemConfig() (*SystemConfig, error) {
 	configPath, err := GetSystemConfigPath()
 	if err != nil {
-		return nil, xerrors.Errorf("failed to get system config path: %w", err)
+		return nil, errors.Wrapf(err, "failed to get system config path")
 	}
 
 	st, err := os.Stat(configPath)
@@ -74,25 +74,25 @@ func NewSystemConfig() (*SystemConfig, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, xerrors.Errorf("failed to stat %s: %w", configPath, err)
+		return nil, errors.Wrapf(err, "failed to stat %q", configPath)
 	}
 
 	if st.IsDir() {
 		// path is directory
-		return nil, xerrors.Errorf("%s is a directory", configPath)
+		return nil, errors.Errorf("%q is a directory", configPath)
 	}
 
 	jsonBytes, err := os.ReadFile(configPath)
 	if err != nil {
 		// file is not accessible
-		return nil, xerrors.Errorf("failed to read %s: %w", configPath, err)
+		return nil, errors.Wrapf(err, "failed to read %q", configPath)
 	}
 
 	systemConfig := SystemConfig{}
 
 	err = json.Unmarshal(jsonBytes, &systemConfig)
 	if err != nil {
-		return nil, xerrors.Errorf("failed to unmarshal %s: %w", configPath, err)
+		return nil, errors.Wrapf(err, "failed to unmarshal %q", configPath)
 	}
 
 	return &systemConfig, nil
