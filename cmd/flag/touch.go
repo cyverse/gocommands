@@ -18,13 +18,13 @@ var (
 )
 
 func SetNoCreateFlags(command *cobra.Command) {
-	command.Flags().BoolVarP(&touchFlagValues.NoCreate, "no_create", "c", false, "Skip creation of the data object")
+	command.Flags().BoolVarP(&touchFlagValues.NoCreate, "no_create", "", false, "Skip creation of the data object")
 	command.Flags().IntVarP(&touchFlagValues.ReplicaNumber, "replica", "n", 0, "The replica number of the replica to update. Cannot be used with -R")
 	command.Flags().StringVarP(&touchFlagValues.ReferencePath, "reference", "r", "", "Use the modification time of the data object given instead of the current time. Cannot be used with -s")
-	command.Flags().IntVarP(&touchFlagValues.SecondsSinceEpoch, "seconds-since-epoch", "s", 0, "Use the modification time given in seconds since epoch instead of the current time. Cannot be used with -r")
+	command.Flags().IntVarP(&touchFlagValues.SecondsSinceEpoch, "seconds-since-epoch", "", 0, "Use the modification time given in seconds since epoch instead of the current time. Cannot be used with -r")
 
-	command.MarkFlagsMutuallyExclusive("R", "n")
-	command.MarkFlagsMutuallyExclusive("r", "s")
+	command.MarkFlagsMutuallyExclusive("reference", "replica")
+	command.MarkFlagsMutuallyExclusive("reference", "seconds-since-epoch")
 }
 
 func GetTouchFlagValues(command *cobra.Command) *TouchFlagValues {
