@@ -533,10 +533,6 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 
 		logger.Debug("creating a tarball")
 
-		progressCallbackPut := func(taskType string, processed int64, total int64) {
-			job.Progress(taskType, processed, total, false)
-		}
-
 		notes := []string{}
 
 		// create a bundle file
@@ -595,11 +591,14 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 			return errors.Wrapf(statErr, "failed to stat %q", parentTargetPath)
 		}
 
-		logger.Debug("uploading a tarball")
-
 		notes = append(notes, fmt.Sprintf("staging path %q", stagingTargetPath))
 
+		progressCallbackPut := func(taskType string, processed int64, total int64) {
+			job.Progress(taskType, processed, total, false)
+		}
+
 		uploadResult, uploadErr := bput.filesystem.UploadFileParallel(tarballPath, stagingTargetPath, "", threadsRequired, false, bput.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
+
 		notes = append(notes, "icat", fmt.Sprintf("%d threads", threadsRequired))
 
 		if uploadErr != nil {
