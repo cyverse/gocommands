@@ -149,7 +149,7 @@ func (cp *CpCommand) Process() error {
 
 	// Create a file system
 	cp.account = config.GetSessionConfig().ToIRODSAccount()
-	cp.filesystem, err = irods.GetIRODSFSClient(cp.account, false, true)
+	cp.filesystem, err = irods.GetIRODSFSClient(cp.account, false)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}

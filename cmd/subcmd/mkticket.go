@@ -83,7 +83,7 @@ func (mkTicket *MkTicketCommand) Process() error {
 
 	// Create a file system
 	mkTicket.account = config.GetSessionConfig().ToIRODSAccount()
-	mkTicket.filesystem, err = irods.GetIRODSFSClient(mkTicket.account, true, false)
+	mkTicket.filesystem, err = irods.GetIRODSFSClient(mkTicket.account, true)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}

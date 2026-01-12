@@ -78,7 +78,7 @@ func (rmTicket *RmTicketCommand) Process() error {
 
 	// Create a file system
 	rmTicket.account = config.GetSessionConfig().ToIRODSAccount()
-	rmTicket.filesystem, err = irods.GetIRODSFSClient(rmTicket.account, true, false)
+	rmTicket.filesystem, err = irods.GetIRODSFSClient(rmTicket.account, true)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
@@ -91,7 +91,7 @@ func (rmTicket *RmTicketCommand) Process() error {
 	for _, ticketName := range rmTicket.tickets {
 		err = rmTicket.removeTicket(ticketName)
 		if err != nil {
-			return xerrors.Errorf("failed to remove ticket %q: %w", ticketName, err)
+			return errors.Wrapf(err, "failed to remove ticket %q", ticketName)
 		}
 	}
 	return nil

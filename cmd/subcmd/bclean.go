@@ -82,7 +82,7 @@ func (bclean *BcleanCommand) Process() error {
 
 	// Create a file system
 	bclean.account = config.GetSessionConfig().ToIRODSAccount()
-	bclean.filesystem, err = irods.GetIRODSFSClient(bclean.account, false, false)
+	bclean.filesystem, err = irods.GetIRODSFSClient(bclean.account, false)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}

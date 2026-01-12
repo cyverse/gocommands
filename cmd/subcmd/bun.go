@@ -101,7 +101,7 @@ func (bun *BunCommand) Process() error {
 
 	// Create a file system
 	bun.account = config.GetSessionConfig().ToIRODSAccount()
-	bun.filesystem, err = irods.GetIRODSFSClient(bun.account, false, true)
+	bun.filesystem, err = irods.GetIRODSFSClient(bun.account, false)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}

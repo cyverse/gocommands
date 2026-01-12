@@ -91,7 +91,7 @@ func (rmDir *RmDirCommand) Process() error {
 
 	// Create a file system
 	rmDir.account = config.GetSessionConfig().ToIRODSAccount()
-	rmDir.filesystem, err = irods.GetIRODSFSClient(rmDir.account, true, true)
+	rmDir.filesystem, err = irods.GetIRODSFSClient(rmDir.account, true)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}

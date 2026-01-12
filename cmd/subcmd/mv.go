@@ -87,7 +87,7 @@ func (mv *MvCommand) Process() error {
 
 	// Create a file system
 	mv.account = config.GetSessionConfig().ToIRODSAccount()
-	mv.filesystem, err = irods.GetIRODSFSClient(mv.account, false, true)
+	mv.filesystem, err = irods.GetIRODSFSClient(mv.account, false)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}

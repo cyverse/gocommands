@@ -87,7 +87,7 @@ func (lsTicket *LsTicketCommand) Process() error {
 
 	// Create a file system
 	lsTicket.account = config.GetSessionConfig().ToIRODSAccount()
-	lsTicket.filesystem, err = irods.GetIRODSFSClient(lsTicket.account, true, true)
+	lsTicket.filesystem, err = irods.GetIRODSFSClient(lsTicket.account, true)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}

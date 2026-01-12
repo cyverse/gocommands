@@ -110,7 +110,7 @@ func (rmMeta *RmMetaCommand) Process() error {
 
 	// Create a file system
 	rmMeta.account = config.GetSessionConfig().ToIRODSAccount()
-	rmMeta.filesystem, err = irods.GetIRODSFSClient(rmMeta.account, true, false)
+	rmMeta.filesystem, err = irods.GetIRODSFSClient(rmMeta.account, true)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}

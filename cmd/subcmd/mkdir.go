@@ -83,7 +83,7 @@ func (mkDir *MkDirCommand) Process() error {
 
 	// Create a file system
 	mkDir.account = config.GetSessionConfig().ToIRODSAccount()
-	mkDir.filesystem, err = irods.GetIRODSFSClient(mkDir.account, true, false)
+	mkDir.filesystem, err = irods.GetIRODSFSClient(mkDir.account, true)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}

@@ -106,7 +106,7 @@ func (addMeta *AddMetaCommand) Process() error {
 
 	// Create a file system
 	addMeta.account = config.GetSessionConfig().ToIRODSAccount()
-	addMeta.filesystem, err = irods.GetIRODSFSClient(addMeta.account, false, false)
+	addMeta.filesystem, err = irods.GetIRODSFSClient(addMeta.account, false)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}

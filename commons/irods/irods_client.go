@@ -22,7 +22,7 @@ func UpdateIRODSFSClientTimeout(fs *irodsclient_fs.FileSystem, timeout int) {
 }
 
 // GetIRODSFSClient returns a file system client
-func GetIRODSFSClient(account *irodsclient_types.IRODSAccount, infiniteCache bool, longTimeout bool) (*irodsclient_fs.FileSystem, error) {
+func GetIRODSFSClient(account *irodsclient_types.IRODSAccount, infiniteCache bool) (*irodsclient_fs.FileSystem, error) {
 	fsConfig := irodsclient_fs.NewFileSystemConfig(constant.ClientProgramName)
 
 	// set operation time out

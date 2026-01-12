@@ -126,7 +126,7 @@ func (ls *LsCommand) Process() error {
 		ls.account.Ticket = ls.ticketAccessFlagValues.Name
 	}
 
-	ls.filesystem, err = irods.GetIRODSFSClient(ls.account, true, true)
+	ls.filesystem, err = irods.GetIRODSFSClient(ls.account, true)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}

@@ -85,7 +85,7 @@ func (cd *CdCommand) Process() error {
 
 	// Create a file system
 	cd.account = config.GetSessionConfig().ToIRODSAccount()
-	cd.filesystem, err = irods.GetIRODSFSClient(cd.account, false, false)
+	cd.filesystem, err = irods.GetIRODSFSClient(cd.account, false)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}

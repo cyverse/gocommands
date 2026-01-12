@@ -74,7 +74,7 @@ func (passwd *PasswdCommand) Process() error {
 
 	// Create a file system
 	passwd.account = config.GetSessionConfig().ToIRODSAccount()
-	passwd.filesystem, err = irods.GetIRODSFSClient(passwd.account, true, false)
+	passwd.filesystem, err = irods.GetIRODSFSClient(passwd.account, true)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}

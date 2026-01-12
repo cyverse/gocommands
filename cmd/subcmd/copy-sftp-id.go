@@ -89,7 +89,7 @@ func (copy *CopySftpIdCommand) Process() error {
 
 	// Create a file system
 	copy.account = config.GetSessionConfig().ToIRODSAccount()
-	copy.filesystem, err = irods.GetIRODSFSClient(copy.account, false, false)
+	copy.filesystem, err = irods.GetIRODSFSClient(copy.account, false)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}

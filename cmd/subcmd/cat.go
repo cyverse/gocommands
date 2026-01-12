@@ -93,7 +93,7 @@ func (cat *CatCommand) Process() error {
 		cat.account.Ticket = cat.ticketAccessFlagValues.Name
 	}
 
-	cat.filesystem, err = irods.GetIRODSFSClient(cat.account, false, false)
+	cat.filesystem, err = irods.GetIRODSFSClient(cat.account, false)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}

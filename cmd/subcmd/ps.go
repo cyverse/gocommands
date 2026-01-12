@@ -81,7 +81,7 @@ func (ps *PsCommand) Process() error {
 
 	// Create a connection
 	ps.account = config.GetSessionConfig().ToIRODSAccount()
-	ps.filesystem, err = irods.GetIRODSFSClient(ps.account, true, true)
+	ps.filesystem, err = irods.GetIRODSFSClient(ps.account, true)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}

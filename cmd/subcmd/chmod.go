@@ -97,7 +97,7 @@ func (chMod *ChModCommand) Process() error {
 
 	// Create a file system
 	chMod.account = config.GetSessionConfig().ToIRODSAccount()
-	chMod.filesystem, err = irods.GetIRODSFSClient(chMod.account, true, true)
+	chMod.filesystem, err = irods.GetIRODSFSClient(chMod.account, true)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}

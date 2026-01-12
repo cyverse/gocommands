@@ -96,7 +96,7 @@ func (chModInherit *ChModInheritCommand) Process() error {
 
 	// Create a file system
 	chModInherit.account = config.GetSessionConfig().ToIRODSAccount()
-	chModInherit.filesystem, err = irods.GetIRODSFSClient(chModInherit.account, true, true)
+	chModInherit.filesystem, err = irods.GetIRODSFSClient(chModInherit.account, true)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
