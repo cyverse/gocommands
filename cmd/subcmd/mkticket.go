@@ -1,13 +1,15 @@
 package subcmd
 
 import (
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/path"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var mkticketCmd = &cobra.Command{
@@ -66,7 +68,7 @@ func NewMkTicketCommand(command *cobra.Command, args []string) (*MkTicketCommand
 func (mkTicket *MkTicketCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(mkTicket.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -74,48 +76,48 @@ func (mkTicket *MkTicketCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
-	mkTicket.account = commons.GetSessionConfig().ToIRODSAccount()
-	mkTicket.filesystem, err = commons.GetIRODSFSClient(mkTicket.account, true, false)
+	mkTicket.account = config.GetSessionConfig().ToIRODSAccount()
+	mkTicket.filesystem, err = irods.GetIRODSFSClient(mkTicket.account, true)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer mkTicket.filesystem.Release()
 
 	if mkTicket.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(mkTicket.filesystem, mkTicket.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(mkTicket.filesystem, mkTicket.commonFlagValues.Timeout)
 	}
 
 	// make ticket
 	err = mkTicket.makeTicket(mkTicket.ticketFlagValues.Name, mkTicket.ticketFlagValues.Type, mkTicket.sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to make a ticket for %q, %q, %q: %w", mkTicket.ticketFlagValues.Name, mkTicket.ticketFlagValues.Type, mkTicket.sourcePath, err)
+		return errors.Wrapf(err, "failed to make a ticket for %q, %q, %q", mkTicket.ticketFlagValues.Name, mkTicket.ticketFlagValues.Type, mkTicket.sourcePath)
 	}
 	return nil
 }
 
 func (mkTicket *MkTicketCommand) makeTicket(ticketName string, ticketType irodsclient_types.TicketType, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "MkTicketCommand",
-		"function": "makeTicket",
+		"ticket_name": ticketName,
+		"ticket_type": ticketType,
+		"target_path": targetPath,
 	})
 
-	logger.Debugf("make ticket %q", ticketName)
+	logger.Debug("create a ticket")
 
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := mkTicket.account.ClientZone
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	targetPath = path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	err := mkTicket.filesystem.CreateTicket(ticketName, ticketType, targetPath)
 	if err != nil {
-		return xerrors.Errorf("failed to create ticket %q: %w", ticketName, err)
+		return errors.Wrapf(err, "failed to create ticket %q", ticketName)
 	}
 
 	return nil

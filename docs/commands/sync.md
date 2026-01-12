@@ -84,14 +84,7 @@ Use `i:<path>` to specify an iRODS path. Local paths do not require a prefix.
 
     This command uses iCAT as a transfer broker. It is useful when direct access to the resource server is unstable.
 
-8. **Sync local directory to iRODS with direct transfer via resource server:**
-    ```sh
-    gocmd sync --redirect /local/dir i:/myZone/home/myUser/dir
-    ```
-
-    This command uses direct access to the resource server. It is useful when transferring large files.
-
-9. **Sync local directory to iRODS with specified transfer threads:**
+8. **Sync local directory to iRODS with specified transfer threads:**
     ```sh
     gocmd sync --thread_num 15 /local/dir i:/myZone/home/myUser/dir
     ```
@@ -122,7 +115,6 @@ Use `i:<path>` to specify an iRODS path. Local paths do not require a prefix.
 | `--no_root`           | Avoid creating the root directory at the destination during operation.       |
 | `--progress`          | Show progress bars during transfer.                                          |
 | `-q, --quiet`         | Suppress all non-error output messages.                                     |
-| `--redirect`          | Enable transfer redirection to the resource server.                         |
 | `-R, --resource string` | Target specific iRODS resource server for operations.                     |
 | `--retry int`         | Set the number of retry attempts.                                            |
 | `--retry_interval int` | Set the interval between retry attempts in seconds (default 60).            |

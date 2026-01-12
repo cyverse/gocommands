@@ -3,12 +3,14 @@ package subcmd
 import (
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/path"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var chmodCmd = &cobra.Command{
@@ -80,7 +82,7 @@ func NewChModCommand(command *cobra.Command, args []string) (*ChModCommand, erro
 func (chMod *ChModCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(chMod.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -88,27 +90,27 @@ func (chMod *ChModCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
-	chMod.account = commons.GetSessionConfig().ToIRODSAccount()
-	chMod.filesystem, err = commons.GetIRODSFSClient(chMod.account, true, true)
+	chMod.account = config.GetSessionConfig().ToIRODSAccount()
+	chMod.filesystem, err = irods.GetIRODSFSClient(chMod.account, true)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer chMod.filesystem.Release()
 
 	if chMod.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(chMod.filesystem, chMod.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(chMod.filesystem, chMod.commonFlagValues.Timeout)
 	}
 
 	for _, targetPath := range chMod.targetPaths {
 		err = chMod.changeOne(targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to change access to %q: %w", targetPath, err)
+			return errors.Wrapf(err, "failed to change access to %q", targetPath)
 		}
 	}
 
@@ -116,18 +118,18 @@ func (chMod *ChModCommand) Process() error {
 }
 
 func (chMod *ChModCommand) changeOne(targetPath string) error {
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := chMod.account.ClientZone
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	targetPath = path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	_, err := chMod.filesystem.Stat(targetPath)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			return xerrors.Errorf("failed to find data-object/collection %q: %w", targetPath, err)
+			return errors.Wrapf(err, "failed to find data-object/collection %q", targetPath)
 		}
 
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	zoneName := chMod.zoneName
@@ -137,7 +139,7 @@ func (chMod *ChModCommand) changeOne(targetPath string) error {
 
 	err = chMod.filesystem.ChangeACLs(targetPath, chMod.accessLevel, chMod.username, zoneName, chMod.recursiveFlagValues.Recursive, false)
 	if err != nil {
-		return xerrors.Errorf("failed to change access: %w", err)
+		return errors.Wrapf(err, "failed to change access to %q", targetPath)
 	}
 
 	return nil

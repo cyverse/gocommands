@@ -3,11 +3,13 @@ package subcmd
 import (
 	"runtime"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/terminal"
+	"github.com/cyverse/gocommands/commons/upgrade"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var upgradeCmd = &cobra.Command{
@@ -54,51 +56,49 @@ func NewUpgradeCommand(command *cobra.Command, args []string) (*UpgradeCommand, 
 	return upgrade, nil
 }
 
-func (upgrade *UpgradeCommand) Process() error {
-	cont, err := flag.ProcessCommonFlags(upgrade.command)
+func (up *UpgradeCommand) Process() error {
+	cont, err := flag.ProcessCommonFlags(up.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
 		return nil
 	}
 
-	err = upgrade.upgrade(upgrade.checkVersionFlagValues.Check)
+	err = up.upgrade(up.checkVersionFlagValues.Check)
 	if err != nil {
-		return xerrors.Errorf("failed to upgrade to new release: %w", err)
+		return errors.Wrapf(err, "failed to upgrade to new release")
 	}
 
 	return nil
 }
 
-func (upgrade *UpgradeCommand) upgrade(checkOnly bool) error {
+func (up *UpgradeCommand) upgrade(checkOnly bool) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "commons",
-		"struct":   "UpgradeCommand",
-		"function": "upgrade",
+		"check_only": checkOnly,
 	})
 
 	myVersion := commons.GetClientVersion()
-	logger.Infof("Current cilent version installed: %s\n", myVersion)
-	commons.Printf("Current cilent version installed: %s\n", myVersion)
+	logger.Infof("Current cilent version installed: %s", myVersion)
+	terminal.Printf("Current cilent version installed: %s\n", myVersion)
 
-	newRelease, err := commons.CheckNewRelease()
+	newRelease, err := upgrade.CheckNewRelease()
 	if err != nil {
-		return xerrors.Errorf("failed to check new release: %w", err)
+		return errors.Wrapf(err, "failed to check new release")
 	}
 
-	logger.Infof("Latest release version available for %s/%s: v%s\n", runtime.GOOS, runtime.GOARCH, newRelease.Version())
-	logger.Infof("Latest release URL: %s\n", newRelease.URL)
-	commons.Printf("Latest release version available for %s/%s: v%s\n", runtime.GOOS, runtime.GOARCH, newRelease.Version())
-	commons.Printf("Latest release URL: %s\n", newRelease.URL)
+	logger.Infof("Latest release version available for %s/%s: v%s", runtime.GOOS, runtime.GOARCH, newRelease.Version())
+	logger.Infof("Latest release URL: %s", newRelease.URL)
+	terminal.Printf("Latest release version available for %s/%s: v%s\n", runtime.GOOS, runtime.GOARCH, newRelease.Version())
+	terminal.Printf("Latest release URL: %s\n", newRelease.URL)
 
-	if upgrade.hasNewRelease(myVersion, newRelease.Version()) {
-		logger.Infof("Need upgrading to latest version v%s\n", newRelease.Version())
-		commons.Printf("Need upgrading to latest version v%s\n", newRelease.Version())
+	if up.hasNewRelease(myVersion, newRelease.Version()) {
+		logger.Infof("Need upgrading to latest version v%s", newRelease.Version())
+		terminal.Printf("Need upgrading to latest version v%s\n", newRelease.Version())
 	} else {
-		logger.Infof("Current client version installed is up-to-date [%s]\n", myVersion)
-		commons.Printf("Current client version installed is up-to-date [%s]\n", myVersion)
+		logger.Infof("Current client version installed is up-to-date [%s]", myVersion)
+		terminal.Printf("Current client version installed is up-to-date [%s]\n", myVersion)
 		return nil
 	}
 
@@ -106,18 +106,18 @@ func (upgrade *UpgradeCommand) upgrade(checkOnly bool) error {
 		return nil
 	}
 
-	commons.Printf("Upgrading to latest version v%s\n", newRelease.Version())
+	terminal.Printf("Upgrading to latest version v%s\n", newRelease.Version())
 
-	err = commons.SelfUpgrade(newRelease)
+	err = upgrade.SelfUpgrade(newRelease)
 	if err != nil {
-		return xerrors.Errorf("failed to upgrade to new release: %w", err)
+		return errors.Wrapf(err, "failed to upgrade to new release")
 	}
 
-	commons.Printf("Upgraded successfully! [%s => v%s]\n", myVersion, newRelease.Version())
+	terminal.Printf("Upgraded successfully! [%s => v%s]\n", myVersion, newRelease.Version())
 	return nil
 }
 
-func (upgrade *UpgradeCommand) hasNewRelease(myVersion string, latestVersion string) bool {
+func (up *UpgradeCommand) hasNewRelease(myVersion string, latestVersion string) bool {
 	mv1, mv2, mv3 := commons.GetVersionParts(myVersion)
 	lv1, lv2, lv3 := commons.GetVersionParts(latestVersion)
 

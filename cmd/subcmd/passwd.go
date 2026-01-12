@@ -1,13 +1,15 @@
 package subcmd
 
 import (
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/terminal"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var passwdCmd = &cobra.Command{
@@ -57,7 +59,7 @@ func NewPasswdCommand(command *cobra.Command, args []string) (*PasswdCommand, er
 func (passwd *PasswdCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(passwd.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -65,80 +67,78 @@ func (passwd *PasswdCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
-	passwd.account = commons.GetSessionConfig().ToIRODSAccount()
-	passwd.filesystem, err = commons.GetIRODSFSClient(passwd.account, true, false)
+	passwd.account = config.GetSessionConfig().ToIRODSAccount()
+	passwd.filesystem, err = irods.GetIRODSFSClient(passwd.account, true)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer passwd.filesystem.Release()
 
 	if passwd.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(passwd.filesystem, passwd.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(passwd.filesystem, passwd.commonFlagValues.Timeout)
 	}
 
 	err = passwd.changePassword()
 	if err != nil {
-		return xerrors.Errorf("failed to change password: %w", err)
+		return errors.Wrapf(err, "failed to change password")
 	}
 	return nil
 }
 
 func (passwd *PasswdCommand) changePassword() error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "PasswdCommand",
-		"function": "changePassword",
+		"user": passwd.account.ClientUser,
 	})
 
-	logger.Debugf("changing password for user %q", passwd.account.ClientUser)
+	logger.Debug("changing password")
 
 	pass := false
 	for i := 0; i < 3; i++ {
-		currentPassword := commons.InputPassword("Current iRODS Password")
+		currentPassword := terminal.InputPassword("Current iRODS Password")
 		if currentPassword == passwd.account.Password {
 			pass = true
 			break
 		}
 
-		commons.Println("Wrong password")
-		commons.Println("")
+		terminal.Println("Wrong password")
+		terminal.Println("")
 	}
 
 	if !pass {
-		return xerrors.Errorf("password mismatched")
+		return errors.Errorf("password mismatched")
 	}
 
 	pass = false
 	newPassword := ""
 	for i := 0; i < 3; i++ {
-		newPassword = commons.InputPassword("New iRODS Password")
+		newPassword = terminal.InputPassword("New iRODS Password")
 		if newPassword != passwd.account.Password {
 			pass = true
 			break
 		}
 
-		commons.Println("Please provide new password")
-		commons.Println("")
+		terminal.Println("Please provide new password")
+		terminal.Println("")
 	}
 
 	if !pass {
-		return xerrors.Errorf("invalid password provided")
+		return errors.Errorf("invalid password provided")
 	}
 
-	newPasswordConfirm := commons.InputPassword("Confirm New iRODS Password")
+	newPasswordConfirm := terminal.InputPassword("Confirm New iRODS Password")
 	if newPassword != newPasswordConfirm {
-		return xerrors.Errorf("password mismatched")
+		return errors.Errorf("password mismatched")
 	}
 
 	err := passwd.filesystem.ChangeUserPassword(passwd.account.ClientUser, passwd.account.ClientZone, newPassword)
 	if err != nil {
-		return xerrors.Errorf("failed to change user password for user %q: %w", passwd.account.ClientUser, err)
+		return errors.Wrapf(err, "failed to change user password for user %q", passwd.account.ClientUser)
 	}
 
 	return nil

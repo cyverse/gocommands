@@ -3,13 +3,17 @@ package subcmd
 import (
 	"path"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	commons_path "github.com/cyverse/gocommands/commons/path"
+	"github.com/cyverse/gocommands/commons/types"
+	"github.com/cyverse/gocommands/commons/wildcard"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var mvCmd = &cobra.Command{
@@ -68,7 +72,7 @@ func NewMvCommand(command *cobra.Command, args []string) (*MvCommand, error) {
 func (mv *MvCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(mv.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -76,21 +80,21 @@ func (mv *MvCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
-	mv.account = commons.GetSessionConfig().ToIRODSAccount()
-	mv.filesystem, err = commons.GetIRODSFSClient(mv.account, false, true)
+	mv.account = config.GetSessionConfig().ToIRODSAccount()
+	mv.filesystem, err = irods.GetIRODSFSClient(mv.account, false)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer mv.filesystem.Release()
 
 	if mv.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(mv.filesystem, mv.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(mv.filesystem, mv.commonFlagValues.Timeout)
 	}
 
 	// run
@@ -98,22 +102,22 @@ func (mv *MvCommand) Process() error {
 		// multi-source, target must be a dir
 		err = mv.ensureTargetIsDir(mv.targetPath)
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "target path %q is not a directory", mv.targetPath)
 		}
 	}
 
 	// Expand wildcards
 	if mv.wildcardSearchFlagValues.WildcardSearch {
-		mv.sourcePaths, err = commons.ExpandWildcards(mv.filesystem, mv.account, mv.sourcePaths, true, true)
+		mv.sourcePaths, err = wildcard.ExpandWildcards(mv.filesystem, mv.account, mv.sourcePaths, true, true)
 		if err != nil {
-			return xerrors.Errorf("failed to expand wildcards:  %w", err)
+			return errors.Wrapf(err, "failed to expand wildcards")
 		}
 	}
 
 	for _, sourcePath := range mv.sourcePaths {
 		err = mv.moveOne(sourcePath, mv.targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to move (rename) %q to %q: %w", sourcePath, mv.targetPath, err)
+			return errors.Wrapf(err, "failed to move (rename) %q to %q", sourcePath, mv.targetPath)
 		}
 	}
 
@@ -121,41 +125,41 @@ func (mv *MvCommand) Process() error {
 }
 
 func (mv *MvCommand) ensureTargetIsDir(targetPath string) error {
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := mv.account.ClientZone
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	targetPath = commons_path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	targetEntry, err := mv.filesystem.Stat(targetPath)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
 			// not exist
-			return commons.NewNotDirError(targetPath)
+			return types.NewNotDirError(targetPath)
 		}
 
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	if !targetEntry.IsDir() {
-		return commons.NewNotDirError(targetPath)
+		return types.NewNotDirError(targetPath)
 	}
 
 	return nil
 }
 
 func (mv *MvCommand) moveOne(sourcePath string, targetPath string) error {
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := mv.account.ClientZone
-	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	sourcePath = commons_path.MakeIRODSPath(cwd, home, zone, sourcePath)
+	targetPath = commons_path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	sourceEntry, err := mv.filesystem.Stat(sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to stat %q", sourcePath)
 	}
 
-	targetPath = commons.MakeTargetIRODSFilePath(mv.filesystem, sourcePath, targetPath)
+	targetPath = commons_path.MakeIRODSTargetFilePath(mv.filesystem, sourcePath, targetPath)
 
 	if sourceEntry.IsDir() {
 		// dir
@@ -168,9 +172,8 @@ func (mv *MvCommand) moveOne(sourcePath string, targetPath string) error {
 
 func (mv *MvCommand) moveFile(sourceEntry *irodsclient_fs.Entry, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "MvCommand",
-		"function": "moveFile",
+		"source_path": sourceEntry.Path,
+		"target_path": targetPath,
 	})
 
 	targetEntry, err := mv.filesystem.Stat(targetPath)
@@ -178,34 +181,34 @@ func (mv *MvCommand) moveFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 		if irodsclient_types.IsFileNotFoundError(err) {
 			// target does not exist
 			// target must be a file with new name
-			logger.Debugf("renaming a data object %q to %q", sourceEntry.Path, targetPath)
+			logger.Debug("renaming a data object")
 			err = mv.filesystem.RenameFileToFile(sourceEntry.Path, targetPath)
 			if err != nil {
-				return xerrors.Errorf("failed to rename %q to %q: %w", sourceEntry.Path, targetPath, err)
+				return errors.Wrapf(err, "failed to rename %q to %q", sourceEntry.Path, targetPath)
 			}
 
 			return nil
 		}
 
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	// target exists
 	// target must be a file
 	if targetEntry.IsDir() {
-		return commons.NewNotFileError(targetPath)
+		return types.NewNotFileError(targetPath)
 	}
 
 	// overwrite
 	err = mv.filesystem.RemoveFile(targetPath, true)
 	if err != nil {
-		return xerrors.Errorf("failed to remove %q for overwriting: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to remove %q for overwriting", targetPath)
 	}
 
-	logger.Debugf("renaming a data object %q to %q", sourceEntry.Path, targetPath)
+	logger.Debug("renaming a data object")
 	err = mv.filesystem.RenameFileToFile(sourceEntry.Path, targetPath)
 	if err != nil {
-		return xerrors.Errorf("failed to rename %q to %q: %w", sourceEntry.Path, targetPath, err)
+		return errors.Wrapf(err, "failed to rename %q to %q", sourceEntry.Path, targetPath)
 	}
 
 	return nil
@@ -213,9 +216,8 @@ func (mv *MvCommand) moveFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 
 func (mv *MvCommand) moveDir(sourceEntry *irodsclient_fs.Entry, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "MvCommand",
-		"function": "moveDir",
+		"source_path": sourceEntry.Path,
+		"target_path": targetPath,
 	})
 
 	targetEntry, err := mv.filesystem.Stat(targetPath)
@@ -223,30 +225,30 @@ func (mv *MvCommand) moveDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 		if irodsclient_types.IsFileNotFoundError(err) {
 			// target does not exist
 			// target must be a directorywith new name
-			logger.Debugf("renaming a collection %q to %q", sourceEntry.Path, targetPath)
+			logger.Debug("renaming a collection")
 			err = mv.filesystem.RenameDirToDir(sourceEntry.Path, targetPath)
 			if err != nil {
-				return xerrors.Errorf("failed to rename %q to %q: %w", sourceEntry.Path, targetPath, err)
+				return errors.Wrapf(err, "failed to rename %q to %q", sourceEntry.Path, targetPath)
 			}
 
 			return nil
 		}
 
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	// target exist
 	if targetEntry.IsDir() {
 		targetDirPath := path.Join(targetPath, sourceEntry.Name)
-		logger.Debugf("renaming a collection %q to %q", sourceEntry.Path, targetDirPath)
+		logger.Debug("renaming a collection")
 		err = mv.filesystem.RenameDirToDir(sourceEntry.Path, targetDirPath)
 		if err != nil {
-			return xerrors.Errorf("failed to rename %q to %q: %w", sourceEntry.Path, targetDirPath, err)
+			return errors.Wrapf(err, "failed to rename %q to %q", sourceEntry.Path, targetDirPath)
 		}
 
 		return nil
 	}
 
 	// file
-	return xerrors.Errorf("failed to rename a collection %q to a file %q", sourceEntry.Path, targetPath)
+	return errors.Errorf("failed to rename a collection %q to a file %q", sourceEntry.Path, targetPath)
 }

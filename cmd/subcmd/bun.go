@@ -1,15 +1,20 @@
 package subcmd
 
 import (
+	"path"
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	commons_path "github.com/cyverse/gocommands/commons/path"
+	"github.com/cyverse/gocommands/commons/types"
+	"github.com/cyverse/gocommands/commons/wildcard"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var bunCmd = &cobra.Command{
@@ -72,7 +77,7 @@ func NewBunCommand(command *cobra.Command, args []string) (*BunCommand, error) {
 	bun.sourcePaths = args[:len(args)-1]
 
 	if !bun.bundleFlagValues.Extract {
-		return nil, xerrors.Errorf("support only extract mode")
+		return nil, errors.Errorf("support only extract mode")
 	}
 
 	return bun, nil
@@ -81,7 +86,7 @@ func NewBunCommand(command *cobra.Command, args []string) (*BunCommand, error) {
 func (bun *BunCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(bun.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -89,28 +94,28 @@ func (bun *BunCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
-	bun.account = commons.GetSessionConfig().ToIRODSAccount()
-	bun.filesystem, err = commons.GetIRODSFSClient(bun.account, false, true)
+	bun.account = config.GetSessionConfig().ToIRODSAccount()
+	bun.filesystem, err = irods.GetIRODSFSClient(bun.account, false)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer bun.filesystem.Release()
 
 	if bun.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(bun.filesystem, bun.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(bun.filesystem, bun.commonFlagValues.Timeout)
 	}
 
 	// Expand wildcards
 	if bun.wildcardSearchFlagValues.WildcardSearch {
-		bun.sourcePaths, err = commons.ExpandWildcards(bun.filesystem, bun.account, bun.sourcePaths, false, true)
+		bun.sourcePaths, err = wildcard.ExpandWildcards(bun.filesystem, bun.account, bun.sourcePaths, false, true)
 		if err != nil {
-			return xerrors.Errorf("failed to expand wildcards: %w", err)
+			return errors.Wrapf(err, "failed to expand wildcards")
 		}
 	}
 
@@ -119,7 +124,7 @@ func (bun *BunCommand) Process() error {
 		if bun.bundleFlagValues.Extract {
 			err = bun.extractOne(sourcePath, bun.targetPath)
 			if err != nil {
-				return xerrors.Errorf("failed to extract bundle file %q to %q: %w", sourcePath, bun.targetPath, err)
+				return errors.Wrapf(err, "failed to extract bundle file %q to %q", sourcePath, bun.targetPath)
 			}
 		}
 	}
@@ -140,11 +145,11 @@ func (bun *BunCommand) getDataType(irodsPath string, dataType string) (irodsclie
 	case "":
 		// auto
 	default:
-		return "", xerrors.Errorf("unknown format %q", dataType)
+		return "", errors.Errorf("unknown format %q", dataType)
 	}
 
 	// auto
-	ext := commons.GetFileExtension(irodsPath)
+	ext := path.Ext(irodsPath)
 	switch strings.ToLower(ext) {
 	case ".tar":
 		return irodsclient_types.TAR_FILE_DT, nil
@@ -161,48 +166,47 @@ func (bun *BunCommand) getDataType(irodsPath string, dataType string) (irodsclie
 
 func (bun *BunCommand) extractOne(sourcePath string, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "BunCommand",
-		"function": "extractOne",
+		"source_path": sourcePath,
+		"target_path": targetPath,
 	})
 
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := bun.account.ClientZone
-	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	sourcePath = commons_path.MakeIRODSPath(cwd, home, zone, sourcePath)
+	targetPath = commons_path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	sourceEntry, err := bun.filesystem.Stat(sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to stat %q", sourcePath)
 	}
 
 	targetEntry, err := bun.filesystem.Stat(targetPath)
 	if err != nil {
 		if !irodsclient_types.IsFileNotFoundError(err) {
-			return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+			return errors.Wrapf(err, "failed to stat %q", targetPath)
 		}
 	} else {
 		if !targetEntry.IsDir() {
-			return commons.NewNotDirError(targetPath)
+			return types.NewNotDirError(targetPath)
 		}
 	}
 
 	if sourceEntry.IsDir() {
-		return xerrors.Errorf("source %q must be a data object", sourcePath)
+		return errors.Errorf("source %q must be a data object", sourcePath)
 	}
 
 	// file
-	logger.Debugf("extracting a data object %q to %q", sourcePath, targetPath)
+	logger.Debug("extracting a data object")
 
 	dt, err := bun.getDataType(sourcePath, bun.bundleFlagValues.DataType)
 	if err != nil {
-		return xerrors.Errorf("failed to get type %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to get type %q", sourcePath)
 	}
 
 	err = bun.filesystem.ExtractStructFile(sourcePath, targetPath, "", dt, bun.forceFlagValues.Force, bun.bundleFlagValues.BulkRegistration)
 	if err != nil {
-		return xerrors.Errorf("failed to extract file %q to %q: %w", sourcePath, targetPath, err)
+		return errors.Wrapf(err, "failed to extract file %q to %q", sourcePath, targetPath)
 	}
 
 	return nil

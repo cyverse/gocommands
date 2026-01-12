@@ -175,13 +175,6 @@ By default, after configuring GoCommands, your current working collection is set
 
    This command uses iCAT as a transfer broker, useful when direct access to the resource server is unstable.
 
-8. **Upload via resource server:**
-   ```sh
-   gocmd put --redirect /local/dir /myZone/home/myUser/
-   ```
-
-   This command bypasses the iCAT server for data transfer, directly accessing the specified resource server for optimized performance.
-
 ## Download Data Objects (files) and Collections (directories) From iRODS
 
 1. **Download a data object to a specific local path:**
@@ -231,15 +224,7 @@ By default, after configuring GoCommands, your current working collection is set
 
    This command uses iCAT as a transfer broker, which is useful when direct access to the resource server is unstable. It ensures reliable data transfer by routing through the iCAT server
 
-8. **Download via resource server:**
-   ```sh
-   gocmd get --redirect /myZone/home/myUser/dir /local/dir
-   ```
-
-   This command bypasses the iCAT server for data transfer, directly accessing the specified resource server. It optimizes performance for large files by direct connection to the resource server.
-
-
-9. **Download with wildcard:** 
+8. **Download with wildcard:** 
    ```sh
    gocmd get -w /myZone/home/myUser/dir/file*.txt /local/dir
    ```

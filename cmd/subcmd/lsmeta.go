@@ -4,12 +4,17 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/format"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/path"
+	"github.com/cyverse/gocommands/commons/terminal"
+	"github.com/cyverse/gocommands/commons/types"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var lsmetaCmd = &cobra.Command{
@@ -70,7 +75,7 @@ func NewLsMetaCommand(command *cobra.Command, args []string) (*LsMetaCommand, er
 func (lsMeta *LsMetaCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(lsMeta.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -78,21 +83,21 @@ func (lsMeta *LsMetaCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
-	lsMeta.account = commons.GetSessionConfig().ToIRODSAccount()
-	lsMeta.filesystem, err = commons.GetIRODSFSClient(lsMeta.account, true, true)
+	lsMeta.account = config.GetSessionConfig().ToIRODSAccount()
+	lsMeta.filesystem, err = irods.GetIRODSFSClient(lsMeta.account, true)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer lsMeta.filesystem.Release()
 
 	if lsMeta.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(lsMeta.filesystem, lsMeta.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(lsMeta.filesystem, lsMeta.commonFlagValues.Timeout)
 	}
 
 	for _, targetObject := range lsMeta.targetObjects {
@@ -106,22 +111,22 @@ func (lsMeta *LsMetaCommand) Process() error {
 	}
 
 	// nothing updated
-	return xerrors.Errorf("path, user, or resource must be given")
+	return errors.Errorf("path, user, or resource must be given")
 }
 
 func (lsMeta *LsMetaCommand) listMetaForPath(targetPath string) error {
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := lsMeta.account.ClientZone
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	targetPath = path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	metas, err := lsMeta.filesystem.ListMetadata(targetPath)
 	if err != nil {
-		return xerrors.Errorf("failed to list meta for path %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to list meta for path %q", targetPath)
 	}
 
 	if len(metas) == 0 {
-		commons.Printf("Found no metadata\n")
+		terminal.Printf("Found no metadata\n")
 		return nil
 	}
 
@@ -131,11 +136,11 @@ func (lsMeta *LsMetaCommand) listMetaForPath(targetPath string) error {
 func (lsMeta *LsMetaCommand) listMetaForUser(username string) error {
 	metas, err := lsMeta.filesystem.ListUserMetadata(username, lsMeta.account.ClientZone)
 	if err != nil {
-		return xerrors.Errorf("failed to list meta for user %q: %w", username, err)
+		return errors.Wrapf(err, "failed to list meta for user %q", username)
 	}
 
 	if len(metas) == 0 {
-		commons.Printf("Found no metadata\n")
+		terminal.Printf("Found no metadata\n")
 		return nil
 	}
 
@@ -145,11 +150,11 @@ func (lsMeta *LsMetaCommand) listMetaForUser(username string) error {
 func (lsMeta *LsMetaCommand) listMetaForResource(resource string) error {
 	metas, err := lsMeta.filesystem.ListResourceMetadata(resource)
 	if err != nil {
-		return xerrors.Errorf("failed to list meta for resource %q: %w", resource, err)
+		return errors.Wrapf(err, "failed to list meta for resource %q", resource)
 	}
 
 	if len(metas) == 0 {
-		commons.Printf("Found no metadata\n")
+		terminal.Printf("Found no metadata\n")
 		return nil
 	}
 
@@ -167,8 +172,8 @@ func (lsMeta *LsMetaCommand) printMetas(metas []*irodsclient_types.IRODSMeta) er
 }
 
 func (lsMeta *LsMetaCommand) printMetaInternal(meta *irodsclient_types.IRODSMeta) {
-	createTime := commons.MakeDateTimeString(meta.CreateTime)
-	modTime := commons.MakeDateTimeString(meta.ModifyTime)
+	createTime := types.MakeDateTimeString(meta.CreateTime)
+	modTime := types.MakeDateTimeString(meta.ModifyTime)
 
 	name := meta.Name
 	if len(name) == 0 {
@@ -192,29 +197,29 @@ func (lsMeta *LsMetaCommand) printMetaInternal(meta *irodsclient_types.IRODSMeta
 	}
 
 	switch lsMeta.listFlagValues.Format {
-	case commons.ListFormatLong, commons.ListFormatVeryLong:
-		commons.Printf("[%s]\n", meta.Name)
-		commons.Printf("  id: %d\n", meta.AVUID)
-		commons.Printf("  attribute: %s\n", name)
-		commons.Printf("  value: %s\n", value)
-		commons.Printf("  unit: %s\n", units)
-		commons.Printf("  create time: %s\n", createTime)
-		commons.Printf("  modify time: %s\n", modTime)
-	case commons.ListFormatNormal:
+	case format.ListFormatLong, format.ListFormatVeryLong:
+		terminal.Printf("[%s]\n", meta.Name)
+		terminal.Printf("  id: %d\n", meta.AVUID)
+		terminal.Printf("  attribute: %s\n", name)
+		terminal.Printf("  value: %s\n", value)
+		terminal.Printf("  unit: %s\n", units)
+		terminal.Printf("  create time: %s\n", createTime)
+		terminal.Printf("  modify time: %s\n", modTime)
+	case format.ListFormatNormal:
 		fallthrough
 	default:
-		commons.Printf("%d\t%s\t%s\t%s\n", meta.AVUID, name, value, units)
+		terminal.Printf("%d\t%s\t%s\t%s\n", meta.AVUID, name, value, units)
 	}
 }
 
-func (lsMeta *LsMetaCommand) getMetaSortFunction(metas []*irodsclient_types.IRODSMeta, sortOrder commons.ListSortOrder, sortReverse bool) func(i int, j int) bool {
+func (lsMeta *LsMetaCommand) getMetaSortFunction(metas []*irodsclient_types.IRODSMeta, sortOrder format.ListSortOrder, sortReverse bool) func(i int, j int) bool {
 	if sortReverse {
 		switch sortOrder {
-		case commons.ListSortOrderName:
+		case format.ListSortOrderName:
 			return func(i int, j int) bool {
 				return metas[i].Name > metas[j].Name
 			}
-		case commons.ListSortOrderTime:
+		case format.ListSortOrderTime:
 			return func(i int, j int) bool {
 				return (metas[i].ModifyTime.After(metas[j].ModifyTime)) ||
 					(metas[i].ModifyTime.Equal(metas[j].ModifyTime) &&
@@ -229,11 +234,11 @@ func (lsMeta *LsMetaCommand) getMetaSortFunction(metas []*irodsclient_types.IROD
 	}
 
 	switch sortOrder {
-	case commons.ListSortOrderName:
+	case format.ListSortOrderName:
 		return func(i int, j int) bool {
 			return metas[i].Name < metas[j].Name
 		}
-	case commons.ListSortOrderTime:
+	case format.ListSortOrderTime:
 		return func(i int, j int) bool {
 			return (metas[i].ModifyTime.Before(metas[j].ModifyTime)) ||
 				(metas[i].ModifyTime.Equal(metas[j].ModifyTime) &&

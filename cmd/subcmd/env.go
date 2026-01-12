@@ -1,11 +1,12 @@
 package subcmd
 
 import (
+	"github.com/cockroachdb/errors"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var envCmd = &cobra.Command{
@@ -52,7 +53,7 @@ func NewEnvCommand(command *cobra.Command, args []string) (*EnvCommand, error) {
 func (env *EnvCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(env.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -61,20 +62,20 @@ func (env *EnvCommand) Process() error {
 
 	err = env.printEnvironment()
 	if err != nil {
-		return xerrors.Errorf("failed to print environment: %w", err)
+		return errors.Wrapf(err, "failed to print environment")
 	}
 
 	return nil
 }
 
 func (env *EnvCommand) printEnvironment() error {
-	envMgr := commons.GetEnvironmentManager()
+	envMgr := config.GetEnvironmentManager()
 	if envMgr == nil {
-		return xerrors.Errorf("environment is not set")
+		return errors.Errorf("environment is not set")
 	}
 
 	t := table.NewWriter()
-	t.SetOutputMirror(commons.GetTerminalWriter())
+	t.SetOutputMirror(terminal.GetTerminalWriter())
 
 	sessionConfig, err := envMgr.GetSessionConfig()
 	if err != nil {
@@ -124,11 +125,11 @@ func (env *EnvCommand) printEnvironment() error {
 		},
 		{
 			"Current Working Dir",
-			commons.GetCWD(),
+			config.GetCWD(),
 		},
 		{
 			"Home",
-			commons.GetHomeDir(),
+			config.GetHomeDir(),
 		},
 		{
 			"Default Hash Scheme",

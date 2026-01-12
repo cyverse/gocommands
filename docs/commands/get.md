@@ -68,28 +68,21 @@ gocmd get [flags] <data-object-or-collection>... <dest-local-file-or-dir>
 
     This command uses iCAT as a transfer broker, which is useful when direct access to the resource server is unstable. It ensures reliable data transfer by routing through the iCAT server
 
-10. **Download via resource server:**
-    ```sh
-    gocmd get --redirect /myZone/home/myUser/dir /local/dir
-    ```
-
-    This command bypasses the iCAT server for data transfer, directly accessing the specified resource server. It optimizes performance for large files by direct connection to the resource server.
-
-11. **Download with specified transfer threads:**
+10. **Download with specified transfer threads:**
     ```sh
     gocmd get --thread_num 15 /myZone/home/myUser/dir /local/dir
     ```
 
     This command uses up to 15 threads for data transfer, requiring more CPU power and RAM.
 
-12. **Download with wildcard:** 
+11. **Download with wildcard:** 
     ```sh
     gocmd get -w /myZone/home/myUser/dir/file*.txt /local/dir
     ```
 
     This command downloads all files matching the pattern "file*.txt" from the specified iRODS collection to the local directory.
 
-13. **Download and generate report:** 
+12. **Download and generate report:** 
     ```sh
     gocmd get --report report.json /myZone/home/myUser/dir /local/dir
     ```
@@ -121,7 +114,6 @@ gocmd get [flags] <data-object-or-collection>... <dest-local-file-or-dir>
 | `--no_root`           | Avoid creating the root directory at the destination during operation.      |
 | `--progress`          | Show progress bars during transfer.                                         |
 | `-q, --quiet`         | Suppress all non-error output messages.                                     |
-| `--redirect`          | Enable transfer redirection to the resource server.                         |
 | `--report string`     | Create a transfer report; specify the path for file output. An empty string or '-' outputs to stdout. |
 | `-R, --resource string` | Target specific iRODS resource server for operations.                     |
 | `--retry int`         | Set the number of retry attempts.                                           |

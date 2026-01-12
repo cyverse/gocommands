@@ -70,21 +70,14 @@ gocmd put [flags] <local-files-or-dir>... <dest-data-object-or-collection>
 
     This command uses iCAT as a transfer broker, useful when direct access to the resource server is unstable.
 
-10. **Upload via resource server:**
-    ```sh
-    gocmd put --redirect /local/dir /myZone/home/myUser/
-    ```
-
-    This command bypasses the iCAT server for data transfer, directly accessing the specified resource server for optimized performance.
-
-11. **Upload with specified transfer threads:**
+10. **Upload with specified transfer threads:**
     ```sh
     gocmd put --thread_num 15 /local/dir /myZone/home/myUser/
     ```
 
     This command uses up to 15 threads for data transfer, requiring more CPU power and RAM.
 
-12. **Upload and generate report:** 
+11. **Upload and generate report:** 
     ```sh
     gocmd put --report report.json /local/dir /myZone/home/myUser/
     ```
@@ -118,7 +111,6 @@ gocmd put [flags] <local-files-or-dir>... <dest-data-object-or-collection>
 | `--no_root`           | Avoid creating the root directory at the destination during operation.      |
 | `--progress`          | Show progress bars during transfer.                                         |
 | `-q, --quiet`         | Suppress all non-error output messages.                                     |
-| `--redirect`          | Enable transfer redirection to the resource server.                         |
 | `--report string`     | Create a transfer report; specify the path for file output. An empty string or '-' outputs to stdout. |
 | `-R, --resource string` | Target specific iRODS resource server for operations.                     |
 | `--retry int`         | Set the number of retry attempts.                                           |

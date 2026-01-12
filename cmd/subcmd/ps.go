@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
 	"github.com/jedib0t/go-pretty/v6/table"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var psCmd = &cobra.Command{
@@ -65,7 +66,7 @@ func NewPsCommand(command *cobra.Command, args []string) (*PsCommand, error) {
 func (ps *PsCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(ps.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -73,26 +74,26 @@ func (ps *PsCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a connection
-	ps.account = commons.GetSessionConfig().ToIRODSAccount()
-	ps.filesystem, err = commons.GetIRODSFSClient(ps.account, true, true)
+	ps.account = config.GetSessionConfig().ToIRODSAccount()
+	ps.filesystem, err = irods.GetIRODSFSClient(ps.account, true)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer ps.filesystem.Release()
 
 	if ps.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(ps.filesystem, ps.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(ps.filesystem, ps.commonFlagValues.Timeout)
 	}
 
 	err = ps.listProcesses()
 	if err != nil {
-		return xerrors.Errorf("failed to list processes: %w", err)
+		return errors.Wrapf(err, "failed to list processes")
 	}
 
 	return nil
@@ -100,16 +101,15 @@ func (ps *PsCommand) Process() error {
 
 func (ps *PsCommand) listProcesses() error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "PsCommand",
-		"function": "listProcesses",
+		"address": ps.processFilterFlagValues.Address,
+		"zone":    ps.processFilterFlagValues.Zone,
 	})
 
-	logger.Debugf("listing processes - addr: %q, zone: %q", ps.processFilterFlagValues.Address, ps.processFilterFlagValues.Zone)
+	logger.Debug("listing processes")
 
 	processes, err := ps.filesystem.StatProcess(ps.processFilterFlagValues.Address, ps.processFilterFlagValues.Zone)
 	if err != nil {
-		return xerrors.Errorf("failed to stat process addr %q, zone %q: %w", ps.processFilterFlagValues.Address, ps.processFilterFlagValues.Zone, err)
+		return errors.Wrapf(err, "failed to stat process addr %q, zone %q", ps.processFilterFlagValues.Address, ps.processFilterFlagValues.Zone)
 	}
 
 	t := table.NewWriter()

@@ -1,13 +1,17 @@
 package subcmd
 
 import (
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/path"
+	"github.com/cyverse/gocommands/commons/types"
+	"github.com/cyverse/gocommands/commons/wildcard"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var rmdirCmd = &cobra.Command{
@@ -72,7 +76,7 @@ func NewRmDirCommand(command *cobra.Command, args []string) (*RmDirCommand, erro
 func (rmDir *RmDirCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(rmDir.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -80,28 +84,28 @@ func (rmDir *RmDirCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
-	rmDir.account = commons.GetSessionConfig().ToIRODSAccount()
-	rmDir.filesystem, err = commons.GetIRODSFSClient(rmDir.account, true, true)
+	rmDir.account = config.GetSessionConfig().ToIRODSAccount()
+	rmDir.filesystem, err = irods.GetIRODSFSClient(rmDir.account, true)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer rmDir.filesystem.Release()
 
 	if rmDir.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(rmDir.filesystem, rmDir.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(rmDir.filesystem, rmDir.commonFlagValues.Timeout)
 	}
 
 	// Expand wildcards
 	if rmDir.wildcardSearchFlagValues.WildcardSearch {
-		rmDir.targetPaths, err = commons.ExpandWildcards(rmDir.filesystem, rmDir.account, rmDir.targetPaths, true, false)
+		rmDir.targetPaths, err = wildcard.ExpandWildcards(rmDir.filesystem, rmDir.account, rmDir.targetPaths, true, false)
 		if err != nil {
-			return xerrors.Errorf("failed to expand wildcards:  %w", err)
+			return errors.Wrapf(err, "failed to expand wildcards")
 		}
 	}
 
@@ -109,7 +113,7 @@ func (rmDir *RmDirCommand) Process() error {
 	for _, targetPath := range rmDir.targetPaths {
 		err = rmDir.removeOne(targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to remove a directory %q: %w", targetPath, err)
+			return errors.Wrapf(err, "failed to remove a directory %q", targetPath)
 		}
 	}
 
@@ -118,31 +122,29 @@ func (rmDir *RmDirCommand) Process() error {
 
 func (rmDir *RmDirCommand) removeOne(targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "RmDirCommand",
-		"function": "removeOne",
+		"target_path": targetPath,
 	})
 
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := rmDir.account.ClientZone
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	targetPath = path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	targetEntry, err := rmDir.filesystem.Stat(targetPath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	if !targetEntry.IsDir() {
 		// file
-		return commons.NewNotDirError(targetPath)
+		return types.NewNotDirError(targetPath)
 	}
 
 	// dir
-	logger.Debugf("removing a directory %q", targetPath)
+	logger.Debug("removing a directory")
 	err = rmDir.filesystem.RemoveDir(targetPath, rmDir.recursiveFlagValues.Recursive, rmDir.forceFlagValues.Force)
 	if err != nil {
-		return xerrors.Errorf("failed to remove a directory %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to remove a collection %q", targetPath)
 	}
 
 	return nil

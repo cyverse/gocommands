@@ -8,7 +8,7 @@
             "irods_port": 1247,
             "irods_zone_name": "iplant",
             "irods_client_zone_name": "iplant",
-            "irods_default_hash_scheme": "SHA256"
+            "irods_default_hash_scheme": "MD5"
         },
         "data.cyverse.rocks": {
             "irods_authentication_scheme": "native",
@@ -18,7 +18,7 @@
             "irods_port": 1247,
             "irods_zone_name": "cyverse",
             "irods_client_zone_name": "cyverse",
-            "irods_default_hash_scheme": "SHA256"
+            "irods_default_hash_scheme": "MD5"
         },
         "data-dev.cyverse.rocks": {
             "irods_authentication_scheme": "native",
@@ -28,7 +28,7 @@
             "irods_port": 1247,
             "irods_zone_name": "cyverse.dev",
             "irods_client_zone_name": "cyverse",
-            "irods_default_hash_scheme": "SHA256"
+            "irods_default_hash_scheme": "MD5"
         },
         "data.soteria.arizona.edu": {
             "irods_authentication_scheme": "pam",

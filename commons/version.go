@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/xerrors"
+	"github.com/cockroachdb/errors"
 )
 
 var (
@@ -48,7 +48,7 @@ func GetVersionJSON() (string, error) {
 	info := GetVersion()
 	marshalled, err := json.MarshalIndent(&info, "", "  ")
 	if err != nil {
-		return "", xerrors.Errorf("failed to marshal version info to json: %w", err)
+		return "", errors.Wrapf(err, "failed to marshal version info to json")
 	}
 	return string(marshalled), nil
 }

@@ -1,13 +1,15 @@
 package subcmd
 
 import (
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/path"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var addmetaCmd = &cobra.Command{
@@ -63,8 +65,21 @@ func NewAddMetaCommand(command *cobra.Command, args []string) (*AddMetaCommand, 
 
 	// get avu
 	addMeta.targetObject = args[0]
-	addMeta.attribute = args[1]
-	addMeta.value = args[2]
+
+	addMeta.attribute = ""
+	if len(args) >= 2 {
+		addMeta.attribute = args[1]
+	} else {
+		return nil, errors.Errorf("metadata attribute is required")
+	}
+
+	addMeta.value = ""
+	if len(args) >= 3 {
+		addMeta.value = args[2]
+	} else {
+		return nil, errors.Errorf("metadata value is required")
+	}
+
 	addMeta.unit = ""
 	if len(args) >= 4 {
 		addMeta.unit = args[3]
@@ -76,7 +91,7 @@ func NewAddMetaCommand(command *cobra.Command, args []string) (*AddMetaCommand, 
 func (addMeta *AddMetaCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(addMeta.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -84,21 +99,21 @@ func (addMeta *AddMetaCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
-	addMeta.account = commons.GetSessionConfig().ToIRODSAccount()
-	addMeta.filesystem, err = commons.GetIRODSFSClient(addMeta.account, false, false)
+	addMeta.account = config.GetSessionConfig().ToIRODSAccount()
+	addMeta.filesystem, err = irods.GetIRODSFSClient(addMeta.account, false)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer addMeta.filesystem.Release()
 
 	if addMeta.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(addMeta.filesystem, addMeta.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(addMeta.filesystem, addMeta.commonFlagValues.Timeout)
 	}
 
 	// add meta
@@ -119,7 +134,7 @@ func (addMeta *AddMetaCommand) Process() error {
 		}
 	} else {
 		// nothing updated
-		return xerrors.Errorf("path, user, or resource must be given")
+		return errors.Errorf("path, user, or resource must be given")
 	}
 
 	return nil
@@ -127,21 +142,22 @@ func (addMeta *AddMetaCommand) Process() error {
 
 func (addMeta *AddMetaCommand) addMetaToPath(targetPath string, attribute string, value string, unit string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "AddMetaCommand",
-		"function": "addMetaToPath",
+		"targetPath": targetPath,
+		"attribute":  attribute,
+		"value":      value,
+		"unit":       unit,
 	})
 
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := addMeta.account.ClientZone
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	targetPath = path.MakeIRODSPath(cwd, home, zone, targetPath)
 
-	logger.Debugf("add metadata to path %q (attr %q, value %q, unit %q)", targetPath, attribute, value, unit)
+	logger.Debug("add metadata to path")
 
 	err := addMeta.filesystem.AddMetadata(targetPath, attribute, value, unit)
 	if err != nil {
-		return xerrors.Errorf("failed to add metadata to path %q (attr %q, value %q, unit %q): %w", targetPath, attribute, value, unit, err)
+		return errors.Wrapf(err, "failed to add metadata to path %q (attr %q, value %q, unit %q)", targetPath, attribute, value, unit)
 	}
 
 	return nil
@@ -149,16 +165,17 @@ func (addMeta *AddMetaCommand) addMetaToPath(targetPath string, attribute string
 
 func (addMeta *AddMetaCommand) addMetaToUser(username string, attribute string, value string, unit string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "AddMetaCommand",
-		"function": "addMetaToUser",
+		"username":  username,
+		"attribute": attribute,
+		"value":     value,
+		"unit":      unit,
 	})
 
-	logger.Debugf("add metadata to user %q (attr %q, value %q, unit %q)", username, attribute, value, unit)
+	logger.Debug("add metadata to user")
 
 	err := addMeta.filesystem.AddUserMetadata(username, addMeta.account.ClientZone, attribute, value, unit)
 	if err != nil {
-		return xerrors.Errorf("failed to add metadata to user %q (attr %q, value %q, unit %q): %w", username, attribute, value, unit, err)
+		return errors.Wrapf(err, "failed to add metadata to user %q (attr %q, value %q, unit %q)", username, attribute, value, unit)
 	}
 
 	return nil
@@ -166,16 +183,17 @@ func (addMeta *AddMetaCommand) addMetaToUser(username string, attribute string, 
 
 func (addMeta *AddMetaCommand) addMetaToResource(resource string, attribute string, value string, unit string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "AddMetaCommand",
-		"function": "addMetaToResource",
+		"resource":  resource,
+		"attribute": attribute,
+		"value":     value,
+		"unit":      unit,
 	})
 
-	logger.Debugf("add metadata to resource %q (attr %q, value %q, unit %q)", resource, attribute, value, unit)
+	logger.Debug("add metadata to resource")
 
 	err := addMeta.filesystem.AddUserMetadata(resource, addMeta.account.ClientZone, attribute, value, unit)
 	if err != nil {
-		return xerrors.Errorf("failed to add metadata to resource %q (attr %q, value %q, unit %q): %w", resource, attribute, value, unit, err)
+		return errors.Wrapf(err, "failed to add metadata to resource %q (attr %q, value %q, unit %q)", resource, attribute, value, unit)
 	}
 
 	return nil

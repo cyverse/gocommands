@@ -4,18 +4,25 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"path"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/parallel"
+	"github.com/cyverse/gocommands/commons/path"
+	"github.com/cyverse/gocommands/commons/terminal"
+	"github.com/cyverse/gocommands/commons/transfer"
+	"github.com/cyverse/gocommands/commons/types"
+	"github.com/cyverse/gocommands/commons/wildcard"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var cpCmd = &cobra.Command{
@@ -38,7 +45,7 @@ func AddCpCommand(rootCmd *cobra.Command) {
 	flag.SetProgressFlags(cpCmd)
 	flag.SetRetryFlags(cpCmd)
 	flag.SetDifferentialTransferFlags(cpCmd, false)
-	flag.SetChecksumFlags(cpCmd, true, true)
+	flag.SetChecksumFlags(cpCmd)
 	flag.SetNoRootFlags(cpCmd)
 	flag.SetSyncFlags(cpCmd, true)
 	flag.SetHiddenFileFlags(cpCmd)
@@ -81,9 +88,12 @@ type CpCommand struct {
 	sourcePaths []string
 	targetPath  string
 
-	parallelJobManager    *commons.ParallelJobManager
-	transferReportManager *commons.TransferReportManager
+	parallelTransferJobManager    *parallel.ParallelJobManager
+	parallelPostProcessJobManager *parallel.ParallelJobManager
+
+	transferReportManager *transfer.TransferReportManager
 	updatedPathMap        map[string]bool
+	mutex                 sync.RWMutex // mutex for updatedPathMap
 }
 
 func NewCpCommand(command *cobra.Command, args []string) (*CpCommand, error) {
@@ -113,22 +123,18 @@ func NewCpCommand(command *cobra.Command, args []string) (*CpCommand, error) {
 	cp.sourcePaths = args[:len(args)-1]
 
 	if cp.noRootFlagValues.NoRoot && len(cp.sourcePaths) > 1 {
-		return nil, xerrors.Errorf("failed to copy multiple source collections without creating root directory")
+		return nil, errors.New("failed to copy multiple source collections without creating root directory")
 	}
 
 	return cp, nil
 }
 
 func (cp *CpCommand) Process() error {
-	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "CpCommand",
-		"function": "Process",
-	})
+	logger := log.WithFields(log.Fields{})
 
 	cont, err := flag.ProcessCommonFlags(cp.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -136,48 +142,40 @@ func (cp *CpCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
-	}
-
-	// handle retry
-	if cp.retryFlagValues.RetryNumber > 0 && !cp.retryFlagValues.RetryChild {
-		err = commons.RunWithRetry(cp.retryFlagValues.RetryNumber, cp.retryFlagValues.RetryIntervalSeconds)
-		if err != nil {
-			return xerrors.Errorf("failed to run with retry %d: %w", cp.retryFlagValues.RetryNumber, err)
-		}
-		return nil
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
-	cp.account = commons.GetSessionConfig().ToIRODSAccount()
-	cp.filesystem, err = commons.GetIRODSFSClient(cp.account, false, true)
+	cp.account = config.GetSessionConfig().ToIRODSAccount()
+	cp.filesystem, err = irods.GetIRODSFSClient(cp.account, false)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer cp.filesystem.Release()
 
 	if cp.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(cp.filesystem, cp.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(cp.filesystem, cp.commonFlagValues.Timeout)
 	}
 
 	// transfer report
-	cp.transferReportManager, err = commons.NewTransferReportManager(cp.transferReportFlagValues.Report, cp.transferReportFlagValues.ReportPath, cp.transferReportFlagValues.ReportToStdout)
+	cp.transferReportManager, err = transfer.NewTransferReportManager(cp.transferReportFlagValues.Report, cp.transferReportFlagValues.ReportPath, cp.transferReportFlagValues.ReportToStdout)
 	if err != nil {
-		return xerrors.Errorf("failed to create transfer report manager: %w", err)
+		return errors.Wrapf(err, "failed to create transfer report manager")
 	}
 	defer cp.transferReportManager.Release()
 
 	// parallel job manager
-	cp.parallelJobManager = commons.NewParallelJobManager(cp.filesystem, cp.parallelTransferFlagValues.ThreadNumber, cp.progressFlagValues.ShowProgress, cp.progressFlagValues.ShowFullPath)
-	cp.parallelJobManager.Start()
+	metaSession := cp.filesystem.GetMetadataSession()
+	cp.parallelTransferJobManager = parallel.NewParallelJobManager(metaSession.GetMaxConnections(), cp.progressFlagValues.ShowProgress, cp.progressFlagValues.ShowFullPath)
+	cp.parallelPostProcessJobManager = parallel.NewParallelJobManager(1, cp.progressFlagValues.ShowProgress, cp.progressFlagValues.ShowFullPath)
 
 	// Expand wildcards
 	if cp.wildcardSearchFlagValues.WildcardSearch {
-		cp.sourcePaths, err = commons.ExpandWildcards(cp.filesystem, cp.account, cp.sourcePaths, true, true)
+		cp.sourcePaths, err = wildcard.ExpandWildcards(cp.filesystem, cp.account, cp.sourcePaths, true, true)
 		if err != nil {
-			return xerrors.Errorf("failed to expand wildcards:  %w", err)
+			return errors.Wrapf(err, "failed to expand wildcards")
 		}
 	}
 
@@ -186,121 +184,183 @@ func (cp *CpCommand) Process() error {
 		// multi-source, target must be a dir
 		err = cp.ensureTargetIsDir(cp.targetPath)
 		if err != nil {
-			return err
+			return errors.Wrapf(err, "target path %q is not a directory", cp.targetPath)
 		}
 	}
 
 	for _, sourcePath := range cp.sourcePaths {
 		err = cp.copyOne(sourcePath, cp.targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to copy %q to %q: %w", sourcePath, cp.targetPath, err)
+			return errors.Wrapf(err, "failed to copy %q to %q", sourcePath, cp.targetPath)
 		}
-	}
-
-	cp.parallelJobManager.DoneScheduling()
-	err = cp.parallelJobManager.Wait()
-	if err != nil {
-		return xerrors.Errorf("failed to perform parallel job: %w", err)
 	}
 
 	// delete extra
 	if cp.syncFlagValues.Delete {
-		logger.Infof("deleting extra files and directories under %q", cp.targetPath)
+		logger.Infof("deleting extra data objects and collections under %q", cp.targetPath)
 
-		err = cp.deleteExtra(cp.targetPath)
+		err = cp.deleteExtraOne(cp.targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to delete extra files: %w", err)
+			return errors.Wrapf(err, "failed to delete extra data objects or collections")
 		}
+	}
+
+	logger.Info("done scheduling jobs, starting jobs")
+
+	transferErr := cp.parallelTransferJobManager.Start()
+	if transferErr != nil {
+		// error occurred while transferring files
+		cp.parallelPostProcessJobManager.CancelJobs()
+	}
+
+	postProcessErr := cp.parallelPostProcessJobManager.Start()
+
+	if transferErr != nil {
+		return errors.Wrapf(transferErr, "failed to perform transfer jobs")
+	}
+
+	if postProcessErr != nil {
+		return errors.Wrapf(postProcessErr, "failed to perform post process jobs")
 	}
 
 	return nil
 }
 
 func (cp *CpCommand) ensureTargetIsDir(targetPath string) error {
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := cp.account.ClientZone
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	targetPath = path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	targetEntry, err := cp.filesystem.Stat(targetPath)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
 			// not exist
-			return commons.NewNotDirError(targetPath)
+			return types.NewNotDirError(targetPath)
 		}
 
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	if !targetEntry.IsDir() {
-		return commons.NewNotDirError(targetPath)
+		return types.NewNotDirError(targetPath)
 	}
 
 	return nil
 }
 
 func (cp *CpCommand) copyOne(sourcePath string, targetPath string) error {
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := cp.account.ClientZone
-	sourcePath = commons.MakeIRODSPath(cwd, home, zone, sourcePath)
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	sourcePath = path.MakeIRODSPath(cwd, home, zone, sourcePath)
+	targetPath = path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	sourceEntry, err := cp.filesystem.Stat(sourcePath)
 	if err != nil {
-		return xerrors.Errorf("failed to stat %q: %w", sourcePath, err)
+		return errors.Wrapf(err, "failed to stat %q", sourcePath)
 	}
 
 	if sourceEntry.IsDir() {
 		// dir
 		if !cp.recursiveFlagValues.Recursive {
-			return xerrors.Errorf("cannot copy a collection, turn on 'recurse' option")
+			return errors.New("cannot copy a collection, turn on 'recurse' option")
 		}
 
 		if !cp.noRootFlagValues.NoRoot {
-			targetPath = commons.MakeTargetIRODSFilePath(cp.filesystem, sourcePath, targetPath)
+			targetPath = path.MakeIRODSTargetFilePath(cp.filesystem, sourcePath, targetPath)
 		}
 
 		return cp.copyDir(sourceEntry, targetPath)
 	}
 
 	// file
-	targetPath = commons.MakeTargetIRODSFilePath(cp.filesystem, sourcePath, targetPath)
+	targetPath = path.MakeIRODSTargetFilePath(cp.filesystem, sourcePath, targetPath)
 	return cp.copyFile(sourceEntry, targetPath)
 }
 
-func (cp *CpCommand) scheduleCopy(sourceEntry *irodsclient_fs.Entry, targetPath string, targetEntry *irodsclient_fs.Entry) error {
+func (cp *CpCommand) deleteExtraOne(targetPath string) error {
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
+	zone := cp.account.ClientZone
+	targetPath = path.MakeIRODSPath(cwd, home, zone, targetPath)
+
+	targetEntry, err := cp.filesystem.Stat(targetPath)
+	if err != nil {
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
+	}
+
+	if targetEntry.IsDir() {
+		// dir
+		return cp.deleteExtraDir(targetEntry)
+	}
+
+	// file
+	return cp.deleteExtraFile(targetEntry)
+}
+
+func (cp *CpCommand) scheduleCopy(sourceEntry *irodsclient_fs.Entry, targetPath string, targetEntry *irodsclient_fs.Entry) {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "CpCommand",
-		"function": "scheduleCopy",
+		"source_path": sourceEntry.Path,
+		"target_path": targetPath,
 	})
 
-	copyTask := func(job *commons.ParallelJob) error {
-		manager := job.GetManager()
-		fs := manager.GetFilesystem()
+	defaultNotes := []string{"cp", "file"}
 
-		job.Progress(0, 1, false)
+	reportSimple := func(err error, additionalNotes ...string) {
+		now := time.Now()
+		newNotes := append(defaultNotes, additionalNotes...)
 
-		logger.Debugf("copying a data object %q to %q", sourceEntry.Path, targetPath)
-		err := fs.CopyFileToFile(sourceEntry.Path, targetPath, true)
-		if err != nil {
-			job.Progress(-1, 1, true)
-			return xerrors.Errorf("failed to copy %q to %q: %w", sourceEntry.Path, targetPath, err)
+		reportFile := &transfer.TransferReportFile{
+			Method:     transfer.TransferMethodCopy,
+			StartAt:    now,
+			EndAt:      now,
+			SourcePath: sourceEntry.Path,
+			SourceSize: sourceEntry.Size,
+			DestPath:   targetPath,
+			Error:      err,
+			Notes:      newNotes,
 		}
 
-		now := time.Now()
-		reportFile := &commons.TransferReportFile{
-			Method:                  commons.TransferMethodCopy,
-			StartAt:                 now,
-			EndAt:                   now,
+		cp.transferReportManager.AddFile(reportFile)
+	}
+
+	copyTask := func(job *parallel.ParallelJob) error {
+		if job.IsCanceled() {
+			// job is canceled, do not run
+			job.Progress("copy", -1, 1, true)
+
+			reportSimple(nil, "canceled")
+			logger.Debug("canceled a task for copying")
+			return nil
+		}
+
+		logger.Debug("copying a data object")
+
+		job.Progress("copy", 0, 1, false)
+
+		startTime := time.Now()
+		copyErr := cp.filesystem.CopyFileToFile(sourceEntry.Path, targetPath, true)
+		endTime := time.Now()
+
+		if copyErr != nil {
+			job.Progress("copy", -1, 1, true)
+
+			reportSimple(copyErr)
+			return errors.Wrapf(copyErr, "failed to copy %q to %q", sourceEntry.Path, targetPath)
+		}
+
+		reportFile := &transfer.TransferReportFile{
+			Method:                  transfer.TransferMethodCopy,
+			StartAt:                 startTime,
+			EndAt:                   endTime,
 			SourcePath:              sourceEntry.Path,
 			SourceSize:              sourceEntry.Size,
 			SourceChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
 			SourceChecksum:          hex.EncodeToString(sourceEntry.CheckSum),
 			DestPath:                targetPath,
 
-			Notes: []string{},
+			Notes: defaultNotes,
 		}
 
 		if targetEntry != nil {
@@ -311,51 +371,192 @@ func (cp *CpCommand) scheduleCopy(sourceEntry *irodsclient_fs.Entry, targetPath 
 
 		cp.transferReportManager.AddFile(reportFile)
 
-		logger.Debugf("copied a data object %q to %q", sourceEntry.Path, targetPath)
-		job.Progress(1, 1, false)
+		logger.Debug("copied a data object")
+		job.Progress("copy", 1, 1, false)
 
-		job.Done()
 		return nil
 	}
 
-	err := cp.parallelJobManager.Schedule(sourceEntry.Path, copyTask, 1, progress.UnitsDefault)
-	if err != nil {
-		return xerrors.Errorf("failed to schedule copy %q to %q: %w", sourceEntry.Path, targetPath, err)
+	cp.parallelTransferJobManager.Schedule(sourceEntry.Path, copyTask, 1, progress.UnitsDefault)
+	logger.Debug("scheduled a data object copy")
+}
+
+func (cp *CpCommand) scheduleDeleteExtraFile(targetEntry *irodsclient_fs.Entry) {
+	logger := log.WithFields(log.Fields{
+		"target_path": targetEntry.Path,
+	})
+
+	defaultNotes := []string{"cp", "extra", "file"}
+
+	report := func(startTime time.Time, endTime time.Time, err error, additionalNotes ...string) {
+		newNotes := append(defaultNotes, additionalNotes...)
+
+		reportFile := &transfer.TransferReportFile{
+			Method:   transfer.TransferMethodDelete,
+			StartAt:  startTime,
+			EndAt:    endTime,
+			DestPath: targetEntry.Path,
+			Error:    err,
+			Notes:    newNotes,
+		}
+
+		cp.transferReportManager.AddFile(reportFile)
 	}
 
-	logger.Debugf("scheduled a data object copy %q to %q", sourceEntry.Path, targetPath)
+	reportSimple := func(err error, additionalNotes ...string) {
+		now := time.Now()
+		report(now, now, err, additionalNotes...)
+	}
 
-	return nil
+	deleteTask := func(job *parallel.ParallelJob) error {
+		if job.IsCanceled() {
+			// job is canceled, do not run
+			job.Progress("delete", -1, 1, true)
+
+			reportSimple(nil, "canceled")
+			logger.Debug("canceled a task for deleting")
+			return nil
+		}
+
+		logger.Debug("deleting a data object")
+
+		job.Progress("delete", 0, 1, false)
+
+		startTime := time.Now()
+		removeErr := cp.filesystem.RemoveFile(targetEntry.Path, true)
+		endTime := time.Now()
+
+		report(startTime, endTime, removeErr)
+
+		if removeErr != nil {
+			job.Progress("delete", -1, 1, true)
+			return errors.Wrapf(removeErr, "failed to delete %q", targetEntry.Path)
+		}
+
+		logger.Debug("deleted a data object")
+		job.Progress("delete", 1, 1, false)
+		return nil
+	}
+
+	cp.parallelPostProcessJobManager.Schedule(targetEntry.Path, deleteTask, 1, progress.UnitsDefault)
+	logger.Debug("scheduled a data object deletion")
+}
+
+func (cp *CpCommand) scheduleDeleteExtraDir(targetEntry *irodsclient_fs.Entry) {
+	logger := log.WithFields(log.Fields{
+		"target_path": targetEntry.Path,
+	})
+
+	defaultNotes := []string{"cp", "extra", "directory"}
+
+	report := func(startTime time.Time, endTime time.Time, err error, additionalNotes ...string) {
+		newNotes := append(defaultNotes, additionalNotes...)
+
+		reportFile := &transfer.TransferReportFile{
+			Method:   transfer.TransferMethodDelete,
+			StartAt:  startTime,
+			EndAt:    endTime,
+			DestPath: targetEntry.Path,
+			Error:    err,
+			Notes:    newNotes,
+		}
+
+		cp.transferReportManager.AddFile(reportFile)
+	}
+
+	reportSimple := func(err error, additionalNotes ...string) {
+		now := time.Now()
+		report(now, now, err, additionalNotes...)
+	}
+
+	deleteTask := func(job *parallel.ParallelJob) error {
+		if job.IsCanceled() {
+			// job is canceled, do not run
+			job.Progress("delete", -1, 1, true)
+
+			reportSimple(nil, "canceled")
+			logger.Debug("canceled a task for deleting extra collection")
+			return nil
+		}
+
+		logger.Debug("deleting an extra collection")
+
+		job.Progress("delete", 0, 1, false)
+
+		startTime := time.Now()
+		err := cp.filesystem.RemoveDir(targetEntry.Path, true, true)
+		endTime := time.Now()
+
+		report(startTime, endTime, err)
+
+		if err != nil {
+			job.Progress("delete", -1, 1, true)
+			return errors.Wrapf(err, "failed to delete %q", targetEntry.Path)
+		}
+
+		logger.Debug("deleted an extra collection")
+		job.Progress("delete", 1, 1, false)
+		return nil
+	}
+
+	cp.parallelPostProcessJobManager.Schedule(targetEntry.Path, deleteTask, 1, progress.UnitsDefault)
+	logger.Debugf("scheduled a collection deletion %q", targetEntry.Path)
 }
 
 func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "CpCommand",
-		"function": "copyFile",
+		"source_path": sourceEntry.Path,
+		"target_path": targetPath,
 	})
 
-	commons.MarkIRODSPathMap(cp.updatedPathMap, targetPath)
+	defaultNotes := []string{"cp"}
+
+	reportSimple := func(err error, additionalNotes ...string) {
+		now := time.Now()
+		newNotes := append(defaultNotes, additionalNotes...)
+		newNotes = append(newNotes, "file")
+
+		reportFile := &transfer.TransferReportFile{
+			Method:     transfer.TransferMethodCopy,
+			StartAt:    now,
+			EndAt:      now,
+			SourcePath: sourceEntry.Path,
+			SourceSize: sourceEntry.Size,
+			DestPath:   targetPath,
+			Error:      err,
+			Notes:      newNotes,
+		}
+
+		cp.transferReportManager.AddFile(reportFile)
+	}
+
+	reportOverwrite := func(startTime time.Time, endTime time.Time, err error, additionalNotes ...string) {
+		newNotes := append(defaultNotes, additionalNotes...)
+		newNotes = append(newNotes, "overwrite")
+
+		reportFile := &transfer.TransferReportFile{
+			Method:   transfer.TransferMethodDelete,
+			StartAt:  startTime,
+			EndAt:    endTime,
+			DestPath: targetPath,
+			Error:    err,
+			Notes:    newNotes,
+		}
+
+		cp.transferReportManager.AddFile(reportFile)
+	}
+
+	cp.mutex.Lock()
+	path.MarkIRODSPathMap(cp.updatedPathMap, targetPath)
+	cp.mutex.Unlock()
 
 	if cp.hiddenFileFlagValues.Exclude {
 		// exclude hidden
 		if strings.HasPrefix(sourceEntry.Name, ".") {
 			// skip
-			now := time.Now()
-			reportFile := &commons.TransferReportFile{
-				Method:     commons.TransferMethodCopy,
-				StartAt:    now,
-				EndAt:      now,
-				SourcePath: sourceEntry.Path,
-				SourceSize: sourceEntry.Size,
-				DestPath:   targetPath,
-				Notes:      []string{"hidden", "skip"},
-			}
-
-			cp.transferReportManager.AddFile(reportFile)
-
-			commons.Printf("skip copying a file %q to %q. The file is hidden!\n", sourceEntry.Path, targetPath)
-			logger.Debugf("skip copying a file %q to %q. The file is hidden!", sourceEntry.Path, targetPath)
+			reportSimple(nil, "hidden", "skipped")
+			terminal.Printf("skip copying a data object %q to %q. The data object is hidden!\n", sourceEntry.Path, targetPath)
+			logger.Debug("skip copying a data object. The data object is hidden!", sourceEntry)
 			return nil
 		}
 	}
@@ -366,34 +567,24 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 		maxAge := time.Duration(cp.syncFlagValues.Age) * time.Minute
 		if age > maxAge {
 			// skip
-			now := time.Now()
-			reportFile := &commons.TransferReportFile{
-				Method:     commons.TransferMethodCopy,
-				StartAt:    now,
-				EndAt:      now,
-				SourcePath: sourceEntry.Path,
-				SourceSize: sourceEntry.Size,
-				DestPath:   targetPath,
-				Notes:      []string{"age", "skip"},
-			}
-
-			cp.transferReportManager.AddFile(reportFile)
-
-			commons.Printf("skip copying a file %q to %q. The file is too old (%s > %s)!\n", sourceEntry.Path, targetPath, age, maxAge)
-			logger.Debugf("skip copying a file %q to %q. The file is too old (%s > %s)!", sourceEntry.Path, targetPath, age, maxAge)
+			reportSimple(nil, "age", "skipped")
+			terminal.Printf("skip copying a data object %q to %q. The data object is too old (%s > %s)!\n", sourceEntry.Path, targetPath, age, maxAge)
+			logger.Debugf("skip copying a data object. The data object is too old (%s > %s)!", age, maxAge)
 			return nil
 		}
 	}
 
 	targetEntry, err := cp.filesystem.Stat(targetPath)
 	if err != nil {
-		if irodsclient_types.IsFileNotFoundError(err) {
+		if !irodsclient_types.IsFileNotFoundError(err) {
 			// target does not exist
 			// target must be a file with new name
-			return cp.scheduleCopy(sourceEntry, targetPath, nil)
+			cp.scheduleCopy(sourceEntry, targetPath, nil)
+			return nil
 		}
 
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		reportSimple(err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	// target exists
@@ -402,50 +593,46 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 		if cp.syncFlagValues.Sync {
 			// if it is sync, remove
 			if cp.forceFlagValues.Force {
+				startTime := time.Now()
 				removeErr := cp.filesystem.RemoveDir(targetPath, true, true)
+				endTime := time.Now()
 
-				now := time.Now()
-				reportFile := &commons.TransferReportFile{
-					Method:     commons.TransferMethodDelete,
-					StartAt:    now,
-					EndAt:      now,
-					SourcePath: targetPath,
-					Error:      removeErr,
-					Notes:      []string{"overwrite", "cp", "dir"},
-				}
-
-				cp.transferReportManager.AddFile(reportFile)
+				reportOverwrite(startTime, endTime, removeErr, "directory")
 
 				if removeErr != nil {
 					return removeErr
 				}
+
+				// fallthrough to copy
 			} else {
 				// ask
-				overwrite := commons.InputYN(fmt.Sprintf("overwriting a file %q, but directory exists. Overwrite?", targetPath))
+				overwrite := terminal.InputYN(fmt.Sprintf("Overwriting a data object %q, but collection exists. Overwrite?", targetPath))
 				if overwrite {
+					startTime := time.Now()
 					removeErr := cp.filesystem.RemoveDir(targetPath, true, true)
+					endTime := time.Now()
 
-					now := time.Now()
-					reportFile := &commons.TransferReportFile{
-						Method:     commons.TransferMethodDelete,
-						StartAt:    now,
-						EndAt:      now,
-						SourcePath: targetPath,
-						Error:      removeErr,
-						Notes:      []string{"overwrite", "cp", "dir"},
-					}
-
-					cp.transferReportManager.AddFile(reportFile)
+					reportOverwrite(startTime, endTime, removeErr, "directory")
 
 					if removeErr != nil {
 						return removeErr
 					}
+
+					// fallthrough to copy
 				} else {
-					return commons.NewNotFileError(targetPath)
+					overwriteErr := types.NewNotFileError(targetPath)
+					now := time.Now()
+
+					reportOverwrite(now, now, overwriteErr, "directory", "declined")
+					return overwriteErr
 				}
 			}
 		} else {
-			return commons.NewNotFileError(targetPath)
+			notFileErr := types.NewNotFileError(targetPath)
+			now := time.Now()
+
+			reportOverwrite(now, now, notFileErr, "directory")
+			return notFileErr
 		}
 	}
 
@@ -454,8 +641,8 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 			if targetEntry.Size == sourceEntry.Size {
 				// skip
 				now := time.Now()
-				reportFile := &commons.TransferReportFile{
-					Method:                  commons.TransferMethodCopy,
+				reportFile := &transfer.TransferReportFile{
+					Method:                  transfer.TransferMethodCopy,
 					StartAt:                 now,
 					EndAt:                   now,
 					SourcePath:              sourceEntry.Path,
@@ -467,13 +654,13 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 					DestChecksumAlgorithm:   string(targetEntry.CheckSumAlgorithm),
 					DestChecksum:            hex.EncodeToString(targetEntry.CheckSum),
 
-					Notes: []string{"differential", "no_hash", "same file size", "skip"},
+					Notes: []string{"cp", "file", "differential", "no hash", "same size", "skipped"},
 				}
 
 				cp.transferReportManager.AddFile(reportFile)
 
-				commons.Printf("skip copying a file %q to %q. The file already exists!\n", sourceEntry.Path, targetPath)
-				logger.Debugf("skip copying a file %q to %q. The file already exists!", sourceEntry.Path, targetPath)
+				terminal.Printf("skip copying a data object %q to %q. The data object already exists!\n", sourceEntry.Path, targetPath)
+				logger.Debugf("skip copying a data object. The data object already exists!")
 				return nil
 			}
 		} else {
@@ -481,8 +668,8 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 				// compare hash
 				if len(sourceEntry.CheckSum) > 0 && bytes.Equal(sourceEntry.CheckSum, targetEntry.CheckSum) {
 					now := time.Now()
-					reportFile := &commons.TransferReportFile{
-						Method:                  commons.TransferMethodCopy,
+					reportFile := &transfer.TransferReportFile{
+						Method:                  transfer.TransferMethodCopy,
 						StartAt:                 now,
 						EndAt:                   now,
 						SourcePath:              sourceEntry.Path,
@@ -493,13 +680,14 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 						DestSize:                targetEntry.Size,
 						DestChecksum:            hex.EncodeToString(targetEntry.CheckSum),
 						DestChecksumAlgorithm:   string(targetEntry.CheckSumAlgorithm),
-						Notes:                   []string{"differential", "same checksum", "skip"},
+
+						Notes: []string{"cp", "file", "differential", "same checksum", "skipped"},
 					}
 
 					cp.transferReportManager.AddFile(reportFile)
 
-					commons.Printf("skip copying a file %q to %q. The file with the same hash already exists!\n", sourceEntry.Path, targetPath)
-					logger.Debugf("skip copying a file %q to %q. The file with the same hash already exists!", sourceEntry.Path, targetPath)
+					terminal.Printf("skip copying a data object %q to %q. The data object with the same hash already exists!\n", sourceEntry.Path, targetPath)
+					logger.Debugf("skip copying a data object %q to %q. The data object with the same hash already exists!", sourceEntry.Path, targetPath)
 					return nil
 				}
 			}
@@ -507,11 +695,11 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 	} else {
 		if !cp.forceFlagValues.Force {
 			// ask
-			overwrite := commons.InputYN(fmt.Sprintf("file %q already exists. Overwrite?", targetPath))
+			overwrite := terminal.InputYN(fmt.Sprintf("Data object %q already exists. Overwrite?", targetPath))
 			if !overwrite {
 				now := time.Now()
-				reportFile := &commons.TransferReportFile{
-					Method:                  commons.TransferMethodCopy,
+				reportFile := &transfer.TransferReportFile{
+					Method:                  transfer.TransferMethodCopy,
 					StartAt:                 now,
 					EndAt:                   now,
 					SourcePath:              sourceEntry.Path,
@@ -522,50 +710,77 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 					DestSize:                targetEntry.Size,
 					DestChecksum:            hex.EncodeToString(targetEntry.CheckSum),
 					DestChecksumAlgorithm:   string(targetEntry.CheckSumAlgorithm),
-					Notes:                   []string{"no_overwrite", "skip"},
+
+					Notes: []string{"cp", "file", "overwrite", "declined", "skipped"},
 				}
 
 				cp.transferReportManager.AddFile(reportFile)
 
-				commons.Printf("skip copying a file %q to %q. The file already exists!\n", sourceEntry.Path, targetPath)
-				logger.Debugf("skip copying a file %q to %q. The file already exists!", sourceEntry.Path, targetPath)
+				terminal.Printf("skip copying a data object %q to %q. The data object already exists!\n", sourceEntry.Path, targetPath)
+				logger.Debugf("skip copying a data object %q to %q. The data object already exists!", sourceEntry.Path, targetPath)
 				return nil
 			}
 		}
 	}
 
 	// schedule
-	return cp.scheduleCopy(sourceEntry, targetPath, targetEntry)
+	cp.scheduleCopy(sourceEntry, targetPath, targetEntry)
+	return nil
 }
 
 func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath string) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "CpCommand",
-		"function": "copyDir",
+		"source_path": sourceEntry.Path,
+		"target_path": targetPath,
 	})
 
-	commons.MarkIRODSPathMap(cp.updatedPathMap, targetPath)
+	defaultNotes := []string{"cp", "directory"}
+
+	reportSimple := func(err error, additionalNotes ...string) {
+		now := time.Now()
+		newNotes := append(defaultNotes, additionalNotes...)
+
+		reportFile := &transfer.TransferReportFile{
+			Method:     transfer.TransferMethodCopy,
+			StartAt:    now,
+			EndAt:      now,
+			SourcePath: sourceEntry.Path,
+			SourceSize: sourceEntry.Size,
+			DestPath:   targetPath,
+			Error:      err,
+			Notes:      newNotes,
+		}
+
+		cp.transferReportManager.AddFile(reportFile)
+	}
+
+	reportOverwrite := func(startTime time.Time, endTime time.Time, err error, additionalNotes ...string) {
+		newNotes := append(defaultNotes, additionalNotes...)
+		newNotes = append(newNotes, "overwrite")
+
+		reportFile := &transfer.TransferReportFile{
+			Method:   transfer.TransferMethodDelete,
+			StartAt:  startTime,
+			EndAt:    endTime,
+			DestPath: targetPath,
+			Error:    err,
+			Notes:    newNotes,
+		}
+
+		cp.transferReportManager.AddFile(reportFile)
+	}
+
+	cp.mutex.Lock()
+	path.MarkIRODSPathMap(cp.updatedPathMap, targetPath)
+	cp.mutex.Unlock()
 
 	if cp.hiddenFileFlagValues.Exclude {
 		// exclude hidden
 		if strings.HasPrefix(sourceEntry.Name, ".") {
 			// skip
-			now := time.Now()
-			reportFile := &commons.TransferReportFile{
-				Method:     commons.TransferMethodCopy,
-				StartAt:    now,
-				EndAt:      now,
-				SourcePath: sourceEntry.Path,
-				SourceSize: sourceEntry.Size,
-				DestPath:   targetPath,
-				Notes:      []string{"hidden", "skip"},
-			}
-
-			cp.transferReportManager.AddFile(reportFile)
-
-			commons.Printf("skip copying a dir %q to %q. The dir is hidden!\n", sourceEntry.Path, targetPath)
-			logger.Debugf("skip copying a dir %q to %q. The dir is hidden!", sourceEntry.Path, targetPath)
+			reportSimple(nil, "hidden", "skipped")
+			terminal.Printf("skip copying a collection %q to %q. The collection is hidden!\n", sourceEntry.Path, targetPath)
+			logger.Debug("skip copying a collection. The collection is hidden!")
 			return nil
 		}
 	}
@@ -576,23 +791,15 @@ func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 			// target does not exist
 			// target must be a directory with new name
 			err = cp.filesystem.MakeDir(targetPath, true)
+			reportSimple(err)
 			if err != nil {
-				return xerrors.Errorf("failed to make a directory %q: %w", targetPath, err)
+				return errors.Wrapf(err, "failed to make a collection %q", targetPath)
 			}
 
-			now := time.Now()
-			reportFile := &commons.TransferReportFile{
-				Method:     commons.TransferMethodCopy,
-				StartAt:    now,
-				EndAt:      now,
-				SourcePath: sourceEntry.Path,
-				DestPath:   targetPath,
-				Notes:      []string{"directory"},
-			}
-
-			cp.transferReportManager.AddFile(reportFile)
+			// fallthrough to copy entries
 		} else {
-			return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+			reportSimple(err)
+			return errors.Wrapf(err, "failed to stat %q", targetPath)
 		}
 	} else {
 		// target exists
@@ -600,50 +807,48 @@ func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 			if cp.syncFlagValues.Sync {
 				// if it is sync, remove
 				if cp.forceFlagValues.Force {
+					startTime := time.Now()
 					removeErr := cp.filesystem.RemoveFile(targetPath, true)
+					endTime := time.Now()
 
-					now := time.Now()
-					reportFile := &commons.TransferReportFile{
-						Method:     commons.TransferMethodDelete,
-						StartAt:    now,
-						EndAt:      now,
-						SourcePath: targetPath,
-						Error:      removeErr,
-						Notes:      []string{"overwrite", "cp"},
-					}
-
-					cp.transferReportManager.AddFile(reportFile)
+					reportOverwrite(startTime, endTime, removeErr)
 
 					if removeErr != nil {
 						return removeErr
 					}
+
+					// fallthrough to copy entries
 				} else {
 					// ask
-					overwrite := commons.InputYN(fmt.Sprintf("overwriting a directory %q, but file exists. Overwrite?", targetPath))
+					overwrite := terminal.InputYN(fmt.Sprintf("Overwriting a collection %q, but data object exists. Overwrite?", targetPath))
 					if overwrite {
+						startTime := time.Now()
 						removeErr := cp.filesystem.RemoveFile(targetPath, true)
+						endTime := time.Now()
 
-						now := time.Now()
-						reportFile := &commons.TransferReportFile{
-							Method:     commons.TransferMethodDelete,
-							StartAt:    now,
-							EndAt:      now,
-							SourcePath: targetPath,
-							Error:      removeErr,
-							Notes:      []string{"overwrite", "cp"},
-						}
-
-						cp.transferReportManager.AddFile(reportFile)
+						reportOverwrite(startTime, endTime, removeErr)
 
 						if removeErr != nil {
 							return removeErr
 						}
+
+						// fallthrough to copy entries
 					} else {
-						return commons.NewNotDirError(targetPath)
+						overwriteErr := types.NewNotDirError(targetPath)
+						now := time.Now()
+
+						reportOverwrite(now, now, overwriteErr, "declined")
+						terminal.Printf("skip copying a collection %q to %q. The data object already exists!\n", sourceEntry.Path, targetPath)
+						logger.Debug("skip copying a collection. The data object already exists!")
+						return nil
 					}
 				}
 			} else {
-				return commons.NewNotDirError(targetPath)
+				notDirErr := types.NewNotDirError(targetPath)
+				now := time.Now()
+
+				reportOverwrite(now, now, notDirErr)
+				return notDirErr
 			}
 		}
 	}
@@ -651,11 +856,12 @@ func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 	// copy entries
 	entries, err := cp.filesystem.List(sourceEntry.Path)
 	if err != nil {
-		return xerrors.Errorf("failed to list a directory %q: %w", sourceEntry.Path, err)
+		reportSimple(err)
+		return errors.Wrapf(err, "failed to list a directory %q", sourceEntry.Path)
 	}
 
 	for _, entry := range entries {
-		newEntryPath := commons.MakeTargetIRODSFilePath(cp.filesystem, entry.Path, targetPath)
+		newEntryPath := path.MakeIRODSTargetFilePath(cp.filesystem, entry.Path, targetPath)
 
 		if entry.IsDir() {
 			// dir
@@ -675,88 +881,129 @@ func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 	return nil
 }
 
-func (cp *CpCommand) deleteExtra(targetPath string) error {
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
-	zone := cp.account.ClientZone
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
-
-	return cp.deleteExtraInternal(targetPath)
-}
-
-func (cp *CpCommand) deleteExtraInternal(targetPath string) error {
+func (cp *CpCommand) deleteExtraFile(targetEntry *irodsclient_fs.Entry) error {
 	logger := log.WithFields(log.Fields{
-		"package":  "subcmd",
-		"struct":   "CpCommand",
-		"function": "deleteExtraInternal",
+		"target_path": targetEntry.Path,
 	})
 
-	targetEntry, err := cp.filesystem.Stat(targetPath)
-	if err != nil {
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
-	}
+	defaultNotes := []string{"cp", "extra", "file"}
 
-	// target is file
-	if !targetEntry.IsDir() {
-		if _, ok := cp.updatedPathMap[targetPath]; !ok {
-			// extra file
-			logger.Debugf("removing an extra data object %q", targetPath)
-
-			removeErr := cp.filesystem.RemoveFile(targetPath, true)
-
-			now := time.Now()
-			reportFile := &commons.TransferReportFile{
-				Method:     commons.TransferMethodDelete,
-				StartAt:    now,
-				EndAt:      now,
-				SourcePath: targetPath,
-				Error:      removeErr,
-				Notes:      []string{"extra", "cp"},
-			}
-
-			cp.transferReportManager.AddFile(reportFile)
-
-			if removeErr != nil {
-				return removeErr
-			}
-		}
-
-		return nil
-	}
-
-	// target is dir
-	if _, ok := cp.updatedPathMap[targetPath]; !ok {
-		// extra dir
-		logger.Debugf("removing an extra collection %q", targetPath)
-
-		removeErr := cp.filesystem.RemoveDir(targetPath, true, true)
-
+	reportSimple := func(err error, additionalNotes ...string) {
 		now := time.Now()
-		reportFile := &commons.TransferReportFile{
-			Method:     commons.TransferMethodDelete,
-			StartAt:    now,
-			EndAt:      now,
-			SourcePath: targetPath,
-			Error:      removeErr,
-			Notes:      []string{"extra", "cp", "dir"},
+		newNotes := append(defaultNotes, additionalNotes...)
+
+		reportFile := &transfer.TransferReportFile{
+			Method:   transfer.TransferMethodDelete,
+			StartAt:  now,
+			EndAt:    now,
+			DestPath: targetEntry.Path,
+			Error:    err,
+			Notes:    newNotes,
 		}
 
 		cp.transferReportManager.AddFile(reportFile)
+	}
 
-		if removeErr != nil {
-			return removeErr
+	cp.mutex.RLock()
+	isExtra := false
+	if _, ok := cp.updatedPathMap[targetEntry.Path]; !ok {
+		isExtra = true
+	}
+	cp.mutex.RUnlock()
+
+	if isExtra {
+		// extra file
+		logger.Debug("removing an extra data object")
+
+		if cp.forceFlagValues.Force {
+			cp.scheduleDeleteExtraFile(targetEntry)
+			return nil
+		} else {
+			// ask
+			overwrite := terminal.InputYN(fmt.Sprintf("Removing an extra data object %q. Remove?", targetEntry.Path))
+			if overwrite {
+				cp.scheduleDeleteExtraFile(targetEntry)
+				return nil
+			} else {
+				// do not remove
+				reportSimple(nil, "declined")
+				return nil
+			}
 		}
-	} else {
-		// non extra dir
-		// scan recursively
-		entries, err := cp.filesystem.List(targetPath)
-		if err != nil {
-			return xerrors.Errorf("failed to list a directory %q: %w", targetPath, err)
+	}
+
+	return nil
+}
+
+func (cp *CpCommand) deleteExtraDir(targetEntry *irodsclient_fs.Entry) error {
+	logger := log.WithFields(log.Fields{
+		"target_path": targetEntry.Path,
+	})
+
+	defaultNotes := []string{"cp", "extra", "directory"}
+
+	reportSimple := func(err error, additionalNotes ...string) {
+		now := time.Now()
+		newNotes := append(defaultNotes, additionalNotes...)
+
+		reportFile := &transfer.TransferReportFile{
+			Method:   transfer.TransferMethodDelete,
+			StartAt:  now,
+			EndAt:    now,
+			DestPath: targetEntry.Path,
+			Error:    err,
+			Notes:    newNotes,
 		}
 
-		for _, entry := range entries {
-			newTargetPath := path.Join(targetPath, entry.Name)
-			err = cp.deleteExtraInternal(newTargetPath)
+		cp.transferReportManager.AddFile(reportFile)
+	}
+
+	// delete the directory itself
+	cp.mutex.RLock()
+	isExtra := false
+	if _, ok := cp.updatedPathMap[targetEntry.Path]; !ok {
+		isExtra = true
+	}
+	cp.mutex.RUnlock()
+
+	if isExtra {
+		// extra dir
+		logger.Debug("removing an extra collection")
+
+		if cp.forceFlagValues.Force {
+			cp.scheduleDeleteExtraDir(targetEntry)
+			return nil
+		} else {
+			// ask
+			overwrite := terminal.InputYN(fmt.Sprintf("Removing an extra directory %q. Remove?", targetEntry.Path))
+			if overwrite {
+				cp.scheduleDeleteExtraDir(targetEntry)
+				return nil
+			} else {
+				// do not remove
+				reportSimple(nil, "declined")
+				return nil
+			}
+		}
+	}
+
+	// scan recursively
+	entries, err := cp.filesystem.List(targetEntry.Path)
+	if err != nil {
+		reportSimple(err)
+		return errors.Wrapf(err, "failed to list a collection %q", targetEntry.Path)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			// dir
+			err = cp.deleteExtraDir(entry)
+			if err != nil {
+				return err
+			}
+		} else {
+			// file
+			err = cp.deleteExtraDir(entry)
 			if err != nil {
 				return err
 			}

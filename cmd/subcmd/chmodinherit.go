@@ -3,12 +3,14 @@ package subcmd
 import (
 	"strings"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
-	"github.com/cyverse/gocommands/commons"
+	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/path"
 	"github.com/spf13/cobra"
-	"golang.org/x/xerrors"
 )
 
 var chmodinheritCmd = &cobra.Command{
@@ -69,7 +71,7 @@ func NewChModInheritCommand(command *cobra.Command, args []string) (*ChModInheri
 		} else if flag == "noinherit" || flag == "no_inherit" || flag == "no-inherit" || flag == "false" || flag == "no" || flag == "disabled" || flag == "off" || flag == "disable" {
 			chModInherit.inherit = false
 		} else {
-			return nil, xerrors.Errorf("invalid inherit flag: %s", args[0])
+			return nil, errors.Errorf("invalid inherit flag %q", args[0])
 		}
 	}
 
@@ -79,7 +81,7 @@ func NewChModInheritCommand(command *cobra.Command, args []string) (*ChModInheri
 func (chModInherit *ChModInheritCommand) Process() error {
 	cont, err := flag.ProcessCommonFlags(chModInherit.command)
 	if err != nil {
-		return xerrors.Errorf("failed to process common flags: %w", err)
+		return errors.Wrapf(err, "failed to process common flags")
 	}
 
 	if !cont {
@@ -87,27 +89,27 @@ func (chModInherit *ChModInheritCommand) Process() error {
 	}
 
 	// handle local flags
-	_, err = commons.InputMissingFields()
+	_, err = config.InputMissingFields()
 	if err != nil {
-		return xerrors.Errorf("failed to input missing fields: %w", err)
+		return errors.Wrapf(err, "failed to input missing fields")
 	}
 
 	// Create a file system
-	chModInherit.account = commons.GetSessionConfig().ToIRODSAccount()
-	chModInherit.filesystem, err = commons.GetIRODSFSClient(chModInherit.account, true, true)
+	chModInherit.account = config.GetSessionConfig().ToIRODSAccount()
+	chModInherit.filesystem, err = irods.GetIRODSFSClient(chModInherit.account, true)
 	if err != nil {
-		return xerrors.Errorf("failed to get iRODS FS Client: %w", err)
+		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer chModInherit.filesystem.Release()
 
 	if chModInherit.commonFlagValues.TimeoutUpdated {
-		commons.UpdateIRODSFSClientTimeout(chModInherit.filesystem, chModInherit.commonFlagValues.Timeout)
+		irods.UpdateIRODSFSClientTimeout(chModInherit.filesystem, chModInherit.commonFlagValues.Timeout)
 	}
 
 	for _, targetPath := range chModInherit.targetPaths {
 		err = chModInherit.changeOne(targetPath)
 		if err != nil {
-			return xerrors.Errorf("failed to change access inherit to %q: %w", targetPath, err)
+			return errors.Wrapf(err, "failed to change access inherit to %q", targetPath)
 		}
 	}
 
@@ -115,27 +117,27 @@ func (chModInherit *ChModInheritCommand) Process() error {
 }
 
 func (chModInherit *ChModInheritCommand) changeOne(targetPath string) error {
-	cwd := commons.GetCWD()
-	home := commons.GetHomeDir()
+	cwd := config.GetCWD()
+	home := config.GetHomeDir()
 	zone := chModInherit.account.ClientZone
-	targetPath = commons.MakeIRODSPath(cwd, home, zone, targetPath)
+	targetPath = path.MakeIRODSPath(cwd, home, zone, targetPath)
 
 	targetEntry, err := chModInherit.filesystem.Stat(targetPath)
 	if err != nil {
 		if irodsclient_types.IsFileNotFoundError(err) {
-			return xerrors.Errorf("failed to find collection %q: %w", targetPath, err)
+			return errors.Wrapf(err, "failed to find collection %q", targetPath)
 		}
 
-		return xerrors.Errorf("failed to stat %q: %w", targetPath, err)
+		return errors.Wrapf(err, "failed to stat %q", targetPath)
 	}
 
 	if !targetEntry.IsDir() {
-		return xerrors.Errorf("target %q is not a collection", targetPath)
+		return errors.Errorf("target %q is not a collection", targetPath)
 	}
 
 	err = chModInherit.filesystem.ChangeDirACLInheritance(targetPath, chModInherit.inherit, chModInherit.recursiveFlagValues.Recursive, false)
 	if err != nil {
-		return xerrors.Errorf("failed to set access inherit %t to %q (recurse: %t): %w", chModInherit.inherit, targetPath, chModInherit.recursiveFlagValues.Recursive, err)
+		return errors.Wrapf(err, "failed to set access inherit %t to %q (recurse %t)", chModInherit.inherit, targetPath, chModInherit.recursiveFlagValues.Recursive)
 	}
 
 	return nil
