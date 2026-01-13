@@ -1,7 +1,6 @@
 package subcmd
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/cockroachdb/errors"
@@ -14,6 +13,7 @@ import (
 	"github.com/cyverse/gocommands/commons/path"
 	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/cyverse/gocommands/commons/types"
+	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -29,7 +29,7 @@ var lsmetaCmd = &cobra.Command{
 func AddLsmetaCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlagsWithoutResource(lsmetaCmd)
-
+	flag.SetOutputFormatFlags(lsmetaCmd)
 	flag.SetListFlags(lsmetaCmd, true, true)
 	flag.SetTargetObjectFlags(lsmetaCmd)
 
@@ -49,6 +49,7 @@ type LsMetaCommand struct {
 	command *cobra.Command
 
 	commonFlagValues       *flag.CommonFlagValues
+	outputFormatFlagValues *flag.OutputFormatFlagValues
 	listFlagValues         *flag.ListFlagValues
 	targetObjectFlagValues *flag.TargetObjectFlagValues
 
@@ -63,6 +64,7 @@ func NewLsMetaCommand(command *cobra.Command, args []string) (*LsMetaCommand, er
 		command: command,
 
 		commonFlagValues:       flag.GetCommonFlagValues(command),
+		outputFormatFlagValues: flag.GetOutputFormatFlagValues(),
 		listFlagValues:         flag.GetListFlagValues(),
 		targetObjectFlagValues: flag.GetTargetObjectFlagValues(command),
 	}
@@ -100,21 +102,64 @@ func (lsMeta *LsMetaCommand) Process() error {
 		irods.UpdateIRODSFSClientTimeout(lsMeta.filesystem, lsMeta.commonFlagValues.Timeout)
 	}
 
+	// table writer
+	tableWriter := table.NewWriter()
+	tableWriter.SetOutputMirror(terminal.GetTerminalWriter())
+	tableWriter.SetTitle("iRODS Metadata")
+
+	if len(lsMeta.targetObjects) == 0 {
+		return errors.New("no target objects specified")
+	}
+
+	columns := []interface{}{
+		"ID",
+		"Attribute",
+		"Value",
+		"Unit",
+	}
+
+	if lsMeta.listFlagValues.Format == format.ListFormatLong || lsMeta.listFlagValues.Format == format.ListFormatVeryLong {
+		columns = append(columns,
+			"Create Time",
+			"Modify Time",
+		)
+	}
+
+	tableWriter.AppendHeader(columns, table.RowConfig{})
+
+	// run
 	for _, targetObject := range lsMeta.targetObjects {
 		if lsMeta.targetObjectFlagValues.Path {
-			return lsMeta.listMetaForPath(targetObject)
+			err = lsMeta.listMetaForPath(tableWriter, targetObject)
+			if err != nil {
+				return err
+			}
 		} else if lsMeta.targetObjectFlagValues.User {
-			return lsMeta.listMetaForUser(targetObject)
+			err = lsMeta.listMetaForUser(tableWriter, targetObject)
+			if err != nil {
+				return err
+			}
 		} else if lsMeta.targetObjectFlagValues.Resource {
-			return lsMeta.listMetaForResource(targetObject)
+			err = lsMeta.listMetaForResource(tableWriter, targetObject)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
-	// nothing updated
-	return errors.Errorf("path, user, or resource must be given")
+	switch lsMeta.outputFormatFlagValues.Format {
+	case format.OutputFormatCSV:
+		tableWriter.RenderCSV()
+	case format.OutputFormatTSV:
+		tableWriter.RenderTSV()
+	default:
+		tableWriter.Render()
+	}
+
+	return nil
 }
 
-func (lsMeta *LsMetaCommand) listMetaForPath(targetPath string) error {
+func (lsMeta *LsMetaCommand) listMetaForPath(tableWriter table.Writer, targetPath string) error {
 	cwd := config.GetCWD()
 	home := config.GetHomeDir()
 	zone := lsMeta.account.ClientZone
@@ -125,91 +170,71 @@ func (lsMeta *LsMetaCommand) listMetaForPath(targetPath string) error {
 		return errors.Wrapf(err, "failed to list meta for path %q", targetPath)
 	}
 
-	if len(metas) == 0 {
-		terminal.Printf("Found no metadata\n")
-		return nil
-	}
-
-	return lsMeta.printMetas(metas)
+	return lsMeta.printMetas(tableWriter, metas)
 }
 
-func (lsMeta *LsMetaCommand) listMetaForUser(username string) error {
+func (lsMeta *LsMetaCommand) listMetaForUser(tableWriter table.Writer, username string) error {
 	metas, err := lsMeta.filesystem.ListUserMetadata(username, lsMeta.account.ClientZone)
 	if err != nil {
 		return errors.Wrapf(err, "failed to list meta for user %q", username)
 	}
 
-	if len(metas) == 0 {
-		terminal.Printf("Found no metadata\n")
-		return nil
-	}
-
-	return lsMeta.printMetas(metas)
+	return lsMeta.printMetas(tableWriter, metas)
 }
 
-func (lsMeta *LsMetaCommand) listMetaForResource(resource string) error {
+func (lsMeta *LsMetaCommand) listMetaForResource(tableWriter table.Writer, resource string) error {
 	metas, err := lsMeta.filesystem.ListResourceMetadata(resource)
 	if err != nil {
 		return errors.Wrapf(err, "failed to list meta for resource %q", resource)
 	}
 
-	if len(metas) == 0 {
-		terminal.Printf("Found no metadata\n")
-		return nil
-	}
-
-	return lsMeta.printMetas(metas)
+	return lsMeta.printMetas(tableWriter, metas)
 }
 
-func (lsMeta *LsMetaCommand) printMetas(metas []*irodsclient_types.IRODSMeta) error {
+func (lsMeta *LsMetaCommand) printMetas(tableWriter table.Writer, metas []*irodsclient_types.IRODSMeta) error {
 	sort.SliceStable(metas, lsMeta.getMetaSortFunction(metas, lsMeta.listFlagValues.SortOrder, lsMeta.listFlagValues.SortReverse))
 
 	for _, meta := range metas {
-		lsMeta.printMetaInternal(meta)
+		lsMeta.printMetaInternal(tableWriter, meta)
 	}
 
 	return nil
 }
 
-func (lsMeta *LsMetaCommand) printMetaInternal(meta *irodsclient_types.IRODSMeta) {
-	createTime := types.MakeDateTimeString(meta.CreateTime)
-	modTime := types.MakeDateTimeString(meta.ModifyTime)
-
+func (lsMeta *LsMetaCommand) printMetaInternal(tableWriter table.Writer, meta *irodsclient_types.IRODSMeta) {
 	name := meta.Name
 	if len(name) == 0 {
-		name = "<empty name>"
-	} else {
-		name = fmt.Sprintf("\"%s\"", name)
+		name = "<empty>"
 	}
 
 	value := meta.Value
 	if len(value) == 0 {
-		value = "<empty value>"
-	} else {
-		value = fmt.Sprintf("\"%s\"", value)
+		value = "<empty>"
 	}
 
 	units := meta.Units
 	if len(units) == 0 {
-		units = "<empty units>"
-	} else {
-		units = fmt.Sprintf("\"%s\"", units)
+		units = "<empty>"
 	}
 
-	switch lsMeta.listFlagValues.Format {
-	case format.ListFormatLong, format.ListFormatVeryLong:
-		terminal.Printf("[%s]\n", meta.Name)
-		terminal.Printf("  id: %d\n", meta.AVUID)
-		terminal.Printf("  attribute: %s\n", name)
-		terminal.Printf("  value: %s\n", value)
-		terminal.Printf("  unit: %s\n", units)
-		terminal.Printf("  create time: %s\n", createTime)
-		terminal.Printf("  modify time: %s\n", modTime)
-	case format.ListFormatNormal:
-		fallthrough
-	default:
-		terminal.Printf("%d\t%s\t%s\t%s\n", meta.AVUID, name, value, units)
+	columnValues := []interface{}{
+		meta.AVUID,
+		name,
+		value,
+		units,
 	}
+
+	if lsMeta.listFlagValues.Format == format.ListFormatLong || lsMeta.listFlagValues.Format == format.ListFormatVeryLong {
+		createTime := types.MakeDateTimeString(meta.CreateTime)
+		modTime := types.MakeDateTimeString(meta.ModifyTime)
+
+		columnValues = append(columnValues,
+			createTime,
+			modTime,
+		)
+	}
+
+	tableWriter.AppendRow(columnValues, table.RowConfig{})
 }
 
 func (lsMeta *LsMetaCommand) getMetaSortFunction(metas []*irodsclient_types.IRODSMeta, sortOrder format.ListSortOrder, sortReverse bool) func(i int, j int) bool {

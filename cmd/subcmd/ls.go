@@ -21,6 +21,7 @@ import (
 	"github.com/cyverse/gocommands/commons/types"
 	"github.com/cyverse/gocommands/commons/wildcard"
 	"github.com/dustin/go-humanize"
+	"github.com/jedib0t/go-pretty/v6/table"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -44,7 +45,7 @@ var lsCmd = &cobra.Command{
 func AddLsCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(lsCmd, false)
-
+	flag.SetOutputFormatFlags(lsCmd)
 	flag.SetListFlags(lsCmd, false, false)
 	flag.SetTicketAccessFlags(lsCmd)
 	flag.SetDecryptionFlags(lsCmd)
@@ -67,6 +68,7 @@ type LsCommand struct {
 	command *cobra.Command
 
 	commonFlagValues         *flag.CommonFlagValues
+	outputFormatFlagValues   *flag.OutputFormatFlagValues
 	listFlagValues           *flag.ListFlagValues
 	ticketAccessFlagValues   *flag.TicketAccessFlagValues
 	decryptionFlagValues     *flag.DecryptionFlagValues
@@ -84,6 +86,7 @@ func NewLsCommand(command *cobra.Command, args []string) (*LsCommand, error) {
 		command: command,
 
 		commonFlagValues:         flag.GetCommonFlagValues(command),
+		outputFormatFlagValues:   flag.GetOutputFormatFlagValues(),
 		listFlagValues:           flag.GetListFlagValues(),
 		ticketAccessFlagValues:   flag.GetTicketAccessFlagValues(),
 		decryptionFlagValues:     flag.GetDecryptionFlagValues(command),
@@ -152,16 +155,9 @@ func (ls *LsCommand) Process() error {
 
 	// run
 	for _, sourcePath := range ls.sourcePaths {
-		err = ls.listDataObject(sourcePath)
+		err = ls.listSourcePath(sourcePath)
 		if err != nil {
-			return errors.Wrapf(err, "failed to list path %q", sourcePath)
-		}
-	}
-
-	for _, sourcePath := range ls.sourcePaths {
-		err = ls.listCollection(sourcePath)
-		if err != nil {
-			return errors.Wrapf(err, "failed to list path %q", sourcePath)
+			return errors.Wrapf(err, "failed to print path %q", sourcePath)
 		}
 	}
 
@@ -181,7 +177,7 @@ func (ls *LsCommand) requireDecryption(sourcePath string) bool {
 	return mode != encryption.EncryptionModeNone
 }
 
-func (ls *LsCommand) listCollection(sourcePath string) error {
+func (ls *LsCommand) listSourcePath(sourcePath string) error {
 	cwd := config.GetCWD()
 	home := config.GetHomeDir()
 	zone := ls.account.ClientZone
@@ -196,112 +192,143 @@ func (ls *LsCommand) listCollection(sourcePath string) error {
 		return errors.Wrapf(err, "failed to stat %q", sourcePath)
 	}
 
+	if sourceEntry.IsDir() {
+		// dir
+		return ls.listCollection(sourceEntry)
+	} else {
+		// file
+		return ls.listDataObject(sourceEntry)
+	}
+}
+
+func (ls *LsCommand) listCollection(sourceEntry *irodsclient_fs.Entry) error {
 	connection, err := ls.filesystem.GetMetadataConnection(true)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get connection")
 	}
 	defer ls.filesystem.ReturnMetadataConnection(connection)
 
-	if !sourceEntry.IsDir() {
-		// data object
-		return nil
-	}
+	// table writer
+	tableWriter := table.NewWriter()
+	tableWriter.SetOutputMirror(terminal.GetTerminalWriter())
+	tableWriter.SetTitle("iRODS Collection")
 
 	// collection
 	if ls.listFlagValues.Access {
 		// get access
-		accesses, err := irodsclient_irodsfs.ListCollectionAccesses(connection, sourcePath)
+		accesses, err := irodsclient_irodsfs.ListCollectionAccesses(connection, sourceEntry.Path)
 		if err != nil {
-			return errors.Wrapf(err, "failed to get access for collection %q", sourcePath)
+			return errors.Wrapf(err, "failed to get access for collection %q", sourceEntry.Path)
 		}
 
-		inherit, err := irodsclient_irodsfs.GetCollectionAccessInheritance(connection, sourcePath)
+		inherit, err := irodsclient_irodsfs.GetCollectionAccessInheritance(connection, sourceEntry.Path)
 		if err != nil {
-			return errors.Wrapf(err, "failed to get access inheritance for collection %q", sourcePath)
+			return errors.Wrapf(err, "failed to get access inheritance for collection %q", sourceEntry.Path)
 		}
 
-		ls.printCurrentCollection(sourcePath, accesses, inherit)
+		accessString := ""
+
+		if len(accesses) > 0 {
+			accessString = ls.getAccessesString(accesses)
+		}
+
+		inheritanceString := "Disabled"
+		if inherit != nil {
+			if inherit.Inheritance {
+				inheritanceString = "Enabled"
+			}
+		}
+
+		tableWriter.AppendHeader([]interface{}{
+			"Type",
+			"Path",
+			"Access",
+			"Inheritance",
+		}, table.RowConfig{})
+
+		tableWriter.AppendRow([]interface{}{
+			"collection",
+			sourceEntry.Path,
+			accessString,
+			inheritanceString,
+		}, table.RowConfig{})
 	} else {
-		ls.printCurrentCollection(sourcePath, nil, nil)
+		tableWriter.AppendHeader([]interface{}{
+			"Type",
+			"Path",
+		}, table.RowConfig{})
+
+		tableWriter.AppendRow([]interface{}{
+			"collection",
+			sourceEntry.Path,
+		}, table.RowConfig{})
 	}
 
-	colls, err := irodsclient_irodsfs.ListSubCollections(connection, sourcePath)
-	if err != nil {
-		return errors.Wrapf(err, "failed to list sub-collections in %q", sourcePath)
+	switch ls.outputFormatFlagValues.Format {
+	case format.OutputFormatCSV:
+		tableWriter.RenderCSV()
+	case format.OutputFormatTSV:
+		tableWriter.RenderTSV()
+	default:
+		tableWriter.Render()
 	}
 
-	objs, err := irodsclient_irodsfs.ListDataObjects(connection, sourcePath)
+	// sub-collections and data-objects
+	colls, err := irodsclient_irodsfs.ListSubCollections(connection, sourceEntry.Path)
 	if err != nil {
-		return errors.Wrapf(err, "failed to list data-objects in %q", sourcePath)
+		return errors.Wrapf(err, "failed to list sub-collections in %q", sourceEntry.Path)
+	}
+
+	objs, err := irodsclient_irodsfs.ListDataObjects(connection, sourceEntry.Path)
+	if err != nil {
+		return errors.Wrapf(err, "failed to list data-objects in %q", sourceEntry.Path)
 	}
 
 	// filter out hidden files
 	filtered_colls := ls.filterHiddenCollections(colls)
 	filtered_objs := ls.filterHiddenDataObjects(objs)
 
+	var accesses []*irodsclient_types.IRODSAccess
+
 	if ls.listFlagValues.Access {
 		// get access
-		accesses, err := irodsclient_irodsfs.ListAccessesForDataObjectsInCollection(connection, sourcePath)
+		accesses, err = irodsclient_irodsfs.ListAccessesForDataObjectsInCollection(connection, sourceEntry.Path)
 		if err != nil {
-			return errors.Wrapf(err, "failed to get access for data-object %q", sourcePath)
+			return errors.Wrapf(err, "failed to get access for data-object %q", sourceEntry.Path)
 		}
-
-		ls.printDataObjects(filtered_objs, accesses, false)
-	} else {
-		ls.printDataObjects(filtered_objs, nil, false)
 	}
-	ls.printCollections(filtered_colls)
 
-	terminal.Print("\n")
+	ls.printDataObjectsAndCollections(sourceEntry, filtered_objs, filtered_colls, accesses, false)
 
 	return nil
 }
 
-func (ls *LsCommand) listDataObject(sourcePath string) error {
-	cwd := config.GetCWD()
-	home := config.GetHomeDir()
-	zone := ls.account.ClientZone
-	sourcePath = commons_path.MakeIRODSPath(cwd, home, zone, sourcePath)
-
-	sourceEntry, err := ls.filesystem.Stat(sourcePath)
-	if err != nil {
-		if !irodsclient_types.IsFileNotFoundError(err) {
-			return errors.Wrapf(err, "failed to find data-object/collection %q", sourcePath)
-		}
-
-		return errors.Wrapf(err, "failed to stat %q", sourcePath)
-	}
-
+func (ls *LsCommand) listDataObject(sourceEntry *irodsclient_fs.Entry) error {
 	connection, err := ls.filesystem.GetMetadataConnection(true)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get connection")
 	}
 	defer ls.filesystem.ReturnMetadataConnection(connection)
 
-	if sourceEntry.IsDir() {
-		// collection
-		return nil
-	}
-
 	// data object
-	entry, err := irodsclient_irodsfs.GetDataObject(connection, sourcePath)
+	entry, err := irodsclient_irodsfs.GetDataObject(connection, sourceEntry.Path)
 	if err != nil {
-		return errors.Wrapf(err, "failed to get data-object %q", sourcePath)
+		return errors.Wrapf(err, "failed to get data-object %q", sourceEntry.Path)
 	}
 
 	entries := []*irodsclient_types.IRODSDataObject{entry}
 
+	var accesses []*irodsclient_types.IRODSAccess
+
 	if ls.listFlagValues.Access {
 		// get access
-		accesses, err := irodsclient_irodsfs.ListDataObjectAccessesWithoutCollection(connection, sourcePath)
+		accesses, err = irodsclient_irodsfs.ListDataObjectAccessesWithoutCollection(connection, sourceEntry.Path)
 		if err != nil {
-			return errors.Wrapf(err, "failed to get access for data-object %q", sourcePath)
+			return errors.Wrapf(err, "failed to get access for data-object %q", sourceEntry.Path)
 		}
-
-		ls.printDataObjects(entries, accesses, true)
-	} else {
-		ls.printDataObjects(entries, nil, true)
 	}
+
+	ls.printDataObjectsAndCollections(nil, entries, nil, accesses, true)
 
 	return nil
 }
@@ -340,56 +367,420 @@ func (ls *LsCommand) filterHiddenDataObjects(entries []*irodsclient_types.IRODSD
 	return filteredEntries
 }
 
-func (ls *LsCommand) printCurrentCollection(sourcePath string, accesses []*irodsclient_types.IRODSAccess, inherit *irodsclient_types.IRODSAccessInheritance) {
-	terminal.Printf("%s:\n", sourcePath)
-	if len(accesses) > 0 {
-		ls.printAccesses(accesses)
+func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.Entry, objectEntries []*irodsclient_types.IRODSDataObject, collectionEntries []*irodsclient_types.IRODSCollection, accesses []*irodsclient_types.IRODSAccess, showFullPath bool) {
+	logger := log.WithFields(log.Fields{})
+
+	// table writer
+	tableWriter := table.NewWriter()
+	tableWriter.SetOutputMirror(terminal.GetTerminalWriter())
+	if parentEntry != nil {
+		tableWriter.SetTitle(fmt.Sprintf("Content of %s", parentEntry.Path))
 	}
 
-	if inherit != nil {
-		ls.printInheritance(inherit)
+	pathTitle := "Name"
+	if showFullPath {
+		pathTitle = "Path"
 	}
-}
 
-func (ls *LsCommand) printCollections(entries []*irodsclient_types.IRODSCollection) {
-	sort.SliceStable(entries, ls.getCollectionSortFunction(entries, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
-	for _, entry := range entries {
-		terminal.Printf("  C- %s\n", entry.Path)
-	}
-}
-
-func (ls *LsCommand) printDataObjects(entries []*irodsclient_types.IRODSDataObject, accesses []*irodsclient_types.IRODSAccess, showFullPath bool) {
 	// access is optional
 	if ls.listFlagValues.Format == format.ListFormatNormal {
-		sort.SliceStable(entries, ls.getDataObjectSortFunction(entries, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
-		for _, entry := range entries {
-			accessesForEntry := []*irodsclient_types.IRODSAccess{}
-			for _, access := range accesses {
-				if access.Path == entry.Path {
-					accessesForEntry = append(accessesForEntry, access)
+		if ls.listFlagValues.Access {
+			tableWriter.AppendHeader([]interface{}{
+				"Type",
+				pathTitle,
+				"Access",
+				"Description",
+			}, table.RowConfig{})
+		} else {
+			tableWriter.AppendHeader([]interface{}{
+				"Type",
+				pathTitle,
+				"Description",
+			}, table.RowConfig{})
+		}
+
+		sort.SliceStable(objectEntries, ls.getDataObjectSortFunction(objectEntries, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
+		sort.SliceStable(collectionEntries, ls.getCollectionSortFunction(collectionEntries, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
+
+		for _, entry := range objectEntries {
+			newName := entry.Name
+			if showFullPath {
+				newName = entry.Path
+			}
+
+			desc := ""
+			if ls.requireDecryption(entry.Path) {
+				// need to decrypt
+				encryptionMode := encryption.DetectEncryptionMode(newName)
+				if encryptionMode != encryption.EncryptionModeNone {
+					encryptManager := ls.getEncryptionManagerForDecryption(encryptionMode)
+
+					decryptedFilename, err := encryptManager.DecryptFilename(newName)
+					if err != nil {
+						logger.Debugf("%+v", err)
+						desc = "decryption_failed"
+					} else {
+						desc = fmt.Sprintf("original file name: %q", decryptedFilename)
+					}
 				}
 			}
-			ls.printDataObjectShort(entry, accessesForEntry, showFullPath)
+
+			if ls.listFlagValues.Access {
+				accessesForEntry := []*irodsclient_types.IRODSAccess{}
+				for _, access := range accesses {
+					if access.Path == entry.Path {
+						accessesForEntry = append(accessesForEntry, access)
+					}
+				}
+
+				accessString := ""
+				if len(accessesForEntry) > 0 {
+					accessString = ls.getAccessesString(accessesForEntry)
+				}
+
+				tableWriter.AppendRow([]interface{}{
+					"data-object",
+					newName,
+					accessString,
+					desc,
+				}, table.RowConfig{})
+			} else {
+				tableWriter.AppendRow([]interface{}{
+					"data-object",
+					newName,
+					desc,
+				}, table.RowConfig{})
+			}
+		}
+
+		for _, entry := range collectionEntries {
+			newName := entry.Name
+			if showFullPath {
+				newName = entry.Path
+			}
+
+			if ls.listFlagValues.Access {
+				tableWriter.AppendRow([]interface{}{
+					"collection",
+					newName,
+					"",
+					"",
+				}, table.RowConfig{})
+			} else {
+				tableWriter.AppendRow([]interface{}{
+					"collection",
+					newName,
+					"",
+				}, table.RowConfig{})
+			}
 		}
 	} else {
-		replicas := ls.flattenReplicas(entries)
-		sort.SliceStable(replicas, ls.getFlatReplicaSortFunction(replicas, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
-		ls.printReplicas(replicas, accesses)
-	}
-}
-
-func (ls *LsCommand) flattenReplicas(objects []*irodsclient_types.IRODSDataObject) []*FlatReplica {
-	var result []*FlatReplica
-	for _, object := range objects {
-		for _, replica := range object.Replicas {
-			flatReplica := FlatReplica{
-				DataObject: object,
-				Replica:    replica,
+		switch ls.listFlagValues.Format {
+		case format.ListFormatLong:
+			if ls.listFlagValues.Access {
+				tableWriter.AppendHeader([]interface{}{
+					"Type",
+					pathTitle,
+					"Replica Owner",
+					"Replica Number",
+					"Resource Hierarchy",
+					"Size",
+					"Modify Time",
+					"Status",
+					"Access",
+					"Description",
+				}, table.RowConfig{})
+			} else {
+				tableWriter.AppendHeader([]interface{}{
+					"Type",
+					pathTitle,
+					"Replica Owner",
+					"Replica Number",
+					"Resource Hierarchy",
+					"Size",
+					"Modify Time",
+					"Status",
+					"Description",
+				}, table.RowConfig{})
 			}
-			result = append(result, &flatReplica)
+		case format.ListFormatVeryLong:
+			if ls.listFlagValues.Access {
+				tableWriter.AppendHeader([]interface{}{
+					"Type",
+					pathTitle,
+					"Replica Owner",
+					"Replica Number",
+					"Resource Hierarchy",
+					"Size",
+					"Modify Time",
+					"Status",
+					"Checksum",
+					"Replica Path",
+					"Access",
+					"Description",
+				}, table.RowConfig{})
+			} else {
+				tableWriter.AppendHeader([]interface{}{
+					"Type",
+					pathTitle,
+					"Replica Owner",
+					"Replica Number",
+					"Resource Hierarchy",
+					"Size",
+					"Modify Time",
+					"Status",
+					"Checksum",
+					"Replica Path",
+					"Description",
+				}, table.RowConfig{})
+			}
+		default:
+			if ls.listFlagValues.Access {
+				tableWriter.AppendHeader([]interface{}{
+					"Type",
+					pathTitle,
+					"Replica Number",
+					"Access",
+					"Description",
+				}, table.RowConfig{})
+			} else {
+				tableWriter.AppendHeader([]interface{}{
+					"Type",
+					pathTitle,
+					"Replica Number",
+					"Description",
+				}, table.RowConfig{})
+			}
+		}
+
+		// replicas
+		var replicas []*FlatReplica
+		for _, entry := range objectEntries {
+			for _, replica := range entry.Replicas {
+				flatReplica := FlatReplica{
+					DataObject: entry,
+					Replica:    replica,
+				}
+				replicas = append(replicas, &flatReplica)
+			}
+		}
+
+		sort.SliceStable(replicas, ls.getFlatReplicaSortFunction(replicas, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
+		sort.SliceStable(collectionEntries, ls.getCollectionSortFunction(collectionEntries, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
+
+		for _, replica := range replicas {
+			newName := replica.DataObject.Name
+			if showFullPath {
+				newName = replica.DataObject.Path
+			}
+
+			desc := ""
+			if ls.requireDecryption(replica.DataObject.Path) {
+				// need to decrypt
+				encryptionMode := encryption.DetectEncryptionMode(newName)
+				if encryptionMode != encryption.EncryptionModeNone {
+					encryptManager := ls.getEncryptionManagerForDecryption(encryptionMode)
+
+					decryptedFilename, err := encryptManager.DecryptFilename(newName)
+					if err != nil {
+						logger.Debugf("%+v", err)
+						desc = "decryption_failed"
+					} else {
+						desc = fmt.Sprintf("original file name: %q", decryptedFilename)
+					}
+				}
+			}
+
+			size := fmt.Sprintf("%v", replica.DataObject.Size)
+			if ls.listFlagValues.HumanReadableSizes {
+				size = humanize.Bytes(uint64(replica.DataObject.Size))
+			}
+
+			accessString := ""
+			if ls.listFlagValues.Access {
+				accessesForEntry := []*irodsclient_types.IRODSAccess{}
+				for _, access := range accesses {
+					if access.Path == replica.DataObject.Path {
+						accessesForEntry = append(accessesForEntry, access)
+					}
+				}
+
+				if len(accessesForEntry) > 0 {
+					accessString = ls.getAccessesString(accessesForEntry)
+				}
+			}
+
+			switch ls.listFlagValues.Format {
+			case format.ListFormatLong:
+				if ls.listFlagValues.Access {
+					tableWriter.AppendRow([]interface{}{
+						"data-object",
+						newName,
+						replica.Replica.Owner,
+						replica.Replica.Number,
+						replica.Replica.ResourceHierarchy,
+						size,
+						types.MakeDateTimeStringHM(replica.Replica.ModifyTime),
+						ls.getStatusMark(replica.Replica.Status),
+						accessString,
+						desc,
+					}, table.RowConfig{})
+				} else {
+					tableWriter.AppendRow([]interface{}{
+						"data-object",
+						newName,
+						replica.Replica.Owner,
+						replica.Replica.Number,
+						replica.Replica.ResourceHierarchy,
+						size,
+						types.MakeDateTimeStringHM(replica.Replica.ModifyTime),
+						ls.getStatusMark(replica.Replica.Status),
+						desc,
+					}, table.RowConfig{})
+				}
+			case format.ListFormatVeryLong:
+				if ls.listFlagValues.Access {
+					tableWriter.AppendRow([]interface{}{
+						"data-object",
+						newName,
+						replica.Replica.Owner,
+						replica.Replica.Number,
+						replica.Replica.ResourceHierarchy,
+						size,
+						types.MakeDateTimeStringHM(replica.Replica.ModifyTime),
+						ls.getStatusMark(replica.Replica.Status),
+						replica.Replica.Checksum.IRODSChecksumString,
+						replica.Replica.Path,
+						accessString,
+						desc,
+					}, table.RowConfig{})
+				} else {
+					tableWriter.AppendRow([]interface{}{
+						"data-object",
+						newName,
+						replica.Replica.Owner,
+						replica.Replica.Number,
+						replica.Replica.ResourceHierarchy,
+						size,
+						types.MakeDateTimeStringHM(replica.Replica.ModifyTime),
+						ls.getStatusMark(replica.Replica.Status),
+						replica.Replica.Checksum.IRODSChecksumString,
+						replica.Replica.Path,
+						desc,
+					}, table.RowConfig{})
+				}
+			default:
+				if ls.listFlagValues.Access {
+					tableWriter.AppendRow([]interface{}{
+						"data-object",
+						newName,
+						replica.Replica.Number,
+						accessString,
+						desc,
+					}, table.RowConfig{})
+				} else {
+					tableWriter.AppendRow([]interface{}{
+						"data-object",
+						newName,
+						replica.Replica.Number,
+						desc,
+					}, table.RowConfig{})
+				}
+			}
+		}
+
+		for _, entry := range collectionEntries {
+			newName := entry.Name
+			if showFullPath {
+				newName = entry.Path
+			}
+
+			switch ls.listFlagValues.Format {
+			case format.ListFormatLong:
+				if ls.listFlagValues.Access {
+					tableWriter.AppendRow([]interface{}{
+						"collection",
+						newName,
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+					}, table.RowConfig{})
+				} else {
+					tableWriter.AppendRow([]interface{}{
+						"collection",
+						newName,
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+					}, table.RowConfig{})
+				}
+			case format.ListFormatVeryLong:
+				if ls.listFlagValues.Access {
+					tableWriter.AppendRow([]interface{}{
+						"collection",
+						newName,
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+					}, table.RowConfig{})
+				} else {
+					tableWriter.AppendRow([]interface{}{
+						"collection",
+						newName,
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+						"",
+					}, table.RowConfig{})
+				}
+			default:
+				if ls.listFlagValues.Access {
+					tableWriter.AppendRow([]interface{}{
+						"collection",
+						newName,
+						"",
+						"",
+					}, table.RowConfig{})
+				} else {
+					tableWriter.AppendRow([]interface{}{
+						"collection",
+						newName,
+						"",
+					}, table.RowConfig{})
+				}
+			}
 		}
 	}
-	return result
+
+	switch ls.outputFormatFlagValues.Format {
+	case format.OutputFormatCSV:
+		tableWriter.RenderCSV()
+	case format.OutputFormatTSV:
+		tableWriter.RenderTSV()
+	default:
+		tableWriter.Render()
+	}
 }
 
 func (ls *LsCommand) getFlatReplicaSortFunction(entries []*FlatReplica, sortOrder format.ListSortOrder, sortReverse bool) func(i int, j int) bool {
@@ -527,89 +918,21 @@ func (ls *LsCommand) getDataObjectModifyTime(object *irodsclient_types.IRODSData
 	return maxTime
 }
 
-func (ls *LsCommand) printDataObjectShort(entry *irodsclient_types.IRODSDataObject, accesses []*irodsclient_types.IRODSAccess, showFullPath bool) {
-	logger := log.WithFields(log.Fields{
-		"path":           entry.Path,
-		"show_full_path": showFullPath,
-	})
-
-	newName := entry.Name
-	if showFullPath {
-		newName = entry.Path
-	}
-
-	if ls.requireDecryption(entry.Path) {
-		// need to decrypt
-		encryptionMode := encryption.DetectEncryptionMode(newName)
-		if encryptionMode != encryption.EncryptionModeNone {
-			encryptManager := ls.getEncryptionManagerForDecryption(encryptionMode)
-
-			decryptedFilename, err := encryptManager.DecryptFilename(newName)
-			if err != nil {
-				logger.Debugf("%+v", err)
-				newName = fmt.Sprintf("%s\t(decryption_failed)", newName)
-			} else {
-				newName = fmt.Sprintf("%s\t(encrypted: %q)", newName, decryptedFilename)
-			}
-		}
-	}
-
-	terminal.Printf("  %s\n", newName)
-	if len(accesses) > 0 {
-		ls.printAccesses(accesses)
-	}
-}
-
-func (ls *LsCommand) printAccesses(accesses []*irodsclient_types.IRODSAccess) {
-	terminal.Print("        ACL - ")
-
+func (ls *LsCommand) getAccessesString(accesses []*irodsclient_types.IRODSAccess) string {
 	// group first then user
-	first := true
+	accessStrings := []string{}
+
 	for _, access := range accesses {
 		if access.UserType == irodsclient_types.IRODSUserRodsGroup {
-			if first {
-				first = false
-			} else {
-				terminal.Print("\t")
-			}
-
-			terminal.Printf("g:%s#%s:%s", access.UserName, access.UserZone, access.AccessLevel)
+			accString := fmt.Sprintf("g:%s#%s:%s", access.UserName, access.UserZone, access.AccessLevel)
+			accessStrings = append(accessStrings, accString)
+		} else {
+			accString := fmt.Sprintf("%s#%s:%s", access.UserName, access.UserZone, access.AccessLevel)
+			accessStrings = append(accessStrings, accString)
 		}
 	}
 
-	for _, access := range accesses {
-		if access.UserType != irodsclient_types.IRODSUserRodsGroup {
-			if first {
-				first = false
-			} else {
-				terminal.Print("\t")
-			}
-
-			terminal.Printf("%s#%s:%s", access.UserName, access.UserZone, access.AccessLevel)
-		}
-	}
-	terminal.Print("\n")
-}
-
-func (ls *LsCommand) printInheritance(inherit *irodsclient_types.IRODSAccessInheritance) {
-	inheritance := "Disabled"
-	if inherit.Inheritance {
-		inheritance = "Enabled"
-	}
-
-	terminal.Printf("        Inheritance - %s\n", inheritance)
-}
-
-func (ls *LsCommand) printReplicas(flatReplicas []*FlatReplica, accesses []*irodsclient_types.IRODSAccess) {
-	for _, flatReplica := range flatReplicas {
-		accessesForEntry := []*irodsclient_types.IRODSAccess{}
-		for _, access := range accesses {
-			if access.Path == flatReplica.DataObject.Path {
-				accessesForEntry = append(accessesForEntry, access)
-			}
-		}
-		ls.printReplica(*flatReplica, accessesForEntry)
-	}
+	return strings.Join(accessStrings, ",\n")
 }
 
 func (ls *LsCommand) getEncryptionManagerForDecryption(mode encryption.EncryptionMode) *encryption.EncryptionManager {
@@ -623,55 +946,6 @@ func (ls *LsCommand) getEncryptionManagerForDecryption(mode encryption.Encryptio
 	}
 
 	return manager
-}
-
-func (ls *LsCommand) printReplica(flatReplica FlatReplica, accesses []*irodsclient_types.IRODSAccess) {
-	logger := log.WithFields(log.Fields{
-		"path": flatReplica.DataObject.Path,
-	})
-
-	newName := flatReplica.DataObject.Name
-
-	if ls.requireDecryption(flatReplica.DataObject.Path) {
-		// need to decrypt
-		encryptionMode := encryption.DetectEncryptionMode(newName)
-		if encryptionMode != encryption.EncryptionModeNone {
-			encryptManager := ls.getEncryptionManagerForDecryption(encryptionMode)
-
-			decryptedFilename, err := encryptManager.DecryptFilename(newName)
-			if err != nil {
-				logger.Debugf("%+v", err)
-				newName = fmt.Sprintf("%s\tdecryption_failed", newName)
-			} else {
-				newName = fmt.Sprintf("%s\t(encrypted: %q)", newName, decryptedFilename)
-			}
-		}
-	}
-
-	size := fmt.Sprintf("%v", flatReplica.DataObject.Size)
-	if ls.listFlagValues.HumanReadableSizes {
-		size = humanize.Bytes(uint64(flatReplica.DataObject.Size))
-	}
-
-	switch ls.listFlagValues.Format {
-	case format.ListFormatNormal:
-		terminal.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
-	case format.ListFormatLong:
-		modTime := types.MakeDateTimeStringHM(flatReplica.Replica.ModifyTime)
-		terminal.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
-			size, modTime, ls.getStatusMark(flatReplica.Replica.Status), newName)
-	case format.ListFormatVeryLong:
-		modTime := types.MakeDateTimeStringHM(flatReplica.Replica.ModifyTime)
-		terminal.Printf("  %s\t%d\t%s\t%s\t%s\t%s\t%s\n", flatReplica.Replica.Owner, flatReplica.Replica.Number, flatReplica.Replica.ResourceHierarchy,
-			size, modTime, ls.getStatusMark(flatReplica.Replica.Status), newName)
-		terminal.Printf("    %s\t%s\n", flatReplica.Replica.Checksum.IRODSChecksumString, flatReplica.Replica.Path)
-	default:
-		terminal.Printf("  %d\t%s\n", flatReplica.Replica.Number, newName)
-	}
-
-	if len(accesses) > 0 {
-		ls.printAccesses(accesses)
-	}
 }
 
 func (ls *LsCommand) getCollectionSortFunction(entries []*irodsclient_types.IRODSCollection, sortOrder format.ListSortOrder, sortReverse bool) func(i int, j int) bool {
@@ -718,10 +992,10 @@ func (ls *LsCommand) getCollectionSortFunction(entries []*irodsclient_types.IROD
 func (ls *LsCommand) getStatusMark(status string) string {
 	switch status {
 	case "0":
-		return "X" // stale
+		return "Stale" // stale
 	case "1":
-		return "&" // good
+		return "Good" // good
 	default:
-		return "?"
+		return "Unknown"
 	}
 }

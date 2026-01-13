@@ -2,14 +2,15 @@ package subcmd
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/format"
 	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/jedib0t/go-pretty/v6/table"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -27,7 +28,7 @@ var psCmd = &cobra.Command{
 func AddPsCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(psCmd, true)
-
+	flag.SetOutputFormatFlags(psCmd)
 	flag.SetProcessFilterFlags(psCmd)
 
 	rootCmd.AddCommand(psCmd)
@@ -46,6 +47,7 @@ type PsCommand struct {
 	command *cobra.Command
 
 	commonFlagValues        *flag.CommonFlagValues
+	outputFormatFlagValues  *flag.OutputFormatFlagValues
 	processFilterFlagValues *flag.ProcessFilterFlagValues
 
 	account    *irodsclient_types.IRODSAccount
@@ -57,6 +59,7 @@ func NewPsCommand(command *cobra.Command, args []string) (*PsCommand, error) {
 		command: command,
 
 		commonFlagValues:        flag.GetCommonFlagValues(command),
+		outputFormatFlagValues:  flag.GetOutputFormatFlagValues(),
 		processFilterFlagValues: flag.GetProcessFilterFlagValues(),
 	}
 
@@ -112,13 +115,15 @@ func (ps *PsCommand) listProcesses() error {
 		return errors.Wrapf(err, "failed to stat process addr %q, zone %q", ps.processFilterFlagValues.Address, ps.processFilterFlagValues.Zone)
 	}
 
-	t := table.NewWriter()
-	t.SetOutputMirror(os.Stdout)
+	// table writer
+	tableWriter := table.NewWriter()
+	tableWriter.SetOutputMirror(terminal.GetTerminalWriter())
+	tableWriter.SetTitle("iRODS Processes")
 
 	switch ps.processFilterFlagValues.GroupBy {
 	case flag.ProcessGroupByNone:
-		t.AppendHeader(table.Row{
-			"Process ID",
+		tableWriter.AppendHeader(table.Row{
+			"ID",
 			"Proxy User",
 			"Client User",
 			"Client Address",
@@ -128,7 +133,7 @@ func (ps *PsCommand) listProcesses() error {
 		}, table.RowConfig{})
 
 		for _, process := range processes {
-			t.AppendRow(table.Row{
+			tableWriter.AppendRow(table.Row{
 				fmt.Sprintf("%d", process.ID),
 				fmt.Sprintf("%s#%s", process.ProxyUser, process.ProxyZone),
 				fmt.Sprintf("%s#%s", process.ClientUser, process.ClientZone),
@@ -139,7 +144,7 @@ func (ps *PsCommand) listProcesses() error {
 			}, table.RowConfig{})
 		}
 	case flag.ProcessGroupByUser:
-		t.AppendHeader(table.Row{
+		tableWriter.AppendHeader(table.Row{
 			"Proxy User",
 			"Client User",
 			"Process Count",
@@ -162,7 +167,7 @@ func (ps *PsCommand) listProcesses() error {
 			if _, ok := procDisplayed[key]; !ok {
 				procDisplayed[key] = true
 
-				t.AppendRow(table.Row{
+				tableWriter.AppendRow(table.Row{
 					fmt.Sprintf("%s#%s", process.ProxyUser, process.ProxyZone),
 					fmt.Sprintf("%s#%s", process.ClientUser, process.ClientZone),
 					fmt.Sprintf("%d", procCount[key]),
@@ -170,7 +175,7 @@ func (ps *PsCommand) listProcesses() error {
 			}
 		}
 	case flag.ProcessGroupByProgram:
-		t.AppendHeader(table.Row{
+		tableWriter.AppendHeader(table.Row{
 			"Client Program",
 			"Process Count",
 		}, table.RowConfig{})
@@ -192,7 +197,7 @@ func (ps *PsCommand) listProcesses() error {
 			if _, ok := procDisplayed[key]; !ok {
 				procDisplayed[key] = true
 
-				t.AppendRow(table.Row{
+				tableWriter.AppendRow(table.Row{
 					process.ClientProgram,
 					fmt.Sprintf("%d", procCount[key]),
 				}, table.RowConfig{})
@@ -200,7 +205,14 @@ func (ps *PsCommand) listProcesses() error {
 		}
 	}
 
-	t.Render()
+	switch ps.outputFormatFlagValues.Format {
+	case format.OutputFormatCSV:
+		tableWriter.RenderCSV()
+	case format.OutputFormatTSV:
+		tableWriter.RenderTSV()
+	default:
+		tableWriter.Render()
+	}
 
 	return nil
 }

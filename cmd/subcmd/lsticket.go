@@ -2,6 +2,7 @@ package subcmd
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
@@ -12,7 +13,7 @@ import (
 	"github.com/cyverse/gocommands/commons/irods"
 	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/cyverse/gocommands/commons/types"
-	log "github.com/sirupsen/logrus"
+	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -28,7 +29,7 @@ var lsticketCmd = &cobra.Command{
 func AddLsticketCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(lsticketCmd, true)
-
+	flag.SetOutputFormatFlags(lsticketCmd)
 	flag.SetListFlags(lsticketCmd, true, true)
 
 	rootCmd.AddCommand(lsticketCmd)
@@ -46,8 +47,9 @@ func processLsticketCommand(command *cobra.Command, args []string) error {
 type LsTicketCommand struct {
 	command *cobra.Command
 
-	commonFlagValues *flag.CommonFlagValues
-	listFlagValues   *flag.ListFlagValues
+	commonFlagValues       *flag.CommonFlagValues
+	outputFormatFlagValues *flag.OutputFormatFlagValues
+	listFlagValues         *flag.ListFlagValues
 
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
@@ -59,8 +61,9 @@ func NewLsTicketCommand(command *cobra.Command, args []string) (*LsTicketCommand
 	lsTicket := &LsTicketCommand{
 		command: command,
 
-		commonFlagValues: flag.GetCommonFlagValues(command),
-		listFlagValues:   flag.GetListFlagValues(),
+		commonFlagValues:       flag.GetCommonFlagValues(command),
+		outputFormatFlagValues: flag.GetOutputFormatFlagValues(),
+		listFlagValues:         flag.GetListFlagValues(),
 	}
 
 	// tickets
@@ -97,54 +100,81 @@ func (lsTicket *LsTicketCommand) Process() error {
 		irods.UpdateIRODSFSClientTimeout(lsTicket.filesystem, lsTicket.commonFlagValues.Timeout)
 	}
 
-	if len(lsTicket.tickets) == 0 {
-		return lsTicket.listTickets()
+	// table writer
+	tableWriter := table.NewWriter()
+	tableWriter.SetOutputMirror(terminal.GetTerminalWriter())
+	tableWriter.SetTitle("iRODS Tickets")
+
+	// run
+	columns := []interface{}{
+		"ID",
+		"Name",
+		"Type",
+		"Owner",
+		"Owner Zone",
+		"Object Type",
+		"Path",
+		"Uses Limit",
+		"Uses Count",
+		"Write File Limit",
+		"Write File Count",
+		"Write Byte Limit",
+		"Write Byte Count",
+		"Expiry Time",
 	}
 
-	for _, ticketName := range lsTicket.tickets {
-		err = lsTicket.printTicket(ticketName)
+	if lsTicket.listFlagValues.Format == format.ListFormatLong || lsTicket.listFlagValues.Format == format.ListFormatVeryLong {
+		columns = append(columns,
+			"Allowed Hosts",
+			"Allowed Users",
+			"Allowed Groups",
+		)
+	}
+
+	tableWriter.AppendHeader(columns, table.RowConfig{})
+
+	// run
+	tickets := []*irodsclient_types.IRODSTicket{}
+	if len(lsTicket.tickets) == 0 {
+		tickets, err = lsTicket.filesystem.ListTickets()
 		if err != nil {
-			return errors.Wrapf(err, "failed to print ticket %q", ticketName)
+			return errors.Wrapf(err, "failed to list tickets")
 		}
+	} else {
+		for _, ticketName := range lsTicket.tickets {
+			ticket, err := lsTicket.filesystem.GetTicket(ticketName)
+			if err != nil {
+				return errors.Wrapf(err, "failed to get ticket %q", ticketName)
+			}
+
+			tickets = append(tickets, ticket)
+		}
+	}
+
+	if len(tickets) > 0 {
+		err = lsTicket.printTickets(tableWriter, tickets)
+		if err != nil {
+			return errors.Wrapf(err, "failed to print tickets")
+		}
+	}
+
+	switch lsTicket.outputFormatFlagValues.Format {
+	case format.OutputFormatCSV:
+		tableWriter.RenderCSV()
+	case format.OutputFormatTSV:
+		tableWriter.RenderTSV()
+	default:
+		tableWriter.Render()
 	}
 
 	return nil
 }
 
-func (lsTicket *LsTicketCommand) listTickets() error {
-	tickets, err := lsTicket.filesystem.ListTickets()
-	if err != nil {
-		return errors.Wrapf(err, "failed to list tickets")
-	}
-
-	if len(tickets) == 0 {
-		terminal.Printf("Found no tickets\n")
-	}
-
-	return lsTicket.printTickets(tickets)
-}
-
-func (lsTicket *LsTicketCommand) printTicket(ticketName string) error {
-	logger := log.WithFields(log.Fields{
-		"ticket_name": ticketName,
-	})
-
-	logger.Debug("print ticket")
-
-	ticket, err := lsTicket.filesystem.GetTicket(ticketName)
-	if err != nil {
-		return errors.Wrapf(err, "failed to get ticket %q", ticketName)
-	}
-
-	tickets := []*irodsclient_types.IRODSTicket{ticket}
-	return lsTicket.printTickets(tickets)
-}
-
-func (lsTicket *LsTicketCommand) printTickets(tickets []*irodsclient_types.IRODSTicket) error {
+func (lsTicket *LsTicketCommand) printTickets(tableWriter table.Writer, tickets []*irodsclient_types.IRODSTicket) error {
 	sort.SliceStable(tickets, lsTicket.getTicketSortFunction(tickets, lsTicket.listFlagValues.SortOrder, lsTicket.listFlagValues.SortReverse))
 
 	for _, ticket := range tickets {
-		err := lsTicket.printTicketInternal(ticket)
+		err := lsTicket.printTicketInternal(tableWriter, ticket)
 		if err != nil {
 			return errors.Wrapf(err, "failed to print ticket %q", ticket.Name)
 		}
@@ -153,26 +183,27 @@ func (lsTicket *LsTicketCommand) printTickets(tickets []*irodsclient_types.IRODS
 	return nil
 }
 
-func (lsTicket *LsTicketCommand) printTicketInternal(ticket *irodsclient_types.IRODSTicket) error {
-	terminal.Printf("[%s]\n", ticket.Name)
-	terminal.Printf("  id: %d\n", ticket.ID)
-	terminal.Printf("  name: %s\n", ticket.Name)
-	terminal.Printf("  type: %s\n", ticket.Type)
-	terminal.Printf("  owner: %s\n", ticket.Owner)
-	terminal.Printf("  owner zone: %s\n", ticket.OwnerZone)
-	terminal.Printf("  object type: %s\n", ticket.ObjectType)
-	terminal.Printf("  path: %s\n", ticket.Path)
-	terminal.Printf("  uses limit: %d\n", ticket.UsesLimit)
-	terminal.Printf("  uses count: %d\n", ticket.UsesCount)
-	terminal.Printf("  write file limit: %d\n", ticket.WriteFileLimit)
-	terminal.Printf("  write file count: %d\n", ticket.WriteFileCount)
-	terminal.Printf("  write byte limit: %d\n", ticket.WriteByteLimit)
-	terminal.Printf("  write byte count: %d\n", ticket.WriteByteCount)
+func (lsTicket *LsTicketCommand) printTicketInternal(tableWriter table.Writer, ticket *irodsclient_types.IRODSTicket) error {
+	expiryTime := "none"
+	if !ticket.ExpirationTime.IsZero() {
+		expiryTime = types.MakeDateTimeString(ticket.ExpirationTime)
+	}
 
-	if ticket.ExpirationTime.IsZero() {
-		terminal.Print("  expiry time: none\n")
-	} else {
-		terminal.Printf("  expiry time: %s\n", types.MakeDateTimeString(ticket.ExpirationTime))
+	columnValues := []interface{}{
+		ticket.ID,
+		ticket.Name,
+		ticket.Type,
+		ticket.Owner,
+		ticket.OwnerZone,
+		ticket.ObjectType,
+		ticket.Path,
+		ticket.UsesLimit,
+		ticket.UsesCount,
+		ticket.WriteFileLimit,
+		ticket.WriteFileCount,
+		ticket.WriteByteLimit,
+		ticket.WriteByteCount,
+		expiryTime,
 	}
 
 	if lsTicket.listFlagValues.Format == format.ListFormatLong || lsTicket.listFlagValues.Format == format.ListFormatVeryLong {
@@ -182,34 +213,30 @@ func (lsTicket *LsTicketCommand) printTicketInternal(ticket *irodsclient_types.I
 		}
 
 		if restrictions != nil {
-			if len(restrictions.AllowedHosts) == 0 {
-				terminal.Printf("  No host restrictions\n")
-			} else {
-				for _, host := range restrictions.AllowedHosts {
-					terminal.Printf("  Allowed Hosts:\n")
-					terminal.Printf("    - %s\n", host)
-				}
+			hosts := "any"
+			if len(restrictions.AllowedHosts) > 0 {
+				hosts = strings.Join(restrictions.AllowedHosts, ", ")
 			}
 
-			if len(restrictions.AllowedUserNames) == 0 {
-				terminal.Printf("  No user restrictions\n")
-			} else {
-				for _, user := range restrictions.AllowedUserNames {
-					terminal.Printf("  Allowed Users:\n")
-					terminal.Printf("    - %s\n", user)
-				}
+			users := "any"
+			if len(restrictions.AllowedUserNames) > 0 {
+				users = strings.Join(restrictions.AllowedUserNames, ", ")
 			}
 
-			if len(restrictions.AllowedGroupNames) == 0 {
-				terminal.Printf("  No group restrictions\n")
-			} else {
-				for _, group := range restrictions.AllowedGroupNames {
-					terminal.Printf("  Allowed Groups:\n")
-					terminal.Printf("    - %s\n", group)
-				}
+			groups := "any"
+			if len(restrictions.AllowedGroupNames) > 0 {
+				groups = strings.Join(restrictions.AllowedGroupNames, ", ")
 			}
+
+			columnValues = append(columnValues,
+				hosts,
+				users,
+				groups,
+			)
 		}
 	}
+
+	tableWriter.AppendRow(columnValues, table.RowConfig{})
 
 	return nil
 }

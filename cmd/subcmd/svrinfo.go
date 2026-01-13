@@ -1,14 +1,14 @@
 package subcmd
 
 import (
-	"os"
-
 	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/format"
 	"github.com/cyverse/gocommands/commons/irods"
+	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
@@ -25,6 +25,7 @@ var svrinfoCmd = &cobra.Command{
 func AddSvrinfoCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(svrinfoCmd, true)
+	flag.SetOutputFormatFlags(svrinfoCmd)
 
 	rootCmd.AddCommand(svrinfoCmd)
 }
@@ -41,7 +42,8 @@ func processSvrinfoCommand(command *cobra.Command, args []string) error {
 type SvrInfoCommand struct {
 	command *cobra.Command
 
-	commonFlagValues *flag.CommonFlagValues
+	commonFlagValues       *flag.CommonFlagValues
+	outputFormatFlagValues *flag.OutputFormatFlagValues
 
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
@@ -51,7 +53,8 @@ func NewSvrInfoCommand(command *cobra.Command, args []string) (*SvrInfoCommand, 
 	svrInfo := &SvrInfoCommand{
 		command: command,
 
-		commonFlagValues: flag.GetCommonFlagValues(command),
+		commonFlagValues:       flag.GetCommonFlagValues(command),
+		outputFormatFlagValues: flag.GetOutputFormatFlagValues(),
 	}
 
 	return svrInfo, nil
@@ -100,24 +103,33 @@ func (svrInfo *SvrInfoCommand) displayInfo() error {
 		return errors.Wrapf(err, "failed to get server version")
 	}
 
-	t := table.NewWriter()
-	t.SetOutputMirror(os.Stdout)
+	// table writer
+	tableWriter := table.NewWriter()
+	tableWriter.SetOutputMirror(terminal.GetTerminalWriter())
+	tableWriter.SetTitle("iRODS Server Information")
 
-	t.AppendRows([]table.Row{
+	tableWriter.AppendHeader(table.Row{
+		"Release Version",
+		"API Version",
+		"iRODS Zone",
+	})
+
+	tableWriter.AppendRows([]table.Row{
 		{
-			"Release Version",
 			ver.ReleaseVersion,
-		},
-		{
-			"API Version",
 			ver.APIVersion,
-		},
-		{
-			"iRODS Zone",
 			svrInfo.account.ClientZone,
 		},
 	}, table.RowConfig{})
-	t.Render()
+
+	switch svrInfo.outputFormatFlagValues.Format {
+	case format.OutputFormatCSV:
+		tableWriter.RenderCSV()
+	case format.OutputFormatTSV:
+		tableWriter.RenderTSV()
+	default:
+		tableWriter.Render()
+	}
 
 	return nil
 }
