@@ -21,7 +21,6 @@ import (
 	"github.com/cyverse/gocommands/commons/types"
 	"github.com/cyverse/gocommands/commons/wildcard"
 	"github.com/dustin/go-humanize"
-	"github.com/jedib0t/go-pretty/v6/table"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -154,12 +153,16 @@ func (ls *LsCommand) Process() error {
 	}
 
 	// run
+	outputFormatter := format.NewOutputFormatter(terminal.GetTerminalWriter())
+
 	for _, sourcePath := range ls.sourcePaths {
-		err = ls.listSourcePath(sourcePath)
+		err = ls.listSourcePath(outputFormatter, sourcePath)
 		if err != nil {
 			return errors.Wrapf(err, "failed to print path %q", sourcePath)
 		}
 	}
+
+	outputFormatter.Render(ls.outputFormatFlagValues.Format)
 
 	return nil
 }
@@ -177,7 +180,7 @@ func (ls *LsCommand) requireDecryption(sourcePath string) bool {
 	return mode != encryption.EncryptionModeNone
 }
 
-func (ls *LsCommand) listSourcePath(sourcePath string) error {
+func (ls *LsCommand) listSourcePath(outputFormatter *format.OutputFormatter, sourcePath string) error {
 	cwd := config.GetCWD()
 	home := config.GetHomeDir()
 	zone := ls.account.ClientZone
@@ -194,24 +197,29 @@ func (ls *LsCommand) listSourcePath(sourcePath string) error {
 
 	if sourceEntry.IsDir() {
 		// dir
-		return ls.listCollection(sourceEntry)
+		err := ls.listCollection(outputFormatter, sourceEntry)
+		if err != nil {
+			return errors.Wrapf(err, "failed to list collection %q", sourcePath)
+		}
 	} else {
 		// file
-		return ls.listDataObject(sourceEntry)
+		err := ls.listDataObject(outputFormatter, sourceEntry)
+		if err != nil {
+			return errors.Wrapf(err, "failed to list data-object %q", sourcePath)
+		}
 	}
+
+	return nil
 }
 
-func (ls *LsCommand) listCollection(sourceEntry *irodsclient_fs.Entry) error {
+func (ls *LsCommand) listCollection(outputFormatter *format.OutputFormatter, sourceEntry *irodsclient_fs.Entry) error {
 	connection, err := ls.filesystem.GetMetadataConnection(true)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get connection")
 	}
 	defer ls.filesystem.ReturnMetadataConnection(connection)
 
-	// table writer
-	tableWriter := table.NewWriter()
-	tableWriter.SetOutputMirror(terminal.GetTerminalWriter())
-	tableWriter.SetTitle("iRODS Collection")
+	outputFormatterTable := outputFormatter.NewTable("iRODS Collection")
 
 	// collection
 	if ls.listFlagValues.Access {
@@ -239,38 +247,29 @@ func (ls *LsCommand) listCollection(sourceEntry *irodsclient_fs.Entry) error {
 			}
 		}
 
-		tableWriter.AppendHeader([]interface{}{
+		outputFormatterTable.SetHeader([]string{
 			"Type",
 			"Path",
 			"Access",
 			"Inheritance",
-		}, table.RowConfig{})
+		})
 
-		tableWriter.AppendRow([]interface{}{
+		outputFormatterTable.AppendRow([]interface{}{
 			"collection",
 			sourceEntry.Path,
 			accessString,
 			inheritanceString,
-		}, table.RowConfig{})
+		})
 	} else {
-		tableWriter.AppendHeader([]interface{}{
+		outputFormatterTable.SetHeader([]string{
 			"Type",
 			"Path",
-		}, table.RowConfig{})
+		})
 
-		tableWriter.AppendRow([]interface{}{
+		outputFormatterTable.AppendRow([]interface{}{
 			"collection",
 			sourceEntry.Path,
-		}, table.RowConfig{})
-	}
-
-	switch ls.outputFormatFlagValues.Format {
-	case format.OutputFormatCSV:
-		tableWriter.RenderCSV()
-	case format.OutputFormatTSV:
-		tableWriter.RenderTSV()
-	default:
-		tableWriter.Render()
+		})
 	}
 
 	// sub-collections and data-objects
@@ -298,12 +297,12 @@ func (ls *LsCommand) listCollection(sourceEntry *irodsclient_fs.Entry) error {
 		}
 	}
 
-	ls.printDataObjectsAndCollections(sourceEntry, filtered_objs, filtered_colls, accesses, false)
+	ls.printDataObjectsAndCollections(outputFormatter, sourceEntry, filtered_objs, filtered_colls, accesses, false)
 
 	return nil
 }
 
-func (ls *LsCommand) listDataObject(sourceEntry *irodsclient_fs.Entry) error {
+func (ls *LsCommand) listDataObject(outputFormatter *format.OutputFormatter, sourceEntry *irodsclient_fs.Entry) error {
 	connection, err := ls.filesystem.GetMetadataConnection(true)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get connection")
@@ -328,7 +327,7 @@ func (ls *LsCommand) listDataObject(sourceEntry *irodsclient_fs.Entry) error {
 		}
 	}
 
-	ls.printDataObjectsAndCollections(nil, entries, nil, accesses, true)
+	ls.printDataObjectsAndCollections(outputFormatter, nil, entries, nil, accesses, true)
 
 	return nil
 }
@@ -367,15 +366,15 @@ func (ls *LsCommand) filterHiddenDataObjects(entries []*irodsclient_types.IRODSD
 	return filteredEntries
 }
 
-func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.Entry, objectEntries []*irodsclient_types.IRODSDataObject, collectionEntries []*irodsclient_types.IRODSCollection, accesses []*irodsclient_types.IRODSAccess, showFullPath bool) {
+func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.OutputFormatter, parentEntry *irodsclient_fs.Entry, objectEntries []*irodsclient_types.IRODSDataObject, collectionEntries []*irodsclient_types.IRODSCollection, accesses []*irodsclient_types.IRODSAccess, showFullPath bool) {
 	logger := log.WithFields(log.Fields{})
 
-	// table writer
-	tableWriter := table.NewWriter()
-	tableWriter.SetOutputMirror(terminal.GetTerminalWriter())
+	title := "iRODS Data Object"
 	if parentEntry != nil {
-		tableWriter.SetTitle(fmt.Sprintf("Content of %s", parentEntry.Path))
+		title = fmt.Sprintf("Content of %s", parentEntry.Path)
 	}
+
+	outputFormatterTable := outputFormatter.NewTable(title)
 
 	pathTitle := "Name"
 	if showFullPath {
@@ -385,18 +384,18 @@ func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.
 	// access is optional
 	if ls.listFlagValues.Format == format.ListFormatNormal {
 		if ls.listFlagValues.Access {
-			tableWriter.AppendHeader([]interface{}{
+			outputFormatterTable.SetHeader([]string{
 				"Type",
 				pathTitle,
 				"Access",
 				"Description",
-			}, table.RowConfig{})
+			})
 		} else {
-			tableWriter.AppendHeader([]interface{}{
+			outputFormatterTable.SetHeader([]string{
 				"Type",
 				pathTitle,
 				"Description",
-			}, table.RowConfig{})
+			})
 		}
 
 		sort.SliceStable(objectEntries, ls.getDataObjectSortFunction(objectEntries, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
@@ -438,18 +437,18 @@ func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.
 					accessString = ls.getAccessesString(accessesForEntry)
 				}
 
-				tableWriter.AppendRow([]interface{}{
+				outputFormatterTable.AppendRow([]interface{}{
 					"data-object",
 					newName,
 					accessString,
 					desc,
-				}, table.RowConfig{})
+				})
 			} else {
-				tableWriter.AppendRow([]interface{}{
+				outputFormatterTable.AppendRow([]interface{}{
 					"data-object",
 					newName,
 					desc,
-				}, table.RowConfig{})
+				})
 			}
 		}
 
@@ -460,25 +459,25 @@ func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.
 			}
 
 			if ls.listFlagValues.Access {
-				tableWriter.AppendRow([]interface{}{
+				outputFormatterTable.AppendRow([]interface{}{
 					"collection",
 					newName,
 					"",
 					"",
-				}, table.RowConfig{})
+				})
 			} else {
-				tableWriter.AppendRow([]interface{}{
+				outputFormatterTable.AppendRow([]interface{}{
 					"collection",
 					newName,
 					"",
-				}, table.RowConfig{})
+				})
 			}
 		}
 	} else {
 		switch ls.listFlagValues.Format {
 		case format.ListFormatLong:
 			if ls.listFlagValues.Access {
-				tableWriter.AppendHeader([]interface{}{
+				outputFormatterTable.SetHeader([]string{
 					"Type",
 					pathTitle,
 					"Replica Owner",
@@ -489,9 +488,9 @@ func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.
 					"Status",
 					"Access",
 					"Description",
-				}, table.RowConfig{})
+				})
 			} else {
-				tableWriter.AppendHeader([]interface{}{
+				outputFormatterTable.SetHeader([]string{
 					"Type",
 					pathTitle,
 					"Replica Owner",
@@ -501,11 +500,11 @@ func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.
 					"Modify Time",
 					"Status",
 					"Description",
-				}, table.RowConfig{})
+				})
 			}
 		case format.ListFormatVeryLong:
 			if ls.listFlagValues.Access {
-				tableWriter.AppendHeader([]interface{}{
+				outputFormatterTable.SetHeader([]string{
 					"Type",
 					pathTitle,
 					"Replica Owner",
@@ -518,9 +517,9 @@ func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.
 					"Replica Path",
 					"Access",
 					"Description",
-				}, table.RowConfig{})
+				})
 			} else {
-				tableWriter.AppendHeader([]interface{}{
+				outputFormatterTable.SetHeader([]string{
 					"Type",
 					pathTitle,
 					"Replica Owner",
@@ -532,24 +531,24 @@ func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.
 					"Checksum",
 					"Replica Path",
 					"Description",
-				}, table.RowConfig{})
+				})
 			}
 		default:
 			if ls.listFlagValues.Access {
-				tableWriter.AppendHeader([]interface{}{
+				outputFormatterTable.SetHeader([]string{
 					"Type",
 					pathTitle,
 					"Replica Number",
 					"Access",
 					"Description",
-				}, table.RowConfig{})
+				})
 			} else {
-				tableWriter.AppendHeader([]interface{}{
+				outputFormatterTable.SetHeader([]string{
 					"Type",
 					pathTitle,
 					"Replica Number",
 					"Description",
-				}, table.RowConfig{})
+				})
 			}
 		}
 
@@ -613,7 +612,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.
 			switch ls.listFlagValues.Format {
 			case format.ListFormatLong:
 				if ls.listFlagValues.Access {
-					tableWriter.AppendRow([]interface{}{
+					outputFormatterTable.AppendRow([]interface{}{
 						"data-object",
 						newName,
 						replica.Replica.Owner,
@@ -624,9 +623,9 @@ func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.
 						ls.getStatusMark(replica.Replica.Status),
 						accessString,
 						desc,
-					}, table.RowConfig{})
+					})
 				} else {
-					tableWriter.AppendRow([]interface{}{
+					outputFormatterTable.AppendRow([]interface{}{
 						"data-object",
 						newName,
 						replica.Replica.Owner,
@@ -636,11 +635,11 @@ func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.
 						types.MakeDateTimeStringHM(replica.Replica.ModifyTime),
 						ls.getStatusMark(replica.Replica.Status),
 						desc,
-					}, table.RowConfig{})
+					})
 				}
 			case format.ListFormatVeryLong:
 				if ls.listFlagValues.Access {
-					tableWriter.AppendRow([]interface{}{
+					outputFormatterTable.AppendRow([]interface{}{
 						"data-object",
 						newName,
 						replica.Replica.Owner,
@@ -653,9 +652,9 @@ func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.
 						replica.Replica.Path,
 						accessString,
 						desc,
-					}, table.RowConfig{})
+					})
 				} else {
-					tableWriter.AppendRow([]interface{}{
+					outputFormatterTable.AppendRow([]interface{}{
 						"data-object",
 						newName,
 						replica.Replica.Owner,
@@ -667,24 +666,24 @@ func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.
 						replica.Replica.Checksum.IRODSChecksumString,
 						replica.Replica.Path,
 						desc,
-					}, table.RowConfig{})
+					})
 				}
 			default:
 				if ls.listFlagValues.Access {
-					tableWriter.AppendRow([]interface{}{
+					outputFormatterTable.AppendRow([]interface{}{
 						"data-object",
 						newName,
 						replica.Replica.Number,
 						accessString,
 						desc,
-					}, table.RowConfig{})
+					})
 				} else {
-					tableWriter.AppendRow([]interface{}{
+					outputFormatterTable.AppendRow([]interface{}{
 						"data-object",
 						newName,
 						replica.Replica.Number,
 						desc,
-					}, table.RowConfig{})
+					})
 				}
 			}
 		}
@@ -698,7 +697,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.
 			switch ls.listFlagValues.Format {
 			case format.ListFormatLong:
 				if ls.listFlagValues.Access {
-					tableWriter.AppendRow([]interface{}{
+					outputFormatterTable.AppendRow([]interface{}{
 						"collection",
 						newName,
 						"",
@@ -709,9 +708,9 @@ func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.
 						"",
 						"",
 						"",
-					}, table.RowConfig{})
+					})
 				} else {
-					tableWriter.AppendRow([]interface{}{
+					outputFormatterTable.AppendRow([]interface{}{
 						"collection",
 						newName,
 						"",
@@ -721,11 +720,11 @@ func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.
 						"",
 						"",
 						"",
-					}, table.RowConfig{})
+					})
 				}
 			case format.ListFormatVeryLong:
 				if ls.listFlagValues.Access {
-					tableWriter.AppendRow([]interface{}{
+					outputFormatterTable.AppendRow([]interface{}{
 						"collection",
 						newName,
 						"",
@@ -738,9 +737,9 @@ func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.
 						"",
 						"",
 						"",
-					}, table.RowConfig{})
+					})
 				} else {
-					tableWriter.AppendRow([]interface{}{
+					outputFormatterTable.AppendRow([]interface{}{
 						"collection",
 						newName,
 						"",
@@ -752,34 +751,25 @@ func (ls *LsCommand) printDataObjectsAndCollections(parentEntry *irodsclient_fs.
 						"",
 						"",
 						"",
-					}, table.RowConfig{})
+					})
 				}
 			default:
 				if ls.listFlagValues.Access {
-					tableWriter.AppendRow([]interface{}{
+					outputFormatterTable.AppendRow([]interface{}{
 						"collection",
 						newName,
 						"",
 						"",
-					}, table.RowConfig{})
+					})
 				} else {
-					tableWriter.AppendRow([]interface{}{
+					outputFormatterTable.AppendRow([]interface{}{
 						"collection",
 						newName,
 						"",
-					}, table.RowConfig{})
+					})
 				}
 			}
 		}
-	}
-
-	switch ls.outputFormatFlagValues.Format {
-	case format.OutputFormatCSV:
-		tableWriter.RenderCSV()
-	case format.OutputFormatTSV:
-		tableWriter.RenderTSV()
-	default:
-		tableWriter.Render()
 	}
 }
 

@@ -6,9 +6,10 @@ import (
 )
 
 type OutputFormatFlagValues struct {
-	Format         format.OutputFormat
-	csvFormatInput bool
-	tsvFormatInput bool
+	Format          format.OutputFormat
+	csvFormatInput  bool
+	tsvFormatInput  bool
+	jsonFormatInput bool
 }
 
 var (
@@ -18,6 +19,7 @@ var (
 func SetOutputFormatFlags(command *cobra.Command) {
 	command.Flags().BoolVarP(&outputFormatFlagValues.csvFormatInput, "output_csv", "", false, "Display results in CSV format")
 	command.Flags().BoolVarP(&outputFormatFlagValues.tsvFormatInput, "output_tsv", "", false, "Display results in TSV format")
+	command.Flags().BoolVarP(&outputFormatFlagValues.jsonFormatInput, "output_json", "", false, "Display results in JSON format")
 }
 
 func GetOutputFormatFlagValues() *OutputFormatFlagValues {
@@ -25,6 +27,8 @@ func GetOutputFormatFlagValues() *OutputFormatFlagValues {
 		outputFormatFlagValues.Format = format.OutputFormatCSV
 	} else if outputFormatFlagValues.tsvFormatInput {
 		outputFormatFlagValues.Format = format.OutputFormatTSV
+	} else if outputFormatFlagValues.jsonFormatInput {
+		outputFormatFlagValues.Format = format.OutputFormatJSON
 	} else {
 		outputFormatFlagValues.Format = format.OutputFormatTable
 	}

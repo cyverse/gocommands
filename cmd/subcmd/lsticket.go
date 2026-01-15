@@ -13,7 +13,6 @@ import (
 	"github.com/cyverse/gocommands/commons/irods"
 	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/cyverse/gocommands/commons/types"
-	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -100,13 +99,11 @@ func (lsTicket *LsTicketCommand) Process() error {
 		irods.UpdateIRODSFSClientTimeout(lsTicket.filesystem, lsTicket.commonFlagValues.Timeout)
 	}
 
-	// table writer
-	tableWriter := table.NewWriter()
-	tableWriter.SetOutputMirror(terminal.GetTerminalWriter())
-	tableWriter.SetTitle("iRODS Tickets")
+	outputFormatter := format.NewOutputFormatter(terminal.GetTerminalWriter())
+	outputFormatterTable := outputFormatter.NewTable("iRODS Tickets")
 
 	// run
-	columns := []interface{}{
+	columns := []string{
 		"ID",
 		"Name",
 		"Type",
@@ -131,7 +128,7 @@ func (lsTicket *LsTicketCommand) Process() error {
 		)
 	}
 
-	tableWriter.AppendHeader(columns, table.RowConfig{})
+	outputFormatterTable.SetHeader(columns)
 
 	// run
 	tickets := []*irodsclient_types.IRODSTicket{}
@@ -152,29 +149,22 @@ func (lsTicket *LsTicketCommand) Process() error {
 	}
 
 	if len(tickets) > 0 {
-		err = lsTicket.printTickets(tableWriter, tickets)
+		err = lsTicket.printTickets(outputFormatterTable, tickets)
 		if err != nil {
 			return errors.Wrapf(err, "failed to print tickets")
 		}
 	}
 
-	switch lsTicket.outputFormatFlagValues.Format {
-	case format.OutputFormatCSV:
-		tableWriter.RenderCSV()
-	case format.OutputFormatTSV:
-		tableWriter.RenderTSV()
-	default:
-		tableWriter.Render()
-	}
+	outputFormatter.Render(lsTicket.outputFormatFlagValues.Format)
 
 	return nil
 }
 
-func (lsTicket *LsTicketCommand) printTickets(tableWriter table.Writer, tickets []*irodsclient_types.IRODSTicket) error {
+func (lsTicket *LsTicketCommand) printTickets(outputFormatterTable *format.OutputFormatterTable, tickets []*irodsclient_types.IRODSTicket) error {
 	sort.SliceStable(tickets, lsTicket.getTicketSortFunction(tickets, lsTicket.listFlagValues.SortOrder, lsTicket.listFlagValues.SortReverse))
 
 	for _, ticket := range tickets {
-		err := lsTicket.printTicketInternal(tableWriter, ticket)
+		err := lsTicket.printTicketInternal(outputFormatterTable, ticket)
 		if err != nil {
 			return errors.Wrapf(err, "failed to print ticket %q", ticket.Name)
 		}
@@ -183,7 +173,7 @@ func (lsTicket *LsTicketCommand) printTickets(tableWriter table.Writer, tickets 
 	return nil
 }
 
-func (lsTicket *LsTicketCommand) printTicketInternal(tableWriter table.Writer, ticket *irodsclient_types.IRODSTicket) error {
+func (lsTicket *LsTicketCommand) printTicketInternal(outputFormatterTable *format.OutputFormatterTable, ticket *irodsclient_types.IRODSTicket) error {
 	expiryTime := "none"
 	if !ticket.ExpirationTime.IsZero() {
 		expiryTime = types.MakeDateTimeString(ticket.ExpirationTime)
@@ -236,7 +226,7 @@ func (lsTicket *LsTicketCommand) printTicketInternal(tableWriter table.Writer, t
 		}
 	}
 
-	tableWriter.AppendRow(columnValues, table.RowConfig{})
+	outputFormatterTable.AppendRow(columnValues)
 
 	return nil
 }

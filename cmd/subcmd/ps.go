@@ -11,7 +11,6 @@ import (
 	"github.com/cyverse/gocommands/commons/format"
 	"github.com/cyverse/gocommands/commons/irods"
 	"github.com/cyverse/gocommands/commons/terminal"
-	"github.com/jedib0t/go-pretty/v6/table"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -115,14 +114,12 @@ func (ps *PsCommand) listProcesses() error {
 		return errors.Wrapf(err, "failed to stat process addr %q, zone %q", ps.processFilterFlagValues.Address, ps.processFilterFlagValues.Zone)
 	}
 
-	// table writer
-	tableWriter := table.NewWriter()
-	tableWriter.SetOutputMirror(terminal.GetTerminalWriter())
-	tableWriter.SetTitle("iRODS Processes")
+	outputFormatter := format.NewOutputFormatter(terminal.GetTerminalWriter())
+	outputFormatterTable := outputFormatter.NewTable("iRODS Processes")
 
 	switch ps.processFilterFlagValues.GroupBy {
 	case flag.ProcessGroupByNone:
-		tableWriter.AppendHeader(table.Row{
+		outputFormatterTable.SetHeader([]string{
 			"ID",
 			"Proxy User",
 			"Client User",
@@ -130,10 +127,10 @@ func (ps *PsCommand) listProcesses() error {
 			"Client Program",
 			"Server Address",
 			"Start Time",
-		}, table.RowConfig{})
+		})
 
 		for _, process := range processes {
-			tableWriter.AppendRow(table.Row{
+			outputFormatterTable.AppendRow([]interface{}{
 				fmt.Sprintf("%d", process.ID),
 				fmt.Sprintf("%s#%s", process.ProxyUser, process.ProxyZone),
 				fmt.Sprintf("%s#%s", process.ClientUser, process.ClientZone),
@@ -141,14 +138,14 @@ func (ps *PsCommand) listProcesses() error {
 				process.ClientProgram,
 				process.ServerAddress,
 				process.StartTime,
-			}, table.RowConfig{})
+			})
 		}
 	case flag.ProcessGroupByUser:
-		tableWriter.AppendHeader(table.Row{
+		outputFormatterTable.SetHeader([]string{
 			"Proxy User",
 			"Client User",
 			"Process Count",
-		}, table.RowConfig{})
+		})
 
 		procCount := map[string]int{}
 		for _, process := range processes {
@@ -167,18 +164,18 @@ func (ps *PsCommand) listProcesses() error {
 			if _, ok := procDisplayed[key]; !ok {
 				procDisplayed[key] = true
 
-				tableWriter.AppendRow(table.Row{
+				outputFormatterTable.AppendRow([]interface{}{
 					fmt.Sprintf("%s#%s", process.ProxyUser, process.ProxyZone),
 					fmt.Sprintf("%s#%s", process.ClientUser, process.ClientZone),
 					fmt.Sprintf("%d", procCount[key]),
-				}, table.RowConfig{})
+				})
 			}
 		}
 	case flag.ProcessGroupByProgram:
-		tableWriter.AppendHeader(table.Row{
+		outputFormatterTable.SetHeader([]string{
 			"Client Program",
 			"Process Count",
-		}, table.RowConfig{})
+		})
 
 		procCount := map[string]int{}
 		for _, process := range processes {
@@ -197,22 +194,15 @@ func (ps *PsCommand) listProcesses() error {
 			if _, ok := procDisplayed[key]; !ok {
 				procDisplayed[key] = true
 
-				tableWriter.AppendRow(table.Row{
+				outputFormatterTable.AppendRow([]interface{}{
 					process.ClientProgram,
 					fmt.Sprintf("%d", procCount[key]),
-				}, table.RowConfig{})
+				})
 			}
 		}
 	}
 
-	switch ps.outputFormatFlagValues.Format {
-	case format.OutputFormatCSV:
-		tableWriter.RenderCSV()
-	case format.OutputFormatTSV:
-		tableWriter.RenderTSV()
-	default:
-		tableWriter.Render()
-	}
+	outputFormatter.Render(ps.outputFormatFlagValues.Format)
 
 	return nil
 }

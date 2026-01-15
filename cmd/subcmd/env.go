@@ -4,8 +4,8 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/format"
 	"github.com/cyverse/gocommands/commons/terminal"
-	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -21,6 +21,7 @@ var envCmd = &cobra.Command{
 func AddEnvCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(envCmd, true)
+	flag.SetOutputFormatFlags(envCmd)
 
 	rootCmd.AddCommand(envCmd)
 }
@@ -37,14 +38,16 @@ func processEnvCommand(command *cobra.Command, args []string) error {
 type EnvCommand struct {
 	command *cobra.Command
 
-	commonFlagValues *flag.CommonFlagValues
+	commonFlagValues       *flag.CommonFlagValues
+	outputFormatFlagValues *flag.OutputFormatFlagValues
 }
 
 func NewEnvCommand(command *cobra.Command, args []string) (*EnvCommand, error) {
 	env := &EnvCommand{
 		command: command,
 
-		commonFlagValues: flag.GetCommonFlagValues(command),
+		commonFlagValues:       flag.GetCommonFlagValues(command),
+		outputFormatFlagValues: flag.GetOutputFormatFlagValues(),
 	}
 
 	return env, nil
@@ -74,15 +77,17 @@ func (env *EnvCommand) printEnvironment() error {
 		return errors.Errorf("environment is not set")
 	}
 
-	t := table.NewWriter()
-	t.SetOutputMirror(terminal.GetTerminalWriter())
+	outputFormatter := format.NewOutputFormatter(terminal.GetTerminalWriter())
+	outputFormatterTable := outputFormatter.NewTable("iRODS Environment")
+
+	outputFormatterTable.SetHeader([]string{"Key", "Value"})
 
 	sessionConfig, err := envMgr.GetSessionConfig()
 	if err != nil {
 		return err
 	}
 
-	t.AppendRows([]table.Row{
+	outputFormatterTable.AppendRows([][]interface{}{
 		{
 			"Session Environment File",
 			envMgr.SessionFilePath,
@@ -187,8 +192,8 @@ func (env *EnvCommand) printEnvironment() error {
 			"SSL Encryption Hash Rounds",
 			envMgr.Environment.EncryptionNumHashRounds,
 		},
-	}, table.RowConfig{})
-	t.Render()
+	})
+	outputFormatter.Render(env.outputFormatFlagValues.Format)
 
 	return nil
 }

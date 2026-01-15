@@ -9,7 +9,6 @@ import (
 	"github.com/cyverse/gocommands/commons/format"
 	"github.com/cyverse/gocommands/commons/irods"
 	"github.com/cyverse/gocommands/commons/terminal"
-	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -103,33 +102,20 @@ func (svrInfo *SvrInfoCommand) displayInfo() error {
 		return errors.Wrapf(err, "failed to get server version")
 	}
 
-	// table writer
-	tableWriter := table.NewWriter()
-	tableWriter.SetOutputMirror(terminal.GetTerminalWriter())
-	tableWriter.SetTitle("iRODS Server Information")
-
-	tableWriter.AppendHeader(table.Row{
-		"Release Version",
+	outputFormatter := format.NewOutputFormatter(terminal.GetTerminalWriter())
+	outputFormatterTable := outputFormatter.NewTable("iRODS Server Information")
+	outputFormatterTable.SetHeader([]string{"Release Version",
 		"API Version",
 		"iRODS Zone",
 	})
 
-	tableWriter.AppendRows([]table.Row{
-		{
-			ver.ReleaseVersion,
-			ver.APIVersion,
-			svrInfo.account.ClientZone,
-		},
-	}, table.RowConfig{})
+	outputFormatterTable.AppendRow([]interface{}{
+		ver.ReleaseVersion,
+		ver.APIVersion,
+		svrInfo.account.ClientZone,
+	})
 
-	switch svrInfo.outputFormatFlagValues.Format {
-	case format.OutputFormatCSV:
-		tableWriter.RenderCSV()
-	case format.OutputFormatTSV:
-		tableWriter.RenderTSV()
-	default:
-		tableWriter.Render()
-	}
+	outputFormatter.Render(svrInfo.outputFormatFlagValues.Format)
 
 	return nil
 }

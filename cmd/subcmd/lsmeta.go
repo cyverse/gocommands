@@ -13,7 +13,6 @@ import (
 	"github.com/cyverse/gocommands/commons/path"
 	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/cyverse/gocommands/commons/types"
-	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 )
 
@@ -102,16 +101,14 @@ func (lsMeta *LsMetaCommand) Process() error {
 		irods.UpdateIRODSFSClientTimeout(lsMeta.filesystem, lsMeta.commonFlagValues.Timeout)
 	}
 
-	// table writer
-	tableWriter := table.NewWriter()
-	tableWriter.SetOutputMirror(terminal.GetTerminalWriter())
-	tableWriter.SetTitle("iRODS Metadata")
+	outputFormatter := format.NewOutputFormatter(terminal.GetTerminalWriter())
+	outputFormatterTable := outputFormatter.NewTable("iRODS Metadata")
 
 	if len(lsMeta.targetObjects) == 0 {
 		return errors.New("no target objects specified")
 	}
 
-	columns := []interface{}{
+	columns := []string{
 		"ID",
 		"Attribute",
 		"Value",
@@ -125,41 +122,34 @@ func (lsMeta *LsMetaCommand) Process() error {
 		)
 	}
 
-	tableWriter.AppendHeader(columns, table.RowConfig{})
+	outputFormatterTable.SetHeader(columns)
 
 	// run
 	for _, targetObject := range lsMeta.targetObjects {
 		if lsMeta.targetObjectFlagValues.Path {
-			err = lsMeta.listMetaForPath(tableWriter, targetObject)
+			err = lsMeta.listMetaForPath(outputFormatterTable, targetObject)
 			if err != nil {
 				return err
 			}
 		} else if lsMeta.targetObjectFlagValues.User {
-			err = lsMeta.listMetaForUser(tableWriter, targetObject)
+			err = lsMeta.listMetaForUser(outputFormatterTable, targetObject)
 			if err != nil {
 				return err
 			}
 		} else if lsMeta.targetObjectFlagValues.Resource {
-			err = lsMeta.listMetaForResource(tableWriter, targetObject)
+			err = lsMeta.listMetaForResource(outputFormatterTable, targetObject)
 			if err != nil {
 				return err
 			}
 		}
 	}
 
-	switch lsMeta.outputFormatFlagValues.Format {
-	case format.OutputFormatCSV:
-		tableWriter.RenderCSV()
-	case format.OutputFormatTSV:
-		tableWriter.RenderTSV()
-	default:
-		tableWriter.Render()
-	}
+	outputFormatter.Render(lsMeta.outputFormatFlagValues.Format)
 
 	return nil
 }
 
-func (lsMeta *LsMetaCommand) listMetaForPath(tableWriter table.Writer, targetPath string) error {
+func (lsMeta *LsMetaCommand) listMetaForPath(outputFormatterTable *format.OutputFormatterTable, targetPath string) error {
 	cwd := config.GetCWD()
 	home := config.GetHomeDir()
 	zone := lsMeta.account.ClientZone
@@ -170,51 +160,51 @@ func (lsMeta *LsMetaCommand) listMetaForPath(tableWriter table.Writer, targetPat
 		return errors.Wrapf(err, "failed to list meta for path %q", targetPath)
 	}
 
-	return lsMeta.printMetas(tableWriter, metas)
+	return lsMeta.printMetas(outputFormatterTable, metas)
 }
 
-func (lsMeta *LsMetaCommand) listMetaForUser(tableWriter table.Writer, username string) error {
+func (lsMeta *LsMetaCommand) listMetaForUser(outputFormatterTable *format.OutputFormatterTable, username string) error {
 	metas, err := lsMeta.filesystem.ListUserMetadata(username, lsMeta.account.ClientZone)
 	if err != nil {
 		return errors.Wrapf(err, "failed to list meta for user %q", username)
 	}
 
-	return lsMeta.printMetas(tableWriter, metas)
+	return lsMeta.printMetas(outputFormatterTable, metas)
 }
 
-func (lsMeta *LsMetaCommand) listMetaForResource(tableWriter table.Writer, resource string) error {
+func (lsMeta *LsMetaCommand) listMetaForResource(outputFormatterTable *format.OutputFormatterTable, resource string) error {
 	metas, err := lsMeta.filesystem.ListResourceMetadata(resource)
 	if err != nil {
 		return errors.Wrapf(err, "failed to list meta for resource %q", resource)
 	}
 
-	return lsMeta.printMetas(tableWriter, metas)
+	return lsMeta.printMetas(outputFormatterTable, metas)
 }
 
-func (lsMeta *LsMetaCommand) printMetas(tableWriter table.Writer, metas []*irodsclient_types.IRODSMeta) error {
+func (lsMeta *LsMetaCommand) printMetas(outputFormatterTable *format.OutputFormatterTable, metas []*irodsclient_types.IRODSMeta) error {
 	sort.SliceStable(metas, lsMeta.getMetaSortFunction(metas, lsMeta.listFlagValues.SortOrder, lsMeta.listFlagValues.SortReverse))
 
 	for _, meta := range metas {
-		lsMeta.printMetaInternal(tableWriter, meta)
+		lsMeta.printMetaInternal(outputFormatterTable, meta)
 	}
 
 	return nil
 }
 
-func (lsMeta *LsMetaCommand) printMetaInternal(tableWriter table.Writer, meta *irodsclient_types.IRODSMeta) {
+func (lsMeta *LsMetaCommand) printMetaInternal(outputFormatterTable *format.OutputFormatterTable, meta *irodsclient_types.IRODSMeta) {
 	name := meta.Name
 	if len(name) == 0 {
-		name = "<empty>"
+		name = ""
 	}
 
 	value := meta.Value
 	if len(value) == 0 {
-		value = "<empty>"
+		value = ""
 	}
 
 	units := meta.Units
 	if len(units) == 0 {
-		units = "<empty>"
+		units = ""
 	}
 
 	columnValues := []interface{}{
@@ -234,7 +224,7 @@ func (lsMeta *LsMetaCommand) printMetaInternal(tableWriter table.Writer, meta *i
 		)
 	}
 
-	tableWriter.AppendRow(columnValues, table.RowConfig{})
+	outputFormatterTable.AppendRow(columnValues)
 }
 
 func (lsMeta *LsMetaCommand) getMetaSortFunction(metas []*irodsclient_types.IRODSMeta, sortOrder format.ListSortOrder, sortReverse bool) func(i int, j int) bool {

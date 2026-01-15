@@ -1,14 +1,12 @@
 package subcmd
 
 import (
-	"os"
-
 	"github.com/cockroachdb/errors"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/commons/config"
+	"github.com/cyverse/gocommands/commons/format"
 	"github.com/cyverse/gocommands/commons/irods"
 	"github.com/cyverse/gocommands/commons/terminal"
-	"github.com/jedib0t/go-pretty/v6/table"
 	"github.com/spf13/cobra"
 
 	irodsclient_config "github.com/cyverse/go-irodsclient/config"
@@ -28,6 +26,7 @@ func AddInitCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(initCmd, false)
 	flag.SetInitFlags(initCmd)
+	flag.SetOutputFormatFlags(initCmd)
 
 	rootCmd.AddCommand(initCmd)
 }
@@ -44,8 +43,9 @@ func processInitCommand(command *cobra.Command, args []string) error {
 type InitCommand struct {
 	command *cobra.Command
 
-	commonFlagValues *flag.CommonFlagValues
-	initFlagValues   *flag.InitFlagValues
+	commonFlagValues       *flag.CommonFlagValues
+	outputFormatFlagValues *flag.OutputFormatFlagValues
+	initFlagValues         *flag.InitFlagValues
 
 	environmentManager *irodsclient_config.ICommandsEnvironmentManager
 	account            *irodsclient_types.IRODSAccount
@@ -55,8 +55,9 @@ func NewInitCommand(command *cobra.Command, args []string) (*InitCommand, error)
 	init := &InitCommand{
 		command: command,
 
-		commonFlagValues: flag.GetCommonFlagValues(command),
-		initFlagValues:   flag.GetInitFlagValues(),
+		commonFlagValues:       flag.GetCommonFlagValues(command),
+		outputFormatFlagValues: flag.GetOutputFormatFlagValues(),
+		initFlagValues:         flag.GetInitFlagValues(),
 	}
 
 	return init, nil
@@ -145,10 +146,11 @@ func (init *InitCommand) PrintAccount() error {
 		return errors.Errorf("environment is not set")
 	}
 
-	t := table.NewWriter()
-	t.SetOutputMirror(os.Stdout)
+	outputFormatter := format.NewOutputFormatter(terminal.GetTerminalWriter())
+	outputFormatterTable := outputFormatter.NewTable("iRODS Account Information")
+	outputFormatterTable.SetHeader([]string{"Key", "Value"})
 
-	t.AppendRows([]table.Row{
+	outputFormatterTable.AppendRows([][]interface{}{
 		{
 			"iRODS Host",
 			envMgr.Environment.Host,
@@ -169,7 +171,8 @@ func (init *InitCommand) PrintAccount() error {
 			"iRODS Authentication Scheme",
 			envMgr.Environment.AuthenticationScheme,
 		},
-	}, table.RowConfig{})
-	t.Render()
+	})
+	outputFormatter.Render(init.outputFormatFlagValues.Format)
+
 	return nil
 }
