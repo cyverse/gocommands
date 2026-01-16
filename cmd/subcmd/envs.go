@@ -94,7 +94,7 @@ func (envs *EnvsCommand) printEnvironments() error {
 
 	envFileNames := []string{}
 	for _, envFile := range envFiles {
-		if !envFile.IsDir() && strings.HasSuffix(envFile.Name(), ".json") {
+		if !envFile.IsDir() && envs.isTargetEnvFile(envFile.Name()) {
 			// environment file
 			envFileNames = append(envFileNames, envFile.Name())
 		}
@@ -137,7 +137,7 @@ func (envs *EnvsCommand) printEnvironments() error {
 			continue
 		}
 
-		environmentName := strings.TrimSuffix(envFileName, ".json")
+		environmentName := envs.getEnvName(envFileName)
 		if envFilePath == irodsclient_config.GetDefaultEnvironmentFilePath() {
 			environmentName += " (current)"
 		}
@@ -156,4 +156,12 @@ func (envs *EnvsCommand) printEnvironments() error {
 	outputFormatter.Render(envs.outputFormatFlagValues.Format)
 
 	return nil
+}
+
+func (envs *EnvsCommand) isTargetEnvFile(p string) bool {
+	return strings.HasSuffix(p, ".env.json")
+}
+
+func (envs *EnvsCommand) getEnvName(p string) string {
+	return strings.TrimSuffix(p, ".env.json")
 }

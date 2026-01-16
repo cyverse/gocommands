@@ -100,18 +100,18 @@ func (switchEnv *SwitchEnvCommand) switchEnvironment(targetEnv string) error {
 
 	targetEnvFilePath := ""
 	for _, envFile := range envFiles {
-		if !envFile.IsDir() && strings.HasSuffix(envFile.Name(), ".json") && envFile.Name() != "irods_environment.json" {
+		if !envFile.IsDir() && switchEnv.isTargetEnvFile(envFile.Name()) {
 			// environment file
 			envFilePath := filepath.Join(dirPath, envFile.Name())
 
-			if targetEnv == envFile.Name() || targetEnv+".json" == envFile.Name() || targetEnv == envFilePath {
+			if targetEnv == envFile.Name() || switchEnv.getEnvName(envFile.Name()) == targetEnv || targetEnv == envFilePath {
 				targetEnvFilePath = envFilePath
 			}
 		}
 	}
 
 	if targetEnvFilePath == "" {
-		targetEnvFilePath := filepath.Join(dirPath, targetEnv+".json")
+		targetEnvFilePath := filepath.Join(dirPath, switchEnv.makeEnvFileName(targetEnv))
 		return irodsclient_types.NewFileNotFoundError(targetEnvFilePath)
 	}
 
@@ -133,7 +133,7 @@ func (switchEnv *SwitchEnvCommand) switchEnvironment(targetEnv string) error {
 
 	err = os.WriteFile(irodsclient_config.GetDefaultEnvironmentFilePath(), envData, 0644)
 	if err != nil {
-		return errors.Wrapf(err, "failed to write environment file %q", filepath.Join(dirPath, "irods_environment.json"))
+		return errors.Wrapf(err, "failed to write environment file %q", irodsclient_config.GetDefaultEnvironmentFilePath())
 	}
 
 	// load the new environment
@@ -227,4 +227,17 @@ func (switchEnv *SwitchEnvCommand) PrintAccount(envMgr *irodsclient_config.IComm
 	outputFormatter.Render(switchEnv.outputFormatFlagValues.Format)
 
 	return nil
+}
+
+func (switchEnv *SwitchEnvCommand) isTargetEnvFile(p string) bool {
+	return strings.HasSuffix(p, ".env.json")
+}
+
+func (switchEnv *SwitchEnvCommand) getEnvName(p string) string {
+	return strings.TrimSuffix(p, ".env.json")
+}
+
+func (switchEnv *SwitchEnvCommand) makeEnvFileName(envName string) string {
+	envName = strings.TrimSuffix(envName, ".env.json")
+	return envName + ".env.json"
 }
