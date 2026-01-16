@@ -84,7 +84,7 @@ func (env *EnvCommand) printEnvironment() error {
 
 	sessionConfig, err := envMgr.GetSessionConfig()
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "failed to get session config")
 	}
 
 	outputFormatterTable.AppendRows([][]interface{}{
