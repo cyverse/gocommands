@@ -75,6 +75,7 @@ func GetProgressWriter(displayPath bool) progress.Writer {
 	progressWriter.Style().Visibility.Value = true
 	progressWriter.Style().Visibility.ETAOverall = false
 	progressWriter.Style().Visibility.TrackerOverall = false
+	progressWriter.Style().Visibility.Speed = true
 
 	return progressWriter
 }
