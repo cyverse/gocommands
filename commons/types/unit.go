@@ -54,6 +54,20 @@ func ParseSize(size string) (int64, error) {
 	}
 }
 
+func SizeString(bytes int64) string {
+	if bytes >= TeraBytes {
+		return strconv.FormatFloat(float64(bytes)/float64(TeraBytes), 'f', 2, 64) + "TB"
+	} else if bytes >= GigaBytes {
+		return strconv.FormatFloat(float64(bytes)/float64(GigaBytes), 'f', 2, 64) + "GB"
+	} else if bytes >= MegaBytes {
+		return strconv.FormatFloat(float64(bytes)/float64(MegaBytes), 'f', 2, 64) + "MB"
+	} else if bytes >= KiloBytes {
+		return strconv.FormatFloat(float64(bytes)/float64(KiloBytes), 'f', 2, 64) + "KB"
+	} else {
+		return strconv.FormatInt(bytes, 10) + "B"
+	}
+}
+
 func ParseTime(t string) (int, error) {
 	t = strings.TrimSpace(t)
 	t = strings.ToUpper(t)

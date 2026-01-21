@@ -106,6 +106,10 @@ type BputCommand struct {
 	transferReportManager         *transfer.TransferReportManager
 	updatedPathMap                map[string]bool
 	mutex                         sync.RWMutex // mutex for updatedPathMap
+
+	totalUploadedFiles int
+	totalUploadedBytes int64
+	startTime          time.Time
 }
 
 func NewBputCommand(command *cobra.Command, args []string) (*BputCommand, error) {
@@ -128,7 +132,10 @@ func NewBputCommand(command *cobra.Command, args []string) (*BputCommand, error)
 		postTransferFlagValues:         flag.GetPostTransferFlagValues(),
 		transferReportFlagValues:       flag.GetTransferReportFlagValues(command),
 
-		updatedPathMap: map[string]bool{},
+		updatedPathMap:     map[string]bool{},
+		totalUploadedFiles: 0,
+		totalUploadedBytes: 0,
+		startTime:          time.Now(),
 	}
 
 	bput.maxConnectionNum = bput.parallelTransferFlagValues.ThreadNumber
@@ -290,6 +297,15 @@ func (bput *BputCommand) Process() error {
 
 	if postProcessErr != nil {
 		return errors.Wrap(postProcessErr, "failed to perform post process jobs")
+	}
+
+	// print final summary
+	if bput.progressFlagValues.ShowProgress {
+		timeTaken := time.Since(bput.startTime).Seconds()
+		totalUploadedSize := types.SizeString(bput.totalUploadedBytes)
+		bps := float64(bput.totalUploadedBytes) / timeTaken
+		bpsString := fmt.Sprintf("%s/s", types.SizeString(int64(bps)))
+		terminal.Printf("Uploaded %d files, %s in total, time taken: %.2f seconds, average speed: %s\n", bput.totalUploadedFiles, totalUploadedSize, timeTaken, bpsString)
 	}
 
 	return nil
@@ -640,6 +656,9 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 		job.Progress("extract", tarballStat.Size(), tarballStat.Size(), false)
 
 		logger.Debug("removed a tarball")
+
+		bput.totalUploadedFiles += bun.GetEntryNumber()
+		bput.totalUploadedBytes += bun.GetSize()
 
 		return nil
 	}

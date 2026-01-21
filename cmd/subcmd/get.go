@@ -108,6 +108,10 @@ type GetCommand struct {
 	transferReportManager *transfer.TransferReportManager
 	updatedPathMap        map[string]bool
 	mutex                 sync.RWMutex // mutex for updatedPathMap
+
+	totalDownloadedFiles int
+	totalDownloadedBytes int64
+	startTime            time.Time
 }
 
 func NewGetCommand(command *cobra.Command, args []string) (*GetCommand, error) {
@@ -132,7 +136,10 @@ func NewGetCommand(command *cobra.Command, args []string) (*GetCommand, error) {
 		transferReportFlagValues:       flag.GetTransferReportFlagValues(command),
 		wildcardSearchFlagValues:       flag.GetWildcardSearchFlagValues(),
 
-		updatedPathMap: map[string]bool{},
+		updatedPathMap:       map[string]bool{},
+		totalDownloadedFiles: 0,
+		totalDownloadedBytes: 0,
+		startTime:            time.Now(),
 	}
 
 	get.maxConnectionNum = get.parallelTransferFlagValues.ThreadNumber
@@ -267,6 +274,15 @@ func (get *GetCommand) Process() error {
 
 	if postProcessErr != nil {
 		return errors.Wrap(postProcessErr, "failed to perform post process jobs")
+	}
+
+	// print final summary
+	if get.progressFlagValues.ShowProgress {
+		timeTaken := time.Since(get.startTime).Seconds()
+		totalDownloadedSize := types.SizeString(get.totalDownloadedBytes)
+		bps := float64(get.totalDownloadedBytes) / timeTaken
+		bpsString := fmt.Sprintf("%s/s", types.SizeString(int64(bps)))
+		terminal.Printf("Downloaded %d files, %s in total, time taken: %.2f seconds, average speed: %s\n", get.totalDownloadedFiles, totalDownloadedSize, timeTaken, bpsString)
 	}
 
 	return nil
@@ -467,6 +483,9 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 			reportTransfer(downloadResult, downloadErr, notes...)
 			return errors.Wrapf(downloadErr, "failed to download %q to %q", sourceEntry.Path, targetPath)
 		}
+
+		get.totalDownloadedFiles++
+		get.totalDownloadedBytes += sourceEntry.Size
 
 		// decrypt
 		if get.requireDecryption(sourceEntry.Path) {

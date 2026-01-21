@@ -104,6 +104,10 @@ type PutCommand struct {
 	transferReportManager         *transfer.TransferReportManager
 	updatedPathMap                map[string]bool
 	mutex                         sync.RWMutex // mutex for updatedPathMap
+
+	totalUploadedFiles int
+	totalUploadedBytes int64
+	startTime          time.Time
 }
 
 func NewPutCommand(command *cobra.Command, args []string) (*PutCommand, error) {
@@ -127,7 +131,10 @@ func NewPutCommand(command *cobra.Command, args []string) (*PutCommand, error) {
 		postTransferFlagValues:         flag.GetPostTransferFlagValues(),
 		transferReportFlagValues:       flag.GetTransferReportFlagValues(command),
 
-		updatedPathMap: map[string]bool{},
+		updatedPathMap:     map[string]bool{},
+		totalUploadedFiles: 0,
+		totalUploadedBytes: 0,
+		startTime:          time.Now(),
 	}
 
 	put.maxConnectionNum = put.parallelTransferFlagValues.ThreadNumber
@@ -254,6 +261,15 @@ func (put *PutCommand) Process() error {
 
 	if postProcessErr != nil {
 		return errors.Wrap(postProcessErr, "failed to perform post process jobs")
+	}
+
+	// print final summary
+	if put.progressFlagValues.ShowProgress {
+		timeTaken := time.Since(put.startTime).Seconds()
+		totalUploadedSize := types.SizeString(put.totalUploadedBytes)
+		bps := float64(put.totalUploadedBytes) / timeTaken
+		bpsString := fmt.Sprintf("%s/s", types.SizeString(int64(bps)))
+		terminal.Printf("Uploaded %d files, %s in total, time taken: %.2f seconds, average speed: %s\n", put.totalUploadedFiles, totalUploadedSize, timeTaken, bpsString)
 	}
 
 	return nil
@@ -498,6 +514,9 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 			reportTransfer(uploadResult, uploadErr, notes...)
 			return errors.Wrapf(uploadErr, "failed to upload %q to %q", sourcePath, targetPath)
 		}
+
+		put.totalUploadedFiles++
+		put.totalUploadedBytes += sourceStat.Size()
 
 		reportTransfer(uploadResult, nil, notes...)
 
