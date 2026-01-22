@@ -3,7 +3,6 @@ package subcmd
 import (
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/cockroachdb/errors"
 	irodsclient_config "github.com/cyverse/go-irodsclient/config"
@@ -16,24 +15,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var switchEnvCmd = &cobra.Command{
+var switchenvCmd = &cobra.Command{
 	Use:     "switchenv",
 	Aliases: []string{"iswitch", "iswitchenv", "switch"},
 	Short:   "Change the current iRODS environment",
 	Long:    `This command changes the current iRODS environment.`,
-	RunE:    processSwitchEnvCommand,
+	RunE:    processSwitchenvCommand,
 	Args:    cobra.ExactArgs(1),
 }
 
-func AddSwitchEnvCommand(rootCmd *cobra.Command) {
+func AddSwitchenvCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(switchEnvCmd, true)
-	flag.SetOutputFormatFlags(switchEnvCmd)
+	flag.SetCommonFlags(switchenvCmd, true)
+	flag.SetOutputFormatFlags(switchenvCmd)
 
-	rootCmd.AddCommand(switchEnvCmd)
+	rootCmd.AddCommand(switchenvCmd)
 }
 
-func processSwitchEnvCommand(command *cobra.Command, args []string) error {
+func processSwitchenvCommand(command *cobra.Command, args []string) error {
 	switchEnv, err := NewSwitchEnvCommand(command, args)
 	if err != nil {
 		return err
@@ -100,18 +99,18 @@ func (switchEnv *SwitchEnvCommand) switchEnvironment(targetEnv string) error {
 
 	targetEnvFilePath := ""
 	for _, envFile := range envFiles {
-		if !envFile.IsDir() && switchEnv.isTargetEnvFile(envFile.Name()) {
+		if !envFile.IsDir() && config.IsTargetEnvFile(envFile.Name()) {
 			// environment file
 			envFilePath := filepath.Join(dirPath, envFile.Name())
 
-			if targetEnv == envFile.Name() || switchEnv.getEnvName(envFile.Name()) == targetEnv || targetEnv == envFilePath {
+			if targetEnv == envFile.Name() || config.GetEnvName(envFile.Name()) == targetEnv || targetEnv == envFilePath {
 				targetEnvFilePath = envFilePath
 			}
 		}
 	}
 
 	if targetEnvFilePath == "" {
-		targetEnvFilePath := filepath.Join(dirPath, switchEnv.makeEnvFileName(targetEnv))
+		targetEnvFilePath := filepath.Join(dirPath, config.MakeEnvFileName(targetEnv))
 		return irodsclient_types.NewFileNotFoundError(targetEnvFilePath)
 	}
 
@@ -227,17 +226,4 @@ func (switchEnv *SwitchEnvCommand) PrintAccount(envMgr *irodsclient_config.IComm
 	outputFormatter.Render(switchEnv.outputFormatFlagValues.Format)
 
 	return nil
-}
-
-func (switchEnv *SwitchEnvCommand) isTargetEnvFile(p string) bool {
-	return strings.HasSuffix(p, ".env.json")
-}
-
-func (switchEnv *SwitchEnvCommand) getEnvName(p string) string {
-	return strings.TrimSuffix(p, ".env.json")
-}
-
-func (switchEnv *SwitchEnvCommand) makeEnvFileName(envName string) string {
-	envName = strings.TrimSuffix(envName, ".env.json")
-	return envName + ".env.json"
 }

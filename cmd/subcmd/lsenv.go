@@ -3,7 +3,6 @@ package subcmd
 import (
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/cockroachdb/errors"
 	irodsclient_config "github.com/cyverse/go-irodsclient/config"
@@ -14,52 +13,52 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var envsCmd = &cobra.Command{
-	Use:     "envs",
-	Aliases: []string{"ienvs"},
+var lsenvCmd = &cobra.Command{
+	Use:     "lsenv",
+	Aliases: []string{"ienvs", "envs"},
 	Short:   "Print all available iRODS environments",
 	Long:    `This command prints all available iRODS environments.`,
-	RunE:    processEnvsCommand,
+	RunE:    processLsenvCommand,
 	Args:    cobra.NoArgs,
 }
 
-func AddEnvsCommand(rootCmd *cobra.Command) {
+func AddLsenvCommand(rootCmd *cobra.Command) {
 	// attach common flags
-	flag.SetCommonFlags(envsCmd, true)
-	flag.SetOutputFormatFlags(envsCmd)
+	flag.SetCommonFlags(lsenvCmd, true)
+	flag.SetOutputFormatFlags(lsenvCmd)
 
-	rootCmd.AddCommand(envsCmd)
+	rootCmd.AddCommand(lsenvCmd)
 }
 
-func processEnvsCommand(command *cobra.Command, args []string) error {
-	envs, err := NewEnvsCommand(command, args)
+func processLsenvCommand(command *cobra.Command, args []string) error {
+	lsenv, err := NewLsenvCommand(command, args)
 	if err != nil {
 		return err
 	}
 
-	return envs.Process()
+	return lsenv.Process()
 }
 
-type EnvsCommand struct {
+type LsenvCommand struct {
 	command *cobra.Command
 
 	commonFlagValues       *flag.CommonFlagValues
 	outputFormatFlagValues *flag.OutputFormatFlagValues
 }
 
-func NewEnvsCommand(command *cobra.Command, args []string) (*EnvsCommand, error) {
-	envs := &EnvsCommand{
+func NewLsenvCommand(command *cobra.Command, args []string) (*LsenvCommand, error) {
+	lsenv := &LsenvCommand{
 		command: command,
 
 		commonFlagValues:       flag.GetCommonFlagValues(command),
 		outputFormatFlagValues: flag.GetOutputFormatFlagValues(),
 	}
 
-	return envs, nil
+	return lsenv, nil
 }
 
-func (envs *EnvsCommand) Process() error {
-	cont, err := flag.ProcessCommonFlags(envs.command)
+func (lsenv *LsenvCommand) Process() error {
+	cont, err := flag.ProcessCommonFlags(lsenv.command)
 	if err != nil {
 		return errors.Wrapf(err, "failed to process common flags")
 	}
@@ -68,7 +67,7 @@ func (envs *EnvsCommand) Process() error {
 		return nil
 	}
 
-	err = envs.printEnvironments()
+	err = lsenv.printEnvironments()
 	if err != nil {
 		return errors.Wrapf(err, "failed to print environment")
 	}
@@ -76,7 +75,7 @@ func (envs *EnvsCommand) Process() error {
 	return nil
 }
 
-func (envs *EnvsCommand) printEnvironments() error {
+func (lsenv *LsenvCommand) printEnvironments() error {
 	envMgr := config.GetEnvironmentManager()
 	if envMgr == nil {
 		return errors.Errorf("environment is not set")
@@ -94,7 +93,7 @@ func (envs *EnvsCommand) printEnvironments() error {
 
 	envFileNames := []string{}
 	for _, envFile := range envFiles {
-		if !envFile.IsDir() && envs.isTargetEnvFile(envFile.Name()) {
+		if !envFile.IsDir() && config.IsTargetEnvFile(envFile.Name()) {
 			// environment file
 			envFileNames = append(envFileNames, envFile.Name())
 		}
@@ -137,7 +136,7 @@ func (envs *EnvsCommand) printEnvironments() error {
 			continue
 		}
 
-		environmentName := envs.getEnvName(envFileName)
+		environmentName := config.GetEnvName(envFileName)
 		if envFilePath == irodsclient_config.GetDefaultEnvironmentFilePath() {
 			environmentName += " (current)"
 		}
@@ -153,15 +152,7 @@ func (envs *EnvsCommand) printEnvironments() error {
 		})
 	}
 
-	outputFormatter.Render(envs.outputFormatFlagValues.Format)
+	outputFormatter.Render(lsenv.outputFormatFlagValues.Format)
 
 	return nil
-}
-
-func (envs *EnvsCommand) isTargetEnvFile(p string) bool {
-	return strings.HasSuffix(p, ".env.json")
-}
-
-func (envs *EnvsCommand) getEnvName(p string) string {
-	return strings.TrimSuffix(p, ".env.json")
 }

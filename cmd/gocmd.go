@@ -80,8 +80,10 @@ func main() {
 	// add sub commands
 	subcmd.AddInitCommand(rootCmd)
 	subcmd.AddEnvCommand(rootCmd)
-	subcmd.AddEnvsCommand(rootCmd)
-	subcmd.AddSwitchEnvCommand(rootCmd)
+	subcmd.AddLsenvCommand(rootCmd)
+	subcmd.AddSaveenvCommand(rootCmd)
+	subcmd.AddRmenvCommand(rootCmd)
+	subcmd.AddSwitchenvCommand(rootCmd)
 	subcmd.AddPasswdCommand(rootCmd)
 	subcmd.AddPwdCommand(rootCmd)
 	subcmd.AddCdCommand(rootCmd)
