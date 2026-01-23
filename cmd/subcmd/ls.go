@@ -512,7 +512,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					"Access",
 					"Description",
 				})
-				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 20, 0, 0, 0, 0, 20})
+				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 0, 20})
 			} else {
 				outputFormatterTable.SetHeader([]string{
 					"Type",
@@ -525,7 +525,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					"Status",
 					"Description",
 				})
-				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 20, 0, 0, 0, 20})
+				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 20})
 			}
 		case format.ListFormatVeryLong:
 			if ls.listFlagValues.Access {
@@ -543,7 +543,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					"Access",
 					"Description",
 				})
-				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 20, 0, 0, 0, 0, 50, 0, 20})
+				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 32, 50, 0, 20})
 			} else {
 				outputFormatterTable.SetHeader([]string{
 					"Type",
@@ -558,7 +558,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					"Replica Path",
 					"Description",
 				})
-				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 20, 0, 0, 0, 0, 50, 20})
+				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 32, 50, 20})
 			}
 		default:
 			if ls.listFlagValues.Access {
