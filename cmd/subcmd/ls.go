@@ -293,10 +293,17 @@ func (ls *LsCommand) listCollection(outputFormatter *format.OutputFormatter, sou
 
 	if ls.listFlagValues.Access {
 		// get access
-		accesses, err = irodsclient_irodsfs.ListAccessesForDataObjectsInCollection(connection, sourceEntry.Path)
+		collAccesses, err := irodsclient_irodsfs.ListAccessesForSubCollections(connection, sourceEntry.Path)
 		if err != nil {
-			return errors.Wrapf(err, "failed to get access for data-object %q", sourceEntry.Path)
+			return errors.Wrapf(err, "failed to get access for collections in %q", sourceEntry.Path)
 		}
+		accesses = append(accesses, collAccesses...)
+
+		objectAccesses, err := irodsclient_irodsfs.ListAccessesForDataObjectsInCollection(connection, sourceEntry.Path)
+		if err != nil {
+			return errors.Wrapf(err, "failed to get access for data-objects in %q", sourceEntry.Path)
+		}
+		accesses = append(accesses, objectAccesses...)
 	}
 
 	ls.printDataObjectsAndCollections(outputFormatter, sourceEntry, filtered_objs, filtered_colls, accesses, false)
@@ -463,10 +470,22 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 			}
 
 			if ls.listFlagValues.Access {
+				accessesForEntry := []*irodsclient_types.IRODSAccess{}
+				for _, access := range accesses {
+					if access.Path == entry.Path {
+						accessesForEntry = append(accessesForEntry, access)
+					}
+				}
+
+				accessString := ""
+				if len(accessesForEntry) > 0 {
+					accessString = ls.getAccessesString(accessesForEntry)
+				}
+
 				outputFormatterTable.AppendRow([]interface{}{
 					"collection",
 					newName,
-					"",
+					accessString,
 					"",
 				})
 			} else {
@@ -710,11 +729,11 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					outputFormatterTable.AppendRow([]interface{}{
 						"collection",
 						newName,
+						entry.Owner,
 						"",
 						"",
 						"",
-						"",
-						"",
+						types.MakeDateTimeStringHM(entry.ModifyTime),
 						"",
 						"",
 						"",
@@ -723,11 +742,11 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					outputFormatterTable.AppendRow([]interface{}{
 						"collection",
 						newName,
+						entry.Owner,
 						"",
 						"",
 						"",
-						"",
-						"",
+						types.MakeDateTimeStringHM(entry.ModifyTime),
 						"",
 						"",
 					})
@@ -737,11 +756,11 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					outputFormatterTable.AppendRow([]interface{}{
 						"collection",
 						newName,
+						entry.Owner,
 						"",
 						"",
 						"",
-						"",
-						"",
+						types.MakeDateTimeStringHM(entry.ModifyTime),
 						"",
 						"",
 						"",
@@ -752,11 +771,11 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					outputFormatterTable.AppendRow([]interface{}{
 						"collection",
 						newName,
+						entry.Owner,
 						"",
 						"",
 						"",
-						"",
-						"",
+						types.MakeDateTimeStringHM(entry.ModifyTime),
 						"",
 						"",
 						"",

@@ -143,6 +143,9 @@ func (of *OutputFormatter) Render(format OutputFormat) {
 			tableWriter.AppendRow(table.Row(rowVal), table.RowConfig{})
 		}
 
+		tableWriter.SetStyle(table.StyleDefault)
+		tableWriter.Style().Options.SeparateRows = true
+
 		// render
 		switch format {
 		case OutputFormatCSV:
