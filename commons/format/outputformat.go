@@ -40,9 +40,10 @@ type OutputFormatter struct {
 }
 
 type OutputFormatterTable struct {
-	Title  string
-	Header []string
-	Rows   [][]interface{}
+	Title    string
+	Header   []string
+	WidthMax []int
+	Rows     [][]interface{}
 }
 
 type OutputFormatterTableObject struct {
@@ -59,9 +60,10 @@ func NewOutputFormatter(writer io.Writer) *OutputFormatter {
 
 func (of *OutputFormatter) NewTable(title string) *OutputFormatterTable {
 	table := OutputFormatterTable{
-		Title:  title,
-		Header: []string{},
-		Rows:   [][]interface{}{},
+		Title:    title,
+		Header:   []string{},
+		WidthMax: []int{},
+		Rows:     [][]interface{}{},
 	}
 	of.Tables = append(of.Tables, table)
 	return &of.Tables[len(of.Tables)-1]
@@ -87,16 +89,58 @@ func (of *OutputFormatter) Render(format OutputFormat) {
 		tableWriter.SetOutputMirror(of.Writer)
 		tableWriter.SetTitle(ofTable.Title)
 
+		// remove empty column
+		nonEmptyColIndices := make(map[int]bool)
+		for header := range ofTable.Header {
+			isEmpty := true
+			for _, row := range ofTable.Rows {
+				if row[header] != "" && row[header] != nil {
+					isEmpty = false
+					break
+				}
+			}
+			if !isEmpty {
+				nonEmptyColIndices[header] = true
+			}
+		}
+
 		// header
-		headerVal := make([]interface{}, 0, len(ofTable.Header))
-		for _, h := range ofTable.Header {
+		headerVal := make([]interface{}, 0, len(nonEmptyColIndices))
+		for headerIdx, h := range ofTable.Header {
+			if _, ok := nonEmptyColIndices[headerIdx]; !ok {
+				continue
+			}
+
 			headerVal = append(headerVal, h)
 		}
 		tableWriter.AppendHeader(table.Row(headerVal), table.RowConfig{})
 
+		// table size control
+		columnConfigs := []table.ColumnConfig{}
+		for configIdx, maxWidth := range ofTable.WidthMax {
+			if _, ok := nonEmptyColIndices[configIdx]; !ok {
+				continue
+			}
+
+			columnConfigs = append(columnConfigs, table.ColumnConfig{
+				Number:   configIdx + 1,
+				WidthMax: maxWidth,
+			})
+		}
+		tableWriter.SetColumnConfigs(columnConfigs)
+
 		// rows
-		for _, row := range ofTable.Rows {
-			tableWriter.AppendRow(table.Row(row))
+		for _, rows := range ofTable.Rows {
+			rowVal := make([]interface{}, 0, len(nonEmptyColIndices))
+			for rowIdx, row := range rows {
+				if _, ok := nonEmptyColIndices[rowIdx]; !ok {
+					continue
+				}
+
+				rowVal = append(rowVal, row)
+			}
+
+			tableWriter.AppendRow(table.Row(rowVal), table.RowConfig{})
 		}
 
 		// render
@@ -142,6 +186,10 @@ func (of *OutputFormatter) RenderJSON() {
 
 func (oft *OutputFormatterTable) SetHeader(header []string) {
 	oft.Header = header
+}
+
+func (oft *OutputFormatterTable) SetColumnWidthMax(widthMax []int) {
+	oft.WidthMax = widthMax
 }
 
 func (oft *OutputFormatterTable) AppendRow(row []interface{}) {

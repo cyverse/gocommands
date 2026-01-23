@@ -253,6 +253,7 @@ func (ls *LsCommand) listCollection(outputFormatter *format.OutputFormatter, sou
 			"Access",
 			"Inheritance",
 		})
+		outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0})
 
 		outputFormatterTable.AppendRow([]interface{}{
 			"collection",
@@ -265,6 +266,7 @@ func (ls *LsCommand) listCollection(outputFormatter *format.OutputFormatter, sou
 			"Type",
 			"Path",
 		})
+		outputFormatterTable.SetColumnWidthMax([]int{0, 50})
 
 		outputFormatterTable.AppendRow([]interface{}{
 			"collection",
@@ -390,12 +392,14 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 				"Access",
 				"Description",
 			})
+			outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 20})
 		} else {
 			outputFormatterTable.SetHeader([]string{
 				"Type",
 				pathTitle,
 				"Description",
 			})
+			outputFormatterTable.SetColumnWidthMax([]int{0, 50, 20})
 		}
 
 		sort.SliceStable(objectEntries, ls.getDataObjectSortFunction(objectEntries, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
@@ -419,7 +423,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 						logger.Debugf("%+v", err)
 						desc = "decryption_failed"
 					} else {
-						desc = fmt.Sprintf("original file name: %q", decryptedFilename)
+						desc = fmt.Sprintf("file name: %q", decryptedFilename)
 					}
 				}
 			}
@@ -480,8 +484,8 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 				outputFormatterTable.SetHeader([]string{
 					"Type",
 					pathTitle,
-					"Replica Owner",
-					"Replica Number",
+					"Owner",
+					"Replica No.",
 					"Resource Hierarchy",
 					"Size",
 					"Modify Time",
@@ -489,26 +493,28 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					"Access",
 					"Description",
 				})
+				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 20, 0, 0, 0, 0, 20})
 			} else {
 				outputFormatterTable.SetHeader([]string{
 					"Type",
 					pathTitle,
-					"Replica Owner",
-					"Replica Number",
+					"Owner",
+					"Replica No.",
 					"Resource Hierarchy",
 					"Size",
 					"Modify Time",
 					"Status",
 					"Description",
 				})
+				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 20, 0, 0, 0, 20})
 			}
 		case format.ListFormatVeryLong:
 			if ls.listFlagValues.Access {
 				outputFormatterTable.SetHeader([]string{
 					"Type",
 					pathTitle,
-					"Replica Owner",
-					"Replica Number",
+					"Owner",
+					"Replica No.",
 					"Resource Hierarchy",
 					"Size",
 					"Modify Time",
@@ -518,12 +524,13 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					"Access",
 					"Description",
 				})
+				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 20, 0, 0, 0, 0, 50, 0, 20})
 			} else {
 				outputFormatterTable.SetHeader([]string{
 					"Type",
 					pathTitle,
-					"Replica Owner",
-					"Replica Number",
+					"Owner",
+					"Replica No.",
 					"Resource Hierarchy",
 					"Size",
 					"Modify Time",
@@ -532,23 +539,26 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					"Replica Path",
 					"Description",
 				})
+				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 20, 0, 0, 0, 0, 50, 20})
 			}
 		default:
 			if ls.listFlagValues.Access {
 				outputFormatterTable.SetHeader([]string{
 					"Type",
 					pathTitle,
-					"Replica Number",
+					"Replica No.",
 					"Access",
 					"Description",
 				})
+				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 20})
 			} else {
 				outputFormatterTable.SetHeader([]string{
 					"Type",
 					pathTitle,
-					"Replica Number",
+					"Replica No.",
 					"Description",
 				})
+				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 20})
 			}
 		}
 
@@ -585,7 +595,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 						logger.Debugf("%+v", err)
 						desc = "decryption_failed"
 					} else {
-						desc = fmt.Sprintf("original file name: %q", decryptedFilename)
+						desc = fmt.Sprintf("file name: %q", decryptedFilename)
 					}
 				}
 			}
