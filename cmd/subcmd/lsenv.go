@@ -15,7 +15,7 @@ import (
 
 var lsenvCmd = &cobra.Command{
 	Use:     "lsenv",
-	Aliases: []string{"ienvs", "envs"},
+	Aliases: []string{"ilsenv", "ienvs", "envs"},
 	Short:   "Print all available iRODS environments",
 	Long:    `This command prints all available iRODS environments.`,
 	RunE:    processLsenvCommand,

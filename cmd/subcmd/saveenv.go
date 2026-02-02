@@ -12,7 +12,7 @@ import (
 
 var saveenvCmd = &cobra.Command{
 	Use:     "saveenv",
-	Aliases: []string{"isave", "isaveenv", "save"},
+	Aliases: []string{"isaveenv"},
 	Short:   "Save the current iRODS environment",
 	Long:    `This command saves the current iRODS environment.`,
 	RunE:    processSaveenvCommand,

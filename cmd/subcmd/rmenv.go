@@ -13,7 +13,7 @@ import (
 
 var rmenvCmd = &cobra.Command{
 	Use:     "rmenv",
-	Aliases: []string{"irmenv", "rmenv", "rm"},
+	Aliases: []string{"irmenv", "rmenv"},
 	Short:   "Remove an iRODS environment",
 	Long:    `This command removes an iRODS environment.`,
 	RunE:    processRmenvCommand,

@@ -17,7 +17,7 @@ import (
 
 var switchenvCmd = &cobra.Command{
 	Use:     "switchenv",
-	Aliases: []string{"iswitch", "iswitchenv", "switch"},
+	Aliases: []string{"iswitch", "iswitchenv"},
 	Short:   "Change the current iRODS environment",
 	Long:    `This command changes the current iRODS environment.`,
 	RunE:    processSwitchenvCommand,
