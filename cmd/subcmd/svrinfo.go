@@ -24,7 +24,7 @@ var svrinfoCmd = &cobra.Command{
 func AddSvrinfoCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(svrinfoCmd, true)
-	flag.SetOutputFormatFlags(svrinfoCmd)
+	flag.SetOutputFormatFlags(svrinfoCmd, true)
 
 	rootCmd.AddCommand(svrinfoCmd)
 }
@@ -115,6 +115,9 @@ func (svrInfo *SvrInfoCommand) displayInfo() error {
 		svrInfo.account.ClientZone,
 	})
 
+	if svrInfo.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+		svrInfo.outputFormatFlagValues.Format = format.OutputFormatTable
+	}
 	outputFormatter.Render(svrInfo.outputFormatFlagValues.Format)
 
 	return nil

@@ -12,10 +12,11 @@ type OutputFormat string
 
 const (
 	// format
-	OutputFormatTable OutputFormat = "table"
-	OutputFormatTSV   OutputFormat = "tsv"
-	OutputFormatCSV   OutputFormat = "csv"
-	OutputFormatJSON  OutputFormat = "json"
+	OutputFormatTable  OutputFormat = "table"
+	OutputFormatTSV    OutputFormat = "tsv"
+	OutputFormatCSV    OutputFormat = "csv"
+	OutputFormatJSON   OutputFormat = "json"
+	OutputFormatLegacy OutputFormat = "legacy"
 )
 
 // GetOutputFormat returns OutputFormat from string
@@ -29,6 +30,8 @@ func GetOutputFormat(order string) OutputFormat {
 		return OutputFormatCSV
 	case string(OutputFormatJSON):
 		return OutputFormatJSON
+	case string(OutputFormatLegacy):
+		return OutputFormatLegacy
 	default:
 		return OutputFormatTable
 	}
@@ -87,7 +90,10 @@ func (of *OutputFormatter) Render(format OutputFormat) {
 		// table writer
 		tableWriter := table.NewWriter()
 		tableWriter.SetOutputMirror(of.Writer)
-		tableWriter.SetTitle(ofTable.Title)
+
+		if format != OutputFormatLegacy {
+			tableWriter.SetTitle(ofTable.Title)
+		}
 
 		// remove empty column
 		nonEmptyColIndices := make(map[int]bool)
@@ -104,30 +110,32 @@ func (of *OutputFormatter) Render(format OutputFormat) {
 			}
 		}
 
-		// header
-		headerVal := make([]interface{}, 0, len(nonEmptyColIndices))
-		for headerIdx, h := range ofTable.Header {
-			if _, ok := nonEmptyColIndices[headerIdx]; !ok {
-				continue
+		if format != OutputFormatLegacy {
+			// header
+			headerVal := make([]interface{}, 0, len(nonEmptyColIndices))
+			for headerIdx, h := range ofTable.Header {
+				if _, ok := nonEmptyColIndices[headerIdx]; !ok {
+					continue
+				}
+
+				headerVal = append(headerVal, h)
 			}
+			tableWriter.AppendHeader(table.Row(headerVal), table.RowConfig{})
 
-			headerVal = append(headerVal, h)
-		}
-		tableWriter.AppendHeader(table.Row(headerVal), table.RowConfig{})
+			// table size control
+			columnConfigs := []table.ColumnConfig{}
+			for configIdx, maxWidth := range ofTable.WidthMax {
+				if _, ok := nonEmptyColIndices[configIdx]; !ok {
+					continue
+				}
 
-		// table size control
-		columnConfigs := []table.ColumnConfig{}
-		for configIdx, maxWidth := range ofTable.WidthMax {
-			if _, ok := nonEmptyColIndices[configIdx]; !ok {
-				continue
+				columnConfigs = append(columnConfigs, table.ColumnConfig{
+					Number:   configIdx + 1,
+					WidthMax: maxWidth,
+				})
 			}
-
-			columnConfigs = append(columnConfigs, table.ColumnConfig{
-				Number:   configIdx + 1,
-				WidthMax: maxWidth,
-			})
+			tableWriter.SetColumnConfigs(columnConfigs)
 		}
-		tableWriter.SetColumnConfigs(columnConfigs)
 
 		// rows
 		for _, rows := range ofTable.Rows {
@@ -143,8 +151,13 @@ func (of *OutputFormatter) Render(format OutputFormat) {
 			tableWriter.AppendRow(table.Row(rowVal), table.RowConfig{})
 		}
 
-		tableWriter.SetStyle(table.StyleDefault)
-		tableWriter.Style().Options.SeparateRows = true
+		if format == OutputFormatLegacy {
+			// legacy format: no header, no title, no column width control, separate rows by tab
+			tableWriter.SetStyle(table.Style{})
+		} else {
+			tableWriter.SetStyle(table.StyleDefault)
+			tableWriter.Style().Options.SeparateRows = true
+		}
 
 		// render
 		switch format {

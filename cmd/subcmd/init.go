@@ -26,7 +26,7 @@ func AddInitCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(initCmd, false)
 	flag.SetInitFlags(initCmd)
-	flag.SetOutputFormatFlags(initCmd)
+	flag.SetOutputFormatFlags(initCmd, true)
 
 	rootCmd.AddCommand(initCmd)
 }
@@ -172,6 +172,10 @@ func (init *InitCommand) PrintAccount() error {
 			envMgr.Environment.AuthenticationScheme,
 		},
 	})
+
+	if init.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+		init.outputFormatFlagValues.Format = format.OutputFormatTable
+	}
 	outputFormatter.Render(init.outputFormatFlagValues.Format)
 
 	return nil

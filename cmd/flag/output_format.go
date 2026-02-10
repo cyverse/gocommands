@@ -6,20 +6,26 @@ import (
 )
 
 type OutputFormatFlagValues struct {
-	Format          format.OutputFormat
-	csvFormatInput  bool
-	tsvFormatInput  bool
-	jsonFormatInput bool
+	Format            format.OutputFormat
+	csvFormatInput    bool
+	tsvFormatInput    bool
+	jsonFormatInput   bool
+	legacyFormatInput bool
 }
 
 var (
 	outputFormatFlagValues OutputFormatFlagValues
 )
 
-func SetOutputFormatFlags(command *cobra.Command) {
+func SetOutputFormatFlags(command *cobra.Command, hideLegacy bool) {
 	command.Flags().BoolVarP(&outputFormatFlagValues.csvFormatInput, "output_csv", "", false, "Display results in CSV format")
 	command.Flags().BoolVarP(&outputFormatFlagValues.tsvFormatInput, "output_tsv", "", false, "Display results in TSV format")
 	command.Flags().BoolVarP(&outputFormatFlagValues.jsonFormatInput, "output_json", "", false, "Display results in JSON format")
+	command.Flags().BoolVarP(&outputFormatFlagValues.legacyFormatInput, "output_legacy", "", false, "Display results in old-iCommands format")
+
+	if hideLegacy {
+		command.Flags().MarkHidden("output_legacy")
+	}
 }
 
 func GetOutputFormatFlagValues() *OutputFormatFlagValues {
@@ -29,6 +35,8 @@ func GetOutputFormatFlagValues() *OutputFormatFlagValues {
 		outputFormatFlagValues.Format = format.OutputFormatTSV
 	} else if outputFormatFlagValues.jsonFormatInput {
 		outputFormatFlagValues.Format = format.OutputFormatJSON
+	} else if outputFormatFlagValues.legacyFormatInput {
+		outputFormatFlagValues.Format = format.OutputFormatLegacy
 	} else {
 		outputFormatFlagValues.Format = format.OutputFormatTable
 	}

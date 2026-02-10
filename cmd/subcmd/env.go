@@ -21,7 +21,7 @@ var envCmd = &cobra.Command{
 func AddEnvCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(envCmd, true)
-	flag.SetOutputFormatFlags(envCmd)
+	flag.SetOutputFormatFlags(envCmd, true)
 
 	rootCmd.AddCommand(envCmd)
 }
@@ -193,6 +193,10 @@ func (env *EnvCommand) printEnvironment() error {
 			envMgr.Environment.EncryptionNumHashRounds,
 		},
 	})
+
+	if env.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+		env.outputFormatFlagValues.Format = format.OutputFormatTable
+	}
 	outputFormatter.Render(env.outputFormatFlagValues.Format)
 
 	return nil

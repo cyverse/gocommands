@@ -25,7 +25,7 @@ var lsenvCmd = &cobra.Command{
 func AddLsenvCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(lsenvCmd, true)
-	flag.SetOutputFormatFlags(lsenvCmd)
+	flag.SetOutputFormatFlags(lsenvCmd, true)
 
 	rootCmd.AddCommand(lsenvCmd)
 }
@@ -152,6 +152,9 @@ func (lsenv *LsenvCommand) printEnvironments() error {
 		})
 	}
 
+	if lsenv.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+		lsenv.outputFormatFlagValues.Format = format.OutputFormatTable
+	}
 	outputFormatter.Render(lsenv.outputFormatFlagValues.Format)
 
 	return nil

@@ -27,7 +27,7 @@ var switchenvCmd = &cobra.Command{
 func AddSwitchenvCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(switchenvCmd, true)
-	flag.SetOutputFormatFlags(switchenvCmd)
+	flag.SetOutputFormatFlags(switchenvCmd, true)
 
 	rootCmd.AddCommand(switchenvCmd)
 }
@@ -223,6 +223,11 @@ func (switchEnv *SwitchEnvCommand) PrintAccount(envMgr *irodsclient_config.IComm
 			envMgr.Environment.AuthenticationScheme,
 		},
 	})
+
+	if switchEnv.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+		switchEnv.outputFormatFlagValues.Format = format.OutputFormatTable
+	}
+
 	outputFormatter.Render(switchEnv.outputFormatFlagValues.Format)
 
 	return nil

@@ -28,7 +28,7 @@ var lsmetaCmd = &cobra.Command{
 func AddLsmetaCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlagsWithoutResource(lsmetaCmd)
-	flag.SetOutputFormatFlags(lsmetaCmd)
+	flag.SetOutputFormatFlags(lsmetaCmd, true)
 	flag.SetListFlags(lsmetaCmd, true, true)
 	flag.SetTargetObjectFlags(lsmetaCmd)
 
@@ -144,6 +144,9 @@ func (lsMeta *LsMetaCommand) Process() error {
 		}
 	}
 
+	if lsMeta.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+		lsMeta.outputFormatFlagValues.Format = format.OutputFormatTable
+	}
 	outputFormatter.Render(lsMeta.outputFormatFlagValues.Format)
 
 	return nil

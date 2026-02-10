@@ -27,7 +27,7 @@ var psCmd = &cobra.Command{
 func AddPsCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(psCmd, true)
-	flag.SetOutputFormatFlags(psCmd)
+	flag.SetOutputFormatFlags(psCmd, true)
 	flag.SetProcessFilterFlags(psCmd)
 
 	rootCmd.AddCommand(psCmd)
@@ -202,6 +202,9 @@ func (ps *PsCommand) listProcesses() error {
 		}
 	}
 
+	if ps.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+		ps.outputFormatFlagValues.Format = format.OutputFormatTable
+	}
 	outputFormatter.Render(ps.outputFormatFlagValues.Format)
 
 	return nil

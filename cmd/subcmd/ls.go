@@ -44,7 +44,7 @@ var lsCmd = &cobra.Command{
 func AddLsCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(lsCmd, false)
-	flag.SetOutputFormatFlags(lsCmd)
+	flag.SetOutputFormatFlags(lsCmd, false)
 	flag.SetListFlags(lsCmd, false, false)
 	flag.SetTicketAccessFlags(lsCmd)
 	flag.SetDecryptionFlags(lsCmd)
@@ -237,7 +237,11 @@ func (ls *LsCommand) listCollection(outputFormatter *format.OutputFormatter, sou
 		accessString := ""
 
 		if len(accesses) > 0 {
-			accessString = ls.getAccessesString(accesses)
+			if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+				accessString = ls.getAccessesString(accesses, "\t")
+			} else {
+				accessString = ls.getAccessesString(accesses, "\n")
+			}
 		}
 
 		inheritanceString := "Disabled"
@@ -247,31 +251,51 @@ func (ls *LsCommand) listCollection(outputFormatter *format.OutputFormatter, sou
 			}
 		}
 
-		outputFormatterTable.SetHeader([]string{
-			"Type",
-			"Path",
-			"Access",
-			"Inheritance",
-		})
-		outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0})
+		if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+			outputFormatterTable.SetHeader([]string{
+				"Path",
+			})
 
-		outputFormatterTable.AppendRow([]interface{}{
-			"collection",
-			sourceEntry.Path,
-			accessString,
-			inheritanceString,
-		})
+			outputFormatterTable.AppendRow([]interface{}{
+				sourceEntry.Path + ":\n\t\tACL - " + accessString + "\n\t\tInheritance - " + inheritanceString,
+			})
+		} else {
+			outputFormatterTable.SetHeader([]string{
+				"Type",
+				"Path",
+				"Access",
+				"Inheritance",
+			})
+			outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0})
+
+			outputFormatterTable.AppendRow([]interface{}{
+				"collection",
+				sourceEntry.Path,
+				accessString,
+				inheritanceString,
+			})
+		}
 	} else {
-		outputFormatterTable.SetHeader([]string{
-			"Type",
-			"Path",
-		})
-		outputFormatterTable.SetColumnWidthMax([]int{0, 50})
+		if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+			outputFormatterTable.SetHeader([]string{
+				"Path",
+			})
 
-		outputFormatterTable.AppendRow([]interface{}{
-			"collection",
-			sourceEntry.Path,
-		})
+			outputFormatterTable.AppendRow([]interface{}{
+				sourceEntry.Path + ":",
+			})
+		} else {
+			outputFormatterTable.SetHeader([]string{
+				"Type",
+				"Path",
+			})
+			outputFormatterTable.SetColumnWidthMax([]int{0, 50})
+
+			outputFormatterTable.AppendRow([]interface{}{
+				"collection",
+				sourceEntry.Path,
+			})
+		}
 	}
 
 	// sub-collections and data-objects
@@ -393,20 +417,32 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 	// access is optional
 	if ls.listFlagValues.Format == format.ListFormatNormal {
 		if ls.listFlagValues.Access {
-			outputFormatterTable.SetHeader([]string{
-				"Type",
-				pathTitle,
-				"Access",
-				"Description",
-			})
-			outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 20})
+			if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+				outputFormatterTable.SetHeader([]string{
+					pathTitle,
+				})
+			} else {
+				outputFormatterTable.SetHeader([]string{
+					"Type",
+					pathTitle,
+					"Access",
+					"Description",
+				})
+				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 20})
+			}
 		} else {
-			outputFormatterTable.SetHeader([]string{
-				"Type",
-				pathTitle,
-				"Description",
-			})
-			outputFormatterTable.SetColumnWidthMax([]int{0, 50, 20})
+			if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+				outputFormatterTable.SetHeader([]string{
+					pathTitle,
+				})
+			} else {
+				outputFormatterTable.SetHeader([]string{
+					"Type",
+					pathTitle,
+					"Description",
+				})
+				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 20})
+			}
 		}
 
 		sort.SliceStable(objectEntries, ls.getDataObjectSortFunction(objectEntries, ls.listFlagValues.SortOrder, ls.listFlagValues.SortReverse))
@@ -432,6 +468,10 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					} else {
 						desc = fmt.Sprintf("file name: %q", decryptedFilename)
 					}
+
+					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+						desc = "(" + desc + ")"
+					}
 				}
 			}
 
@@ -445,21 +485,37 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 
 				accessString := ""
 				if len(accessesForEntry) > 0 {
-					accessString = ls.getAccessesString(accessesForEntry)
+					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+						accessString = ls.getAccessesString(accessesForEntry, "\t")
+					} else {
+						accessString = ls.getAccessesString(accessesForEntry, "\n")
+					}
 				}
 
-				outputFormatterTable.AppendRow([]interface{}{
-					"data-object",
-					newName,
-					accessString,
-					desc,
-				})
+				if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+					outputFormatterTable.AppendRow([]interface{}{
+						"  " + newName + "\t" + desc + "\n\t\tACL - " + accessString,
+					})
+				} else {
+					outputFormatterTable.AppendRow([]interface{}{
+						"data-object",
+						newName,
+						accessString,
+						desc,
+					})
+				}
 			} else {
-				outputFormatterTable.AppendRow([]interface{}{
-					"data-object",
-					newName,
-					desc,
-				})
+				if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+					outputFormatterTable.AppendRow([]interface{}{
+						"  " + newName + "\t" + desc,
+					})
+				} else {
+					outputFormatterTable.AppendRow([]interface{}{
+						"data-object",
+						newName,
+						desc,
+					})
+				}
 			}
 		}
 
@@ -479,105 +535,158 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 
 				accessString := ""
 				if len(accessesForEntry) > 0 {
-					accessString = ls.getAccessesString(accessesForEntry)
+					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+						accessString = ls.getAccessesString(accessesForEntry, "\t")
+					} else {
+						accessString = ls.getAccessesString(accessesForEntry, "\n")
+					}
 				}
 
-				outputFormatterTable.AppendRow([]interface{}{
-					"collection",
-					newName,
-					accessString,
-					"",
-				})
+				if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+					outputFormatterTable.AppendRow([]interface{}{
+						"  C- " + entry.Path,
+					})
+				} else {
+					outputFormatterTable.AppendRow([]interface{}{
+						"collection",
+						newName,
+						accessString,
+						"",
+					})
+				}
+
 			} else {
-				outputFormatterTable.AppendRow([]interface{}{
-					"collection",
-					newName,
-					"",
-				})
+				if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+					outputFormatterTable.AppendRow([]interface{}{
+						"  C- " + entry.Path,
+					})
+				} else {
+					outputFormatterTable.AppendRow([]interface{}{
+						"collection",
+						newName,
+						"",
+					})
+				}
 			}
 		}
 	} else {
 		switch ls.listFlagValues.Format {
 		case format.ListFormatLong:
 			if ls.listFlagValues.Access {
-				outputFormatterTable.SetHeader([]string{
-					"Type",
-					pathTitle,
-					"Owner",
-					"Replica No.",
-					"Resource Hierarchy",
-					"Size",
-					"Modify Time",
-					"Status",
-					"Access",
-					"Description",
-				})
-				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 0, 20})
+				if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+					outputFormatterTable.SetHeader([]string{
+						pathTitle,
+					})
+				} else {
+					outputFormatterTable.SetHeader([]string{
+						"Type",
+						pathTitle,
+						"Owner",
+						"Replica No.",
+						"Resource Hierarchy",
+						"Size",
+						"Modify Time",
+						"Status",
+						"Access",
+						"Description",
+					})
+					outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 0, 20})
+				}
 			} else {
-				outputFormatterTable.SetHeader([]string{
-					"Type",
-					pathTitle,
-					"Owner",
-					"Replica No.",
-					"Resource Hierarchy",
-					"Size",
-					"Modify Time",
-					"Status",
-					"Description",
-				})
-				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 20})
+				if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+					outputFormatterTable.SetHeader([]string{
+						pathTitle,
+					})
+				} else {
+					outputFormatterTable.SetHeader([]string{
+						"Type",
+						pathTitle,
+						"Owner",
+						"Replica No.",
+						"Resource Hierarchy",
+						"Size",
+						"Modify Time",
+						"Status",
+						"Description",
+					})
+					outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 20})
+				}
 			}
 		case format.ListFormatVeryLong:
 			if ls.listFlagValues.Access {
-				outputFormatterTable.SetHeader([]string{
-					"Type",
-					pathTitle,
-					"Owner",
-					"Replica No.",
-					"Resource Hierarchy",
-					"Size",
-					"Modify Time",
-					"Status",
-					"Checksum",
-					"Replica Path",
-					"Access",
-					"Description",
-				})
-				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 32, 50, 0, 20})
+				if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+					outputFormatterTable.SetHeader([]string{
+						pathTitle,
+					})
+				} else {
+					outputFormatterTable.SetHeader([]string{
+						"Type",
+						pathTitle,
+						"Owner",
+						"Replica No.",
+						"Resource Hierarchy",
+						"Size",
+						"Modify Time",
+						"Status",
+						"Checksum",
+						"Replica Path",
+						"Access",
+						"Description",
+					})
+					outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 32, 50, 0, 20})
+				}
 			} else {
-				outputFormatterTable.SetHeader([]string{
-					"Type",
-					pathTitle,
-					"Owner",
-					"Replica No.",
-					"Resource Hierarchy",
-					"Size",
-					"Modify Time",
-					"Status",
-					"Checksum",
-					"Replica Path",
-					"Description",
-				})
-				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 32, 50, 20})
+				if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+					outputFormatterTable.SetHeader([]string{
+						pathTitle,
+					})
+				} else {
+					outputFormatterTable.SetHeader([]string{
+						"Type",
+						pathTitle,
+						"Owner",
+						"Replica No.",
+						"Resource Hierarchy",
+						"Size",
+						"Modify Time",
+						"Status",
+						"Checksum",
+						"Replica Path",
+						"Description",
+					})
+					outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 32, 50, 20})
+				}
 			}
 		default:
 			if ls.listFlagValues.Access {
-				outputFormatterTable.SetHeader([]string{
-					"Type",
-					pathTitle,
-					"Replica No.",
-					"Access",
-					"Description",
-				})
-				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 20})
+				if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+					outputFormatterTable.SetHeader([]string{
+						pathTitle,
+					})
+				} else {
+					outputFormatterTable.SetHeader([]string{
+						"Type",
+						pathTitle,
+						"Replica No.",
+						"Access",
+						"Description",
+					})
+					outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 20})
+				}
 			} else {
-				outputFormatterTable.SetHeader([]string{
-					"Type",
-					pathTitle,
-					"Replica No.",
-					"Description",
-				})
-				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 20})
+				if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+					outputFormatterTable.SetHeader([]string{
+						pathTitle,
+					})
+				} else {
+					outputFormatterTable.SetHeader([]string{
+						"Type",
+						pathTitle,
+						"Replica No.",
+						"Description",
+					})
+					outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 20})
+				}
 			}
 		}
 
@@ -616,6 +725,10 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					} else {
 						desc = fmt.Sprintf("file name: %q", decryptedFilename)
 					}
+
+					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+						desc = "(" + desc + ")"
+					}
 				}
 			}
 
@@ -634,85 +747,129 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 				}
 
 				if len(accessesForEntry) > 0 {
-					accessString = ls.getAccessesString(accessesForEntry)
+					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+						accessString = ls.getAccessesString(accessesForEntry, "\t")
+					} else {
+						accessString = ls.getAccessesString(accessesForEntry, "\n")
+					}
 				}
 			}
 
 			switch ls.listFlagValues.Format {
 			case format.ListFormatLong:
+				replicaNumberString := fmt.Sprintf("%d", replica.Replica.Number)
+
 				if ls.listFlagValues.Access {
-					outputFormatterTable.AppendRow([]interface{}{
-						"data-object",
-						newName,
-						replica.Replica.Owner,
-						replica.Replica.Number,
-						replica.Replica.ResourceHierarchy,
-						size,
-						types.MakeDateTimeStringHM(replica.Replica.ModifyTime),
-						ls.getStatusMark(replica.Replica.Status),
-						accessString,
-						desc,
-					})
+					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+						outputFormatterTable.AppendRow([]interface{}{
+							"  " + replica.Replica.Owner + "\t\t" + replicaNumberString + " " + replica.Replica.ResourceHierarchy + "\t\t" + size + " " + types.MakeDateTimeStringHM(replica.Replica.ModifyTime) + " " + ls.getStatusMark(replica.Replica.Status, true) + " " + newName + "\t" + desc + "\n\t\tACL - " + accessString,
+						})
+					} else {
+						outputFormatterTable.AppendRow([]interface{}{
+							"data-object",
+							newName,
+							replica.Replica.Owner,
+							replica.Replica.Number,
+							replica.Replica.ResourceHierarchy,
+							size,
+							types.MakeDateTimeStringHM(replica.Replica.ModifyTime),
+							ls.getStatusMark(replica.Replica.Status, false),
+							accessString,
+							desc,
+						})
+					}
 				} else {
-					outputFormatterTable.AppendRow([]interface{}{
-						"data-object",
-						newName,
-						replica.Replica.Owner,
-						replica.Replica.Number,
-						replica.Replica.ResourceHierarchy,
-						size,
-						types.MakeDateTimeStringHM(replica.Replica.ModifyTime),
-						ls.getStatusMark(replica.Replica.Status),
-						desc,
-					})
+					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+						outputFormatterTable.AppendRow([]interface{}{
+							"  " + replica.Replica.Owner + "\t\t\t" + replicaNumberString + " " + replica.Replica.ResourceHierarchy + "\t\t" + size + " " + types.MakeDateTimeStringHM(replica.Replica.ModifyTime) + " " + ls.getStatusMark(replica.Replica.Status, true) + " " + newName + "\t" + desc,
+						})
+					} else {
+						outputFormatterTable.AppendRow([]interface{}{
+							"data-object",
+							newName,
+							replica.Replica.Owner,
+							replica.Replica.Number,
+							replica.Replica.ResourceHierarchy,
+							size,
+							types.MakeDateTimeStringHM(replica.Replica.ModifyTime),
+							ls.getStatusMark(replica.Replica.Status, false),
+							desc,
+						})
+					}
 				}
 			case format.ListFormatVeryLong:
+				replicaNumberString := fmt.Sprintf("%d", replica.Replica.Number)
+
 				if ls.listFlagValues.Access {
-					outputFormatterTable.AppendRow([]interface{}{
-						"data-object",
-						newName,
-						replica.Replica.Owner,
-						replica.Replica.Number,
-						replica.Replica.ResourceHierarchy,
-						size,
-						types.MakeDateTimeStringHM(replica.Replica.ModifyTime),
-						ls.getStatusMark(replica.Replica.Status),
-						replica.Replica.Checksum.IRODSChecksumString,
-						replica.Replica.Path,
-						accessString,
-						desc,
-					})
+					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+						outputFormatterTable.AppendRow([]interface{}{
+							"  " + replica.Replica.Owner + "\t\t" + replicaNumberString + " " + replica.Replica.ResourceHierarchy + "\t\t" + size + " " + types.MakeDateTimeStringHM(replica.Replica.ModifyTime) + " " + ls.getStatusMark(replica.Replica.Status, true) + " " + newName + "\t" + desc + "\n\t" + replica.Replica.Checksum.IRODSChecksumString + "\t" + replica.DataObject.DataType + "\t" + replica.Replica.Path + "\n\t\tACL - " + accessString,
+						})
+					} else {
+						outputFormatterTable.AppendRow([]interface{}{
+							"data-object",
+							newName,
+							replica.Replica.Owner,
+							replica.Replica.Number,
+							replica.Replica.ResourceHierarchy,
+							size,
+							types.MakeDateTimeStringHM(replica.Replica.ModifyTime),
+							ls.getStatusMark(replica.Replica.Status, false),
+							replica.Replica.Checksum.IRODSChecksumString,
+							replica.Replica.Path,
+							accessString,
+							desc,
+						})
+					}
 				} else {
-					outputFormatterTable.AppendRow([]interface{}{
-						"data-object",
-						newName,
-						replica.Replica.Owner,
-						replica.Replica.Number,
-						replica.Replica.ResourceHierarchy,
-						size,
-						types.MakeDateTimeStringHM(replica.Replica.ModifyTime),
-						ls.getStatusMark(replica.Replica.Status),
-						replica.Replica.Checksum.IRODSChecksumString,
-						replica.Replica.Path,
-						desc,
-					})
+					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+						outputFormatterTable.AppendRow([]interface{}{
+							"  " + replica.Replica.Owner + "\t\t" + replicaNumberString + " " + replica.Replica.ResourceHierarchy + "\t\t" + size + " " + types.MakeDateTimeStringHM(replica.Replica.ModifyTime) + " " + ls.getStatusMark(replica.Replica.Status, true) + " " + newName + "\t" + desc + "\n\t" + replica.Replica.Checksum.IRODSChecksumString + "\t" + replica.DataObject.DataType + "\t" + replica.Replica.Path,
+						})
+					} else {
+						outputFormatterTable.AppendRow([]interface{}{
+							"data-object",
+							newName,
+							replica.Replica.Owner,
+							replica.Replica.Number,
+							replica.Replica.ResourceHierarchy,
+							size,
+							types.MakeDateTimeStringHM(replica.Replica.ModifyTime),
+							ls.getStatusMark(replica.Replica.Status, false),
+							replica.Replica.Checksum.IRODSChecksumString,
+							replica.Replica.Path,
+							desc,
+						})
+					}
 				}
 			default:
 				if ls.listFlagValues.Access {
-					outputFormatterTable.AppendRow([]interface{}{
-						"data-object",
-						newName,
-						replica.Replica.Number,
-						accessString,
-						desc,
-					})
+					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+						outputFormatterTable.AppendRow([]interface{}{
+							"  " + newName + "\t" + accessString + "\t" + desc,
+						})
+					} else {
+						outputFormatterTable.AppendRow([]interface{}{
+							"data-object",
+							newName,
+							replica.Replica.Number,
+							accessString,
+							desc,
+						})
+					}
 				} else {
-					outputFormatterTable.AppendRow([]interface{}{
-						"data-object",
-						newName,
-						replica.Replica.Number,
-						desc,
-					})
+					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+						outputFormatterTable.AppendRow([]interface{}{
+							"  " + newName + "\t" + desc,
+						})
+					} else {
+						outputFormatterTable.AppendRow([]interface{}{
+							"data-object",
+							newName,
+							replica.Replica.Number,
+							desc,
+						})
+					}
 				}
 			}
 		}
@@ -726,76 +883,112 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 			switch ls.listFlagValues.Format {
 			case format.ListFormatLong:
 				if ls.listFlagValues.Access {
-					outputFormatterTable.AppendRow([]interface{}{
-						"collection",
-						newName,
-						entry.Owner,
-						"",
-						"",
-						"",
-						types.MakeDateTimeStringHM(entry.ModifyTime),
-						"",
-						"",
-						"",
-					})
+					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+						outputFormatterTable.AppendRow([]interface{}{
+							"  C- " + entry.Path,
+						})
+					} else {
+						outputFormatterTable.AppendRow([]interface{}{
+							"collection",
+							newName,
+							entry.Owner,
+							"",
+							"",
+							"",
+							types.MakeDateTimeStringHM(entry.ModifyTime),
+							"",
+							"",
+							"",
+						})
+					}
 				} else {
-					outputFormatterTable.AppendRow([]interface{}{
-						"collection",
-						newName,
-						entry.Owner,
-						"",
-						"",
-						"",
-						types.MakeDateTimeStringHM(entry.ModifyTime),
-						"",
-						"",
-					})
+					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+						outputFormatterTable.AppendRow([]interface{}{
+							"  C- " + entry.Path,
+						})
+					} else {
+						outputFormatterTable.AppendRow([]interface{}{
+							"collection",
+							newName,
+							entry.Owner,
+							"",
+							"",
+							"",
+							types.MakeDateTimeStringHM(entry.ModifyTime),
+							"",
+							"",
+						})
+					}
 				}
 			case format.ListFormatVeryLong:
 				if ls.listFlagValues.Access {
-					outputFormatterTable.AppendRow([]interface{}{
-						"collection",
-						newName,
-						entry.Owner,
-						"",
-						"",
-						"",
-						types.MakeDateTimeStringHM(entry.ModifyTime),
-						"",
-						"",
-						"",
-						"",
-						"",
-					})
+					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+						outputFormatterTable.AppendRow([]interface{}{
+							"  C- " + entry.Path,
+						})
+					} else {
+						outputFormatterTable.AppendRow([]interface{}{
+							"collection",
+							newName,
+							entry.Owner,
+							"",
+							"",
+							"",
+							types.MakeDateTimeStringHM(entry.ModifyTime),
+							"",
+							"",
+							"",
+							"",
+							"",
+						})
+					}
 				} else {
-					outputFormatterTable.AppendRow([]interface{}{
-						"collection",
-						newName,
-						entry.Owner,
-						"",
-						"",
-						"",
-						types.MakeDateTimeStringHM(entry.ModifyTime),
-						"",
-						"",
-						"",
-						"",
-					})
+					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+						outputFormatterTable.AppendRow([]interface{}{
+							"  C- " + entry.Path,
+						})
+					} else {
+						outputFormatterTable.AppendRow([]interface{}{
+							"collection",
+							newName,
+							entry.Owner,
+							"",
+							"",
+							"",
+							types.MakeDateTimeStringHM(entry.ModifyTime),
+							"",
+							"",
+							"",
+							"",
+						})
+					}
 				}
 			default:
 				if ls.listFlagValues.Access {
-					outputFormatterTable.AppendRow([]interface{}{
-						"collection",
-						newName,
-						"",
-						"",
-					})
+					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+						outputFormatterTable.AppendRow([]interface{}{
+							"  C- " + newName,
+						})
+					} else {
+						outputFormatterTable.AppendRow([]interface{}{
+							"collection",
+							newName,
+							"",
+							"",
+						})
+					}
 				} else {
-					outputFormatterTable.AppendRow([]interface{}{
-						"collection",
-						newName,
-						"",
-					})
+					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+						outputFormatterTable.AppendRow([]interface{}{
+							"  C- " + newName,
+						})
+					} else {
+						outputFormatterTable.AppendRow([]interface{}{
+							"collection",
+							newName,
+							"",
+						})
+					}
 				}
 			}
 		}
@@ -937,7 +1130,7 @@ func (ls *LsCommand) getDataObjectModifyTime(object *irodsclient_types.IRODSData
 	return maxTime
 }
 
-func (ls *LsCommand) getAccessesString(accesses []*irodsclient_types.IRODSAccess) string {
+func (ls *LsCommand) getAccessesString(accesses []*irodsclient_types.IRODSAccess, separater string) string {
 	// group first then user
 	accessStrings := []string{}
 
@@ -951,7 +1144,7 @@ func (ls *LsCommand) getAccessesString(accesses []*irodsclient_types.IRODSAccess
 		}
 	}
 
-	return strings.Join(accessStrings, ",\n")
+	return strings.Join(accessStrings, separater)
 }
 
 func (ls *LsCommand) getEncryptionManagerForDecryption(mode encryption.EncryptionMode) *encryption.EncryptionManager {
@@ -1008,13 +1201,22 @@ func (ls *LsCommand) getCollectionSortFunction(entries []*irodsclient_types.IROD
 	}
 }
 
-func (ls *LsCommand) getStatusMark(status string) string {
+func (ls *LsCommand) getStatusMark(status string, simple bool) string {
 	switch status {
 	case "0":
+		if simple {
+			return "X" // stale
+		}
 		return "Stale" // stale
 	case "1":
+		if simple {
+			return "&" // good
+		}
 		return "Good" // good
 	default:
+		if simple {
+			return "?" // unknown
+		}
 		return "Unknown"
 	}
 }

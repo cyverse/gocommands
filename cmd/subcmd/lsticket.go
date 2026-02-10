@@ -28,7 +28,7 @@ var lsticketCmd = &cobra.Command{
 func AddLsticketCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(lsticketCmd, true)
-	flag.SetOutputFormatFlags(lsticketCmd)
+	flag.SetOutputFormatFlags(lsticketCmd, true)
 	flag.SetListFlags(lsticketCmd, true, true)
 
 	rootCmd.AddCommand(lsticketCmd)
@@ -155,6 +155,9 @@ func (lsTicket *LsTicketCommand) Process() error {
 		}
 	}
 
+	if lsTicket.outputFormatFlagValues.Format == format.OutputFormatLegacy {
+		lsTicket.outputFormatFlagValues.Format = format.OutputFormatTable
+	}
 	outputFormatter.Render(lsTicket.outputFormatFlagValues.Format)
 
 	return nil
