@@ -1,8 +1,9 @@
 package types
 
 import (
-	"errors"
 	"fmt"
+
+	"github.com/cockroachdb/errors"
 )
 
 type NotDirError struct {
@@ -33,7 +34,8 @@ func (err *NotDirError) ToString() string {
 
 // IsNotDirError evaluates if the given error is NotDirError
 func IsNotDirError(err error) bool {
-	return errors.Is(err, &NotDirError{})
+	var notDirErr *NotDirError
+	return errors.As(err, &notDirErr)
 }
 
 type NotFileError struct {
@@ -64,5 +66,6 @@ func (err *NotFileError) ToString() string {
 
 // IsNotFileError evaluates if the given error is NotFileError
 func IsNotFileError(err error) bool {
-	return errors.Is(err, &NotFileError{})
+	var notFileErr *NotFileError
+	return errors.As(err, &notFileErr)
 }

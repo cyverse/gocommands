@@ -1,9 +1,9 @@
 package main
 
 import (
-	"errors"
 	"os"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/cmd/flag"
 	"github.com/cyverse/gocommands/cmd/subcmd"
