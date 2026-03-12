@@ -8,7 +8,8 @@
             "irods_port": 1247,
             "irods_zone_name": "iplant",
             "irods_client_zone_name": "iplant",
-            "irods_default_hash_scheme": "MD5"
+            "irods_default_hash_scheme": "MD5",
+            "irods_webdav_base_url": "https://data.cyverse.org/dav"
         },
         "data.cyverse.rocks": {
             "irods_authentication_scheme": "native",

@@ -5,9 +5,10 @@ go 1.24.9
 toolchain go1.24.10
 
 require (
+	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/cockroachdb/errors v1.12.0
 	github.com/creativeprojects/go-selfupdate v1.5.0
-	github.com/cyverse/go-irodsclient v0.19.7
+	github.com/cyverse/go-irodsclient v0.19.8-0.20260311233657-a6f0c7d2d19f
 	github.com/dustin/go-humanize v1.0.1
 	github.com/gliderlabs/ssh v0.3.5
 	github.com/jedib0t/go-pretty/v6 v6.6.7
@@ -15,6 +16,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.10.1
 	github.com/stretchr/testify v1.11.1
+	github.com/studio-b12/gowebdav v0.12.0
 	golang.org/x/crypto v0.43.0
 	golang.org/x/term v0.36.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1

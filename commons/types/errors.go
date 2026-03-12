@@ -69,3 +69,37 @@ func IsNotFileError(err error) bool {
 	var notFileErr *NotFileError
 	return errors.As(err, &notFileErr)
 }
+
+type WebDAVError struct {
+	URL       string
+	ErrorCode int
+}
+
+func NewWebDAVError(url string, errorCode int) error {
+	return &WebDAVError{
+		URL:       url,
+		ErrorCode: errorCode,
+	}
+}
+
+// Error returns error message
+func (err *WebDAVError) Error() string {
+	return fmt.Sprintf("failed to access %q, received %d error", err.URL, err.ErrorCode)
+}
+
+// Is tests type of error
+func (err *WebDAVError) Is(other error) bool {
+	_, ok := other.(*WebDAVError)
+	return ok
+}
+
+// ToString stringifies the object
+func (err *WebDAVError) ToString() string {
+	return fmt.Sprintf("WebDAVError: %q (error %d)", err.URL, err.ErrorCode)
+}
+
+// IsWebDAVError evaluates if the given error is WebDAVError
+func IsWebDAVError(err error) bool {
+	var webDAVErr *WebDAVError
+	return errors.As(err, &webDAVErr)
+}

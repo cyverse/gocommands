@@ -25,6 +25,7 @@ import (
 	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/cyverse/gocommands/commons/transfer"
 	"github.com/cyverse/gocommands/commons/types"
+	"github.com/cyverse/gocommands/commons/webdav"
 	"github.com/cyverse/gocommands/commons/wildcard"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
@@ -54,6 +55,7 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	flag.SetDifferentialTransferFlags(getCmd, false)
 	flag.SetChecksumFlags(getCmd)
 	flag.SetNoRootFlags(getCmd)
+	flag.SetWebDAVFlags(getCmd)
 	flag.SetSyncFlags(getCmd, true)
 	flag.SetDecryptionFlags(getCmd)
 	flag.SetPostTransferFlagValues(getCmd)
@@ -87,6 +89,7 @@ type GetCommand struct {
 	differentialTransferFlagValues *flag.DifferentialTransferFlagValues
 	checksumFlagValues             *flag.ChecksumFlagValues
 	noRootFlagValues               *flag.NoRootFlagValues
+	webdavFlagValues               *flag.WebDAVFlagValues
 	syncFlagValues                 *flag.SyncFlagValues
 	decryptionFlagValues           *flag.DecryptionFlagValues
 	postTransferFlagValues         *flag.PostTransferFlagValues
@@ -96,8 +99,9 @@ type GetCommand struct {
 
 	maxConnectionNum int
 
-	account    *irodsclient_types.IRODSAccount
-	filesystem *irodsclient_fs.FileSystem
+	account      *irodsclient_types.IRODSAccount
+	filesystem   *irodsclient_fs.FileSystem
+	webdavClient *webdav.WebDAVClient
 
 	sourcePaths []string
 	targetPath  string
@@ -129,6 +133,7 @@ func NewGetCommand(command *cobra.Command, args []string) (*GetCommand, error) {
 		differentialTransferFlagValues: flag.GetDifferentialTransferFlagValues(),
 		checksumFlagValues:             flag.GetChecksumFlagValues(),
 		noRootFlagValues:               flag.GetNoRootFlagValues(),
+		webdavFlagValues:               flag.GetWebDAVFlagValues(),
 		syncFlagValues:                 flag.GetSyncFlagValues(),
 		decryptionFlagValues:           flag.GetDecryptionFlagValues(command),
 		postTransferFlagValues:         flag.GetPostTransferFlagValues(),
@@ -190,6 +195,10 @@ func (get *GetCommand) Process() error {
 		return errors.Wrap(err, "failed to get iRODS FS Client")
 	}
 	defer get.filesystem.Release()
+
+	if len(config.GetSessionConfig().WebDAVBaseURL) > 0 {
+		get.webdavClient = webdav.NewWebDAVClient(config.GetSessionConfig().WebDAVBaseURL, get.account.ProxyUser, get.account.Password)
+	}
 
 	if get.commonFlagValues.TimeoutUpdated {
 		irods.UpdateIRODSFSClientTimeout(get.filesystem, get.commonFlagValues.Timeout)
@@ -435,7 +444,7 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 		get.transferReportManager.AddTransfer(result, transfer.TransferMethodGet, err, newNotes)
 	}
 
-	_, threadsRequired := get.determineTransferMethod(sourceEntry.Size)
+	transferMode, threadsRequired := get.determineTransferMethod(sourceEntry.Size)
 
 	getTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
@@ -470,12 +479,22 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 			return errors.Wrapf(statErr, "failed to stat %q", parentDownloadPath)
 		}
 
-		notes := []string{"icat", fmt.Sprintf("%d threads", threadsRequired)}
+		notes := []string{string(transferMode), fmt.Sprintf("%d threads", threadsRequired)}
 		if get.requireDecryption(sourceEntry.Path) {
 			notes = append(notes, "decrypt")
 		}
 
-		downloadResult, downloadErr := get.filesystem.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, progressCallbackGet)
+		var downloadErr error
+		var downloadResult *irodsclient_fs.FileTransferResult
+
+		switch transferMode {
+		case transfer.TransferModeWebDAV:
+			downloadResult, downloadErr = get.webdavClient.DownloadFile(sourceEntry, downloadPath, progressCallbackGet)
+		case transfer.TransferModeICAT:
+			fallthrough
+		default:
+			downloadResult, downloadErr = get.filesystem.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, progressCallbackGet)
+		}
 		if downloadErr != nil {
 			job.Progress("download", -1, sourceEntry.Size, true)
 			job.Progress("checksum", -1, sourceEntry.Size, true)
@@ -1465,6 +1484,13 @@ func (get *GetCommand) determineTransferMethod(size int64) (transfer.TransferMod
 
 	if get.parallelTransferFlagValues.Icat {
 		return transfer.TransferModeICAT, threads
+	} else if get.webdavFlagValues.WebDAV {
+		if get.webdavClient == nil {
+			// fallback to ICAT
+			return transfer.TransferModeICAT, threads
+		}
+
+		return transfer.TransferModeWebDAV, 1
 	}
 
 	// sysconfig
