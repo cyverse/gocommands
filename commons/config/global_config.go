@@ -116,38 +116,73 @@ func SetCWD(cwd string) error {
 func InputMissingFields() (bool, error) {
 	updated := false
 
-	env := environmentManager.Environment
-	if len(env.Host) == 0 {
-		env.Host = terminal.Input("iRODS Host [data.cyverse.org]")
-		if len(env.Host) == 0 {
-			env.Host = "data.cyverse.org"
+	requirePortInput := false
+	if len(environmentManager.Environment.Host) == 0 {
+		environmentManager.Environment.Host = terminal.Input("iRODS Host [data.cyverse.org]")
+		if len(environmentManager.Environment.Host) == 0 {
+			environmentManager.Environment.Host = "data.cyverse.org"
 		}
 
-		env.Port = terminal.InputInt("iRODS Port [1247]")
-		if env.Port == 0 {
-			env.Port = 1247
+		requirePortInput = true
+	}
+
+	var configFromCatalog *irodsclient_config.Config
+	configCatalog, err := catalog.NewConfigCatalog()
+	if err == nil {
+		// ignore error
+		if len(environmentManager.Environment.Host) > 0 {
+			config, found := configCatalog.GetIRODSConfig(environmentManager.Environment.Host)
+			if found {
+				configFromCatalog = config
+			}
+		}
+	}
+
+	// read catalog
+	if configFromCatalog != nil {
+		// overwrite
+		if requirePortInput {
+			environmentManager.Environment.Port = configFromCatalog.Port
+			requirePortInput = false
+		}
+
+		if len(environmentManager.Environment.ZoneName) == 0 {
+			environmentManager.Environment.ZoneName = configFromCatalog.ZoneName
+		}
+
+		if len(environmentManager.Environment.WebDAVBaseURL) == 0 {
+			environmentManager.Environment.WebDAVBaseURL = configFromCatalog.WebDAVBaseURL
 		}
 
 		updated = true
 	}
 
-	if len(env.ZoneName) == 0 {
-		env.ZoneName = terminal.Input("iRODS Zone [iplant]")
-		if len(env.ZoneName) == 0 {
-			env.ZoneName = "iplant"
+	if requirePortInput {
+		environmentManager.Environment.Port = terminal.InputInt("iRODS Port [1247]")
+		if environmentManager.Environment.Port == 0 {
+			environmentManager.Environment.Port = 1247
 		}
 
 		updated = true
 	}
 
-	if len(env.Username) == 0 {
-		env.Username = terminal.Input("iRODS Username")
+	if len(environmentManager.Environment.ZoneName) == 0 {
+		environmentManager.Environment.ZoneName = terminal.Input("iRODS Zone [iplant]")
+		if len(environmentManager.Environment.ZoneName) == 0 {
+			environmentManager.Environment.ZoneName = "iplant"
+		}
+
+		updated = true
+	}
+
+	if len(environmentManager.Environment.Username) == 0 {
+		environmentManager.Environment.Username = terminal.Input("iRODS Username")
 		updated = true
 	}
 
 	password := environmentManager.Environment.Password
 	pamToken := environmentManager.Environment.PAMToken
-	if len(password) == 0 && len(pamToken) == 0 && env.Username != "anonymous" {
+	if len(password) == 0 && len(pamToken) == 0 && environmentManager.Environment.Username != "anonymous" {
 		environmentManager.Environment.Password = terminal.InputPassword("iRODS Password")
 		updated = true
 	}

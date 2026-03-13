@@ -2,20 +2,11 @@ package catalog
 
 import (
 	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"time"
 
 	"github.com/cockroachdb/errors"
 	irodsclient_config "github.com/cyverse/go-irodsclient/config"
-	constant "github.com/cyverse/gocommands/commons/constant"
+	"github.com/cyverse/gocommands/catalog"
 )
-
-// GetConfigCatalogURL returns the URL of the catalog file
-func GetConfigCatalogURL() string {
-	return fmt.Sprintf("https://raw.githubusercontent.com/%s/refs/heads/main/catalog/catalog.json", constant.GoCommandsRepoPackagePath)
-}
 
 type ConfigCatalog struct {
 	Configs map[string]map[string]interface{} `json:"configs,omitempty" yaml:"configs,omitempty"`
@@ -23,34 +14,10 @@ type ConfigCatalog struct {
 
 // NewConfigCatalog reads Catalog from a JSON file
 func NewConfigCatalog() (*ConfigCatalog, error) {
-	catalogURL := GetConfigCatalogURL()
-
-	// Create a client with a timeout
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-
-	// Make the GET request
-	resp, err := client.Get(catalogURL)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to make GET request to %s", catalogURL)
-	}
-	defer resp.Body.Close()
-
-	// Check the status code
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.Errorf("unexpected status code %d", resp.StatusCode)
-	}
-
-	// Read the response body
-	jsonBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to read response body")
-	}
-
 	configCatalog := ConfigCatalog{}
 
-	err = json.Unmarshal(jsonBytes, &configCatalog)
+	catalogJSON := catalog.GetCatalogJSON()
+	err := json.Unmarshal(catalogJSON, &configCatalog)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to unmarshal config catalog")
 	}
