@@ -1472,6 +1472,8 @@ func (get *GetCommand) decryptFile(sourcePath string, encryptedFilePath string, 
 }
 
 func (get *GetCommand) determineTransferMethod(size int64) (transfer.TransferMode, int) {
+	logger := log.WithFields(log.Fields{})
+
 	threads := parallel.CalculateThreadForTransferJob(size, get.parallelTransferFlagValues.ThreadNumberPerFile)
 
 	// determine how to download
@@ -1480,13 +1482,16 @@ func (get *GetCommand) determineTransferMethod(size int64) (transfer.TransferMod
 	}
 
 	if get.parallelTransferFlagValues.Icat {
+		logger.Info("using ICAT transfer for downloading a data object")
 		return transfer.TransferModeICAT, threads
 	} else if get.parallelTransferFlagValues.WebDAV {
 		if get.webdavClient == nil {
-			// fallback to ICAT
+			// fallback
+			logger.Info("WebDAV is not configured. Using ICAT transfer for downloading a data object")
 			return transfer.TransferModeICAT, threads
 		}
 
+		logger.Info("using WebDAV for downloading a data object")
 		return transfer.TransferModeWebDAV, 1
 	}
 
@@ -1499,5 +1504,6 @@ func (get *GetCommand) determineTransferMethod(size int64) (transfer.TransferMod
 		}
 	}
 
+	logger.Info("using ICAT transfer for downloading a data object")
 	return transfer.TransferModeICAT, threads
 }

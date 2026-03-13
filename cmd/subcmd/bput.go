@@ -26,6 +26,7 @@ import (
 	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/cyverse/gocommands/commons/transfer"
 	"github.com/cyverse/gocommands/commons/types"
+	"github.com/cyverse/gocommands/commons/webdav"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -92,8 +93,9 @@ type BputCommand struct {
 
 	maxConnectionNum int
 
-	account    *irodsclient_types.IRODSAccount
-	filesystem *irodsclient_fs.FileSystem
+	account      *irodsclient_types.IRODSAccount
+	filesystem   *irodsclient_fs.FileSystem
+	webdavClient *webdav.WebDAVClient
 
 	sourcePaths []string
 	targetPath  string
@@ -181,6 +183,10 @@ func (bput *BputCommand) Process() error {
 		return errors.Wrap(err, "failed to get iRODS FS Client")
 	}
 	defer bput.filesystem.Release()
+
+	if len(config.GetSessionConfig().WebDAVBaseURL) > 0 {
+		bput.webdavClient = webdav.NewWebDAVClient(bput.filesystem, config.GetSessionConfig().WebDAVBaseURL, bput.account.ProxyUser, bput.account.Password)
+	}
 
 	if bput.commonFlagValues.TimeoutUpdated {
 		irods.UpdateIRODSFSClientTimeout(bput.filesystem, bput.commonFlagValues.Timeout)
@@ -534,7 +540,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 		}
 	}
 
-	_, threadsRequired := bput.determineTransferMethodForBundle(bun)
+	transferMode, threadsRequired := bput.determineTransferMethodForBundle(bun)
 
 	// task for bundling and uploading
 	bundleTask := func(job *parallel.ParallelJob) error {
@@ -613,9 +619,19 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 			job.Progress(taskType, processed, total, false)
 		}
 
-		uploadResult, uploadErr := bput.filesystem.UploadFileParallel(tarballPath, stagingTargetPath, "", threadsRequired, false, bput.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
+		var uploadErr error
+		var uploadResult *irodsclient_fs.FileTransferResult
 
-		notes = append(notes, "icat", fmt.Sprintf("%d threads", threadsRequired))
+		notes = append(notes, string(transferMode), fmt.Sprintf("%d threads", threadsRequired))
+
+		switch transferMode {
+		case transfer.TransferModeWebDAV:
+			uploadResult, uploadErr = bput.webdavClient.UploadFile(tarballPath, stagingTargetPath, bput.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
+		case transfer.TransferModeICAT:
+			fallthrough
+		default:
+			uploadResult, uploadErr = bput.filesystem.UploadFileParallel(tarballPath, stagingTargetPath, "", threadsRequired, false, bput.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
+		}
 
 		if uploadErr != nil {
 			job.Progress("upload", -1, tarballStat.Size(), true)
