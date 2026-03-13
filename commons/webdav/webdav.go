@@ -16,6 +16,7 @@ import (
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_common "github.com/cyverse/go-irodsclient/irods/common"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	"github.com/cyverse/go-irodsclient/irods/util"
 	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
 	"github.com/cyverse/gocommands/commons/types"
 	log "github.com/sirupsen/logrus"
@@ -23,16 +24,18 @@ import (
 )
 
 type WebDAVClient struct {
-	baseURL  string
-	username string
-	password string
+	filesystem *irodsclient_fs.FileSystem
+	baseURL    string
+	username   string
+	password   string
 }
 
-func NewWebDAVClient(baseURL string, username string, password string) *WebDAVClient {
+func NewWebDAVClient(filesystem *irodsclient_fs.FileSystem, baseURL string, username string, password string) *WebDAVClient {
 	return &WebDAVClient{
-		baseURL:  strings.TrimRight(baseURL, "/"),
-		username: username,
-		password: password,
+		filesystem: filesystem,
+		baseURL:    strings.TrimRight(baseURL, "/"),
+		username:   username,
+		password:   password,
 	}
 }
 
@@ -55,7 +58,7 @@ func (client *WebDAVClient) getWebDavError(url string, err error) error {
 	return err
 }
 
-func (client *WebDAVClient) DownloadFile(sourceEntry *irodsclient_fs.Entry, localPath string, callback irodsclient_common.TransferTrackerCallback) (*irodsclient_fs.FileTransferResult, error) {
+func (client *WebDAVClient) DownloadFile(sourceEntry *irodsclient_fs.Entry, localPath string, verifyChecksum bool, callback irodsclient_common.TransferTrackerCallback) (*irodsclient_fs.FileTransferResult, error) {
 	logger := log.WithFields(log.Fields{
 		"irods_source_path": sourceEntry.Path,
 		"local_path":        localPath,
@@ -90,8 +93,10 @@ func (client *WebDAVClient) DownloadFile(sourceEntry *irodsclient_fs.Entry, loca
 	fileTransferResult.IRODSCheckSum = sourceEntry.CheckSum
 	fileTransferResult.IRODSSize = sourceEntry.Size
 
-	if len(sourceEntry.CheckSum) == 0 {
-		return fileTransferResult, errors.Errorf("failed to get checksum of the source file for path %q", irodsSrcPath)
+	if verifyChecksum {
+		if len(sourceEntry.CheckSum) == 0 {
+			return fileTransferResult, errors.Errorf("failed to get checksum of the source file for path %q", irodsSrcPath)
+		}
 	}
 
 	if sourceEntry.Size == 0 {
@@ -111,6 +116,187 @@ func (client *WebDAVClient) DownloadFile(sourceEntry *irodsclient_fs.Entry, loca
 		return fileTransferResult, nil
 	}
 
+	webdav, err := client.createAndConnectWebDAV()
+	if err != nil {
+		return fileTransferResult, errors.Wrapf(err, "failed to connect to WebDAV server")
+	}
+
+	// download the file
+	offset := int64(0)
+	readSize := sourceEntry.Size
+	for offset < sourceEntry.Size {
+		download := func() error {
+			readSize = sourceEntry.Size - offset
+
+			logger.Debugf("downloading file %s (offset %d, length %d) from WebDAV server", irodsSrcPath, offset, readSize)
+
+			newOffset, downloadErr := client.downloadToLocalWithTrackerCallBack(webdav, irodsSrcPath, localFilePath, offset, readSize, sourceEntry.Size, callback)
+			if downloadErr != nil {
+				logger.WithError(downloadErr).Debugf("failed to download file %q (offset %d, length %d) from WebDAV server", irodsSrcPath, offset, readSize)
+
+				// if the download failed, we need to update the offset
+				offset = newOffset
+				return errors.Wrapf(downloadErr, "failed to download file %q (offset %d, length %d) from WebDAV server", irodsSrcPath, offset, readSize)
+			}
+
+			offset = newOffset
+			return nil
+		}
+
+		// retry download in case of failure
+		// we retry 3 times with 5 seconds delay between attempts
+		offsetLast := offset
+		retryErr := retry.Do(download, retry.Attempts(3), retry.Delay(5*time.Second), retry.LastErrorOnly(true))
+		if retryErr != nil {
+			if errors.Is(retryErr, io.ErrUnexpectedEOF) && offsetLast < offset {
+				// progress was made
+				// continue to retry
+				logger.WithError(retryErr).Debugf("downloaded file %q (offset %d, length %d, data left %d) from WebDAV server, but got unexpected EOF, retrying...", irodsSrcPath, offset, offset-offsetLast, readSize)
+			} else {
+				return fileTransferResult, errors.Wrapf(retryErr, "failed to download file %q (offset %d, length %d) from WebDAV server after 3 attempts", irodsSrcPath, offset, readSize)
+			}
+		}
+	}
+
+	fileTransferResult.LocalSize = offset
+
+	if verifyChecksum {
+		localHash, err := client.calculateLocalFileHash(localPath, sourceEntry.CheckSumAlgorithm, callback)
+		if err != nil {
+			return fileTransferResult, errors.Wrapf(err, "failed to calculate hash of local file %q with alg %s", localPath, sourceEntry.CheckSumAlgorithm)
+		}
+
+		fileTransferResult.LocalCheckSumAlgorithm = sourceEntry.CheckSumAlgorithm
+		fileTransferResult.LocalCheckSum = localHash
+
+		if !bytes.Equal(sourceEntry.CheckSum, localHash) {
+			return fileTransferResult, errors.Errorf("checksum verification failed for local file %q, download failed", localPath)
+		}
+	}
+
+	fileTransferResult.EndTime = time.Now()
+
+	return fileTransferResult, nil
+}
+
+func (client *WebDAVClient) UploadFile(localPath string, irodsPath string, verifyChecksum bool, ignoreOverwriteError bool, callback irodsclient_common.TransferTrackerCallback) (*irodsclient_fs.FileTransferResult, error) {
+	logger := log.WithFields(log.Fields{
+		"local_source_path": localPath,
+		"irods_path":        irodsPath,
+	})
+
+	localSrcPath := irodsclient_util.GetCorrectLocalPath(localPath)
+	irodsDestPath := irodsclient_util.GetCorrectIRODSPath(irodsPath)
+
+	irodsFilePath := irodsDestPath
+
+	fileTransferResult := &irodsclient_fs.FileTransferResult{}
+	fileTransferResult.LocalPath = localSrcPath
+	fileTransferResult.StartTime = time.Now()
+
+	stat, err := os.Stat(localSrcPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// file not exists
+			newErr := errors.Join(err, irodsclient_types.NewFileNotFoundError(localSrcPath))
+			return fileTransferResult, errors.Wrapf(newErr, "failed to find a file for local path %q", localSrcPath)
+		}
+		return fileTransferResult, err
+	}
+
+	if stat.IsDir() {
+		newErr := irodsclient_types.NewFileNotFoundError(localSrcPath)
+		return fileTransferResult, errors.Wrapf(newErr, "failed to find a file for local path %q, the path is for a directory", localSrcPath)
+	}
+
+	entry, err := client.filesystem.Stat(irodsDestPath)
+	if err != nil {
+		if !irodsclient_types.IsFileNotFoundError(err) {
+			return fileTransferResult, err
+		}
+	} else {
+		if entry.IsDir() {
+			localFileName := filepath.Base(localSrcPath)
+			irodsFilePath = util.MakeIRODSPath(irodsDestPath, localFileName)
+		} else {
+			err = client.filesystem.RemoveFile(irodsDestPath, true)
+			if err != nil {
+				if !ignoreOverwriteError {
+					return fileTransferResult, errors.Wrapf(err, "failed to remove data object %q for overwrite", irodsDestPath)
+				}
+			}
+		}
+	}
+
+	fileTransferResult.LocalSize = stat.Size()
+	fileTransferResult.IRODSPath = irodsFilePath
+
+	webdav, err := client.createAndConnectWebDAV()
+	if err != nil {
+		return fileTransferResult, errors.Wrapf(err, "failed to connect to WebDAV server")
+	}
+
+	// upload the file
+	// upload via WebDAV cannot be resumed, so we will retry the whole upload in case of failure
+	offset := int64(0)
+	writeSize := stat.Size()
+
+	upload := func() error {
+		logger.Debugf("uploading file %s (length %d) to WebDAV server", localSrcPath, writeSize)
+
+		newOffset, uploadErr := client.uploadToIrodsWithTrackerCallBack(webdav, localSrcPath, irodsFilePath, writeSize, callback)
+		if uploadErr != nil {
+			logger.WithError(uploadErr).Debugf("failed to upload file %q (length %d) to WebDAV server", localSrcPath, writeSize)
+
+			return errors.Wrapf(uploadErr, "failed to upload file %q (length %d) to WebDAV server", localSrcPath, writeSize)
+		}
+
+		offset = newOffset
+		return nil
+	}
+
+	// retry upload in case of failure
+	// we retry 3 times with 5 seconds delay between attempts
+	retryErr := retry.Do(upload, retry.Attempts(3), retry.Delay(5*time.Second), retry.LastErrorOnly(true))
+	if retryErr != nil {
+		return fileTransferResult, errors.Wrapf(retryErr, "failed to upload file %q (length %d) from WebDAV server after 3 attempts", localSrcPath, offset, writeSize)
+	}
+
+	client.filesystem.InvalidateCacheForFileCreate(irodsFilePath)
+	cachePropagation := client.filesystem.GetCachePropagation()
+	cachePropagation.PropagateFileCreate(irodsFilePath)
+
+	entry, err = client.filesystem.Stat(irodsFilePath)
+	if err != nil {
+		return fileTransferResult, err
+	}
+
+	fileTransferResult.IRODSCheckSumAlgorithm = entry.CheckSumAlgorithm
+	fileTransferResult.IRODSCheckSum = entry.CheckSum
+	fileTransferResult.IRODSSize = entry.Size
+
+	if verifyChecksum {
+		if len(entry.CheckSum) > 0 {
+			localHash, err := client.calculateLocalFileHash(localSrcPath, entry.CheckSumAlgorithm, callback)
+			if err != nil {
+				return fileTransferResult, errors.Wrapf(err, "failed to calculate hash of local file %q with alg %s", localSrcPath, entry.CheckSumAlgorithm)
+			}
+
+			fileTransferResult.LocalCheckSumAlgorithm = entry.CheckSumAlgorithm
+			fileTransferResult.LocalCheckSum = localHash
+
+			if !bytes.Equal(entry.CheckSum, localHash) {
+				return fileTransferResult, errors.Errorf("checksum verification failed for iRODS file %q, upload failed", irodsFilePath)
+			}
+		}
+	}
+
+	fileTransferResult.EndTime = time.Now()
+
+	return fileTransferResult, nil
+}
+
+func (client *WebDAVClient) createAndConnectWebDAV() (*gowebdav.Client, error) {
 	webdav := gowebdav.NewClient(client.baseURL, client.username, client.password)
 
 	tlsConfig := &tls.Config{
@@ -150,76 +336,15 @@ func (client *WebDAVClient) DownloadFile(sourceEntry *irodsclient_fs.Entry, loca
 	}
 
 	webdav.SetTransport(transport)
-	err = webdav.Connect()
+	err := webdav.Connect()
 	if err != nil {
 		if httpStatusErr, ok := client.getWebDAVErrorCode(err); ok {
-			return fileTransferResult, types.NewWebDAVError(client.baseURL, int(httpStatusErr))
+			return nil, types.NewWebDAVError(client.baseURL, int(httpStatusErr))
 		}
 
-		return fileTransferResult, types.NewWebDAVError(client.baseURL, http.StatusServiceUnavailable)
+		return nil, types.NewWebDAVError(client.baseURL, http.StatusServiceUnavailable)
 	}
-
-	// download the file
-	offset := int64(0)
-	readSize := sourceEntry.Size
-	for offset < sourceEntry.Size {
-		download := func() error {
-			readSize = sourceEntry.Size - offset
-
-			logger.Debugf("downloading file %s (offset %d, length %d) from WebDAV server", irodsSrcPath, offset, readSize)
-
-			reader, readErr := webdav.ReadStreamRange(irodsSrcPath, offset, readSize)
-			if readErr != nil {
-				baseErr := client.getWebDavError(client.baseURL+irodsSrcPath, readErr)
-				return errors.Wrapf(baseErr, "failed to read stream range of file %q (offset %d, length %d) from WebDAV server", irodsSrcPath, offset, readSize)
-			}
-			defer reader.Close()
-
-			newOffset, downloadErr := client.downloadToLocalWithTrackerCallBack(reader, localFilePath, offset, readSize, sourceEntry.Size, callback)
-			if downloadErr != nil {
-				logger.WithError(downloadErr).Debugf("failed to download file %q (offset %d, length %d) from WebDAV server", irodsSrcPath, offset, readSize)
-
-				// if the download failed, we need to update the offset
-				offset = newOffset
-				return errors.Wrapf(downloadErr, "failed to download file %q (offset %d, length %d) from WebDAV server", irodsSrcPath, offset, readSize)
-			}
-
-			offset = newOffset
-			return nil
-		}
-
-		// retry download in case of failure
-		// we retry 3 times with 5 seconds delay between attempts
-		offsetLast := offset
-		retryErr := retry.Do(download, retry.Attempts(3), retry.Delay(5*time.Second), retry.LastErrorOnly(true))
-		if retryErr != nil {
-			if errors.Is(retryErr, io.ErrUnexpectedEOF) && offsetLast < offset {
-				// progress was made
-				// continue to retry
-				logger.WithError(retryErr).Debugf("downloaded file %q (offset %d, length %d, data left %d) from WebDAV server, but got unexpected EOF, retrying...", irodsSrcPath, offset, offset-offsetLast, readSize)
-			} else {
-				return fileTransferResult, errors.Wrapf(retryErr, "failed to download file %q (offset %d, length %d) from WebDAV server after 3 attempts", irodsSrcPath, offset, readSize)
-			}
-		}
-	}
-
-	fileTransferResult.LocalSize = offset
-
-	localHash, err := client.calculateLocalFileHash(localPath, sourceEntry.CheckSumAlgorithm, callback)
-	if err != nil {
-		return fileTransferResult, errors.Wrapf(err, "failed to calculate hash of local file %q with alg %s", localPath, sourceEntry.CheckSumAlgorithm)
-	}
-
-	fileTransferResult.LocalCheckSumAlgorithm = sourceEntry.CheckSumAlgorithm
-	fileTransferResult.LocalCheckSum = localHash
-
-	if !bytes.Equal(sourceEntry.CheckSum, localHash) {
-		return fileTransferResult, errors.Errorf("checksum verification failed for local file %q, download failed", localPath)
-	}
-
-	fileTransferResult.EndTime = time.Now()
-
-	return fileTransferResult, nil
+	return webdav, nil
 }
 
 func (client *WebDAVClient) calculateLocalFileHash(localPath string, algorithm irodsclient_types.ChecksumAlgorithm, processCallback irodsclient_common.TransferTrackerCallback) ([]byte, error) {
@@ -232,12 +357,18 @@ func (client *WebDAVClient) calculateLocalFileHash(localPath string, algorithm i
 	return hashBytes, nil
 }
 
-func (client *WebDAVClient) downloadToLocalWithTrackerCallBack(reader io.ReadCloser, localPath string, offset int64, readLength int64, fileSize int64, callback irodsclient_common.TransferTrackerCallback) (int64, error) {
+func (client *WebDAVClient) downloadToLocalWithTrackerCallBack(webdav *gowebdav.Client, irodsPath string, localPath string, offset int64, readLength int64, fileSize int64, callback irodsclient_common.TransferTrackerCallback) (int64, error) {
+	reader, readErr := webdav.ReadStreamRange(irodsPath, offset, readLength)
+	if readErr != nil {
+		baseErr := client.getWebDavError(client.baseURL+irodsPath, readErr)
+		return offset, errors.Wrapf(baseErr, "failed to read stream range of file %q (offset %d, length %d) from WebDAV server", irodsPath, offset, readLength)
+	}
+	defer reader.Close()
+
 	f, err := os.OpenFile(localPath, os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
 		return offset, errors.Wrapf(err, "failed to open local file %q", localPath)
 	}
-	defer f.Close()
 
 	newOffset, err := f.Seek(offset, io.SeekStart)
 	if err != nil {
@@ -248,50 +379,70 @@ func (client *WebDAVClient) downloadToLocalWithTrackerCallBack(reader io.ReadClo
 		return offset, errors.Errorf("failed to seek to offset %d in local file %q, current offset is %d", offset, localPath, newOffset)
 	}
 
+	actualWrite := int64(0)
+
+	progress := func(writeSize int) {
+		actualWrite += int64(writeSize)
+
+		if callback != nil {
+			callback("download", offset+actualWrite, fileSize)
+		}
+	}
+
+	progressWriter := NewWriterWithProgress(f, progress)
+	defer progressWriter.Close()
+
 	if callback != nil {
 		callback("download", offset, fileSize)
 	}
 
-	sizeLeft := readLength
-	actualRead := int64(0)
-	actualWrite := int64(0)
-
-	buffer := make([]byte, 64*1024) // 64KB buffer
-	for sizeLeft > 0 {
-		sizeRead, err := reader.Read(buffer)
-
-		if sizeRead > 0 {
-			sizeLeft -= int64(sizeRead)
-			actualRead += int64(sizeRead)
-
-			sizeWritten, writeErr := f.Write(buffer[:sizeRead])
-			if writeErr != nil {
-				return offset + actualWrite, errors.Wrapf(writeErr, "failed to write to local file %q", localPath)
-			}
-
-			if sizeWritten != sizeRead {
-				return offset + actualWrite, errors.Errorf("failed to write all bytes to local file %q, expected %d, got %d", localPath, sizeRead, sizeWritten)
-			}
-
-			actualWrite += int64(sizeWritten)
-
-			if callback != nil {
-				callback("download", offset+actualWrite, fileSize)
-			}
-		}
-
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-
-			return offset + actualWrite, errors.Wrapf(err, "failed to read from reader")
-		}
+	copied, err := io.CopyN(progressWriter, reader, readLength)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return offset + actualWrite, errors.Wrapf(err, "failed to copy data to local file %q", localPath)
 	}
 
-	if actualWrite != readLength {
-		return offset + actualWrite, errors.Errorf("file size mismatch, expected %d, got %d", readLength, actualRead)
+	if readLength != copied {
+		return offset + actualWrite, errors.Errorf("file size mismatch, expected %d, got %d", readLength, copied)
+	}
+
+	if readLength != actualWrite {
+		return offset + actualWrite, errors.Errorf("file size mismatch, expected %d, got %d", readLength, actualWrite)
 	}
 
 	return offset + actualWrite, nil
+}
+
+func (client *WebDAVClient) uploadToIrodsWithTrackerCallBack(webdav *gowebdav.Client, localPath string, irodsPath string, fileSize int64, callback irodsclient_common.TransferTrackerCallback) (int64, error) {
+	reader, readErr := os.Open(localPath)
+	if readErr != nil {
+		return 0, errors.Wrapf(readErr, "failed to open local file %q", localPath)
+	}
+
+	if callback != nil {
+		callback("upload", 0, fileSize)
+	}
+
+	actualRead := int64(0)
+
+	progress := func(readSize int) {
+		actualRead += int64(readSize)
+
+		if callback != nil {
+			callback("upload", actualRead, fileSize)
+		}
+	}
+
+	progressReader := NewReaderWithProgress(reader, progress)
+	defer progressReader.Close()
+
+	err := webdav.WriteStreamWithLength(irodsPath, progressReader, fileSize, 0)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return actualRead, errors.Wrapf(err, "failed to copy data to irods file %q", irodsPath)
+	}
+
+	if actualRead != fileSize {
+		return actualRead, errors.Errorf("file size mismatch, expected %d, got %d", fileSize, actualRead)
+	}
+
+	return actualRead, nil
 }

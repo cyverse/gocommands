@@ -25,6 +25,7 @@ import (
 	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/cyverse/gocommands/commons/transfer"
 	"github.com/cyverse/gocommands/commons/types"
+	"github.com/cyverse/gocommands/commons/webdav"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -93,8 +94,9 @@ type PutCommand struct {
 
 	maxConnectionNum int
 
-	account    *irodsclient_types.IRODSAccount
-	filesystem *irodsclient_fs.FileSystem
+	account      *irodsclient_types.IRODSAccount
+	filesystem   *irodsclient_fs.FileSystem
+	webdavClient *webdav.WebDAVClient
 
 	sourcePaths []string
 	targetPath  string
@@ -185,6 +187,10 @@ func (put *PutCommand) Process() error {
 		return errors.Wrap(err, "failed to get iRODS FS Client")
 	}
 	defer put.filesystem.Release()
+
+	if len(config.GetSessionConfig().WebDAVBaseURL) > 0 {
+		put.webdavClient = webdav.NewWebDAVClient(put.filesystem, config.GetSessionConfig().WebDAVBaseURL, put.account.ProxyUser, put.account.Password)
+	}
 
 	if put.commonFlagValues.TimeoutUpdated {
 		irods.UpdateIRODSFSClientTimeout(put.filesystem, put.commonFlagValues.Timeout)
@@ -444,7 +450,7 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 		put.transferReportManager.AddTransfer(result, transfer.TransferMethodPut, err, newNotes)
 	}
 
-	_, threadsRequired := put.determineTransferMethod(sourceStat.Size())
+	transferMode, threadsRequired := put.determineTransferMethod(sourceStat.Size())
 
 	putTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
@@ -504,8 +510,19 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 			return errors.Wrapf(statErr, "failed to stat %q", parentTargetPath)
 		}
 
-		uploadResult, uploadErr := put.filesystem.UploadFileParallel(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
-		notes = append(notes, "icat", fmt.Sprintf("%d threads", threadsRequired))
+		var uploadErr error
+		var uploadResult *irodsclient_fs.FileTransferResult
+
+		notes = append(notes, string(transferMode), fmt.Sprintf("%d threads", threadsRequired))
+
+		switch transferMode {
+		case transfer.TransferModeWebDAV:
+			uploadResult, uploadErr = put.webdavClient.UploadFile(uploadSourcePath, targetPath, put.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
+		case transfer.TransferModeICAT:
+			fallthrough
+		default:
+			uploadResult, uploadErr = put.filesystem.UploadFileParallel(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
+		}
 
 		if uploadErr != nil {
 			job.Progress("upload", -1, sourceStat.Size(), true)
@@ -1497,6 +1514,13 @@ func (put *PutCommand) determineTransferMethod(size int64) (transfer.TransferMod
 
 	if put.parallelTransferFlagValues.Icat {
 		return transfer.TransferModeICAT, threads
+	} else if put.parallelTransferFlagValues.WebDAV {
+		if put.webdavClient == nil {
+			// fallback to ICAT
+			return transfer.TransferModeICAT, threads
+		}
+
+		return transfer.TransferModeWebDAV, 1
 	}
 
 	// sysconfig

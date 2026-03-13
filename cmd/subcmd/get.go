@@ -55,7 +55,6 @@ func AddGetCommand(rootCmd *cobra.Command) {
 	flag.SetDifferentialTransferFlags(getCmd, false)
 	flag.SetChecksumFlags(getCmd)
 	flag.SetNoRootFlags(getCmd)
-	flag.SetWebDAVFlags(getCmd)
 	flag.SetSyncFlags(getCmd, true)
 	flag.SetDecryptionFlags(getCmd)
 	flag.SetPostTransferFlagValues(getCmd)
@@ -89,7 +88,6 @@ type GetCommand struct {
 	differentialTransferFlagValues *flag.DifferentialTransferFlagValues
 	checksumFlagValues             *flag.ChecksumFlagValues
 	noRootFlagValues               *flag.NoRootFlagValues
-	webdavFlagValues               *flag.WebDAVFlagValues
 	syncFlagValues                 *flag.SyncFlagValues
 	decryptionFlagValues           *flag.DecryptionFlagValues
 	postTransferFlagValues         *flag.PostTransferFlagValues
@@ -133,7 +131,6 @@ func NewGetCommand(command *cobra.Command, args []string) (*GetCommand, error) {
 		differentialTransferFlagValues: flag.GetDifferentialTransferFlagValues(),
 		checksumFlagValues:             flag.GetChecksumFlagValues(),
 		noRootFlagValues:               flag.GetNoRootFlagValues(),
-		webdavFlagValues:               flag.GetWebDAVFlagValues(),
 		syncFlagValues:                 flag.GetSyncFlagValues(),
 		decryptionFlagValues:           flag.GetDecryptionFlagValues(command),
 		postTransferFlagValues:         flag.GetPostTransferFlagValues(),
@@ -197,7 +194,7 @@ func (get *GetCommand) Process() error {
 	defer get.filesystem.Release()
 
 	if len(config.GetSessionConfig().WebDAVBaseURL) > 0 {
-		get.webdavClient = webdav.NewWebDAVClient(config.GetSessionConfig().WebDAVBaseURL, get.account.ProxyUser, get.account.Password)
+		get.webdavClient = webdav.NewWebDAVClient(get.filesystem, config.GetSessionConfig().WebDAVBaseURL, get.account.ProxyUser, get.account.Password)
 	}
 
 	if get.commonFlagValues.TimeoutUpdated {
@@ -489,7 +486,7 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 
 		switch transferMode {
 		case transfer.TransferModeWebDAV:
-			downloadResult, downloadErr = get.webdavClient.DownloadFile(sourceEntry, downloadPath, progressCallbackGet)
+			downloadResult, downloadErr = get.webdavClient.DownloadFile(sourceEntry, downloadPath, get.checksumFlagValues.VerifyChecksum, progressCallbackGet)
 		case transfer.TransferModeICAT:
 			fallthrough
 		default:
@@ -1484,7 +1481,7 @@ func (get *GetCommand) determineTransferMethod(size int64) (transfer.TransferMod
 
 	if get.parallelTransferFlagValues.Icat {
 		return transfer.TransferModeICAT, threads
-	} else if get.webdavFlagValues.WebDAV {
+	} else if get.parallelTransferFlagValues.WebDAV {
 		if get.webdavClient == nil {
 			// fallback to ICAT
 			return transfer.TransferModeICAT, threads
