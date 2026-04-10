@@ -521,7 +521,7 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 		case transfer.TransferModeICAT:
 			fallthrough
 		default:
-			uploadResult, uploadErr = put.filesystem.UploadFileParallel(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
+			uploadResult, uploadErr = put.filesystem.UploadFileParallel(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.VerifyChecksum, progressCallbackPut)
 		}
 
 		if uploadErr != nil {

@@ -630,7 +630,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 		case transfer.TransferModeICAT:
 			fallthrough
 		default:
-			uploadResult, uploadErr = bput.filesystem.UploadFileParallel(tarballPath, stagingTargetPath, "", threadsRequired, false, bput.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
+			uploadResult, uploadErr = bput.filesystem.UploadFileParallel(tarballPath, stagingTargetPath, "", threadsRequired, false, bput.checksumFlagValues.VerifyChecksum, progressCallbackPut)
 		}
 
 		if uploadErr != nil {
@@ -776,7 +776,7 @@ func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleE
 			return errors.Wrapf(statErr, "failed to stat %q", parentTargetPath)
 		}
 
-		uploadResult, uploadErr := bput.filesystem.UploadFileParallel(uploadSourcePath, bundleEntry.IRODSPath, "", threadsRequired, false, bput.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
+		uploadResult, uploadErr := bput.filesystem.UploadFileParallel(uploadSourcePath, bundleEntry.IRODSPath, "", threadsRequired, false, bput.checksumFlagValues.VerifyChecksum, progressCallbackPut)
 		notes = append(notes, "icat", fmt.Sprintf("%d threads", threadsRequired))
 
 		if uploadErr != nil {

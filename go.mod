@@ -8,7 +8,7 @@ require (
 	github.com/avast/retry-go v3.0.0+incompatible
 	github.com/cockroachdb/errors v1.12.0
 	github.com/creativeprojects/go-selfupdate v1.5.0
-	github.com/cyverse/go-irodsclient v0.19.8-0.20260312232517-f9a6d3e0a73b
+	github.com/cyverse/go-irodsclient v0.19.8
 	github.com/dustin/go-humanize v1.0.1
 	github.com/gliderlabs/ssh v0.3.5
 	github.com/jedib0t/go-pretty/v6 v6.6.7
