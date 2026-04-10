@@ -53,8 +53,17 @@ func GetIRODSFSClient(account *irodsclient_types.IRODSAccount, infiniteCache boo
 }
 
 // GetIRODSFSClientForLargeFileIO returns a file system client
-func GetIRODSFSClientForLargeFileIO(account *irodsclient_types.IRODSAccount, maxIOConnection int, tcpBufferSize int) (*irodsclient_fs.FileSystem, error) {
+func GetIRODSFSClientForLargeFileIO(account *irodsclient_types.IRODSAccount, maxIOConnection int, tcpBufferSize int, infiniteCache bool) (*irodsclient_fs.FileSystem, error) {
 	fsConfig := irodsclient_fs.NewFileSystemConfig(constant.ClientProgramName)
+
+	if infiniteCache {
+		// set infinite cache timeout
+		infiniteDuration := irodsclient_types.Duration(365 * 24 * time.Hour) // 1y (almost infinite)
+
+		fsConfig.Cache.Timeout = infiniteDuration
+		fsConfig.Cache.CleanupTime = infiniteDuration
+		fsConfig.Cache.InvalidateParentEntryCacheImmediately = true
+	}
 
 	// set operation time out
 	fsConfig.MetadataConnection.OperationTimeout = config.FilesystemTimeout

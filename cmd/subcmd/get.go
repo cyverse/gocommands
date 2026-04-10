@@ -187,7 +187,7 @@ func (get *GetCommand) Process() error {
 		get.account.Ticket = get.ticketAccessFlagValues.Name
 	}
 
-	get.filesystem, err = irods.GetIRODSFSClientForLargeFileIO(get.account, get.maxConnectionNum, get.parallelTransferFlagValues.TCPBufferSize)
+	get.filesystem, err = irods.GetIRODSFSClientForLargeFileIO(get.account, get.maxConnectionNum, get.parallelTransferFlagValues.TCPBufferSize, true)
 	if err != nil {
 		return errors.Wrap(err, "failed to get iRODS FS Client")
 	}

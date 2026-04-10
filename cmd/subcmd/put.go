@@ -182,7 +182,7 @@ func (put *PutCommand) Process() error {
 		put.account.Ticket = put.ticketAccessFlagValues.Name
 	}
 
-	put.filesystem, err = irods.GetIRODSFSClientForLargeFileIO(put.account, put.maxConnectionNum, put.parallelTransferFlagValues.TCPBufferSize)
+	put.filesystem, err = irods.GetIRODSFSClientForLargeFileIO(put.account, put.maxConnectionNum, put.parallelTransferFlagValues.TCPBufferSize, true)
 	if err != nil {
 		return errors.Wrap(err, "failed to get iRODS FS Client")
 	}
@@ -1140,6 +1140,14 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 				reportOverwrite(now, now, notDirErr)
 				return notDirErr
 			}
+		} else {
+			// target is a directory
+			// cache target dir entries first for performance, because multiple files are uploaded to the same target dir
+			_, err = put.filesystem.List(targetPath)
+			if err != nil {
+				reportSimple(err)
+				return errors.Wrapf(err, "failed to list a directory %q", targetPath)
+			}
 		}
 	}
 
@@ -1515,16 +1523,16 @@ func (put *PutCommand) determineTransferMethod(size int64) (transfer.TransferMod
 	}
 
 	if put.parallelTransferFlagValues.Icat {
-		logger.Info("using ICAT transfer for downloading a data object")
+		logger.Info("using ICAT transfer for uploading a data object")
 		return transfer.TransferModeICAT, threads
 	} else if put.parallelTransferFlagValues.WebDAV {
 		if put.webdavClient == nil {
 			// fallback to ICAT
-			logger.Info("WebDAV is not configured. Using ICAT transfer for downloading a data object")
+			logger.Info("WebDAV is not configured. Using ICAT transfer for uploading a data object")
 			return transfer.TransferModeICAT, threads
 		}
 
-		logger.Info("using WebDAV for downloading a data object")
+		logger.Info("using WebDAV for uploading a data object")
 		return transfer.TransferModeWebDAV, 1
 	}
 
@@ -1537,6 +1545,6 @@ func (put *PutCommand) determineTransferMethod(size int64) (transfer.TransferMod
 		}
 	}
 
-	logger.Info("using ICAT transfer for downloading a data object")
+	logger.Info("using ICAT transfer for uploading a data object")
 	return transfer.TransferModeICAT, threads
 }

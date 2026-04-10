@@ -178,7 +178,7 @@ func (bput *BputCommand) Process() error {
 
 	// Create a file system
 	bput.account = config.GetSessionConfig().ToIRODSAccount()
-	bput.filesystem, err = irods.GetIRODSFSClientForLargeFileIO(bput.account, bput.maxConnectionNum, bput.parallelTransferFlagValues.TCPBufferSize)
+	bput.filesystem, err = irods.GetIRODSFSClientForLargeFileIO(bput.account, bput.maxConnectionNum, bput.parallelTransferFlagValues.TCPBufferSize, true)
 	if err != nil {
 		return errors.Wrap(err, "failed to get iRODS FS Client")
 	}
@@ -1408,6 +1408,14 @@ func (bput *BputCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targe
 				now := time.Now()
 				reportOverwrite(now, now, notDirErr)
 				return notDirErr
+			}
+		} else {
+			// target is a directory
+			// cache target dir entries first for performance, because multiple files are uploaded to the same target dir
+			_, err = bput.filesystem.List(targetPath)
+			if err != nil {
+				reportSimple(err)
+				return errors.Wrapf(err, "failed to list a directory %q", targetPath)
 			}
 		}
 	}
