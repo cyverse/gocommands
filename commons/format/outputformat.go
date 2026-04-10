@@ -86,14 +86,14 @@ func (of *OutputFormatter) Render(format OutputFormat) {
 		return
 	}
 
-	for _, ofTable := range of.Tables {
+	for idx, ofTable := range of.Tables {
 		// table writer
 		tableWriter := table.NewWriter()
 		tableWriter.SetOutputMirror(of.Writer)
 
-		if format != OutputFormatLegacy {
-			tableWriter.SetTitle(ofTable.Title)
-		}
+		// if format != OutputFormatLegacy {
+		// 	tableWriter.SetTitle(ofTable.Title)
+		// }
 
 		// remove empty column
 		nonEmptyColIndices := make(map[int]bool)
@@ -156,15 +156,29 @@ func (of *OutputFormatter) Render(format OutputFormat) {
 			tableWriter.SetStyle(table.Style{})
 		} else {
 			tableWriter.SetStyle(table.StyleDefault)
-			tableWriter.Style().Options.SeparateRows = true
+			tableWriter.Style().Options.SeparateHeader = false
+			tableWriter.Style().Options.SeparateRows = false
+			tableWriter.Style().Options.SeparateColumns = false
+			tableWriter.Style().Options.DrawBorder = false
 		}
 
 		// render
 		switch format {
 		case OutputFormatCSV:
+			if idx > 0 {
+				of.Writer.Write([]byte("\n"))
+			}
 			tableWriter.RenderCSV()
 		case OutputFormatTSV:
+			if idx > 0 {
+				of.Writer.Write([]byte("\n"))
+			}
 			tableWriter.RenderTSV()
+		case OutputFormatTable:
+			if idx > 0 {
+				of.Writer.Write([]byte("\n"))
+			}
+			tableWriter.Render()
 		default:
 			tableWriter.Render()
 		}

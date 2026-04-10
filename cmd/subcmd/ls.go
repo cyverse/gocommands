@@ -240,7 +240,7 @@ func (ls *LsCommand) listCollection(outputFormatter *format.OutputFormatter, sou
 			if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
 				accessString = ls.getAccessesString(accesses, "\t")
 			} else {
-				accessString = ls.getAccessesString(accesses, "\n")
+				accessString = ls.getAccessesString(accesses, ",")
 			}
 		}
 
@@ -266,7 +266,7 @@ func (ls *LsCommand) listCollection(outputFormatter *format.OutputFormatter, sou
 				"Access",
 				"Inheritance",
 			})
-			outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0})
+			// outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0})
 
 			outputFormatterTable.AppendRow([]interface{}{
 				"collection",
@@ -289,7 +289,7 @@ func (ls *LsCommand) listCollection(outputFormatter *format.OutputFormatter, sou
 				"Type",
 				"Path",
 			})
-			outputFormatterTable.SetColumnWidthMax([]int{0, 50})
+			// outputFormatterTable.SetColumnWidthMax([]int{0, 50})
 
 			outputFormatterTable.AppendRow([]interface{}{
 				"collection",
@@ -425,10 +425,13 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 				outputFormatterTable.SetHeader([]string{
 					"Type",
 					pathTitle,
+					"Size",
+					"Owner",
+					"Modify Time",
 					"Access",
 					"Description",
 				})
-				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 20})
+				// outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 20})
 			}
 		} else {
 			if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
@@ -439,9 +442,12 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 				outputFormatterTable.SetHeader([]string{
 					"Type",
 					pathTitle,
+					"Size",
+					"Owner",
+					"Modify Time",
 					"Description",
 				})
-				outputFormatterTable.SetColumnWidthMax([]int{0, 50, 20})
+				// outputFormatterTable.SetColumnWidthMax([]int{0, 50, 20})
 			}
 		}
 
@@ -475,6 +481,18 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 				}
 			}
 
+			size := fmt.Sprintf("%v", entry.Size)
+			if ls.listFlagValues.HumanReadableSizes {
+				size = humanize.Bytes(uint64(entry.Size))
+			}
+
+			owner := ""
+			modifyTime := ""
+			if len(entry.Replicas) > 0 {
+				owner = entry.Replicas[0].Owner
+				modifyTime = types.MakeDateTimeStringHM(entry.Replicas[0].ModifyTime)
+			}
+
 			if ls.listFlagValues.Access {
 				accessesForEntry := []*irodsclient_types.IRODSAccess{}
 				for _, access := range accesses {
@@ -488,7 +506,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
 						accessString = ls.getAccessesString(accessesForEntry, "\t")
 					} else {
-						accessString = ls.getAccessesString(accessesForEntry, "\n")
+						accessString = ls.getAccessesString(accessesForEntry, ",")
 					}
 				}
 
@@ -500,6 +518,9 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					outputFormatterTable.AppendRow([]interface{}{
 						"data-object",
 						newName,
+						size,
+						owner,
+						modifyTime,
 						accessString,
 						desc,
 					})
@@ -513,6 +534,9 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					outputFormatterTable.AppendRow([]interface{}{
 						"data-object",
 						newName,
+						size,
+						owner,
+						modifyTime,
 						desc,
 					})
 				}
@@ -524,6 +548,9 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 			if showFullPath {
 				newName = entry.Path
 			}
+
+			owner := entry.Owner
+			modifyTime := types.MakeDateTimeStringHM(entry.ModifyTime)
 
 			if ls.listFlagValues.Access {
 				accessesForEntry := []*irodsclient_types.IRODSAccess{}
@@ -538,7 +565,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
 						accessString = ls.getAccessesString(accessesForEntry, "\t")
 					} else {
-						accessString = ls.getAccessesString(accessesForEntry, "\n")
+						accessString = ls.getAccessesString(accessesForEntry, ",")
 					}
 				}
 
@@ -550,11 +577,13 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					outputFormatterTable.AppendRow([]interface{}{
 						"collection",
 						newName,
+						"",
+						owner,
+						modifyTime,
 						accessString,
 						"",
 					})
 				}
-
 			} else {
 				if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
 					outputFormatterTable.AppendRow([]interface{}{
@@ -564,6 +593,9 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					outputFormatterTable.AppendRow([]interface{}{
 						"collection",
 						newName,
+						"",
+						owner,
+						modifyTime,
 						"",
 					})
 				}
@@ -590,7 +622,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 						"Access",
 						"Description",
 					})
-					outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 0, 20})
+					// outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 0, 20})
 				}
 			} else {
 				if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
@@ -609,7 +641,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 						"Status",
 						"Description",
 					})
-					outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 20})
+					// outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 20})
 				}
 			}
 		case format.ListFormatVeryLong:
@@ -633,7 +665,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 						"Access",
 						"Description",
 					})
-					outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 32, 50, 0, 20})
+					// outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 32, 50, 0, 20})
 				}
 			} else {
 				if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
@@ -654,7 +686,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 						"Replica Path",
 						"Description",
 					})
-					outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 32, 50, 20})
+					// outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 18, 0, 0, 0, 32, 50, 20})
 				}
 			}
 		default:
@@ -671,7 +703,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 						"Access",
 						"Description",
 					})
-					outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 20})
+					// outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 0, 20})
 				}
 			} else {
 				if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
@@ -685,7 +717,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 						"Replica No.",
 						"Description",
 					})
-					outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 20})
+					// outputFormatterTable.SetColumnWidthMax([]int{0, 50, 0, 20})
 				}
 			}
 		}
@@ -750,7 +782,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
 						accessString = ls.getAccessesString(accessesForEntry, "\t")
 					} else {
-						accessString = ls.getAccessesString(accessesForEntry, "\n")
+						accessString = ls.getAccessesString(accessesForEntry, ",")
 					}
 				}
 			}
