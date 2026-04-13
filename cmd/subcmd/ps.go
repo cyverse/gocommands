@@ -83,15 +83,17 @@ func (ps *PsCommand) Process() error {
 
 	// Create a connection
 	ps.account = config.GetSessionConfig().ToIRODSAccount()
-	ps.filesystem, err = irods.GetIRODSFSClient(ps.account, true)
+
+	timeout := 0
+	if ps.commonFlagValues.TimeoutUpdated {
+		timeout = ps.commonFlagValues.Timeout
+	}
+
+	ps.filesystem, err = irods.GetIRODSFSClient(ps.account, true, timeout)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer ps.filesystem.Release()
-
-	if ps.commonFlagValues.TimeoutUpdated {
-		irods.UpdateIRODSFSClientTimeout(ps.filesystem, ps.commonFlagValues.Timeout)
-	}
 
 	err = ps.listProcesses()
 	if err != nil {

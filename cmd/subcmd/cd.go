@@ -85,15 +85,17 @@ func (cd *CdCommand) Process() error {
 
 	// Create a file system
 	cd.account = config.GetSessionConfig().ToIRODSAccount()
-	cd.filesystem, err = irods.GetIRODSFSClient(cd.account, false)
+
+	timeout := 0
+	if cd.commonFlagValues.TimeoutUpdated {
+		timeout = cd.commonFlagValues.Timeout
+	}
+
+	cd.filesystem, err = irods.GetIRODSFSClient(cd.account, false, timeout)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer cd.filesystem.Release()
-
-	if cd.commonFlagValues.TimeoutUpdated {
-		irods.UpdateIRODSFSClientTimeout(cd.filesystem, cd.commonFlagValues.Timeout)
-	}
 
 	// run
 	err = cd.changeWorkingDir(cd.targetPath)

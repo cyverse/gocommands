@@ -96,15 +96,17 @@ func (chModInherit *ChModInheritCommand) Process() error {
 
 	// Create a file system
 	chModInherit.account = config.GetSessionConfig().ToIRODSAccount()
-	chModInherit.filesystem, err = irods.GetIRODSFSClient(chModInherit.account, true)
+
+	timeout := 0
+	if chModInherit.commonFlagValues.TimeoutUpdated {
+		timeout = chModInherit.commonFlagValues.Timeout
+	}
+
+	chModInherit.filesystem, err = irods.GetIRODSFSClient(chModInherit.account, true, timeout)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer chModInherit.filesystem.Release()
-
-	if chModInherit.commonFlagValues.TimeoutUpdated {
-		irods.UpdateIRODSFSClientTimeout(chModInherit.filesystem, chModInherit.commonFlagValues.Timeout)
-	}
 
 	for _, targetPath := range chModInherit.targetPaths {
 		err = chModInherit.changeOne(targetPath)

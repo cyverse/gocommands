@@ -93,15 +93,16 @@ func (cat *CatCommand) Process() error {
 		cat.account.Ticket = cat.ticketAccessFlagValues.Name
 	}
 
-	cat.filesystem, err = irods.GetIRODSFSClient(cat.account, false)
+	timeout := 0
+	if cat.commonFlagValues.TimeoutUpdated {
+		timeout = cat.commonFlagValues.Timeout
+	}
+
+	cat.filesystem, err = irods.GetIRODSFSClient(cat.account, false, timeout)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer cat.filesystem.Release()
-
-	if cat.commonFlagValues.TimeoutUpdated {
-		irods.UpdateIRODSFSClientTimeout(cat.filesystem, cat.commonFlagValues.Timeout)
-	}
 
 	// run
 	for _, sourcePath := range cat.sourcePaths {

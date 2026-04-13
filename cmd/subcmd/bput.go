@@ -178,7 +178,13 @@ func (bput *BputCommand) Process() error {
 
 	// Create a file system
 	bput.account = config.GetSessionConfig().ToIRODSAccount()
-	bput.filesystem, err = irods.GetIRODSFSClientForLargeFileIO(bput.account, bput.maxConnectionNum, bput.parallelTransferFlagValues.TCPBufferSize, true)
+
+	timeout := 0
+	if bput.commonFlagValues.TimeoutUpdated {
+		timeout = bput.commonFlagValues.Timeout
+	}
+
+	bput.filesystem, err = irods.GetIRODSFSClientForLargeFileIO(bput.account, bput.maxConnectionNum, bput.parallelTransferFlagValues.TCPBufferSize, true, timeout)
 	if err != nil {
 		return errors.Wrap(err, "failed to get iRODS FS Client")
 	}
@@ -186,10 +192,6 @@ func (bput *BputCommand) Process() error {
 
 	if len(config.GetSessionConfig().WebDAVBaseURL) > 0 {
 		bput.webdavClient = webdav.NewWebDAVClient(bput.filesystem, config.GetSessionConfig().WebDAVBaseURL, bput.account.ProxyUser, bput.account.Password)
-	}
-
-	if bput.commonFlagValues.TimeoutUpdated {
-		irods.UpdateIRODSFSClientTimeout(bput.filesystem, bput.commonFlagValues.Timeout)
 	}
 
 	// transfer report
@@ -626,7 +628,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 
 		switch transferMode {
 		case transfer.TransferModeWebDAV:
-			uploadResult, uploadErr = bput.webdavClient.UploadFile(tarballPath, stagingTargetPath, bput.checksumFlagValues.VerifyChecksum, false, progressCallbackPut)
+			uploadResult, uploadErr = bput.webdavClient.UploadFile(tarballPath, stagingTargetPath, bput.checksumFlagValues.VerifyChecksum, progressCallbackPut)
 		case transfer.TransferModeICAT:
 			fallthrough
 		default:

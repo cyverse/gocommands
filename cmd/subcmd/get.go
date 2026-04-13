@@ -187,7 +187,12 @@ func (get *GetCommand) Process() error {
 		get.account.Ticket = get.ticketAccessFlagValues.Name
 	}
 
-	get.filesystem, err = irods.GetIRODSFSClientForLargeFileIO(get.account, get.maxConnectionNum, get.parallelTransferFlagValues.TCPBufferSize, true)
+	timeout := 0
+	if get.commonFlagValues.TimeoutUpdated {
+		timeout = get.commonFlagValues.Timeout
+	}
+
+	get.filesystem, err = irods.GetIRODSFSClientForLargeFileIO(get.account, get.maxConnectionNum, get.parallelTransferFlagValues.TCPBufferSize, true, timeout)
 	if err != nil {
 		return errors.Wrap(err, "failed to get iRODS FS Client")
 	}
@@ -195,10 +200,6 @@ func (get *GetCommand) Process() error {
 
 	if len(config.GetSessionConfig().WebDAVBaseURL) > 0 {
 		get.webdavClient = webdav.NewWebDAVClient(get.filesystem, config.GetSessionConfig().WebDAVBaseURL, get.account.ProxyUser, get.account.Password)
-	}
-
-	if get.commonFlagValues.TimeoutUpdated {
-		irods.UpdateIRODSFSClientTimeout(get.filesystem, get.commonFlagValues.Timeout)
 	}
 
 	// transfer report

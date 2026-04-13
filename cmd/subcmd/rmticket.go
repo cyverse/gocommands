@@ -78,15 +78,17 @@ func (rmTicket *RmTicketCommand) Process() error {
 
 	// Create a file system
 	rmTicket.account = config.GetSessionConfig().ToIRODSAccount()
-	rmTicket.filesystem, err = irods.GetIRODSFSClient(rmTicket.account, true)
+
+	timeout := 0
+	if rmTicket.commonFlagValues.TimeoutUpdated {
+		timeout = rmTicket.commonFlagValues.Timeout
+	}
+
+	rmTicket.filesystem, err = irods.GetIRODSFSClient(rmTicket.account, true, timeout)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer rmTicket.filesystem.Release()
-
-	if rmTicket.commonFlagValues.TimeoutUpdated {
-		irods.UpdateIRODSFSClientTimeout(rmTicket.filesystem, rmTicket.commonFlagValues.Timeout)
-	}
 
 	for _, ticketName := range rmTicket.tickets {
 		err = rmTicket.removeTicket(ticketName)

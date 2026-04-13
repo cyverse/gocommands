@@ -83,15 +83,17 @@ func (mkDir *MkDirCommand) Process() error {
 
 	// Create a file system
 	mkDir.account = config.GetSessionConfig().ToIRODSAccount()
-	mkDir.filesystem, err = irods.GetIRODSFSClient(mkDir.account, true)
+
+	timeout := 0
+	if mkDir.commonFlagValues.TimeoutUpdated {
+		timeout = mkDir.commonFlagValues.Timeout
+	}
+
+	mkDir.filesystem, err = irods.GetIRODSFSClient(mkDir.account, true, timeout)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer mkDir.filesystem.Release()
-
-	if mkDir.commonFlagValues.TimeoutUpdated {
-		irods.UpdateIRODSFSClientTimeout(mkDir.filesystem, mkDir.commonFlagValues.Timeout)
-	}
 
 	// run
 	for _, targetPath := range mkDir.targetPaths {

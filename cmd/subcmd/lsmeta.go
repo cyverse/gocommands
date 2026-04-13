@@ -91,15 +91,17 @@ func (lsMeta *LsMetaCommand) Process() error {
 
 	// Create a file system
 	lsMeta.account = config.GetSessionConfig().ToIRODSAccount()
-	lsMeta.filesystem, err = irods.GetIRODSFSClient(lsMeta.account, true)
+
+	timeout := 0
+	if lsMeta.commonFlagValues.TimeoutUpdated {
+		timeout = lsMeta.commonFlagValues.Timeout
+	}
+
+	lsMeta.filesystem, err = irods.GetIRODSFSClient(lsMeta.account, true, timeout)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer lsMeta.filesystem.Release()
-
-	if lsMeta.commonFlagValues.TimeoutUpdated {
-		irods.UpdateIRODSFSClientTimeout(lsMeta.filesystem, lsMeta.commonFlagValues.Timeout)
-	}
 
 	outputFormatter := format.NewOutputFormatter(terminal.GetTerminalWriter())
 	outputFormatterTable := outputFormatter.NewTable("iRODS Metadata")

@@ -179,7 +179,7 @@ func (client *WebDAVClient) DownloadFile(sourceEntry *irodsclient_fs.Entry, loca
 	return fileTransferResult, nil
 }
 
-func (client *WebDAVClient) UploadFile(localPath string, irodsPath string, verifyChecksum bool, ignoreOverwriteError bool, callback irodsclient_common.TransferTrackerCallback) (*irodsclient_fs.FileTransferResult, error) {
+func (client *WebDAVClient) UploadFile(localPath string, irodsPath string, verifyChecksum bool, callback irodsclient_common.TransferTrackerCallback) (*irodsclient_fs.FileTransferResult, error) {
 	logger := log.WithFields(log.Fields{
 		"local_source_path": localPath,
 		"irods_path":        irodsPath,
@@ -209,6 +209,7 @@ func (client *WebDAVClient) UploadFile(localPath string, irodsPath string, verif
 		return fileTransferResult, errors.Wrapf(newErr, "failed to find a file for local path %q, the path is for a directory", localSrcPath)
 	}
 
+	overwrite := false
 	entry, err := client.filesystem.Stat(irodsDestPath)
 	if err != nil {
 		if !irodsclient_types.IsFileNotFoundError(err) {
@@ -219,12 +220,9 @@ func (client *WebDAVClient) UploadFile(localPath string, irodsPath string, verif
 			localFileName := filepath.Base(localSrcPath)
 			irodsFilePath = util.MakeIRODSPath(irodsDestPath, localFileName)
 		} else {
-			err = client.filesystem.RemoveFile(irodsDestPath, true)
-			if err != nil {
-				if !ignoreOverwriteError {
-					return fileTransferResult, errors.Wrapf(err, "failed to remove data object %q for overwrite", irodsDestPath)
-				}
-			}
+			// overwrite the existing file
+			// we do not need to delete the existing file before upload, as WebDAV WriteStream will overwrite the file if it already exists
+			overwrite = true
 		}
 	}
 
@@ -262,9 +260,17 @@ func (client *WebDAVClient) UploadFile(localPath string, irodsPath string, verif
 		return fileTransferResult, errors.Wrapf(retryErr, "failed to upload file %q (length %d) from WebDAV server after 3 attempts", localSrcPath, offset, writeSize)
 	}
 
-	client.filesystem.InvalidateCacheForFileCreate(irodsFilePath)
-	cachePropagation := client.filesystem.GetCachePropagation()
-	cachePropagation.PropagateFileCreate(irodsFilePath)
+	if overwrite {
+		// update - overwrite
+		client.filesystem.InvalidateCacheForFileUpdate(irodsFilePath)
+		cachePropagation := client.filesystem.GetCachePropagation()
+		cachePropagation.PropagateFileUpdate(irodsFilePath)
+	} else {
+		// create
+		client.filesystem.InvalidateCacheForFileCreate(irodsFilePath)
+		cachePropagation := client.filesystem.GetCachePropagation()
+		cachePropagation.PropagateFileCreate(irodsFilePath)
+	}
 
 	entry, err = client.filesystem.Stat(irodsFilePath)
 	if err != nil {

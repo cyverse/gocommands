@@ -149,15 +149,17 @@ func (cp *CpCommand) Process() error {
 
 	// Create a file system
 	cp.account = config.GetSessionConfig().ToIRODSAccount()
-	cp.filesystem, err = irods.GetIRODSFSClient(cp.account, false)
+
+	timeout := 0
+	if cp.commonFlagValues.TimeoutUpdated {
+		timeout = cp.commonFlagValues.Timeout
+	}
+
+	cp.filesystem, err = irods.GetIRODSFSClient(cp.account, false, timeout)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer cp.filesystem.Release()
-
-	if cp.commonFlagValues.TimeoutUpdated {
-		irods.UpdateIRODSFSClientTimeout(cp.filesystem, cp.commonFlagValues.Timeout)
-	}
 
 	// transfer report
 	cp.transferReportManager, err = transfer.NewTransferReportManager(cp.transferReportFlagValues.Report, cp.transferReportFlagValues.ReportPath, cp.transferReportFlagValues.ReportToStdout)

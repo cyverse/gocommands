@@ -83,15 +83,17 @@ func (mkTicket *MkTicketCommand) Process() error {
 
 	// Create a file system
 	mkTicket.account = config.GetSessionConfig().ToIRODSAccount()
-	mkTicket.filesystem, err = irods.GetIRODSFSClient(mkTicket.account, true)
+
+	timeout := 0
+	if mkTicket.commonFlagValues.TimeoutUpdated {
+		timeout = mkTicket.commonFlagValues.Timeout
+	}
+
+	mkTicket.filesystem, err = irods.GetIRODSFSClient(mkTicket.account, true, timeout)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer mkTicket.filesystem.Release()
-
-	if mkTicket.commonFlagValues.TimeoutUpdated {
-		irods.UpdateIRODSFSClientTimeout(mkTicket.filesystem, mkTicket.commonFlagValues.Timeout)
-	}
 
 	// make ticket
 	err = mkTicket.makeTicket(mkTicket.ticketFlagValues.Name, mkTicket.ticketFlagValues.Type, mkTicket.sourcePath)

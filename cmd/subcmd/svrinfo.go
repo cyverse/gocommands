@@ -77,15 +77,17 @@ func (svrInfo *SvrInfoCommand) Process() error {
 
 	// Create a file system
 	svrInfo.account = config.GetSessionConfig().ToIRODSAccount()
-	svrInfo.filesystem, err = irods.GetIRODSFSClient(svrInfo.account, true)
+
+	timeout := 0
+	if svrInfo.commonFlagValues.TimeoutUpdated {
+		timeout = svrInfo.commonFlagValues.Timeout
+	}
+
+	svrInfo.filesystem, err = irods.GetIRODSFSClient(svrInfo.account, true, timeout)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer svrInfo.filesystem.Release()
-
-	if svrInfo.commonFlagValues.TimeoutUpdated {
-		irods.UpdateIRODSFSClientTimeout(svrInfo.filesystem, svrInfo.commonFlagValues.Timeout)
-	}
 
 	// run
 	err = svrInfo.displayInfo()

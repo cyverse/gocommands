@@ -128,15 +128,16 @@ func (ls *LsCommand) Process() error {
 		ls.account.Ticket = ls.ticketAccessFlagValues.Name
 	}
 
-	ls.filesystem, err = irods.GetIRODSFSClient(ls.account, true)
+	timeout := 0
+	if ls.commonFlagValues.TimeoutUpdated {
+		timeout = ls.commonFlagValues.Timeout
+	}
+
+	ls.filesystem, err = irods.GetIRODSFSClient(ls.account, true, timeout)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer ls.filesystem.Release()
-
-	if ls.commonFlagValues.TimeoutUpdated {
-		irods.UpdateIRODSFSClientTimeout(ls.filesystem, ls.commonFlagValues.Timeout)
-	}
 
 	// set default key for decryption
 	if len(ls.decryptionFlagValues.Key) == 0 {

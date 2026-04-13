@@ -97,15 +97,17 @@ func (chMod *ChModCommand) Process() error {
 
 	// Create a file system
 	chMod.account = config.GetSessionConfig().ToIRODSAccount()
-	chMod.filesystem, err = irods.GetIRODSFSClient(chMod.account, true)
+
+	timeout := 0
+	if chMod.commonFlagValues.TimeoutUpdated {
+		timeout = chMod.commonFlagValues.Timeout
+	}
+
+	chMod.filesystem, err = irods.GetIRODSFSClient(chMod.account, true, timeout)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer chMod.filesystem.Release()
-
-	if chMod.commonFlagValues.TimeoutUpdated {
-		irods.UpdateIRODSFSClientTimeout(chMod.filesystem, chMod.commonFlagValues.Timeout)
-	}
 
 	for _, targetPath := range chMod.targetPaths {
 		err = chMod.changeOne(targetPath)

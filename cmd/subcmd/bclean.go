@@ -82,15 +82,17 @@ func (bclean *BcleanCommand) Process() error {
 
 	// Create a file system
 	bclean.account = config.GetSessionConfig().ToIRODSAccount()
-	bclean.filesystem, err = irods.GetIRODSFSClient(bclean.account, false)
+
+	timeout := 0
+	if bclean.commonFlagValues.TimeoutUpdated {
+		timeout = bclean.commonFlagValues.Timeout
+	}
+
+	bclean.filesystem, err = irods.GetIRODSFSClient(bclean.account, false, timeout)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get iRODS FS Client")
 	}
 	defer bclean.filesystem.Release()
-
-	if bclean.commonFlagValues.TimeoutUpdated {
-		irods.UpdateIRODSFSClientTimeout(bclean.filesystem, bclean.commonFlagValues.Timeout)
-	}
 
 	// run
 	for _, targetPath := range bclean.targetPaths {

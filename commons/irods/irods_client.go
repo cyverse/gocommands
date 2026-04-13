@@ -11,18 +11,8 @@ import (
 	"github.com/cyverse/gocommands/commons/constant"
 )
 
-func UpdateIRODSFSClientTimeout(fs *irodsclient_fs.FileSystem, timeout int) {
-	if timeout <= 0 {
-		return
-	}
-
-	duration := time.Duration(timeout) * time.Second
-	fs.GetConfig().MetadataConnection.OperationTimeout = irodsclient_types.Duration(duration)
-	fs.GetConfig().IOConnection.OperationTimeout = irodsclient_types.Duration(duration)
-}
-
 // GetIRODSFSClient returns a file system client
-func GetIRODSFSClient(account *irodsclient_types.IRODSAccount, infiniteCache bool) (*irodsclient_fs.FileSystem, error) {
+func GetIRODSFSClient(account *irodsclient_types.IRODSAccount, infiniteCache bool, timeout int) (*irodsclient_fs.FileSystem, error) {
 	fsConfig := irodsclient_fs.NewFileSystemConfig(constant.ClientProgramName)
 
 	// set operation time out
@@ -49,11 +39,19 @@ func GetIRODSFSClient(account *irodsclient_types.IRODSAccount, infiniteCache boo
 		fsConfig.Cache.StartNewTransaction = false
 	}
 
+	if timeout > 0 {
+		duration := time.Duration(timeout) * time.Second
+		fsConfig.MetadataConnection.OperationTimeout = irodsclient_types.Duration(duration)
+		fsConfig.MetadataConnection.LongOperationTimeout = irodsclient_types.Duration(duration)
+		fsConfig.IOConnection.OperationTimeout = irodsclient_types.Duration(duration)
+		fsConfig.IOConnection.LongOperationTimeout = irodsclient_types.Duration(duration)
+	}
+
 	return irodsclient_fs.NewFileSystem(account, fsConfig)
 }
 
 // GetIRODSFSClientForLargeFileIO returns a file system client
-func GetIRODSFSClientForLargeFileIO(account *irodsclient_types.IRODSAccount, maxIOConnection int, tcpBufferSize int, infiniteCache bool) (*irodsclient_fs.FileSystem, error) {
+func GetIRODSFSClientForLargeFileIO(account *irodsclient_types.IRODSAccount, maxIOConnection int, tcpBufferSize int, infiniteCache bool, timeout int) (*irodsclient_fs.FileSystem, error) {
 	fsConfig := irodsclient_fs.NewFileSystemConfig(constant.ClientProgramName)
 
 	if infiniteCache {
@@ -84,6 +82,14 @@ func GetIRODSFSClientForLargeFileIO(account *irodsclient_types.IRODSAccount, max
 	// set tcp buffer size
 	fsConfig.MetadataConnection.TcpBufferSize = tcpBufferSize
 	fsConfig.IOConnection.TcpBufferSize = tcpBufferSize
+
+	if timeout > 0 {
+		duration := time.Duration(timeout) * time.Second
+		fsConfig.MetadataConnection.OperationTimeout = irodsclient_types.Duration(duration)
+		fsConfig.MetadataConnection.LongOperationTimeout = irodsclient_types.Duration(duration)
+		fsConfig.IOConnection.OperationTimeout = irodsclient_types.Duration(duration)
+		fsConfig.IOConnection.LongOperationTimeout = irodsclient_types.Duration(duration)
+	}
 
 	return irodsclient_fs.NewFileSystem(account, fsConfig)
 }
