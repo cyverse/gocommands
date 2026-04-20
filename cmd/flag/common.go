@@ -79,6 +79,8 @@ func SetCommonFlagsWithoutResource(command *cobra.Command) {
 	command.Flags().BoolVarP(&commonFlagValues.LogTerminal, "log_terminal", "", false, "Enable logging to terminal")
 	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Set session ID")
 	command.Flags().IntVarP(&commonFlagValues.Timeout, "timeout", "", config.GetDefaultFilesystemTimeout(), "Specify timeout duration in seconds")
+	command.Flags().BoolVarP(&commonFlagValues.YesAll, "yes", "Y", false, "Yes to all questions")
+	command.Flags().BoolVarP(&commonFlagValues.NoAll, "no", "N", false, "No to all questions")
 
 	command.MarkFlagsMutuallyExclusive("quiet", "version")
 	command.MarkFlagsMutuallyExclusive("log_level", "version")
