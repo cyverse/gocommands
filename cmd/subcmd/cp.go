@@ -594,7 +594,16 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 	if targetEntry.IsDir() {
 		if cp.syncFlagValues.Sync {
 			// if it is sync, remove
-			if cp.forceFlagValues.Force {
+			overwrite := false
+			if cp.forceFlagValues.Force || cp.commonFlagValues.YesAll {
+				overwrite = true
+			} else if cp.commonFlagValues.NoAll {
+				overwrite = false
+			} else {
+				overwrite = terminal.InputYN(fmt.Sprintf("Overwriting a data object %q, but collection exists. Overwrite?", targetPath))
+			}
+
+			if overwrite {
 				startTime := time.Now()
 				removeErr := cp.filesystem.RemoveDir(targetPath, true, true)
 				endTime := time.Now()
@@ -607,27 +616,11 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 
 				// fallthrough to copy
 			} else {
-				// ask
-				overwrite := terminal.InputYN(fmt.Sprintf("Overwriting a data object %q, but collection exists. Overwrite?", targetPath))
-				if overwrite {
-					startTime := time.Now()
-					removeErr := cp.filesystem.RemoveDir(targetPath, true, true)
-					endTime := time.Now()
+				overwriteErr := types.NewNotFileError(targetPath)
+				now := time.Now()
 
-					reportOverwrite(startTime, endTime, removeErr, "directory")
-
-					if removeErr != nil {
-						return removeErr
-					}
-
-					// fallthrough to copy
-				} else {
-					overwriteErr := types.NewNotFileError(targetPath)
-					now := time.Now()
-
-					reportOverwrite(now, now, overwriteErr, "directory", "declined")
-					return overwriteErr
-				}
+				reportOverwrite(now, now, overwriteErr, "directory", "declined")
+				return overwriteErr
 			}
 		} else {
 			notFileErr := types.NewNotFileError(targetPath)
@@ -695,33 +688,38 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 			}
 		}
 	} else {
-		if !cp.forceFlagValues.Force {
-			// ask
-			overwrite := terminal.InputYN(fmt.Sprintf("Data object %q already exists. Overwrite?", targetPath))
-			if !overwrite {
-				now := time.Now()
-				reportFile := &transfer.TransferReportFile{
-					Method:                  transfer.TransferMethodCopy,
-					StartAt:                 now,
-					EndAt:                   now,
-					SourcePath:              sourceEntry.Path,
-					SourceSize:              sourceEntry.Size,
-					SourceChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
-					SourceChecksum:          hex.EncodeToString(sourceEntry.CheckSum),
-					DestPath:                targetPath,
-					DestSize:                targetEntry.Size,
-					DestChecksum:            hex.EncodeToString(targetEntry.CheckSum),
-					DestChecksumAlgorithm:   string(targetEntry.CheckSumAlgorithm),
+		overwrite := false
+		if cp.forceFlagValues.Force || cp.commonFlagValues.YesAll {
+			overwrite = true
+		} else if cp.commonFlagValues.NoAll {
+			overwrite = false
+		} else {
+			overwrite = terminal.InputYN(fmt.Sprintf("Data object %q already exists. Overwrite?", targetPath))
+		}
 
-					Notes: []string{"cp", "file", "overwrite", "declined", "skipped"},
-				}
+		if !overwrite {
+			now := time.Now()
+			reportFile := &transfer.TransferReportFile{
+				Method:                  transfer.TransferMethodCopy,
+				StartAt:                 now,
+				EndAt:                   now,
+				SourcePath:              sourceEntry.Path,
+				SourceSize:              sourceEntry.Size,
+				SourceChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
+				SourceChecksum:          hex.EncodeToString(sourceEntry.CheckSum),
+				DestPath:                targetPath,
+				DestSize:                targetEntry.Size,
+				DestChecksum:            hex.EncodeToString(targetEntry.CheckSum),
+				DestChecksumAlgorithm:   string(targetEntry.CheckSumAlgorithm),
 
-				cp.transferReportManager.AddFile(reportFile)
-
-				terminal.Printf("skip copying a data object %q to %q. The data object already exists!\n", sourceEntry.Path, targetPath)
-				logger.Debugf("skip copying a data object %q to %q. The data object already exists!", sourceEntry.Path, targetPath)
-				return nil
+				Notes: []string{"cp", "file", "overwrite", "declined", "skipped"},
 			}
+
+			cp.transferReportManager.AddFile(reportFile)
+
+			terminal.Printf("skip copying a data object %q to %q. The data object already exists!\n", sourceEntry.Path, targetPath)
+			logger.Debugf("skip copying a data object %q to %q. The data object already exists!", sourceEntry.Path, targetPath)
+			return nil
 		}
 	}
 
@@ -808,7 +806,16 @@ func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 		if !targetEntry.IsDir() {
 			if cp.syncFlagValues.Sync {
 				// if it is sync, remove
-				if cp.forceFlagValues.Force {
+				overwrite := false
+				if cp.forceFlagValues.Force || cp.commonFlagValues.YesAll {
+					overwrite = true
+				} else if cp.commonFlagValues.NoAll {
+					overwrite = false
+				} else {
+					overwrite = terminal.InputYN(fmt.Sprintf("Overwriting a collection %q, but data object exists. Overwrite?", targetPath))
+				}
+
+				if overwrite {
 					startTime := time.Now()
 					removeErr := cp.filesystem.RemoveFile(targetPath, true)
 					endTime := time.Now()
@@ -821,29 +828,13 @@ func (cp *CpCommand) copyDir(sourceEntry *irodsclient_fs.Entry, targetPath strin
 
 					// fallthrough to copy entries
 				} else {
-					// ask
-					overwrite := terminal.InputYN(fmt.Sprintf("Overwriting a collection %q, but data object exists. Overwrite?", targetPath))
-					if overwrite {
-						startTime := time.Now()
-						removeErr := cp.filesystem.RemoveFile(targetPath, true)
-						endTime := time.Now()
+					overwriteErr := types.NewNotDirError(targetPath)
+					now := time.Now()
 
-						reportOverwrite(startTime, endTime, removeErr)
-
-						if removeErr != nil {
-							return removeErr
-						}
-
-						// fallthrough to copy entries
-					} else {
-						overwriteErr := types.NewNotDirError(targetPath)
-						now := time.Now()
-
-						reportOverwrite(now, now, overwriteErr, "declined")
-						terminal.Printf("skip copying a collection %q to %q. The data object already exists!\n", sourceEntry.Path, targetPath)
-						logger.Debug("skip copying a collection. The data object already exists!")
-						return nil
-					}
+					reportOverwrite(now, now, overwriteErr, "declined")
+					terminal.Printf("skip copying a collection %q to %q. The data object already exists!\n", sourceEntry.Path, targetPath)
+					logger.Debug("skip copying a collection. The data object already exists!")
+					return nil
 				}
 			} else {
 				notDirErr := types.NewNotDirError(targetPath)
@@ -917,20 +908,22 @@ func (cp *CpCommand) deleteExtraFile(targetEntry *irodsclient_fs.Entry) error {
 		// extra file
 		logger.Debug("removing an extra data object")
 
-		if cp.forceFlagValues.Force {
+		overwrite := false
+		if cp.forceFlagValues.Force || cp.commonFlagValues.YesAll {
+			overwrite = true
+		} else if cp.commonFlagValues.NoAll {
+			overwrite = false
+		} else {
+			overwrite = terminal.InputYN(fmt.Sprintf("Removing an extra data object %q. Remove?", targetEntry.Path))
+		}
+
+		if overwrite {
 			cp.scheduleDeleteExtraFile(targetEntry)
 			return nil
 		} else {
-			// ask
-			overwrite := terminal.InputYN(fmt.Sprintf("Removing an extra data object %q. Remove?", targetEntry.Path))
-			if overwrite {
-				cp.scheduleDeleteExtraFile(targetEntry)
-				return nil
-			} else {
-				// do not remove
-				reportSimple(nil, "declined")
-				return nil
-			}
+			// do not remove
+			reportSimple(nil, "declined")
+			return nil
 		}
 	}
 
@@ -972,20 +965,22 @@ func (cp *CpCommand) deleteExtraDir(targetEntry *irodsclient_fs.Entry) error {
 		// extra dir
 		logger.Debug("removing an extra collection")
 
-		if cp.forceFlagValues.Force {
+		overwrite := false
+		if cp.forceFlagValues.Force || cp.commonFlagValues.YesAll {
+			overwrite = true
+		} else if cp.commonFlagValues.NoAll {
+			overwrite = false
+		} else {
+			overwrite = terminal.InputYN(fmt.Sprintf("Removing an extra directory %q. Remove?", targetEntry.Path))
+		}
+
+		if overwrite {
 			cp.scheduleDeleteExtraDir(targetEntry)
 			return nil
 		} else {
-			// ask
-			overwrite := terminal.InputYN(fmt.Sprintf("Removing an extra directory %q. Remove?", targetEntry.Path))
-			if overwrite {
-				cp.scheduleDeleteExtraDir(targetEntry)
-				return nil
-			} else {
-				// do not remove
-				reportSimple(nil, "declined")
-				return nil
-			}
+			// do not remove
+			reportSimple(nil, "declined")
+			return nil
 		}
 	}
 

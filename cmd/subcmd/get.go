@@ -857,7 +857,16 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 	if targetStat.IsDir() {
 		if get.syncFlagValues.Sync {
 			// if it is sync, remove
-			if get.forceFlagValues.Force {
+			overwrite := false
+			if get.forceFlagValues.Force || get.commonFlagValues.YesAll {
+				overwrite = true
+			} else if get.commonFlagValues.NoAll {
+				overwrite = false
+			} else {
+				overwrite = terminal.InputYN(fmt.Sprintf("Overwriting a file %q, but directory exists. Overwrite?", targetPath))
+			}
+
+			if overwrite {
 				removeErr := os.RemoveAll(targetPath)
 				reportOverwrite(removeErr, "directory")
 
@@ -867,25 +876,12 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 
 				// fallthrough to get
 			} else {
-				// ask
-				overwrite := terminal.InputYN(fmt.Sprintf("Overwriting a file %q, but directory exists. Overwrite?", targetPath))
-				if overwrite {
-					removeErr := os.RemoveAll(targetPath)
-					reportOverwrite(removeErr, "directory")
+				overwriteErr := types.NewNotFileError(targetPath)
 
-					if removeErr != nil {
-						return removeErr
-					}
-
-					// fallthrough to get
-				} else {
-					overwriteErr := types.NewNotFileError(targetPath)
-
-					reportOverwrite(overwriteErr, "directory", "declined", "skipped")
-					terminal.Printf("skip downloading a data object %q to %q. Directory exists with the same name!\n", sourceEntry.Path, targetPath)
-					logger.Debug("skip downloading a data object. Directory exists with the same name!")
-					return nil
-				}
+				reportOverwrite(overwriteErr, "directory", "declined", "skipped")
+				terminal.Printf("skip downloading a data object %q to %q. Directory exists with the same name!\n", sourceEntry.Path, targetPath)
+				logger.Debug("skip downloading a data object. Directory exists with the same name!")
+				return nil
 			}
 		} else {
 			notFileErr := types.NewNotFileError(targetPath)
@@ -968,32 +964,37 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 			}
 		}
 	} else {
-		if !get.forceFlagValues.Force {
-			// ask
-			overwrite := terminal.InputYN(fmt.Sprintf("File %q already exists. Overwrite?", targetPath))
-			if !overwrite {
-				// skip
-				now := time.Now()
-				reportFile := &transfer.TransferReportFile{
-					Method:                  transfer.TransferMethodGet,
-					StartAt:                 now,
-					EndAt:                   now,
-					SourcePath:              sourceEntry.Path,
-					SourceSize:              sourceEntry.Size,
-					SourceChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
-					SourceChecksum:          hex.EncodeToString(sourceEntry.CheckSum),
-					DestPath:                targetPath,
-					DestSize:                targetStat.Size(),
+		overwrite := false
+		if get.forceFlagValues.Force || get.commonFlagValues.YesAll {
+			overwrite = true
+		} else if get.commonFlagValues.NoAll {
+			overwrite = false
+		} else {
+			overwrite = terminal.InputYN(fmt.Sprintf("File %q already exists. Overwrite?", targetPath))
+		}
 
-					Notes: []string{"get", "file", "overwrite", "decliened", "skipped"},
-				}
+		if !overwrite {
+			// skip
+			now := time.Now()
+			reportFile := &transfer.TransferReportFile{
+				Method:                  transfer.TransferMethodGet,
+				StartAt:                 now,
+				EndAt:                   now,
+				SourcePath:              sourceEntry.Path,
+				SourceSize:              sourceEntry.Size,
+				SourceChecksumAlgorithm: string(sourceEntry.CheckSumAlgorithm),
+				SourceChecksum:          hex.EncodeToString(sourceEntry.CheckSum),
+				DestPath:                targetPath,
+				DestSize:                targetStat.Size(),
 
-				get.transferReportManager.AddFile(reportFile)
-
-				terminal.Printf("skip downloading a data object %q to %q. The file already exists!\n", sourceEntry.Path, targetPath)
-				logger.Debug("skip downloading a data object. The file already exists!")
-				return nil
+				Notes: []string{"get", "file", "overwrite", "decliened", "skipped"},
 			}
+
+			get.transferReportManager.AddFile(reportFile)
+
+			terminal.Printf("skip downloading a data object %q to %q. The file already exists!\n", sourceEntry.Path, targetPath)
+			logger.Debug("skip downloading a data object. The file already exists!")
+			return nil
 		}
 	}
 
@@ -1081,7 +1082,16 @@ func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath stri
 		if !targetStat.IsDir() {
 			if get.syncFlagValues.Sync {
 				// if it is sync, remove
-				if get.forceFlagValues.Force {
+				overwrite := false
+				if get.forceFlagValues.Force || get.commonFlagValues.YesAll {
+					overwrite = true
+				} else if get.commonFlagValues.NoAll {
+					overwrite = false
+				} else {
+					overwrite = terminal.InputYN(fmt.Sprintf("Overwriting a directory %q, but file exists. Overwrite?", targetPath))
+				}
+
+				if overwrite {
 					removeErr := os.Remove(targetPath)
 					reportOverwrite(removeErr)
 
@@ -1091,25 +1101,12 @@ func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath stri
 
 					// fallthrough to get entries
 				} else {
-					// ask
-					overwrite := terminal.InputYN(fmt.Sprintf("Overwriting a directory %q, but file exists. Overwrite?", targetPath))
-					if overwrite {
-						removeErr := os.Remove(targetPath)
-						reportOverwrite(removeErr)
+					overwriteErr := types.NewNotDirError(targetPath)
 
-						if removeErr != nil {
-							return removeErr
-						}
-
-						// fallthrough to get entries
-					} else {
-						overwriteErr := types.NewNotDirError(targetPath)
-
-						reportOverwrite(overwriteErr, "declined", "skipped")
-						terminal.Printf("skip downloading a collection %q to %q. File exists with the same name!\n", sourceEntry.Path, targetPath)
-						logger.Debug("skip downloading a collection. File exists with the same name!")
-						return nil
-					}
+					reportOverwrite(overwriteErr, "declined", "skipped")
+					terminal.Printf("skip downloading a collection %q to %q. File exists with the same name!\n", sourceEntry.Path, targetPath)
+					logger.Debug("skip downloading a collection. File exists with the same name!")
+					return nil
 				}
 			} else {
 				notDirErr := types.NewNotDirError(targetPath)
@@ -1189,20 +1186,22 @@ func (get *GetCommand) deleteFileOnSuccess(sourcePath string) error {
 
 	logger.Debug("removing a data object after download")
 
-	if get.forceFlagValues.Force {
+	overwrite := false
+	if get.forceFlagValues.Force || get.commonFlagValues.YesAll {
+		overwrite = true
+	} else if get.commonFlagValues.NoAll {
+		overwrite = false
+	} else {
+		overwrite = terminal.InputYN(fmt.Sprintf("Removing a data object %q after download. Remove?", sourcePath))
+	}
+
+	if overwrite {
 		get.scheduleDeleteFileOnSuccess(sourcePath)
 		return nil
 	} else {
-		// ask
-		overwrite := terminal.InputYN(fmt.Sprintf("Removing a data object %q after download. Remove?", sourcePath))
-		if overwrite {
-			get.scheduleDeleteFileOnSuccess(sourcePath)
-			return nil
-		} else {
-			// do not remove
-			reportSimple(nil, "declined", "skipped")
-			return nil
-		}
+		// do not remove
+		reportSimple(nil, "declined", "skipped")
+		return nil
 	}
 }
 
@@ -1255,20 +1254,22 @@ func (get *GetCommand) deleteDirOnSuccess(sourcePath string) error {
 	}
 
 	// delete the directory itself
-	if get.forceFlagValues.Force {
+	overwrite := false
+	if get.forceFlagValues.Force || get.commonFlagValues.YesAll {
+		overwrite = true
+	} else if get.commonFlagValues.NoAll {
+		overwrite = false
+	} else {
+		overwrite = terminal.InputYN(fmt.Sprintf("Removing a collection after download %q. Remove?", sourcePath))
+	}
+
+	if overwrite {
 		get.scheduleDeleteDirOnSuccess(sourcePath)
 		return nil
 	} else {
-		// ask
-		overwrite := terminal.InputYN(fmt.Sprintf("Removing a collection after download %q. Remove?", sourcePath))
-		if overwrite {
-			get.scheduleDeleteDirOnSuccess(sourcePath)
-			return nil
-		} else {
-			// do not remove
-			reportSimple(nil, "declined", "skipped")
-			return nil
-		}
+		// do not remove
+		reportSimple(nil, "declined", "skipped")
+		return nil
 	}
 }
 
@@ -1306,20 +1307,22 @@ func (get *GetCommand) deleteExtraFile(targetPath string) error {
 		// extra file
 		logger.Debug("removing an extra file")
 
-		if get.forceFlagValues.Force {
+		overwrite := false
+		if get.forceFlagValues.Force || get.commonFlagValues.YesAll {
+			overwrite = true
+		} else if get.commonFlagValues.NoAll {
+			overwrite = false
+		} else {
+			overwrite = terminal.InputYN(fmt.Sprintf("Removing an extra file %q. Remove?", targetPath))
+		}
+
+		if overwrite {
 			get.scheduleDeleteExtraFile(targetPath)
 			return nil
 		} else {
-			// ask
-			overwrite := terminal.InputYN(fmt.Sprintf("Removing an extra file %q. Remove?", targetPath))
-			if overwrite {
-				get.scheduleDeleteExtraFile(targetPath)
-				return nil
-			} else {
-				// do not remove
-				reportSimple(nil, "declined", "skipped")
-				return nil
-			}
+			// do not remove
+			reportSimple(nil, "declined", "skipped")
+			return nil
 		}
 	}
 
@@ -1386,20 +1389,22 @@ func (get *GetCommand) deleteExtraDir(targetPath string) error {
 		// extra dir
 		logger.Debug("removing an extra directory")
 
-		if get.forceFlagValues.Force {
+		overwrite := false
+		if get.forceFlagValues.Force || get.commonFlagValues.YesAll {
+			overwrite = true
+		} else if get.commonFlagValues.NoAll {
+			overwrite = false
+		} else {
+			overwrite = terminal.InputYN(fmt.Sprintf("Removing an extra directory %q. Remove?", targetPath))
+		}
+
+		if overwrite {
 			get.scheduleDeleteExtraDir(targetPath)
 			return nil
 		} else {
-			// ask
-			overwrite := terminal.InputYN(fmt.Sprintf("Removing an extra directory %q. Remove?", targetPath))
-			if overwrite {
-				get.scheduleDeleteExtraDir(targetPath)
-				return nil
-			} else {
-				// do not remove
-				reportSimple(nil, "declined", "skipped")
-				return nil
-			}
+			// do not remove
+			reportSimple(nil, "declined", "skipped")
+			return nil
 		}
 	}
 

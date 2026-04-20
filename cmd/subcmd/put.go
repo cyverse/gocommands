@@ -874,7 +874,16 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 	if targetEntry.IsDir() {
 		if put.syncFlagValues.Sync {
 			// if it is sync, remove
-			if put.forceFlagValues.Force {
+			overwrite := false
+			if put.forceFlagValues.Force || put.commonFlagValues.YesAll {
+				overwrite = true
+			} else if put.commonFlagValues.NoAll {
+				overwrite = false
+			} else {
+				overwrite = terminal.InputYN(fmt.Sprintf("Overwriting a data object %q, but collection exists. Overwrite?", targetPath))
+			}
+
+			if overwrite {
 				startTime := time.Now()
 				removeErr := put.filesystem.RemoveDir(targetPath, true, true)
 				endTime := time.Now()
@@ -886,28 +895,13 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 
 				// fallthrough to put
 			} else {
-				// ask
-				overwrite := terminal.InputYN(fmt.Sprintf("Overwriting a data object %q, but collection exists. Overwrite?", targetPath))
-				if overwrite {
-					startTime := time.Now()
-					removeErr := put.filesystem.RemoveDir(targetPath, true, true)
-					endTime := time.Now()
-					reportOverwrite(startTime, endTime, removeErr, "directory")
+				overwriteErr := types.NewNotFileError(targetPath)
 
-					if removeErr != nil {
-						return removeErr
-					}
-
-					// fallthrough to put
-				} else {
-					overwriteErr := types.NewNotFileError(targetPath)
-
-					now := time.Now()
-					reportOverwrite(now, now, overwriteErr, "directory", "declined", "skipped")
-					terminal.Printf("skip uploading a file %q to %q. Collection exists with the same name!\n", sourcePath, targetPath)
-					logger.Debug("skip uploading a file. Collection exists with the same name!")
-					return nil
-				}
+				now := time.Now()
+				reportOverwrite(now, now, overwriteErr, "directory", "declined", "skipped")
+				terminal.Printf("skip uploading a file %q to %q. Collection exists with the same name!\n", sourcePath, targetPath)
+				logger.Debug("skip uploading a file. Collection exists with the same name!")
+				return nil
 			}
 		} else {
 			notFileErr := types.NewNotFileError(targetPath)
@@ -980,32 +974,37 @@ func (put *PutCommand) putFile(sourceStat fs.FileInfo, sourcePath string, tempPa
 			}
 		}
 	} else {
-		if !put.forceFlagValues.Force {
-			// ask
-			overwrite := terminal.InputYN(fmt.Sprintf("Data object %q already exists. Overwrite?", targetPath))
-			if !overwrite {
-				// skip
-				now := time.Now()
-				reportFile := &transfer.TransferReportFile{
-					Method:                transfer.TransferMethodPut,
-					StartAt:               now,
-					EndAt:                 now,
-					SourcePath:            sourcePath,
-					SourceSize:            sourceStat.Size(),
-					DestPath:              targetEntry.Path,
-					DestSize:              targetEntry.Size,
-					DestChecksum:          hex.EncodeToString(targetEntry.CheckSum),
-					DestChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
+		overwrite := false
+		if put.forceFlagValues.Force || put.commonFlagValues.YesAll {
+			overwrite = true
+		} else if put.commonFlagValues.NoAll {
+			overwrite = false
+		} else {
+			overwrite = terminal.InputYN(fmt.Sprintf("Data object %q already exists. Overwrite?", targetPath))
+		}
 
-					Notes: []string{"put", "file", "overwrite", "declined", "skipped"},
-				}
+		if !overwrite {
+			// skip
+			now := time.Now()
+			reportFile := &transfer.TransferReportFile{
+				Method:                transfer.TransferMethodPut,
+				StartAt:               now,
+				EndAt:                 now,
+				SourcePath:            sourcePath,
+				SourceSize:            sourceStat.Size(),
+				DestPath:              targetEntry.Path,
+				DestSize:              targetEntry.Size,
+				DestChecksum:          hex.EncodeToString(targetEntry.CheckSum),
+				DestChecksumAlgorithm: string(targetEntry.CheckSumAlgorithm),
 
-				put.transferReportManager.AddFile(reportFile)
-
-				terminal.Printf("skip uploading a file %q to %q. The data object already exists!\n", sourcePath, targetPath)
-				logger.Debug("skip uploading a file. The data object already exists!")
-				return nil
+				Notes: []string{"put", "file", "overwrite", "declined", "skipped"},
 			}
+
+			put.transferReportManager.AddFile(reportFile)
+
+			terminal.Printf("skip uploading a file %q to %q. The data object already exists!\n", sourcePath, targetPath)
+			logger.Debug("skip uploading a file. The data object already exists!")
+			return nil
 		}
 	}
 
@@ -1099,10 +1098,20 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 		if !targetEntry.IsDir() {
 			if put.syncFlagValues.Sync {
 				// if it is sync, remove
-				if put.forceFlagValues.Force {
+				overwrite := false
+				if put.forceFlagValues.Force || put.commonFlagValues.YesAll {
+					overwrite = true
+				} else if put.commonFlagValues.NoAll {
+					overwrite = false
+				} else {
+					overwrite = terminal.InputYN(fmt.Sprintf("Overwriting a directory %q, but file exists. Overwrite?", targetPath))
+				}
+
+				if overwrite {
 					startTime := time.Now()
 					removeErr := put.filesystem.RemoveFile(targetPath, true)
 					endTime := time.Now()
+
 					reportOverwrite(startTime, endTime, removeErr)
 
 					if removeErr != nil {
@@ -1111,29 +1120,13 @@ func (put *PutCommand) putDir(sourceStat fs.FileInfo, sourcePath string, targetP
 
 					// fallthrough to put entries
 				} else {
-					// ask
-					overwrite := terminal.InputYN(fmt.Sprintf("Overwriting a directory %q, but file exists. Overwrite?", targetPath))
-					if overwrite {
-						startTime := time.Now()
-						removeErr := put.filesystem.RemoveFile(targetPath, true)
-						endTime := time.Now()
+					overwriteErr := types.NewNotDirError(targetPath)
 
-						reportOverwrite(startTime, endTime, removeErr)
-
-						if removeErr != nil {
-							return removeErr
-						}
-
-						// fallthrough to put entries
-					} else {
-						overwriteErr := types.NewNotDirError(targetPath)
-
-						now := time.Now()
-						reportOverwrite(now, now, overwriteErr, "declined", "skipped")
-						terminal.Printf("skip uploading a directory %q to %q. Data object exists with the same name!\n", sourcePath, targetPath)
-						logger.Debug("skip uploading a directory. Data object exists with the same name!")
-						return nil
-					}
+					now := time.Now()
+					reportOverwrite(now, now, overwriteErr, "declined", "skipped")
+					terminal.Printf("skip uploading a directory %q to %q. Data object exists with the same name!\n", sourcePath, targetPath)
+					logger.Debug("skip uploading a directory. Data object exists with the same name!")
+					return nil
 				}
 			} else {
 				notDirErr := types.NewNotDirError(targetPath)
@@ -1234,20 +1227,22 @@ func (put *PutCommand) deleteFileOnSuccess(sourcePath string) error {
 
 	logger.Debug("removing a file after upload", sourcePath)
 
-	if put.forceFlagValues.Force {
+	overwrite := false
+	if put.forceFlagValues.Force || put.commonFlagValues.YesAll {
+		overwrite = true
+	} else if put.commonFlagValues.NoAll {
+		overwrite = false
+	} else {
+		overwrite = terminal.InputYN(fmt.Sprintf("Removing a file %q after upload. Remove?", sourcePath))
+	}
+
+	if overwrite {
 		put.scheduleDeleteFileOnSuccess(sourcePath)
 		return nil
 	} else {
-		// ask
-		overwrite := terminal.InputYN(fmt.Sprintf("Removing a file %q after upload. Remove?", sourcePath))
-		if overwrite {
-			put.scheduleDeleteFileOnSuccess(sourcePath)
-			return nil
-		} else {
-			// do not remove
-			reportSimple(nil, "declined", "skipped")
-			return nil
-		}
+		// do not remove
+		reportSimple(nil, "declined", "skipped")
+		return nil
 	}
 }
 
@@ -1302,20 +1297,22 @@ func (put *PutCommand) deleteDirOnSuccess(sourcePath string) error {
 	}
 
 	// delete the directory itself
-	if put.forceFlagValues.Force {
+	overwrite := false
+	if put.forceFlagValues.Force || put.commonFlagValues.YesAll {
+		overwrite = true
+	} else if put.commonFlagValues.NoAll {
+		overwrite = false
+	} else {
+		overwrite = terminal.InputYN(fmt.Sprintf("Removing a directory %q after upload. Remove?", sourcePath))
+	}
+
+	if overwrite {
 		put.scheduleDeleteDirOnSuccess(sourcePath)
 		return nil
 	} else {
-		// ask
-		overwrite := terminal.InputYN(fmt.Sprintf("Removing a directory %q after upload. Remove?", sourcePath))
-		if overwrite {
-			put.scheduleDeleteDirOnSuccess(sourcePath)
-			return nil
-		} else {
-			// do not remove
-			reportSimple(nil, "declined", "skipped")
-			return nil
-		}
+		// do not remove
+		reportSimple(nil, "declined", "skipped")
+		return nil
 	}
 }
 
@@ -1357,20 +1354,22 @@ func (put *PutCommand) deleteExtraFile(targetPath string) error {
 		// extra file
 		logger.Debug("removing an extra data object", targetPath)
 
-		if put.forceFlagValues.Force {
+		overwrite := false
+		if put.forceFlagValues.Force || put.commonFlagValues.YesAll {
+			overwrite = true
+		} else if put.commonFlagValues.NoAll {
+			overwrite = false
+		} else {
+			overwrite = terminal.InputYN(fmt.Sprintf("Removing an extra data object %q. Remove?", targetPath))
+		}
+
+		if overwrite {
 			put.scheduleDeleteExtraFile(targetPath)
 			return nil
 		} else {
-			// ask
-			overwrite := terminal.InputYN(fmt.Sprintf("Removing an extra data object %q. Remove?", targetPath))
-			if overwrite {
-				put.scheduleDeleteExtraFile(targetPath)
-				return nil
-			} else {
-				// do not remove
-				reportSimple(nil, "declined", "skipped")
-				return nil
-			}
+			// do not remove
+			reportSimple(nil, "declined", "skipped")
+			return nil
 		}
 	}
 
@@ -1435,20 +1434,22 @@ func (put *PutCommand) deleteExtraDir(targetPath string) error {
 		// extra dir
 		logger.Debug("removing an extra collection")
 
-		if put.forceFlagValues.Force {
+		overwrite := false
+		if put.forceFlagValues.Force || put.commonFlagValues.YesAll {
+			overwrite = true
+		} else if put.commonFlagValues.NoAll {
+			overwrite = false
+		} else {
+			overwrite = terminal.InputYN(fmt.Sprintf("Removing an extra collection %q. Remove?", targetPath))
+		}
+
+		if overwrite {
 			put.scheduleDeleteExtraDir(targetPath)
 			return nil
 		} else {
-			// ask
-			overwrite := terminal.InputYN(fmt.Sprintf("Removing an extra collection %q. Remove?", targetPath))
-			if overwrite {
-				put.scheduleDeleteExtraDir(targetPath)
-				return nil
-			} else {
-				// do not remove
-				reportSimple(nil, "declined", "skipped")
-				return nil
-			}
+			// do not remove
+			reportSimple(nil, "declined", "skipped")
+			return nil
 		}
 	}
 

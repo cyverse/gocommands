@@ -45,14 +45,15 @@ func InputYN(msg string) bool {
 	for {
 		inputString := Input(fmt.Sprintf("%s [yes(y)/no(n)/yes-all(a)/no-all(na)]", msg))
 		inputString = strings.ToLower(inputString)
-		if inputString == "y" || inputString == "yes" || inputString == "true" {
+		switch inputString {
+		case "y", "yes", "true":
 			return true
-		} else if inputString == "n" || inputString == "no" || inputString == "false" {
+		case "n", "no", "false":
 			return false
-		} else if inputString == "a" || inputString == "ya" || inputString == "all" || inputString == "yes-all" {
+		case "a", "ya", "all", "yes-all":
 			selectedYesAll = true
 			return true
-		} else if inputString == "na" || inputString == "none" || inputString == "no-all" {
+		case "na", "none", "no-all":
 			selectedNoAll = true
 			return false
 		}

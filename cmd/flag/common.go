@@ -31,6 +31,8 @@ type CommonFlagValues struct {
 	ResourceUpdated bool
 	Timeout         int
 	TimeoutUpdated  bool
+	YesAll          bool
+	NoAll           bool
 }
 
 var (
@@ -49,10 +51,13 @@ func SetCommonFlags(command *cobra.Command, hideResource bool) {
 	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Specify session identifier for tracking operations")
 	command.Flags().StringVarP(&commonFlagValues.Resource, "resource", "R", "", "Target specific iRODS resource server for operations")
 	command.Flags().IntVarP(&commonFlagValues.Timeout, "timeout", "", config.GetDefaultFilesystemTimeout(), "Specify timeout duration in seconds")
+	command.Flags().BoolVarP(&commonFlagValues.YesAll, "yes", "Y", false, "Yes to all questions")
+	command.Flags().BoolVarP(&commonFlagValues.NoAll, "no", "N", false, "No to all questions")
 
 	command.MarkFlagsMutuallyExclusive("quiet", "version")
 	command.MarkFlagsMutuallyExclusive("log_level", "version")
 	command.MarkFlagsMutuallyExclusive("debug", "quiet", "log_level")
+	command.MarkFlagsMutuallyExclusive("yes", "no")
 
 	if !hideResource {
 		command.MarkFlagsMutuallyExclusive("resource", "version")
@@ -78,6 +83,7 @@ func SetCommonFlagsWithoutResource(command *cobra.Command) {
 	command.MarkFlagsMutuallyExclusive("quiet", "version")
 	command.MarkFlagsMutuallyExclusive("log_level", "version")
 	command.MarkFlagsMutuallyExclusive("debug", "quiet", "log_level")
+	command.MarkFlagsMutuallyExclusive("yes", "no")
 
 	command.MarkFlagsMutuallyExclusive("session", "version")
 }
