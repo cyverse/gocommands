@@ -578,7 +578,7 @@ func (cp *CpCommand) copyFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 
 	targetEntry, err := cp.filesystem.Stat(targetPath)
 	if err != nil {
-		if !irodsclient_types.IsFileNotFoundError(err) {
+		if irodsclient_types.IsFileNotFoundError(err) {
 			// target does not exist
 			// target must be a file with new name
 			cp.scheduleCopy(sourceEntry, targetPath, nil)
