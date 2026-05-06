@@ -10,33 +10,12 @@ USE_SUDO="true"              # Use sudo for installation (can be overridden)
 
 # --- Functions ---
 
-# Function to download and extract
+# Function to download and extract into a temp directory
 download_and_extract() {
     local url="$1"
+    local dest="$2"
     echo "Downloading and extracting from: $url"
-    curl -L -s "$url" | tar zxvf -
-}
-
-# Function to install the binary
-install_binary() {
-    if [ ! -d "$INSTALL_DIR" ]; then
-        echo "Creating installation directory: $INSTALL_DIR"
-        if [[ "$USE_SUDO" == "true" ]]; then
-            sudo mkdir -p "$INSTALL_DIR"
-        else
-            mkdir -p "$INSTALL_DIR"
-        fi
-    fi
-
-    echo "Installing $BINARY_NAME to $INSTALL_DIR"
-    if [[ "$USE_SUDO" == "true" ]]; then
-        sudo mv "$BINARY_NAME" "$INSTALL_DIR/"
-        sudo chmod +x "$INSTALL_DIR/$BINARY_NAME" # Make executable
-    else
-        mv "$BINARY_NAME" "$INSTALL_DIR/"
-        chmod +x "$INSTALL_DIR/$BINARY_NAME"
-    fi
-    echo "$BINARY_NAME installed successfully to $INSTALL_DIR"
+    curl -L -s "$url" | tar zxvf - -C "$dest"
 }
 
 # Function to display usage
@@ -51,7 +30,7 @@ usage() {
 }
 
 # --- Argument Parsing ---
-GOCMD_VER="$DEFAULT_GOCMD_VER" # Set the default version
+GOCMD_VER="$DEFAULT_GOCMD_VER"
 INSTALL="false" # Default to not installing
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -79,6 +58,12 @@ while [[ $# -gt 0 ]]; do
     esac
     shift # past option
 done
+
+# Validate version (either fetched or user-supplied)
+if [[ -z "$GOCMD_VER" ]]; then
+    echo "Error: Could not fetch latest version from GitHub. Use --version to specify a version."
+    exit 1
+fi
 
 # --- OS and Architecture Detection ---
 OS=$(uname -s)
@@ -119,11 +104,42 @@ case "$OS-$ARCH" in
 esac
 
 # --- Download and Install ---
-download_and_extract "$URL"
+TMPDIR=$(mktemp -d)
+trap "rm -rf '$TMPDIR'" EXIT
+
+download_and_extract "$URL" "$TMPDIR"
+
+if [[ ! -f "$TMPDIR/$BINARY_NAME" ]]; then
+    echo "Error: Binary '$BINARY_NAME' not found after extraction."
+    exit 1
+fi
 
 if [[ "$INSTALL" == "true" ]]; then
     # After extraction, move the binary to the install location
+    BINARY_NAME_PATH="$TMPDIR/$BINARY_NAME"
+    install_binary() {
+        if [ ! -d "$INSTALL_DIR" ]; then
+            echo "Creating installation directory: $INSTALL_DIR"
+            if [[ "$USE_SUDO" == "true" ]]; then
+                sudo mkdir -p "$INSTALL_DIR"
+            else
+                mkdir -p "$INSTALL_DIR"
+            fi
+        fi
+
+        echo "Installing $BINARY_NAME to $INSTALL_DIR"
+        if [[ "$USE_SUDO" == "true" ]]; then
+            sudo mv "$BINARY_NAME_PATH" "$INSTALL_DIR/$BINARY_NAME"
+            sudo chmod +x "$INSTALL_DIR/$BINARY_NAME"
+        else
+            mv "$BINARY_NAME_PATH" "$INSTALL_DIR/$BINARY_NAME"
+            chmod +x "$INSTALL_DIR/$BINARY_NAME"
+        fi
+        echo "$BINARY_NAME installed successfully to $INSTALL_DIR"
+    }
     install_binary
 else
-    echo "$BINARY_NAME downloaded successfully"
+    mv "$TMPDIR/$BINARY_NAME" "./$BINARY_NAME"
+    chmod +x "./$BINARY_NAME"
+    echo "$BINARY_NAME downloaded successfully to $(pwd)/$BINARY_NAME"
 fi
