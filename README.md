@@ -5,7 +5,6 @@ iRODS Command-line Tools written in Go
 ## Installation
 
 ### Download pre-built binary
-Please download binary file (bundled with `tar` or `zip`) at ["https://github.com/cyverse/gocommands/releases"]("https://github.com/cyverse/gocommands/releases").
 Be sure to download a binary for your target system architecture.
 
 For Linux & Mac OS:
@@ -13,17 +12,20 @@ For Linux & Mac OS:
 curl -fsSL https://raw.githubusercontent.com/cyverse/gocommands/main/install_gocmd.sh | bash
 ```
 
-For Windows-amd64 (using windows Cmd):
+For Windows on Intel CPU (windows-amd64, windows Cmd):
 ```bash
 curl -L -s -o gocmdv.txt https://raw.githubusercontent.com/cyverse/gocommands/main/VERSION.txt && set /p GOCMD_VER=<gocmdv.txt
 curl -L -s -o gocmd.zip https://github.com/cyverse/gocommands/releases/download/%GOCMD_VER%/gocmd-%GOCMD_VER%-windows-amd64.zip && tar zxvf gocmd.zip && del gocmd.zip gocmdv.txt
 ```
 
-For Windows-amd64 (using windows PowerShell):
+For Windows on Intel CPU (windows-amd64, windows PowerShell):
 ```bash
 curl -o gocmdv.txt https://raw.githubusercontent.com/cyverse/gocommands/main/VERSION.txt ; $env:GOCMD_VER = (Get-Content gocmdv.txt)
 curl -o gocmd.zip https://github.com/cyverse/gocommands/releases/download/$env:GOCMD_VER/gocmd-$env:GOCMD_VER-windows-amd64.zip ; tar zxvf gocmd.zip ; del gocmd.zip ; del gocmdv.txt
 ```
+
+#### Manual download binary
+Please download binary file (bundled with `tar` or `zip`) at ["https://github.com/cyverse/gocommands/releases"]("https://github.com/cyverse/gocommands/releases").
 
 ### Install via Conda (Conda-forge)
 `Gocommands` can be installed via `conda` if you are using Linux or Mac OS. Unfortunately, Windows system is not yet supported. Please follow instructions below to install.
