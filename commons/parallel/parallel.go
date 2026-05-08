@@ -285,12 +285,13 @@ func (manager *ParallelJobManager) Start() error {
 	logger.Debug("waiting job-wait")
 	manager.processWait.Wait()
 
+	logger.Debugf("all jobs done, total: %d, completed: %d, canceled: %d, errored: %d", manager.totalJobs, manager.jobsDoneCounter, manager.jobsCanceledCounter, manager.jobsErroredCounter)
+
 	err := manager.GetLastError()
 	if err != nil {
 		return err
 	}
 
-	logger.Debugf("all jobs done, total: %d, completed: %d, canceled: %d, errored: %d", manager.totalJobs, manager.jobsDoneCounter, manager.jobsCanceledCounter, manager.jobsErroredCounter)
 	return nil
 }
 
