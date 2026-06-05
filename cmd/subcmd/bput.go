@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/avast/retry-go"
 	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
@@ -208,8 +209,8 @@ func (bput *BputCommand) Process() error {
 
 	// parallel job manager
 	ioSession := bput.filesystem.GetIOSession()
-	bput.parallelTransferJobManager = parallel.NewParallelJobManager(ioSession.GetMaxConnections(), bput.progressFlagValues.ShowProgress, bput.progressFlagValues.ShowFullPath)
-	bput.parallelPostProcessJobManager = parallel.NewParallelJobManager(1, bput.progressFlagValues.ShowProgress, bput.progressFlagValues.ShowFullPath)
+	bput.parallelTransferJobManager = parallel.NewParallelJobManager(ioSession.GetMaxConnections(), bput.progressFlagValues.ShowProgress, bput.progressFlagValues.ShowFullPath, bput.parallelTransferFlagValues.StopOnError)
+	bput.parallelPostProcessJobManager = parallel.NewParallelJobManager(1, bput.progressFlagValues.ShowProgress, bput.progressFlagValues.ShowFullPath, false)
 
 	// run
 	if len(bput.sourcePaths) >= 2 {
@@ -626,21 +627,33 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 
 		notes = append(notes, string(transferMode), fmt.Sprintf("%d threads", threadsRequired))
 
-		switch transferMode {
-		case transfer.TransferModeWebDAV:
-			uploadResult, uploadErr = bput.webdavClient.UploadFile(tarballPath, stagingTargetPath, bput.checksumFlagValues.VerifyChecksum, progressCallbackPut)
-		case transfer.TransferModeICAT:
-			fallthrough
-		default:
-			uploadResult, uploadErr = bput.filesystem.UploadFileParallel(tarballPath, stagingTargetPath, "", threadsRequired, false, bput.checksumFlagValues.VerifyChecksum, progressCallbackPut)
-		}
+		retryNum := bput.retryFlagValues.GetRetryNumber()
+		retryInterval := bput.retryFlagValues.GetRetryIntervalSeconds()
 
-		if uploadErr != nil {
+		bundleAttempt := 0
+		bundleRetryErr := retry.Do(func() error {
+			bundleAttempt++
+			if bundleAttempt > 1 {
+				logger.Debugf("retrying bundle upload attempt %d/%d for %q", bundleAttempt, retryNum+1, tarballPath)
+			}
+
+			switch transferMode {
+			case transfer.TransferModeWebDAV:
+				uploadResult, uploadErr = bput.webdavClient.UploadFile(tarballPath, stagingTargetPath, bput.checksumFlagValues.VerifyChecksum, progressCallbackPut)
+			case transfer.TransferModeICAT:
+				fallthrough
+			default:
+				uploadResult, uploadErr = bput.filesystem.UploadFileParallel(tarballPath, stagingTargetPath, "", threadsRequired, false, bput.checksumFlagValues.VerifyChecksum, progressCallbackPut)
+			}
+			return uploadErr
+		}, retry.Attempts(uint(retryNum+1)), retry.Delay(retryInterval), retry.LastErrorOnly(true))
+
+		if bundleRetryErr != nil {
 			job.Progress("upload", -1, tarballStat.Size(), true)
 			job.Progress("checksum", -1, tarballStat.Size(), true)
 
-			reportTransfer(uploadResult, uploadErr, notes...)
-			return errors.Wrapf(uploadErr, "failed to upload a tarball %q to %q", tarballPath, stagingTargetPath)
+			reportTransfer(uploadResult, bundleRetryErr, notes...)
+			return errors.Wrapf(bundleRetryErr, "failed to upload bundle %q to %q after %d attempts", tarballPath, stagingTargetPath, retryNum+1)
 		}
 
 		reportTransfer(uploadResult, nil, notes...)
@@ -778,15 +791,30 @@ func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleE
 			return errors.Wrapf(statErr, "failed to stat %q", parentTargetPath)
 		}
 
-		uploadResult, uploadErr := bput.filesystem.UploadFileParallel(uploadSourcePath, bundleEntry.IRODSPath, "", threadsRequired, false, bput.checksumFlagValues.VerifyChecksum, progressCallbackPut)
 		notes = append(notes, "icat", fmt.Sprintf("%d threads", threadsRequired))
 
-		if uploadErr != nil {
+		var uploadResult *irodsclient_fs.FileTransferResult
+		var uploadErr error
+
+		entryRetryNum := bput.retryFlagValues.GetRetryNumber()
+		entryRetryInterval := bput.retryFlagValues.GetRetryIntervalSeconds()
+
+		entryAttempt := 0
+		entryRetryErr := retry.Do(func() error {
+			entryAttempt++
+			if entryAttempt > 1 {
+				logger.Debugf("retrying upload attempt %d/%d for %q", entryAttempt, entryRetryNum+1, bundleEntry.LocalPath)
+			}
+			uploadResult, uploadErr = bput.filesystem.UploadFileParallel(uploadSourcePath, bundleEntry.IRODSPath, "", threadsRequired, false, bput.checksumFlagValues.VerifyChecksum, progressCallbackPut)
+			return uploadErr
+		}, retry.Attempts(uint(entryRetryNum+1)), retry.Delay(entryRetryInterval), retry.LastErrorOnly(true))
+
+		if entryRetryErr != nil {
 			job.Progress("upload", -1, bundleEntry.Size, true)
 			job.Progress("checksum", -1, bundleEntry.Size, true)
 
-			reportTransfer(uploadResult, uploadErr, notes...)
-			return errors.Wrapf(uploadErr, "failed to upload %q to %q", bundleEntry.LocalPath, bundleEntry.IRODSPath)
+			reportTransfer(uploadResult, entryRetryErr, notes...)
+			return errors.Wrapf(entryRetryErr, "failed to upload %q to %q after %d attempts", bundleEntry.LocalPath, bundleEntry.IRODSPath, entryRetryNum+1)
 		}
 
 		reportTransfer(uploadResult, nil, notes...)

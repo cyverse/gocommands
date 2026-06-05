@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/avast/retry-go"
 	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
@@ -211,8 +212,8 @@ func (put *PutCommand) Process() error {
 
 	// parallel job manager
 	ioSession := put.filesystem.GetIOSession()
-	put.parallelTransferJobManager = parallel.NewParallelJobManager(ioSession.GetMaxConnections(), put.progressFlagValues.ShowProgress, put.progressFlagValues.ShowFullPath)
-	put.parallelPostProcessJobManager = parallel.NewParallelJobManager(1, put.progressFlagValues.ShowProgress, put.progressFlagValues.ShowFullPath)
+	put.parallelTransferJobManager = parallel.NewParallelJobManager(ioSession.GetMaxConnections(), put.progressFlagValues.ShowProgress, put.progressFlagValues.ShowFullPath, put.parallelTransferFlagValues.StopOnError)
+	put.parallelPostProcessJobManager = parallel.NewParallelJobManager(1, put.progressFlagValues.ShowProgress, put.progressFlagValues.ShowFullPath, false)
 
 	// run
 	if len(put.sourcePaths) >= 2 {
@@ -516,21 +517,33 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 
 		notes = append(notes, string(transferMode), fmt.Sprintf("%d threads", threadsRequired))
 
-		switch transferMode {
-		case transfer.TransferModeWebDAV:
-			uploadResult, uploadErr = put.webdavClient.UploadFile(uploadSourcePath, targetPath, put.checksumFlagValues.VerifyChecksum, progressCallbackPut)
-		case transfer.TransferModeICAT:
-			fallthrough
-		default:
-			uploadResult, uploadErr = put.filesystem.UploadFileParallel(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.VerifyChecksum, progressCallbackPut)
-		}
+		retryNum := put.retryFlagValues.GetRetryNumber()
+		retryInterval := put.retryFlagValues.GetRetryIntervalSeconds()
 
-		if uploadErr != nil {
+		attempt := 0
+		retryErr := retry.Do(func() error {
+			attempt++
+			if attempt > 1 {
+				logger.Debugf("retrying upload attempt %d/%d for %q", attempt, retryNum+1, sourcePath)
+			}
+
+			switch transferMode {
+			case transfer.TransferModeWebDAV:
+				uploadResult, uploadErr = put.webdavClient.UploadFile(uploadSourcePath, targetPath, put.checksumFlagValues.VerifyChecksum, progressCallbackPut)
+			case transfer.TransferModeICAT:
+				fallthrough
+			default:
+				uploadResult, uploadErr = put.filesystem.UploadFileParallel(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.VerifyChecksum, progressCallbackPut)
+			}
+			return uploadErr
+		}, retry.Attempts(uint(retryNum+1)), retry.Delay(retryInterval), retry.LastErrorOnly(true))
+
+		if retryErr != nil {
 			job.Progress("upload", -1, sourceStat.Size(), true)
 			job.Progress("checksum", -1, sourceStat.Size(), true)
 
-			reportTransfer(uploadResult, uploadErr, notes...)
-			return errors.Wrapf(uploadErr, "failed to upload %q to %q", sourcePath, targetPath)
+			reportTransfer(uploadResult, retryErr, notes...)
+			return errors.Wrapf(retryErr, "failed to upload %q to %q after %d attempts", sourcePath, targetPath, retryNum+1)
 		}
 
 		put.totalUploadedFiles++

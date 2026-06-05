@@ -14,6 +14,7 @@ type ParallelTransferFlagValues struct {
 	tcpBufferSizeInput  string
 	Icat                bool
 	WebDAV              bool
+	StopOnError         bool
 }
 
 var (
@@ -27,6 +28,7 @@ func SetParallelTransferFlags(command *cobra.Command, hideParallelConfig bool, h
 	command.Flags().BoolVar(&parallelTransferFlagValues.Icat, "icat", false, "Use iCAT for file transfers")
 	command.Flags().BoolVar(&parallelTransferFlagValues.SingleThread, "single_threaded", false, "Force single-threaded file transfer")
 	command.Flags().BoolVar(&parallelTransferFlagValues.WebDAV, "webdav", false, "Use WebDAV protocol (HTTP) for transfer")
+	command.Flags().BoolVar(&parallelTransferFlagValues.StopOnError, "stop_on_error", false, "Stop all transfers immediately when an error occurs")
 
 	if hideParallelConfig {
 		command.Flags().MarkHidden("thread_num")

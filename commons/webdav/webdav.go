@@ -12,7 +12,6 @@ import (
 
 	"github.com/cockroachdb/errors"
 
-	"github.com/avast/retry-go"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_common "github.com/cyverse/go-irodsclient/irods/common"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
@@ -101,7 +100,7 @@ func (client *WebDAVClient) DownloadFile(sourceEntry *irodsclient_fs.Entry, loca
 
 	if sourceEntry.Size == 0 {
 		// zero size file, just create an empty file
-		f, err := os.OpenFile(localPath, os.O_RDWR|os.O_CREATE, 0666)
+		f, err := os.OpenFile(localPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 		if err != nil {
 			return fileTransferResult, errors.Wrapf(err, "failed to create a local file %q", localPath)
 		}
@@ -124,39 +123,16 @@ func (client *WebDAVClient) DownloadFile(sourceEntry *irodsclient_fs.Entry, loca
 	// download the file
 	offset := int64(0)
 	readSize := sourceEntry.Size
-	for offset < sourceEntry.Size {
-		download := func() error {
-			readSize = sourceEntry.Size - offset
 
-			logger.Debugf("downloading file %s (offset %d, length %d) from WebDAV server", irodsSrcPath, offset, readSize)
+	logger.Debugf("downloading file %s (offset %d, length %d) from WebDAV server", irodsSrcPath, offset, readSize)
 
-			newOffset, downloadErr := client.downloadToLocalWithTrackerCallBack(webdav, irodsSrcPath, localFilePath, offset, readSize, sourceEntry.Size, callback)
-			if downloadErr != nil {
-				logger.WithError(downloadErr).Debugf("failed to download file %q (offset %d, length %d) from WebDAV server", irodsSrcPath, offset, readSize)
-
-				// if the download failed, we need to update the offset
-				offset = newOffset
-				return errors.Wrapf(downloadErr, "failed to download file %q (offset %d, length %d) from WebDAV server", irodsSrcPath, offset, readSize)
-			}
-
-			offset = newOffset
-			return nil
-		}
-
-		// retry download in case of failure
-		// we retry 3 times with 5 seconds delay between attempts
-		offsetLast := offset
-		retryErr := retry.Do(download, retry.Attempts(3), retry.Delay(5*time.Second), retry.LastErrorOnly(true))
-		if retryErr != nil {
-			if errors.Is(retryErr, io.ErrUnexpectedEOF) && offsetLast < offset {
-				// progress was made
-				// continue to retry
-				logger.WithError(retryErr).Debugf("downloaded file %q (offset %d, length %d, data left %d) from WebDAV server, but got unexpected EOF, retrying...", irodsSrcPath, offset, offset-offsetLast, readSize)
-			} else {
-				return fileTransferResult, errors.Wrapf(retryErr, "failed to download file %q (offset %d, length %d) from WebDAV server after 3 attempts", irodsSrcPath, offset, readSize)
-			}
-		}
+	newOffset, downloadErr := client.downloadToLocalWithTrackerCallBack(webdav, irodsSrcPath, localFilePath, offset, readSize, sourceEntry.Size, callback)
+	if downloadErr != nil {
+		logger.WithError(downloadErr).Debugf("failed to download file %q (offset %d, length %d) from WebDAV server", irodsSrcPath, offset, readSize)
+		return fileTransferResult, errors.Wrapf(downloadErr, "failed to download file %q (offset %d, length %d) from WebDAV server", irodsSrcPath, offset, readSize)
 	}
+
+	offset = newOffset
 
 	fileTransferResult.LocalSize = offset
 
@@ -235,29 +211,14 @@ func (client *WebDAVClient) UploadFile(localPath string, irodsPath string, verif
 	}
 
 	// upload the file
-	// upload via WebDAV cannot be resumed, so we will retry the whole upload in case of failure
-	offset := int64(0)
 	writeSize := stat.Size()
 
-	upload := func() error {
-		logger.Debugf("uploading file %s (length %d) to WebDAV server", localSrcPath, writeSize)
+	logger.Debugf("uploading file %s (length %d) to WebDAV server", localSrcPath, writeSize)
 
-		newOffset, uploadErr := client.uploadToIrodsWithTrackerCallBack(webdav, localSrcPath, irodsFilePath, writeSize, callback)
-		if uploadErr != nil {
-			logger.WithError(uploadErr).Debugf("failed to upload file %q (length %d) to WebDAV server", localSrcPath, writeSize)
-
-			return errors.Wrapf(uploadErr, "failed to upload file %q (length %d) to WebDAV server", localSrcPath, writeSize)
-		}
-
-		offset = newOffset
-		return nil
-	}
-
-	// retry upload in case of failure
-	// we retry 3 times with 5 seconds delay between attempts
-	retryErr := retry.Do(upload, retry.Attempts(3), retry.Delay(5*time.Second), retry.LastErrorOnly(true))
-	if retryErr != nil {
-		return fileTransferResult, errors.Wrapf(retryErr, "failed to upload file %q (length %d) from WebDAV server after 3 attempts", localSrcPath, offset, writeSize)
+	_, uploadErr := client.uploadToIrodsWithTrackerCallBack(webdav, localSrcPath, irodsFilePath, writeSize, callback)
+	if uploadErr != nil {
+		logger.WithError(uploadErr).Debugf("failed to upload file %q (length %d) to WebDAV server", localSrcPath, writeSize)
+		return fileTransferResult, errors.Wrapf(uploadErr, "failed to upload file %q (length %d) to WebDAV server", localSrcPath, writeSize)
 	}
 
 	if overwrite {
@@ -371,7 +332,11 @@ func (client *WebDAVClient) downloadToLocalWithTrackerCallBack(webdav *gowebdav.
 	}
 	defer reader.Close()
 
-	f, err := os.OpenFile(localPath, os.O_RDWR|os.O_CREATE, 0666)
+	flags := os.O_RDWR | os.O_CREATE
+	if offset == 0 {
+		flags |= os.O_TRUNC
+	}
+	f, err := os.OpenFile(localPath, flags, 0666)
 	if err != nil {
 		return offset, errors.Wrapf(err, "failed to open local file %q", localPath)
 	}

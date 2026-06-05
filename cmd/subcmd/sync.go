@@ -182,33 +182,19 @@ func (sync *SyncCommand) getNewCommandArgs() ([]string, error) {
 	newArgs = append(newArgs, "--sync")
 	newArgs = append(newArgs, osArgs[commandIdx+1:]...)
 
-	// filter out retry flag
-	newArgsWoRetryFlag := []string{}
-	for _, arg := range newArgs {
-		if arg != "--retry_child" {
-			newArgsWoRetryFlag = append(newArgsWoRetryFlag, arg)
-		}
-	}
-
-	return newArgsWoRetryFlag, nil
+	return newArgs, nil
 }
 
 func (sync *SyncCommand) syncLocalToIRODS() error {
 	newArgs, err := sync.getNewCommandArgs()
 	if err != nil {
-		return errors.Wrapf(err, "failed to get new command args for retry")
+		return errors.Wrapf(err, "failed to get new command args")
 	}
 
-	logger := log.WithFields(log.Fields{
-		"args": newArgs,
-	})
-
 	useBput := false
-
 	if sync.syncFlagValues.BulkUpload {
 		useBput = true
 	} else {
-		// sysconfig
 		systemConfig := config.GetSystemConfig()
 		if systemConfig != nil && systemConfig.AdditionalConfig != nil {
 			if systemConfig.AdditionalConfig.BputForSync {
@@ -218,50 +204,58 @@ func (sync *SyncCommand) syncLocalToIRODS() error {
 	}
 
 	if useBput {
-		// run bput
-		logger.Debug("run bput")
-		bputCmd.ParseFlags(newArgs)
-		argWoFlags := bputCmd.Flags().Args()
-		return bputCmd.RunE(bputCmd, argWoFlags)
+		log.WithFields(log.Fields{"args": newArgs}).Debug("run bput")
+		if err := bputCmd.ParseFlags(newArgs); err != nil {
+			return errors.Wrapf(err, "failed to parse flags for bput")
+		}
+		bput, err := NewBputCommand(bputCmd, bputCmd.Flags().Args())
+		if err != nil {
+			return errors.Wrapf(err, "failed to create bput command")
+		}
+		return bput.Process()
 	}
 
-	// run put
-	logger.Debug("run put")
-	putCmd.ParseFlags(newArgs)
-	argWoFlags := putCmd.Flags().Args()
-	return putCmd.RunE(putCmd, argWoFlags)
+	log.WithFields(log.Fields{"args": newArgs}).Debug("run put")
+	if err := putCmd.ParseFlags(newArgs); err != nil {
+		return errors.Wrapf(err, "failed to parse flags for put")
+	}
+	put, err := NewPutCommand(putCmd, putCmd.Flags().Args())
+	if err != nil {
+		return errors.Wrapf(err, "failed to create put command")
+	}
+	return put.Process()
 }
 
 func (sync *SyncCommand) syncIRODSToIRODS() error {
 	newArgs, err := sync.getNewCommandArgs()
 	if err != nil {
-		return errors.Wrapf(err, "failed to get new command args for retry")
+		return errors.Wrapf(err, "failed to get new command args")
 	}
 
-	logger := log.WithFields(log.Fields{
-		"args": newArgs,
-	})
-
-	// run cp
-	logger.Debug("run cp")
-	cpCmd.ParseFlags(newArgs)
-	argWoFlags := cpCmd.Flags().Args()
-	return cpCmd.RunE(cpCmd, argWoFlags)
+	log.WithFields(log.Fields{"args": newArgs}).Debug("run cp")
+	if err := cpCmd.ParseFlags(newArgs); err != nil {
+		return errors.Wrapf(err, "failed to parse flags for cp")
+	}
+	cp, err := NewCpCommand(cpCmd, cpCmd.Flags().Args())
+	if err != nil {
+		return errors.Wrapf(err, "failed to create cp command")
+	}
+	return cp.Process()
 }
 
 func (sync *SyncCommand) syncIRODSToLocal() error {
 	newArgs, err := sync.getNewCommandArgs()
 	if err != nil {
-		return errors.Wrapf(err, "failed to get new command args for retry")
+		return errors.Wrapf(err, "failed to get new command args")
 	}
 
-	logger := log.WithFields(log.Fields{
-		"args": newArgs,
-	})
-
-	// run get
-	logger.Debug("run get")
-	getCmd.ParseFlags(newArgs)
-	argWoFlags := getCmd.Flags().Args()
-	return getCmd.RunE(getCmd, argWoFlags)
+	log.WithFields(log.Fields{"args": newArgs}).Debug("run get")
+	if err := getCmd.ParseFlags(newArgs); err != nil {
+		return errors.Wrapf(err, "failed to parse flags for get")
+	}
+	get, err := NewGetCommand(getCmd, getCmd.Flags().Args())
+	if err != nil {
+		return errors.Wrapf(err, "failed to create get command")
+	}
+	return get.Process()
 }

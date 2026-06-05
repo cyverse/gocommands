@@ -5,6 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/jedib0t/go-pretty/v6/progress"
 	log "github.com/sirupsen/logrus"
@@ -82,7 +83,8 @@ type ParallelJobManager struct {
 	progressWriter          progress.Writer
 	progressTrackers        map[string]*progress.Tracker
 	progressTrackerCallback terminal.ProgressTrackerCallback
-	lastError               error
+	jobErrors               []error
+	stopOnError             bool
 	canceled                bool // if the job manager is canceled
 	mutex                   sync.RWMutex
 	waitCond                *sync.Cond // condition variable for waiting on weight capacity
@@ -91,7 +93,7 @@ type ParallelJobManager struct {
 }
 
 // NewParallelJobManager creates a new ParallelJobManager
-func NewParallelJobManager(weightCapacity int, showProgress bool, showFullPath bool) *ParallelJobManager {
+func NewParallelJobManager(weightCapacity int, showProgress bool, showFullPath bool, stopOnError bool) *ParallelJobManager {
 	manager := &ParallelJobManager{
 		nextJobIndex:            0,
 		pendingJobs:             list.New(),
@@ -104,7 +106,8 @@ func NewParallelJobManager(weightCapacity int, showProgress bool, showFullPath b
 		progressWriter:          nil,
 		progressTrackers:        map[string]*progress.Tracker{},
 		progressTrackerCallback: nil,
-		lastError:               nil,
+		jobErrors:               nil,
+		stopOnError:             stopOnError,
 		canceled:                false,
 		mutex:                   sync.RWMutex{},
 		processWait:             sync.WaitGroup{},
@@ -149,22 +152,35 @@ func (manager *ParallelJobManager) decWeight(weight int) {
 	manager.waitCond.Broadcast()
 }
 
-func (manager *ParallelJobManager) setLastError(err error) {
+func (manager *ParallelJobManager) addError(err error) {
 	manager.mutex.Lock()
-	defer manager.mutex.Unlock()
+	manager.jobErrors = append(manager.jobErrors, err)
 
-	manager.lastError = err
+	var jobsToCancel []*ParallelJob
+	if manager.stopOnError {
+		for _, job := range manager.runningJobs {
+			jobsToCancel = append(jobsToCancel, job)
+		}
+	}
+	manager.mutex.Unlock()
 
-	for _, job := range manager.runningJobs {
+	for _, job := range jobsToCancel {
 		job.SetCanceled()
 	}
 }
 
-func (manager *ParallelJobManager) GetLastError() error {
+func (manager *ParallelJobManager) hasError() bool {
 	manager.mutex.RLock()
 	defer manager.mutex.RUnlock()
 
-	return manager.lastError
+	return len(manager.jobErrors) > 0
+}
+
+func (manager *ParallelJobManager) getError() error {
+	manager.mutex.RLock()
+	defer manager.mutex.RUnlock()
+
+	return errors.Join(manager.jobErrors...)
 }
 
 func (manager *ParallelJobManager) CancelJobs() {
@@ -234,13 +250,13 @@ func (manager *ParallelJobManager) Start() error {
 			break
 		}
 
-		if manager.GetLastError() != nil {
+		if manager.stopOnError && manager.hasError() {
 			// mark the job is canceled if there is an error
-			job.canceled = true
+			job.SetCanceled()
 		}
 
 		if manager.IsJobCanceled() {
-			job.canceled = true
+			job.SetCanceled()
 		}
 
 		manager.waitForWeight(job.weight)
@@ -259,8 +275,8 @@ func (manager *ParallelJobManager) Start() error {
 				// increase jobs errored counter
 				atomic.AddInt64(&manager.jobsErroredCounter, 1)
 
-				// mark error
-				manager.setLastError(err)
+				// record error
+				manager.addError(err)
 				taskLogger.Error(err)
 				// don't stop here
 			} else {
@@ -287,12 +303,7 @@ func (manager *ParallelJobManager) Start() error {
 
 	logger.Debugf("all jobs done, total: %d, completed: %d, canceled: %d, errored: %d", manager.totalJobs, manager.jobsDoneCounter, manager.jobsCanceledCounter, manager.jobsErroredCounter)
 
-	err := manager.GetLastError()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return manager.getError()
 }
 
 func (manager *ParallelJobManager) startProgress() {
@@ -348,7 +359,7 @@ func (manager *ParallelJobManager) endProgress() {
 			manager.mutex.Lock()
 
 			for _, tracker := range manager.progressTrackers {
-				if manager.lastError != nil {
+				if len(manager.jobErrors) == 0 {
 					tracker.MarkAsDone()
 				} else {
 					if !tracker.IsDone() {

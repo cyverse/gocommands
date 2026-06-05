@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/avast/retry-go"
 	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
@@ -170,8 +171,8 @@ func (cp *CpCommand) Process() error {
 
 	// parallel job manager
 	metaSession := cp.filesystem.GetMetadataSession()
-	cp.parallelTransferJobManager = parallel.NewParallelJobManager(metaSession.GetMaxConnections(), cp.progressFlagValues.ShowProgress, cp.progressFlagValues.ShowFullPath)
-	cp.parallelPostProcessJobManager = parallel.NewParallelJobManager(1, cp.progressFlagValues.ShowProgress, cp.progressFlagValues.ShowFullPath)
+	cp.parallelTransferJobManager = parallel.NewParallelJobManager(metaSession.GetMaxConnections(), cp.progressFlagValues.ShowProgress, cp.progressFlagValues.ShowFullPath, cp.parallelTransferFlagValues.StopOnError)
+	cp.parallelPostProcessJobManager = parallel.NewParallelJobManager(1, cp.progressFlagValues.ShowProgress, cp.progressFlagValues.ShowFullPath, false)
 
 	// Expand wildcards
 	if cp.wildcardSearchFlagValues.WildcardSearch {
@@ -341,15 +342,27 @@ func (cp *CpCommand) scheduleCopy(sourceEntry *irodsclient_fs.Entry, targetPath 
 
 		job.Progress("copy", 0, 1, false)
 
-		startTime := time.Now()
-		copyErr := cp.filesystem.CopyFileToFile(sourceEntry.Path, targetPath, true)
-		endTime := time.Now()
+		retryNum := cp.retryFlagValues.GetRetryNumber()
+		retryInterval := cp.retryFlagValues.GetRetryIntervalSeconds()
 
-		if copyErr != nil {
+		var startTime, endTime time.Time
+		attempt := 0
+		retryErr := retry.Do(func() error {
+			attempt++
+			if attempt > 1 {
+				logger.Debugf("retrying copy attempt %d/%d for %q", attempt, retryNum, sourceEntry.Path)
+			}
+			startTime = time.Now()
+			err := cp.filesystem.CopyFileToFile(sourceEntry.Path, targetPath, true)
+			endTime = time.Now()
+			return err
+		}, retry.Attempts(uint(retryNum+1)), retry.Delay(retryInterval), retry.LastErrorOnly(true))
+
+		if retryErr != nil {
 			job.Progress("copy", -1, 1, true)
 
-			reportSimple(copyErr)
-			return errors.Wrapf(copyErr, "failed to copy %q to %q", sourceEntry.Path, targetPath)
+			reportSimple(retryErr)
+			return errors.Wrapf(retryErr, "failed to copy %q to %q after %d attempts", sourceEntry.Path, targetPath, retryNum+1)
 		}
 
 		reportFile := &transfer.TransferReportFile{

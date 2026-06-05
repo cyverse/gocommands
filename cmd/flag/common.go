@@ -170,7 +170,6 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	})
 
 	myCommonFlagValues := GetCommonFlagValues(command)
-	retryFlagValues := GetRetryFlagValues()
 
 	setLogLevel(command)
 
@@ -280,14 +279,6 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 
 	// prioritize log level user set via command-line argument
 	setLogLevel(command)
-
-	if retryFlagValues.RetryChild {
-		// read from stdin
-		err := config.InputMissingFieldsFromStdin()
-		if err != nil {
-			return false, errors.Wrapf(err, "failed to load config from stdin")
-		}
-	}
 
 	if myCommonFlagValues.ResourceUpdated {
 		environmentManager.Environment.DefaultResource = myCommonFlagValues.Resource
