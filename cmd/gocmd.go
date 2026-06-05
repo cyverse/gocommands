@@ -88,6 +88,7 @@ func main() {
 	subcmd.AddPwdCommand(rootCmd)
 	subcmd.AddCdCommand(rootCmd)
 	subcmd.AddLsCommand(rootCmd)
+	subcmd.AddDirstatCommand(rootCmd)
 	subcmd.AddTouchCommand(rootCmd)
 	subcmd.AddCpCommand(rootCmd)
 	subcmd.AddMvCommand(rootCmd)
