@@ -1000,7 +1000,7 @@ func (cp *CpCommand) deleteExtraDir(targetEntry *irodsclient_fs.Entry) error {
 			}
 		} else {
 			// file
-			err = cp.deleteExtraDir(entry)
+			err = cp.deleteExtraFile(entry)
 			if err != nil {
 				return err
 			}
