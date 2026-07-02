@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/avast/retry-go"
 	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
 	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
@@ -216,8 +217,8 @@ func (get *GetCommand) Process() error {
 
 	// parallel job manager
 	ioSession := get.filesystem.GetIOSession()
-	get.parallelTransferJobManager = parallel.NewParallelJobManager(ioSession.GetMaxConnections(), get.progressFlagValues.ShowProgress, get.progressFlagValues.ShowFullPath)
-	get.parallelPostProcessJobManager = parallel.NewParallelJobManager(1, get.progressFlagValues.ShowProgress, get.progressFlagValues.ShowFullPath)
+	get.parallelTransferJobManager = parallel.NewParallelJobManager(ioSession.GetMaxConnections(), get.progressFlagValues.ShowProgress, get.progressFlagValues.ShowFullPath, get.parallelTransferFlagValues.StopOnError)
+	get.parallelPostProcessJobManager = parallel.NewParallelJobManager(1, get.progressFlagValues.ShowProgress, get.progressFlagValues.ShowFullPath, false)
 
 	// Expand wildcards
 	if get.wildcardSearchFlagValues.WildcardSearch {
@@ -485,20 +486,33 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 		var downloadErr error
 		var downloadResult *irodsclient_fs.FileTransferResult
 
-		switch transferMode {
-		case transfer.TransferModeWebDAV:
-			downloadResult, downloadErr = get.webdavClient.DownloadFile(sourceEntry, downloadPath, get.checksumFlagValues.VerifyChecksum, progressCallbackGet)
-		case transfer.TransferModeICAT:
-			fallthrough
-		default:
-			downloadResult, downloadErr = get.filesystem.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, progressCallbackGet)
-		}
-		if downloadErr != nil {
+		retryNum := get.retryFlagValues.GetRetryNumber()
+		retryInterval := get.retryFlagValues.GetRetryIntervalSeconds()
+
+		attempt := 0
+		retryErr := retry.Do(func() error {
+			attempt++
+			if attempt > 1 {
+				logger.Debugf("retrying download attempt %d/%d for %q", attempt, retryNum+1, sourceEntry.Path)
+			}
+
+			switch transferMode {
+			case transfer.TransferModeWebDAV:
+				downloadResult, downloadErr = get.webdavClient.DownloadFile(sourceEntry, downloadPath, get.checksumFlagValues.VerifyChecksum, progressCallbackGet)
+			case transfer.TransferModeICAT:
+				fallthrough
+			default:
+				downloadResult, downloadErr = get.filesystem.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, progressCallbackGet)
+			}
+			return downloadErr
+		}, retry.Attempts(uint(retryNum+1)), retry.Delay(retryInterval), retry.LastErrorOnly(true))
+
+		if retryErr != nil {
 			job.Progress("download", -1, sourceEntry.Size, true)
 			job.Progress("checksum", -1, sourceEntry.Size, true)
 
-			reportTransfer(downloadResult, downloadErr, notes...)
-			return errors.Wrapf(downloadErr, "failed to download %q to %q", sourceEntry.Path, targetPath)
+			reportTransfer(downloadResult, retryErr, notes...)
+			return errors.Wrapf(retryErr, "failed to download %q to %q after %d attempts", sourceEntry.Path, targetPath, retryNum+1)
 		}
 
 		get.totalDownloadedFiles++
