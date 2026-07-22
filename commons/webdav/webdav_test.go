@@ -35,9 +35,11 @@ func testDownloadFileFromWebDAV(t *testing.T) {
 		t.Logf("Progress: %d/%d", progress, total)
 	}
 
-	webdav := NewWebDAVClient(nil, "https://data.cyverse.org/dav", "username", "password")
+	// filesystem is not used for download
+	webdav, err := NewWebDAVClient(nil, "https://data.cyverse.org/dav", "username", "password")
+	assert.NoError(t, err)
 
-	transferResult, err := webdav.DownloadFile(sourceEntry, localPath, true, callback)
+	transferResult, err := webdav.DownloadFile(sourceEntry, localPath, "", true, callback)
 	assert.NoError(t, err)
 
 	os.Remove(localPath) // Clean up the test file

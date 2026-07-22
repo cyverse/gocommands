@@ -121,3 +121,13 @@ func IsNewerVersion(ver1 []int, ver2 []int) bool {
 	}
 	return false
 }
+
+func HasNewRelease(myVersion string, latestVersion string) bool {
+	mv1, mv2, mv3 := GetVersionParts(myVersion)
+	lv1, lv2, lv3 := GetVersionParts(latestVersion)
+
+	myVersionParts := []int{mv1, mv2, mv3}
+	latestVersionParts := []int{lv1, lv2, lv3}
+
+	return IsNewerVersion(latestVersionParts, myVersionParts)
+}

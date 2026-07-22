@@ -191,8 +191,13 @@ func (bput *BputCommand) Process() error {
 	}
 	defer bput.filesystem.Release()
 
-	if len(config.GetSessionConfig().WebDAVBaseURL) > 0 {
-		bput.webdavClient = webdav.NewWebDAVClient(bput.filesystem, config.GetSessionConfig().WebDAVBaseURL, bput.account.ProxyUser, bput.account.Password)
+	if bput.parallelTransferFlagValues.WebDAV && len(config.GetSessionConfig().WebDAVBaseURL) > 0 {
+		webdavClient, err := webdav.NewWebDAVClient(bput.filesystem, config.GetSessionConfig().WebDAVBaseURL, bput.account.ProxyUser, bput.account.Password)
+		if err != nil {
+			return errors.Wrap(err, "failed to create WebDAV client")
+		}
+
+		bput.webdavClient = webdavClient
 	}
 
 	// transfer report
@@ -639,7 +644,7 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 
 			switch transferMode {
 			case transfer.TransferModeWebDAV:
-				uploadResult, uploadErr = bput.webdavClient.UploadFile(tarballPath, stagingTargetPath, bput.checksumFlagValues.VerifyChecksum, progressCallbackPut)
+				uploadResult, uploadErr = bput.webdavClient.UploadFile(tarballPath, stagingTargetPath, "", bput.checksumFlagValues.VerifyChecksum, progressCallbackPut)
 			case transfer.TransferModeICAT:
 				fallthrough
 			default:
@@ -1810,6 +1815,8 @@ func (bput *BputCommand) encryptFile(sourcePath string, encryptedFilePath string
 }
 
 func (bput *BputCommand) determineTransferMethod(size int64) (transfer.TransferMode, int) {
+	logger := log.WithFields(log.Fields{})
+
 	threads := parallel.CalculateThreadForTransferJob(size, bput.parallelTransferFlagValues.ThreadNumberPerFile)
 
 	// determine how to upload
@@ -1818,7 +1825,17 @@ func (bput *BputCommand) determineTransferMethod(size int64) (transfer.TransferM
 	}
 
 	if bput.parallelTransferFlagValues.Icat {
+		logger.Info("using ICAT transfer for uploading a data object")
 		return transfer.TransferModeICAT, threads
+	} else if bput.parallelTransferFlagValues.WebDAV {
+		if bput.webdavClient == nil {
+			// fallback
+			logger.Info("WebDAV is not configured. Using ICAT transfer for uploading a data object")
+			return transfer.TransferModeICAT, threads
+		}
+
+		logger.Info("using WebDAV for uploading a data object")
+		return transfer.TransferModeWebDAV, 1
 	}
 
 	// sysconfig
@@ -1830,10 +1847,13 @@ func (bput *BputCommand) determineTransferMethod(size int64) (transfer.TransferM
 		}
 	}
 
+	logger.Info("using ICAT transfer for uploading a data object")
 	return transfer.TransferModeICAT, threads
 }
 
 func (bput *BputCommand) determineTransferMethodForBundle(bun *bundle.Bundle) (transfer.TransferMode, int) {
+	logger := log.WithFields(log.Fields{})
+
 	threads := parallel.CalculateThreadForTransferJob(bun.GetSize(), bput.parallelTransferFlagValues.ThreadNumberPerFile)
 
 	// determine how to upload
@@ -1842,7 +1862,17 @@ func (bput *BputCommand) determineTransferMethodForBundle(bun *bundle.Bundle) (t
 	}
 
 	if bput.parallelTransferFlagValues.Icat {
+		logger.Info("using ICAT transfer for uploading a data object")
 		return transfer.TransferModeICAT, threads
+	} else if bput.parallelTransferFlagValues.WebDAV {
+		if bput.webdavClient == nil {
+			// fallback
+			logger.Info("WebDAV is not configured. Using ICAT transfer for uploading a data object")
+			return transfer.TransferModeICAT, threads
+		}
+
+		logger.Info("using WebDAV for uploading a data object")
+		return transfer.TransferModeWebDAV, 1
 	}
 
 	// sysconfig
@@ -1854,5 +1884,6 @@ func (bput *BputCommand) determineTransferMethodForBundle(bun *bundle.Bundle) (t
 		}
 	}
 
+	logger.Info("using ICAT transfer for uploading a data object")
 	return transfer.TransferModeICAT, threads
 }

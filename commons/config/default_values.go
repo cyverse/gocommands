@@ -8,6 +8,9 @@ import (
 )
 
 const (
+	GoCommandsRepoPackagePath string = "cyverse/gocommands"
+	ClientProgramName         string = "gocommands"
+
 	FilesystemTimeout               irodsclient_types.Duration = irodsclient_types.Duration(5 * time.Minute)
 	LongFilesystemTimeout           irodsclient_types.Duration = irodsclient_types.Duration(10 * time.Minute) // exceptionally long timeout for listing dirs or users
 	transferThreadNumDefault        int                        = 5
@@ -21,7 +24,7 @@ const (
 	MaxBundleFileSizeDefault   int64 = 2 * 1024 * 1024 * 1024 // 2GB
 )
 
-func GetDefaultFilesystemTimeout() int {
+func GetDefaultFilesystemTimeoutInSeconds() int {
 	return int(FilesystemTimeout / irodsclient_types.Duration(time.Second))
 }
 

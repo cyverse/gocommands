@@ -27,15 +27,78 @@ type WebDAVClient struct {
 	baseURL    string
 	username   string
 	password   string
+
+	webdav *gowebdav.Client
 }
 
-func NewWebDAVClient(filesystem *irodsclient_fs.FileSystem, baseURL string, username string, password string) *WebDAVClient {
-	return &WebDAVClient{
+func NewWebDAVClient(filesystem *irodsclient_fs.FileSystem, baseURL string, username string, password string) (*WebDAVClient, error) {
+	client := &WebDAVClient{
 		filesystem: filesystem,
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		username:   username,
 		password:   password,
+
+		webdav: nil,
 	}
+
+	err := client.initWebDAV()
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to connect to WebDAV server")
+	}
+	return client, nil
+}
+
+func (client *WebDAVClient) initWebDAV() error {
+	webdav := gowebdav.NewClient(client.baseURL, client.username, client.password)
+
+	tlsConfig := &tls.Config{
+		CipherSuites: []uint16{
+			// TLS 1.0 - 1.2 cipher suites.
+			tls.TLS_RSA_WITH_RC4_128_SHA,
+			tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA,
+			tls.TLS_RSA_WITH_AES_128_CBC_SHA,
+			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
+			tls.TLS_RSA_WITH_AES_128_CBC_SHA256,
+			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_RC4_128_SHA,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+			tls.TLS_ECDHE_RSA_WITH_RC4_128_SHA,
+			tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+			// TLS 1.3 cipher suites.
+			tls.TLS_AES_128_GCM_SHA256,
+			tls.TLS_AES_256_GCM_SHA384,
+			tls.TLS_CHACHA20_POLY1305_SHA256,
+		},
+	}
+
+	transport := &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}
+
+	webdav.SetTransport(transport)
+	err := webdav.Connect()
+	if err != nil {
+		if httpStatusErr, ok := client.getWebDAVErrorCode(err); ok {
+			return types.NewWebDAVError(client.baseURL, int(httpStatusErr))
+		}
+
+		return types.NewWebDAVError(client.baseURL, http.StatusServiceUnavailable)
+	}
+
+	client.webdav = webdav
+	return nil
 }
 
 func (client *WebDAVClient) getWebDAVErrorCode(err error) (int, bool) {
@@ -57,10 +120,15 @@ func (client *WebDAVClient) getWebDavError(url string, err error) error {
 	return err
 }
 
-func (client *WebDAVClient) DownloadFile(sourceEntry *irodsclient_fs.Entry, localPath string, verifyChecksum bool, callback irodsclient_common.TransferTrackerCallback) (*irodsclient_fs.FileTransferResult, error) {
+func (client *WebDAVClient) getPathForTicket(irodsPath string, ticket string) string {
+	return client.baseURL + irodsPath + "?ticket=" + ticket
+}
+
+func (client *WebDAVClient) DownloadFile(sourceEntry *irodsclient_fs.Entry, localPath string, ticket string, verifyChecksum bool, callback irodsclient_common.TransferTrackerCallback) (*irodsclient_fs.FileTransferResult, error) {
 	logger := log.WithFields(log.Fields{
 		"irods_source_path": sourceEntry.Path,
 		"local_path":        localPath,
+		"ticket":            ticket,
 	})
 
 	irodsSrcPath := irodsclient_util.GetCorrectIRODSPath(sourceEntry.Path)
@@ -115,18 +183,20 @@ func (client *WebDAVClient) DownloadFile(sourceEntry *irodsclient_fs.Entry, loca
 		return fileTransferResult, nil
 	}
 
-	webdav, err := client.createAndConnectWebDAV()
-	if err != nil {
-		return fileTransferResult, errors.Wrapf(err, "failed to connect to WebDAV server")
+	// resume from partial download if the file already exists
+	offset := int64(0)
+	if partialStat, statErr := os.Stat(localFilePath); statErr == nil {
+		if partialStat.Size() > 0 && partialStat.Size() < sourceEntry.Size {
+			offset = partialStat.Size()
+			logger.Debugf("resuming download of %q from offset %d", irodsSrcPath, offset)
+		}
 	}
 
-	// download the file
-	offset := int64(0)
-	readSize := sourceEntry.Size
+	readSize := sourceEntry.Size - offset
 
 	logger.Debugf("downloading file %s (offset %d, length %d) from WebDAV server", irodsSrcPath, offset, readSize)
 
-	newOffset, downloadErr := client.downloadToLocalWithTrackerCallBack(webdav, irodsSrcPath, localFilePath, offset, readSize, sourceEntry.Size, callback)
+	newOffset, downloadErr := client.downloadToLocalWithTrackerCallBack(irodsSrcPath, localFilePath, ticket, offset, readSize, sourceEntry.Size, callback)
 	if downloadErr != nil {
 		logger.WithError(downloadErr).Debugf("failed to download file %q (offset %d, length %d) from WebDAV server", irodsSrcPath, offset, readSize)
 		return fileTransferResult, errors.Wrapf(downloadErr, "failed to download file %q (offset %d, length %d) from WebDAV server", irodsSrcPath, offset, readSize)
@@ -146,6 +216,8 @@ func (client *WebDAVClient) DownloadFile(sourceEntry *irodsclient_fs.Entry, loca
 		fileTransferResult.LocalCheckSum = localHash
 
 		if !bytes.Equal(sourceEntry.CheckSum, localHash) {
+			// remove the corrupted file so the next retry starts from offset 0
+			os.Remove(localFilePath)
 			return fileTransferResult, errors.Errorf("checksum verification failed for local file %q, download failed", localPath)
 		}
 	}
@@ -155,10 +227,11 @@ func (client *WebDAVClient) DownloadFile(sourceEntry *irodsclient_fs.Entry, loca
 	return fileTransferResult, nil
 }
 
-func (client *WebDAVClient) UploadFile(localPath string, irodsPath string, verifyChecksum bool, callback irodsclient_common.TransferTrackerCallback) (*irodsclient_fs.FileTransferResult, error) {
+func (client *WebDAVClient) UploadFile(localPath string, irodsPath string, ticket string, verifyChecksum bool, callback irodsclient_common.TransferTrackerCallback) (*irodsclient_fs.FileTransferResult, error) {
 	logger := log.WithFields(log.Fields{
 		"local_source_path": localPath,
 		"irods_path":        irodsPath,
+		"ticket":            ticket,
 	})
 
 	localSrcPath := irodsclient_util.GetCorrectLocalPath(localPath)
@@ -205,17 +278,12 @@ func (client *WebDAVClient) UploadFile(localPath string, irodsPath string, verif
 	fileTransferResult.LocalSize = stat.Size()
 	fileTransferResult.IRODSPath = irodsFilePath
 
-	webdav, err := client.createAndConnectWebDAV()
-	if err != nil {
-		return fileTransferResult, errors.Wrapf(err, "failed to connect to WebDAV server")
-	}
-
 	// upload the file
 	writeSize := stat.Size()
 
 	logger.Debugf("uploading file %s (length %d) to WebDAV server", localSrcPath, writeSize)
 
-	_, uploadErr := client.uploadToIrodsWithTrackerCallBack(webdav, localSrcPath, irodsFilePath, writeSize, callback)
+	_, uploadErr := client.uploadToIrodsWithTrackerCallBack(localSrcPath, irodsFilePath, ticket, writeSize, callback)
 	if uploadErr != nil {
 		logger.WithError(uploadErr).Debugf("failed to upload file %q (length %d) to WebDAV server", localSrcPath, writeSize)
 		return fileTransferResult, errors.Wrapf(uploadErr, "failed to upload file %q (length %d) to WebDAV server", localSrcPath, writeSize)
@@ -263,57 +331,6 @@ func (client *WebDAVClient) UploadFile(localPath string, irodsPath string, verif
 	return fileTransferResult, nil
 }
 
-func (client *WebDAVClient) createAndConnectWebDAV() (*gowebdav.Client, error) {
-	webdav := gowebdav.NewClient(client.baseURL, client.username, client.password)
-
-	tlsConfig := &tls.Config{
-		CipherSuites: []uint16{
-			// TLS 1.0 - 1.2 cipher suites.
-			tls.TLS_RSA_WITH_RC4_128_SHA,
-			tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA,
-			tls.TLS_RSA_WITH_AES_128_CBC_SHA,
-			tls.TLS_RSA_WITH_AES_256_CBC_SHA,
-			tls.TLS_RSA_WITH_AES_128_CBC_SHA256,
-			tls.TLS_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_ECDSA_WITH_RC4_128_SHA,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
-			tls.TLS_ECDHE_RSA_WITH_RC4_128_SHA,
-			tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-			tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-			// TLS 1.3 cipher suites.
-			tls.TLS_AES_128_GCM_SHA256,
-			tls.TLS_AES_256_GCM_SHA384,
-			tls.TLS_CHACHA20_POLY1305_SHA256,
-		},
-	}
-
-	transport := &http.Transport{
-		TLSClientConfig: tlsConfig,
-	}
-
-	webdav.SetTransport(transport)
-	err := webdav.Connect()
-	if err != nil {
-		if httpStatusErr, ok := client.getWebDAVErrorCode(err); ok {
-			return nil, types.NewWebDAVError(client.baseURL, int(httpStatusErr))
-		}
-
-		return nil, types.NewWebDAVError(client.baseURL, http.StatusServiceUnavailable)
-	}
-	return webdav, nil
-}
-
 func (client *WebDAVClient) calculateLocalFileHash(localPath string, algorithm irodsclient_types.ChecksumAlgorithm, processCallback irodsclient_common.TransferTrackerCallback) ([]byte, error) {
 	// verify checksum
 	hashBytes, err := irodsclient_util.HashLocalFile(localPath, string(algorithm), processCallback)
@@ -324,8 +341,10 @@ func (client *WebDAVClient) calculateLocalFileHash(localPath string, algorithm i
 	return hashBytes, nil
 }
 
-func (client *WebDAVClient) downloadToLocalWithTrackerCallBack(webdav *gowebdav.Client, irodsPath string, localPath string, offset int64, readLength int64, fileSize int64, callback irodsclient_common.TransferTrackerCallback) (int64, error) {
-	reader, readErr := webdav.ReadStreamRange(irodsPath, offset, readLength)
+func (client *WebDAVClient) downloadToLocalWithTrackerCallBack(irodsPath string, localPath string, ticket string, offset int64, readLength int64, fileSize int64, callback irodsclient_common.TransferTrackerCallback) (int64, error) {
+	webdavPath := client.getPathForTicket(irodsPath, ticket)
+
+	reader, readErr := client.webdav.ReadStreamRange(webdavPath, offset, readLength)
 	if readErr != nil {
 		baseErr := client.getWebDavError(client.baseURL+irodsPath, readErr)
 		return offset, errors.Wrapf(baseErr, "failed to read stream range of file %q (offset %d, length %d) from WebDAV server", irodsPath, offset, readLength)
@@ -383,7 +402,9 @@ func (client *WebDAVClient) downloadToLocalWithTrackerCallBack(webdav *gowebdav.
 	return offset + actualWrite, nil
 }
 
-func (client *WebDAVClient) uploadToIrodsWithTrackerCallBack(webdav *gowebdav.Client, localPath string, irodsPath string, fileSize int64, callback irodsclient_common.TransferTrackerCallback) (int64, error) {
+func (client *WebDAVClient) uploadToIrodsWithTrackerCallBack(localPath string, irodsPath string, ticket string, fileSize int64, callback irodsclient_common.TransferTrackerCallback) (int64, error) {
+	webdavPath := client.getPathForTicket(irodsPath, ticket)
+
 	reader, readErr := os.Open(localPath)
 	if readErr != nil {
 		return 0, errors.Wrapf(readErr, "failed to open local file %q", localPath)
@@ -406,7 +427,7 @@ func (client *WebDAVClient) uploadToIrodsWithTrackerCallBack(webdav *gowebdav.Cl
 	progressReader := NewReaderWithProgress(reader, progress)
 	defer progressReader.Close()
 
-	err := webdav.WriteStreamWithLength(irodsPath, progressReader, fileSize, 0)
+	err := client.webdav.WriteStreamWithLength(webdavPath, progressReader, fileSize, 0)
 	if err != nil && !errors.Is(err, io.EOF) {
 		return actualRead, errors.Wrapf(err, "failed to copy data to irods file %q", irodsPath)
 	}

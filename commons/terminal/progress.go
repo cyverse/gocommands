@@ -88,7 +88,7 @@ func GetTrackerName(taskType string, taskName string) string {
 		taskType = "Dn"
 	case "copy":
 		taskType = "Cp"
-	case "checksum":
+	case "checksum", "hash":
 		taskType = "Ck"
 	case "delete":
 		taskType = "Rm"

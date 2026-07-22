@@ -191,6 +191,13 @@ func main() {
 			} else {
 				terminal.PrintErrorf("iRODS Error!\n")
 			}
+		} else if types.IsWebDAVError(err) {
+			var webDAVError *types.WebDAVError
+			if errors.As(err, &webDAVError) {
+				terminal.PrintErrorf("WebDAV Error (URL: %q, code: '%d')\n", webDAVError.URL, webDAVError.ErrorCode)
+			} else {
+				terminal.PrintErrorf("WebDAV Error!\n")
+			}
 		} else if types.IsNotDirError(err) {
 			var notDirError *types.NotDirError
 			if errors.As(err, &notDirError) {
