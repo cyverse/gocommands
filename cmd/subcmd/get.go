@@ -199,8 +199,13 @@ func (get *GetCommand) Process() error {
 	}
 	defer get.filesystem.Release()
 
-	if len(config.GetSessionConfig().WebDAVBaseURL) > 0 {
-		get.webdavClient = webdav.NewWebDAVClient(get.filesystem, config.GetSessionConfig().WebDAVBaseURL, get.account.ProxyUser, get.account.Password)
+	if get.parallelTransferFlagValues.WebDAV && len(config.GetSessionConfig().WebDAVBaseURL) > 0 {
+		webdavClient, err := webdav.NewWebDAVClient(get.filesystem, config.GetSessionConfig().WebDAVBaseURL, get.account.ProxyUser, get.account.Password)
+		if err != nil {
+			return errors.Wrap(err, "failed to create WebDAV client")
+		}
+
+		get.webdavClient = webdavClient
 	}
 
 	// transfer report
@@ -498,11 +503,13 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 
 			switch transferMode {
 			case transfer.TransferModeWebDAV:
-				downloadResult, downloadErr = get.webdavClient.DownloadFile(sourceEntry, downloadPath, get.checksumFlagValues.VerifyChecksum, progressCallbackGet)
+				downloadResult, downloadErr = get.webdavClient.DownloadFile(sourceEntry, downloadPath, "", get.checksumFlagValues.VerifyChecksum, progressCallbackGet)
+				notes = append(notes, "webdav")
 			case transfer.TransferModeICAT:
 				fallthrough
 			default:
 				downloadResult, downloadErr = get.filesystem.DownloadFileParallelResumable(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, progressCallbackGet)
+				notes = append(notes, "icat", fmt.Sprintf("%d threads", threadsRequired))
 			}
 			return downloadErr
 		}, retry.Attempts(uint(retryNum+1)), retry.Delay(retryInterval), retry.LastErrorOnly(true))
@@ -535,7 +542,7 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 
 		reportTransfer(downloadResult, nil, notes...)
 
-		logger.Debug("downloaded a data object")
+		logger.Debugf("downloaded a data object %q to %q", sourceEntry.Path, targetPath)
 
 		return nil
 	}
@@ -787,6 +794,8 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 		"target_path": targetPath,
 	})
 
+	logger.Debug("download a data object")
+
 	defaultNotes := []string{"get"}
 
 	reportSimple := func(err error, additionalNotes ...string) {
@@ -1022,6 +1031,8 @@ func (get *GetCommand) getDir(sourceEntry *irodsclient_fs.Entry, targetPath stri
 		"source_path": sourceEntry.Path,
 		"target_path": targetPath,
 	})
+
+	logger.Debug("download a collection")
 
 	defaultNotes := []string{"get", "directory"}
 

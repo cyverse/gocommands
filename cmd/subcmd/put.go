@@ -194,8 +194,13 @@ func (put *PutCommand) Process() error {
 	}
 	defer put.filesystem.Release()
 
-	if len(config.GetSessionConfig().WebDAVBaseURL) > 0 {
-		put.webdavClient = webdav.NewWebDAVClient(put.filesystem, config.GetSessionConfig().WebDAVBaseURL, put.account.ProxyUser, put.account.Password)
+	if put.parallelTransferFlagValues.WebDAV && len(config.GetSessionConfig().WebDAVBaseURL) > 0 {
+		webdavClient, err := webdav.NewWebDAVClient(put.filesystem, config.GetSessionConfig().WebDAVBaseURL, put.account.ProxyUser, put.account.Password)
+		if err != nil {
+			return errors.Wrap(err, "failed to create WebDAV client")
+		}
+
+		put.webdavClient = webdavClient
 	}
 
 	// transfer report
@@ -529,7 +534,7 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 
 			switch transferMode {
 			case transfer.TransferModeWebDAV:
-				uploadResult, uploadErr = put.webdavClient.UploadFile(uploadSourcePath, targetPath, put.checksumFlagValues.VerifyChecksum, progressCallbackPut)
+				uploadResult, uploadErr = put.webdavClient.UploadFile(uploadSourcePath, targetPath, "", put.checksumFlagValues.VerifyChecksum, progressCallbackPut)
 			case transfer.TransferModeICAT:
 				fallthrough
 			default:

@@ -7,7 +7,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	selfupdate "github.com/creativeprojects/go-selfupdate"
-	"github.com/cyverse/gocommands/commons/constant"
+	"github.com/cyverse/gocommands/commons/config"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -15,12 +15,12 @@ func CheckNewRelease() (*selfupdate.Release, error) {
 	logger := log.WithFields(log.Fields{
 		"GOOS":       runtime.GOOS,
 		"GOARCH":     runtime.GOARCH,
-		"GithubRepo": constant.GoCommandsRepoPackagePath,
+		"GithubRepo": config.GoCommandsRepoPackagePath,
 	})
 
 	logger.Infof("checking latest version")
 
-	latest, found, err := selfupdate.DetectLatest(context.Background(), selfupdate.ParseSlug(constant.GoCommandsRepoPackagePath))
+	latest, found, err := selfupdate.DetectLatest(context.Background(), selfupdate.ParseSlug(config.GoCommandsRepoPackagePath))
 	if err != nil {
 		return nil, errors.Wrapf(err, "error occurred while detecting version")
 	}

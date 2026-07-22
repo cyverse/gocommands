@@ -50,7 +50,7 @@ func SetCommonFlags(command *cobra.Command, hideResource bool) {
 	command.Flags().BoolVarP(&commonFlagValues.LogTerminal, "log_terminal", "", false, "Enable logging to terminal")
 	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Specify session identifier for tracking operations")
 	command.Flags().StringVarP(&commonFlagValues.Resource, "resource", "R", "", "Target specific iRODS resource server for operations")
-	command.Flags().IntVarP(&commonFlagValues.Timeout, "timeout", "", config.GetDefaultFilesystemTimeout(), "Specify timeout duration in seconds")
+	command.Flags().IntVarP(&commonFlagValues.Timeout, "timeout", "", config.GetDefaultFilesystemTimeoutInSeconds(), "Specify timeout duration in seconds")
 	command.Flags().BoolVarP(&commonFlagValues.YesAll, "yes", "Y", false, "Yes to all questions")
 	command.Flags().BoolVarP(&commonFlagValues.NoAll, "no", "N", false, "No to all questions")
 
@@ -78,7 +78,7 @@ func SetCommonFlagsWithoutResource(command *cobra.Command) {
 	command.Flags().StringVar(&commonFlagValues.LogFile, "log_file", "", "Specify file path for logging output")
 	command.Flags().BoolVarP(&commonFlagValues.LogTerminal, "log_terminal", "", false, "Enable logging to terminal")
 	command.Flags().IntVarP(&commonFlagValues.SessionID, "session", "s", os.Getppid(), "Set session ID")
-	command.Flags().IntVarP(&commonFlagValues.Timeout, "timeout", "", config.GetDefaultFilesystemTimeout(), "Specify timeout duration in seconds")
+	command.Flags().IntVarP(&commonFlagValues.Timeout, "timeout", "", config.GetDefaultFilesystemTimeoutInSeconds(), "Specify timeout duration in seconds")
 	command.Flags().BoolVarP(&commonFlagValues.YesAll, "yes", "Y", false, "Yes to all questions")
 	command.Flags().BoolVarP(&commonFlagValues.NoAll, "no", "N", false, "No to all questions")
 
@@ -285,7 +285,7 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		logger.Debugf("use default resource server %q", myCommonFlagValues.Resource)
 	}
 
-	return true, nil // contiue
+	return true, nil // continue
 }
 
 func printVersion() error {

@@ -8,12 +8,11 @@ import (
 	irodsclient_conn "github.com/cyverse/go-irodsclient/irods/connection"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/commons/config"
-	"github.com/cyverse/gocommands/commons/constant"
 )
 
 // GetIRODSFSClient returns a file system client
 func GetIRODSFSClient(account *irodsclient_types.IRODSAccount, infiniteCache bool, timeout int) (*irodsclient_fs.FileSystem, error) {
-	fsConfig := irodsclient_fs.NewFileSystemConfig(constant.ClientProgramName)
+	fsConfig := irodsclient_fs.NewFileSystemConfig(config.ClientProgramName)
 
 	// set operation time out
 	fsConfig.MetadataConnection.OperationTimeout = config.FilesystemTimeout
@@ -52,7 +51,7 @@ func GetIRODSFSClient(account *irodsclient_types.IRODSAccount, infiniteCache boo
 
 // GetIRODSFSClientForLargeFileIO returns a file system client
 func GetIRODSFSClientForLargeFileIO(account *irodsclient_types.IRODSAccount, maxIOConnection int, tcpBufferSize int, infiniteCache bool, timeout int) (*irodsclient_fs.FileSystem, error) {
-	fsConfig := irodsclient_fs.NewFileSystemConfig(constant.ClientProgramName)
+	fsConfig := irodsclient_fs.NewFileSystemConfig(config.ClientProgramName)
 
 	if infiniteCache {
 		// set infinite cache timeout
@@ -98,7 +97,7 @@ func GetIRODSFSClientForLargeFileIO(account *irodsclient_types.IRODSAccount, max
 // used for init subcommand
 func GetIRODSConnection(account *irodsclient_types.IRODSAccount) (*irodsclient_conn.IRODSConnection, error) {
 	config := irodsclient_conn.IRODSConnectionConfig{
-		ApplicationName: constant.ClientProgramName,
+		ApplicationName: config.ClientProgramName,
 	}
 
 	conn, err := irodsclient_conn.NewIRODSConnection(account, &config)

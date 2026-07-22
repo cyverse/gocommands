@@ -81,3 +81,11 @@ func MarkIRODSPathMap(pathMap map[string]bool, p string) {
 
 	pathMap[p] = true
 }
+
+func GetIRODSRelativePath(base string, p string) string {
+	if base == "/" {
+		return strings.TrimPrefix(p, "/")
+	}
+
+	return strings.TrimPrefix(p, base+"/")
+}

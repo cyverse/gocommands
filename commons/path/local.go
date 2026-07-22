@@ -199,22 +199,3 @@ func ResolveLocalSymlink(p string) (string, error) {
 	}
 	return p, nil
 }
-
-/*
-func ExistFile(p string) bool {
-	realPath, err := ResolveSymlink(p)
-	if err != nil {
-		return false
-	}
-
-	st, err := os.Stat(realPath)
-	if err != nil {
-		return false
-	}
-
-	if !st.IsDir() {
-		return true
-	}
-	return false
-}
-*/
