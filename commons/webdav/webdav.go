@@ -131,8 +131,8 @@ func (client *WebDAVClient) DownloadFile(sourceEntry *irodsclient_fs.Entry, loca
 		"ticket":            ticket,
 	})
 
-	irodsSrcPath := irodsclient_util.GetCorrectIRODSPath(sourceEntry.Path)
-	localDestPath := irodsclient_util.GetCorrectLocalPath(localPath)
+	irodsSrcPath := irodsclient_util.CleanIRODSPath(sourceEntry.Path)
+	localDestPath := irodsclient_util.CleanLocalPath(localPath)
 
 	localFilePath := localDestPath
 
@@ -234,8 +234,8 @@ func (client *WebDAVClient) UploadFile(localPath string, irodsPath string, ticke
 		"ticket":            ticket,
 	})
 
-	localSrcPath := irodsclient_util.GetCorrectLocalPath(localPath)
-	irodsDestPath := irodsclient_util.GetCorrectIRODSPath(irodsPath)
+	localSrcPath := irodsclient_util.CleanLocalPath(localPath)
+	irodsDestPath := irodsclient_util.CleanIRODSPath(irodsPath)
 
 	irodsFilePath := irodsDestPath
 
@@ -292,13 +292,9 @@ func (client *WebDAVClient) UploadFile(localPath string, irodsPath string, ticke
 	if overwrite {
 		// update - overwrite
 		client.filesystem.InvalidateCacheForFileUpdate(irodsFilePath)
-		cachePropagation := client.filesystem.GetCachePropagation()
-		cachePropagation.PropagateFileUpdate(irodsFilePath)
 	} else {
 		// create
 		client.filesystem.InvalidateCacheForFileCreate(irodsFilePath)
-		cachePropagation := client.filesystem.GetCachePropagation()
-		cachePropagation.PropagateFileCreate(irodsFilePath)
 	}
 
 	entry, err = client.filesystem.Stat(irodsFilePath)

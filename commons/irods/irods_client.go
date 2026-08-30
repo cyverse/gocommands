@@ -30,11 +30,10 @@ func GetIRODSFSClient(account *irodsclient_types.IRODSAccount, infiniteCache boo
 
 	if infiniteCache {
 		// set infinite cache timeout
-		infiniteDuration := irodsclient_types.Duration(365 * 24 * time.Hour) // 1y (almost infinite)
+		infiniteDuration := 365 * 24 * time.Hour // 1y (almost infinite)
 
-		fsConfig.Cache.Timeout = infiniteDuration
-		fsConfig.Cache.CleanupTime = infiniteDuration
-		fsConfig.Cache.InvalidateParentEntryCacheImmediately = true
+		fsConfig.Cache.Backend.Memory.DefaultTTL = infiniteDuration
+		fsConfig.Cache.Backend.Memory.CleanupInterval = infiniteDuration
 		fsConfig.Cache.StartNewTransaction = false
 	}
 
@@ -55,11 +54,11 @@ func GetIRODSFSClientForLargeFileIO(account *irodsclient_types.IRODSAccount, max
 
 	if infiniteCache {
 		// set infinite cache timeout
-		infiniteDuration := irodsclient_types.Duration(365 * 24 * time.Hour) // 1y (almost infinite)
+		infiniteDuration := 365 * 24 * time.Hour // 1y (almost infinite)
 
-		fsConfig.Cache.Timeout = infiniteDuration
-		fsConfig.Cache.CleanupTime = infiniteDuration
-		fsConfig.Cache.InvalidateParentEntryCacheImmediately = true
+		fsConfig.Cache.Backend.Memory.DefaultTTL = infiniteDuration
+		fsConfig.Cache.Backend.Memory.CleanupInterval = infiniteDuration
+		fsConfig.Cache.StartNewTransaction = false
 	}
 
 	// set operation time out
