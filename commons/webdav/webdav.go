@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -138,7 +139,15 @@ func (client *WebDAVClient) getWebDavError(url string, err error) error {
 }
 
 func (client *WebDAVClient) getPathForTicket(irodsPath string, ticket string) string {
-	return client.baseURL + irodsPath + "?ticket=" + ticket
+	webdavURL, err := url.Parse(client.baseURL)
+	if err != nil {
+		return client.baseURL + irodsPath + "?ticket=" + url.QueryEscape(ticket)
+	}
+	webdavURL.Path = strings.TrimRight(webdavURL.Path, "/") + "/" + strings.TrimLeft(irodsPath, "/")
+	query := webdavURL.Query()
+	query.Set("ticket", ticket)
+	webdavURL.RawQuery = query.Encode()
+	return webdavURL.String()
 }
 
 func (client *WebDAVClient) DownloadFile(sourceEntry *irodsclient_fs.Entry, localPath string, ticket string, verifyChecksum bool, callback irodsclient_common.TransferTrackerCallback) (*irodsclient_fs.FileTransferResult, error) {
