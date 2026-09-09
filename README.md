@@ -106,8 +106,8 @@ Some of field values, such as `IRODS_USER_PASSWORD` can be omitted if you don't 
 
 ## Encryption
 
-`Gocommands` provides file encryption feature to store cofidential data on iRODS. The encryption encrypts filename and content with a strong encryption algorithm (AES256-CTL) before uploading files to iRODS. Also, it can decrypts filename and content after downloading enrypted files from iRODS.
-By default, `Gocommands` uses RSA + AES256-CTL algorithm for encryption with your SSH public key (`$HOME/.ssh/id_rsa.pub`) and private key (`$HOME/.ssh/id_rsa`).
+`Gocommands` provides file encryption feature to store confidential data on iRODS. It encrypts file content with AES-256-CTR before uploading and decrypts it after downloading.
+By default, `Gocommands` uses RSA + AES-256-CTR encryption with your SSH public key (`$HOME/.ssh/id_rsa.pub`) and private key (`$HOME/.ssh/id_rsa`).
 
 `put`, `get`, and `ls` supports file encryption.
 
@@ -124,6 +124,8 @@ gocmd put --encrypt --encrypt_pub_key id_rsa.pub file1.txt
 ```
 
 After uploading the file, you will see that the file will have a new encrypted filename with `.rsaaesctr.enc` extension.
+
+> **SSH-mode filename privacy:** SSH-mode filenames are obfuscated, but are not confidential. Their AES key is derived from the SSH public key, so anyone who has that public key and the stored filename can recover the original filename. Do not put sensitive information in SSH-mode filenames. Use WinSCP mode with a secret `--encrypt_key` when filename confidentiality is required.
 
 ### Downloading
 

@@ -1,6 +1,6 @@
 # File Encryption with GoCommands
 
-GoCommands provides a secure file encryption feature to protect confidential data on iRODS. It encrypts both filenames and file content using the `AES256-CTL` algorithm before uploading files and decrypts them after downloading. By default, it uses the `RSA + AES256-CTL` algorithm with your SSH public key (`$HOME/.ssh/id_rsa.pub`) and private key (`$HOME/.ssh/id_rsa`).
+GoCommands provides a file encryption feature to protect confidential data on iRODS. It encrypts file content using `AES-256-CTR` before uploading and decrypts it after downloading. By default, it uses `RSA + AES-256-CTR` with your SSH public key (`$HOME/.ssh/id_rsa.pub`) and private key (`$HOME/.ssh/id_rsa`).
 
 The `put`, `get`, and `ls` commands support encryption and decryption.
 
@@ -20,6 +20,8 @@ gocmd put --encrypt --encrypt_pub_key id_rsa.pub file1.txt target_dir
 ```
 
 After uploading, the file will be renamed with the `.rsaaesctr.enc` extension.
+
+> **SSH-mode filename privacy:** SSH-mode filenames are obfuscated, but are not confidential. Their AES key is derived from the SSH public key, so anyone who has that public key and the stored filename can recover the original filename. Do not put sensitive information in SSH-mode filenames. Use WinSCP mode with a secret `--encrypt_key` when filename confidentiality is required.
 
 ---
 
@@ -83,6 +85,6 @@ gocmd get --decrypt --decrypt_priv_key id_rsa XXXXXXXXXXXXXXXXXXXXXXXXX.rsaaesct
 
 ## Encryption Modes
 
-- **SSH Mode (`ssh`)**: Uses RSA + AES256-CTL with SSH keys.
+- **SSH Mode (`ssh`)**: Uses RSA + AES-256-CTR with SSH keys. File content is confidential to the private-key holder; filenames are only obfuscated (see the security note above).
 - **WinSCP Mode (`winscp`)**: Compatible with WinSCP.
 - **PGP Mode (`pgp`)**: Compatible with PGP. Encrypts only file content.
