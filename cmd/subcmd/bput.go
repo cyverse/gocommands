@@ -584,12 +584,23 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 					return errors.Wrapf(encryptErr, "failed to encrypt file %s", bundleEntry.LocalPath)
 				}
 
-				tarball.AddEntry(bundleEntry.TempPath, bundleEntry.IRODSPath)
+				addErr := tarball.AddEntry(bundleEntry.TempPath, bundleEntry.IRODSPath)
+				if addErr != nil {
+					job.Progress("bundle", -1, bun.GetSize(), true)
+					reportSimple(addErr, "tar")
+					return errors.Wrapf(addErr, "failed to add %q to tarball", bundleEntry.TempPath)
+				}
 			} else {
-				tarball.AddEntry(bundleEntry.LocalPath, bundleEntry.IRODSPath)
+				addErr := tarball.AddEntry(bundleEntry.LocalPath, bundleEntry.IRODSPath)
+				if addErr != nil {
+					job.Progress("bundle", -1, bun.GetSize(), true)
+					reportSimple(addErr, "tar")
+					return errors.Wrapf(addErr, "failed to add %q to tarball", bundleEntry.LocalPath)
+				}
 			}
 		}
 
+		defer os.Remove(tarballPath)
 		tarErr := tarball.CreateTarball(tarballPath, nil)
 		if tarErr != nil {
 			job.Progress("bundle", -1, bun.GetSize(), true)
@@ -597,8 +608,6 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 			reportSimple(tarErr, "tar")
 			return errors.Wrapf(tarErr, "failed to create a tarball %q for bundle %d", tarballPath, bun.GetID())
 		}
-		defer os.Remove(tarballPath)
-
 		job.Progress("bundle", bun.GetSize(), bun.GetSize(), false)
 		logger.Debug("created a tarball")
 
@@ -1175,7 +1184,10 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string, temp
 		if irodsclient_types.IsFileNotFoundError(err) {
 			// target does not exist
 			// target must be a file with new name
-			bput.schedulePut(sourceStat, sourcePath, tempPath, targetPath, encryptionMode)
+			err = bput.schedulePut(sourceStat, sourcePath, tempPath, targetPath, encryptionMode)
+			if err != nil {
+				return errors.Wrapf(err, "failed to schedule upload of %q", sourcePath)
+			}
 			return nil
 		}
 
@@ -1322,7 +1334,10 @@ func (bput *BputCommand) putFile(sourceStat fs.FileInfo, sourcePath string, temp
 	}
 
 	// schedule
-	bput.schedulePut(sourceStat, sourcePath, tempPath, targetPath, encryptionMode)
+	err = bput.schedulePut(sourceStat, sourcePath, tempPath, targetPath, encryptionMode)
+	if err != nil {
+		return errors.Wrapf(err, "failed to schedule upload of %q", sourcePath)
+	}
 	return nil
 }
 

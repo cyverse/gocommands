@@ -61,7 +61,7 @@ func (t *Tar) AddEntry(sourcePath string, targetPath string) error {
 	}
 
 	if sourceStat.IsDir() {
-		return errors.Wrapf(err, "cannot add directory %q to tarball, only files are supported", absSourcePath)
+		return errors.Errorf("cannot add directory %q to tarball, only files are supported", absSourcePath)
 	}
 
 	// use relative path for the target path in the tarball
@@ -94,6 +94,12 @@ func (t *Tar) CreateTarball(targetPath string, callback TarTrackerCallBack) erro
 	if err != nil {
 		return errors.Wrapf(err, "failed to create a tarball file %q", targetPath)
 	}
+	succeeded := false
+	defer func() {
+		if !succeeded {
+			_ = os.Remove(targetPath)
+		}
+	}()
 	defer tarfile.Close()
 
 	tarWriter := tar.NewWriter(tarfile)
@@ -161,5 +167,6 @@ func (t *Tar) CreateTarball(targetPath string, callback TarTrackerCallBack) erro
 		}
 	}
 
+	succeeded = true
 	return nil
 }
