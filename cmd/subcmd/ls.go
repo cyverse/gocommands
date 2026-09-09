@@ -1207,12 +1207,12 @@ func (ls *LsCommand) getCollectionSortFunction(entries []*irodsclient_types.IROD
 			return func(i int, j int) bool {
 				return (entries[i].ModifyTime.After(entries[j].ModifyTime)) ||
 					(entries[i].ModifyTime.Equal(entries[j].ModifyTime) &&
-						entries[i].Name < entries[j].Name)
+						entries[i].Name > entries[j].Name)
 			}
 		// Cannot sort collections by size or extension, so use default sort by name
 		default:
 			return func(i int, j int) bool {
-				return entries[i].Name < entries[j].Name
+				return entries[i].Name > entries[j].Name
 			}
 		}
 	}

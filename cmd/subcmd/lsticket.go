@@ -247,12 +247,12 @@ func (lsTicket *LsTicketCommand) getTicketSortFunction(tickets []*irodsclient_ty
 			return func(i int, j int) bool {
 				return (tickets[i].ExpirationTime.After(tickets[j].ExpirationTime)) ||
 					(tickets[i].ExpirationTime.Equal(tickets[j].ExpirationTime) &&
-						tickets[i].Name < tickets[j].Name)
+						tickets[i].Name > tickets[j].Name)
 			}
 		// Cannot sort tickets by size or extension, so use default sort by name
 		default:
 			return func(i int, j int) bool {
-				return tickets[i].Name < tickets[j].Name
+				return tickets[i].Name > tickets[j].Name
 			}
 		}
 	}

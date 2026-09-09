@@ -243,12 +243,12 @@ func (lsMeta *LsMetaCommand) getMetaSortFunction(metas []*irodsclient_types.IROD
 			return func(i int, j int) bool {
 				return (metas[i].ModifyTime.After(metas[j].ModifyTime)) ||
 					(metas[i].ModifyTime.Equal(metas[j].ModifyTime) &&
-						metas[i].Name < metas[j].Name)
+						metas[i].Name > metas[j].Name)
 			}
 		// Cannot sort meta by size or extension, so use default sort by avuid
 		default:
 			return func(i int, j int) bool {
-				return metas[i].AVUID < metas[j].AVUID
+				return metas[i].AVUID > metas[j].AVUID
 			}
 		}
 	}
