@@ -1,6 +1,7 @@
 package parallel
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -31,5 +32,34 @@ func TestParallelJobManagerRunsOversizedWeight(t *testing.T) {
 
 	if weight := <-run; weight != 2 {
 		t.Errorf("scheduled weight = %d, want 2", weight)
+	}
+}
+
+func TestFinishJobProgressUsesIndividualJobResult(t *testing.T) {
+	manager := NewParallelJobManager(1, true, false, false)
+
+	succeeded := &progress.Tracker{Total: 10}
+	succeeded.SetValue(5)
+	manager.progressTrackersByJob["succeeded"] = []*progress.Tracker{succeeded}
+	manager.finishJobProgress(&ParallelJob{name: "succeeded"}, nil)
+	if !succeeded.IsDone() || succeeded.IsErrored() {
+		t.Error("successful job tracker was not marked done")
+	}
+
+	failed := &progress.Tracker{Total: 10}
+	failed.SetValue(5)
+	manager.progressTrackersByJob["failed"] = []*progress.Tracker{failed}
+	manager.finishJobProgress(&ParallelJob{name: "failed"}, errors.New("failed"))
+	if !failed.IsErrored() {
+		t.Error("failed job tracker was not marked errored")
+	}
+
+	canceled := &progress.Tracker{Total: 10}
+	canceled.SetValue(5)
+	manager.progressTrackersByJob["canceled"] = []*progress.Tracker{canceled}
+	canceledJob := &ParallelJob{name: "canceled", canceled: true}
+	manager.finishJobProgress(canceledJob, nil)
+	if canceled.IsDone() || canceled.IsErrored() {
+		t.Error("canceled job tracker was incorrectly finalized")
 	}
 }
