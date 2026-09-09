@@ -1507,6 +1507,12 @@ func (get *GetCommand) decryptFile(sourcePath string, encryptedFilePath string, 
 
 	if encryptionMode != encryption.EncryptionModeNone {
 		logger.Debug("decrypt a data object")
+		defer func() {
+			logger.Debug("removing a temp file")
+			if err := os.Remove(encryptedFilePath); err != nil && !os.IsNotExist(err) {
+				logger.WithError(err).Warnf("failed to remove temporary file %q", encryptedFilePath)
+			}
+		}()
 
 		encryptManager := get.getEncryptionManagerForDecryption(encryptionMode)
 
@@ -1514,10 +1520,6 @@ func (get *GetCommand) decryptFile(sourcePath string, encryptedFilePath string, 
 		if err != nil {
 			return false, errors.Wrapf(err, "failed to decrypt %q to %q", encryptedFilePath, targetPath)
 		}
-
-		logger.Debug("removing a temp file")
-		os.Remove(encryptedFilePath)
-
 		return true, nil
 	}
 

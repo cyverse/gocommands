@@ -488,6 +488,14 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 			notes = append(notes, "encrypt")
 
 			job.Progress("encrypt", 0, sourceStat.Size(), false)
+			defer func() {
+				if len(tempPath) > 0 {
+					logger.Debug("removing a temporary file")
+					if err := os.Remove(tempPath); err != nil && !os.IsNotExist(err) {
+						logger.WithError(err).Warnf("failed to remove temporary file %q", tempPath)
+					}
+				}
+			}()
 
 			_, encryptErr := put.encryptFile(sourcePath, tempPath, encryptionMode)
 			if encryptErr != nil {
@@ -496,14 +504,6 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 				reportSimple(encryptErr, notes...)
 				return errors.Wrap(encryptErr, "failed to encrypt file")
 			}
-
-			defer func() {
-				if len(tempPath) > 0 {
-					// remove temp file
-					logger.Debug("removing a temporary file")
-					os.Remove(tempPath)
-				}
-			}()
 		}
 
 		progressCallbackPut := func(taskType string, processed int64, total int64) {
