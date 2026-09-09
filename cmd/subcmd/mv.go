@@ -105,20 +105,18 @@ func (mv *MvCommand) Process() error {
 	}
 	defer mv.filesystem.Release()
 
-	// run
-	if len(mv.sourcePaths) >= 2 {
-		// multi-source, target must be a dir
-		err = mv.ensureTargetIsDir(mv.targetPath)
-		if err != nil {
-			return errors.Wrapf(err, "target path %q is not a directory", mv.targetPath)
-		}
-	}
-
 	// Expand wildcards
 	if mv.wildcardSearchFlagValues.WildcardSearch {
 		mv.sourcePaths, err = wildcard.ExpandWildcards(mv.filesystem, mv.account, mv.sourcePaths, true, true)
 		if err != nil {
 			return errors.Wrapf(err, "failed to expand wildcards")
+		}
+	}
+	if len(mv.sourcePaths) >= 2 {
+		// multi-source, target must be a dir
+		err = mv.ensureTargetIsDir(mv.targetPath)
+		if err != nil {
+			return errors.Wrapf(err, "target path %q is not a directory", mv.targetPath)
 		}
 	}
 
