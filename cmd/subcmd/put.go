@@ -115,12 +115,20 @@ type PutCommand struct {
 }
 
 func NewPutCommand(command *cobra.Command, args []string) (*PutCommand, error) {
+	bundleTransferFlagValues, err := flag.GetBundleTransferFlagValues()
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid bundle transfer flag")
+	}
+	parallelTransferFlagValues, err := flag.GetParallelTransferFlagValues()
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid parallel transfer flag")
+	}
 	put := &PutCommand{
 		command: command,
 
 		commonFlagValues:               flag.GetCommonFlagValues(command),
-		bundleTransferFlagValues:       flag.GetBundleTransferFlagValues(),
-		parallelTransferFlagValues:     flag.GetParallelTransferFlagValues(),
+		bundleTransferFlagValues:       bundleTransferFlagValues,
+		parallelTransferFlagValues:     parallelTransferFlagValues,
 		forceFlagValues:                flag.GetForceFlagValues(),
 		recursiveFlagValues:            flag.GetRecursiveFlagValues(),
 		ticketAccessFlagValues:         flag.GetTicketAccessFlagValues(),

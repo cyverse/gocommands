@@ -51,11 +51,15 @@ type BcleanCommand struct {
 }
 
 func NewBcleanCommand(command *cobra.Command, args []string) (*BcleanCommand, error) {
+	bundleTransferFlagValues, err := flag.GetBundleTransferFlagValues()
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid bundle transfer flag")
+	}
 	bclean := &BcleanCommand{
 		command: command,
 
 		commonFlagValues:         flag.GetCommonFlagValues(command),
-		bundleTransferFlagValues: flag.GetBundleTransferFlagValues(),
+		bundleTransferFlagValues: bundleTransferFlagValues,
 	}
 
 	// path

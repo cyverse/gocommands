@@ -48,9 +48,12 @@ func SetBundleTransferFlags(command *cobra.Command, hideTempPathConfig bool, hid
 	}
 }
 
-func GetBundleTransferFlagValues() *BundleTransferFlagValues {
-	maxBundleFileSize, _ := types.ParseSize(bundleTransferFlagValues.maxBundleFileSizeInput)
+func GetBundleTransferFlagValues() (*BundleTransferFlagValues, error) {
+	maxBundleFileSize, err := types.ParseSize(bundleTransferFlagValues.maxBundleFileSizeInput)
+	if err != nil {
+		return nil, err
+	}
 	bundleTransferFlagValues.MaxBundleFileSize = maxBundleFileSize
 
-	return &bundleTransferFlagValues
+	return &bundleTransferFlagValues, nil
 }

@@ -40,6 +40,12 @@ func testSize(t *testing.T) {
 	s6 := "256x"
 	_, err = ParseSize(s6)
 	assert.Error(t, err)
+
+	_, err = ParseSize("")
+	assert.Error(t, err)
+
+	_, err = ParseSize("99999999999G")
+	assert.Error(t, err)
 }
 
 func testTime(t *testing.T) {
@@ -70,5 +76,11 @@ func testTime(t *testing.T) {
 
 	s6 := "32e"
 	_, err = ParseTime(s6)
+	assert.Error(t, err)
+
+	_, err = ParseTime("")
+	assert.Error(t, err)
+
+	_, err = ParseTime("999999999999999999D")
 	assert.Error(t, err)
 }

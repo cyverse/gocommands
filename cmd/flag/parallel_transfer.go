@@ -1,6 +1,7 @@
 package flag
 
 import (
+	"github.com/cockroachdb/errors"
 	"github.com/cyverse/gocommands/commons/config"
 	"github.com/cyverse/gocommands/commons/types"
 	"github.com/spf13/cobra"
@@ -16,6 +17,8 @@ type ParallelTransferFlagValues struct {
 	WebDAV              bool
 	StopOnError         bool
 }
+
+const maxTCPBufferSize = 100 * types.MegaBytes
 
 var (
 	parallelTransferFlagValues ParallelTransferFlagValues
@@ -46,8 +49,14 @@ func SetParallelTransferFlags(command *cobra.Command, hideParallelConfig bool, h
 	command.MarkFlagsMutuallyExclusive("icat", "webdav")
 }
 
-func GetParallelTransferFlagValues() *ParallelTransferFlagValues {
-	size, _ := types.ParseSize(parallelTransferFlagValues.tcpBufferSizeInput)
+func GetParallelTransferFlagValues() (*ParallelTransferFlagValues, error) {
+	size, err := types.ParseSize(parallelTransferFlagValues.tcpBufferSizeInput)
+	if err != nil {
+		return nil, err
+	}
+	if size > maxTCPBufferSize {
+		return nil, errors.Errorf("tcp buffer size must not exceed %dMB", maxTCPBufferSize/types.MegaBytes)
+	}
 	parallelTransferFlagValues.TCPBufferSize = int(size)
 
 	if parallelTransferFlagValues.ThreadNumber < 1 {
@@ -71,5 +80,5 @@ func GetParallelTransferFlagValues() *ParallelTransferFlagValues {
 		parallelTransferFlagValues.ThreadNumberPerFile = 1
 	}
 
-	return &parallelTransferFlagValues
+	return &parallelTransferFlagValues, nil
 }

@@ -117,12 +117,20 @@ type BputCommand struct {
 }
 
 func NewBputCommand(command *cobra.Command, args []string) (*BputCommand, error) {
+	bundleTransferFlagValues, err := flag.GetBundleTransferFlagValues()
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid bundle transfer flag")
+	}
+	parallelTransferFlagValues, err := flag.GetParallelTransferFlagValues()
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid parallel transfer flag")
+	}
 	bput := &BputCommand{
 		command: command,
 
 		commonFlagValues:               flag.GetCommonFlagValues(command),
-		bundleTransferFlagValues:       flag.GetBundleTransferFlagValues(),
-		parallelTransferFlagValues:     flag.GetParallelTransferFlagValues(),
+		bundleTransferFlagValues:       bundleTransferFlagValues,
+		parallelTransferFlagValues:     parallelTransferFlagValues,
 		forceFlagValues:                flag.GetForceFlagValues(),
 		recursiveFlagValues:            flag.GetRecursiveFlagValues(),
 		progressFlagValues:             flag.GetProgressFlagValues(),
