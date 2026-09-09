@@ -248,7 +248,7 @@ func (bput *BputCommand) Process() error {
 	if bput.bundleTransferFlagValues.ClearOld {
 		logger.Debugf("clearing a local temp directory %q", bput.bundleTransferFlagValues.LocalTempPath)
 		clearErr := bput.bundleManager.ClearLocalBundles()
-		if err != nil {
+		if clearErr != nil {
 			return errors.Wrapf(clearErr, "failed to clear local bundle files")
 		}
 

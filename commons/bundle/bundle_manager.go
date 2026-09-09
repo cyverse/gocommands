@@ -312,10 +312,7 @@ func (manager *BundleManager) DoneScheduling() {
 }
 
 func (manager *BundleManager) IsBundleFilename(p string) bool {
-	if strings.HasPrefix(p, "bundle_") && strings.HasPrefix(p, ".tar") {
-		return true
-	}
-	return false
+	return strings.HasPrefix(p, "bundle_") && strings.HasSuffix(p, ".tar")
 }
 
 func (manager *BundleManager) ClearLocalBundles() error {
@@ -346,6 +343,7 @@ func (manager *BundleManager) ClearLocalBundles() error {
 		if removeErr != nil {
 			return errors.Wrapf(removeErr, "failed to remove old local bundle %q", entry)
 		}
+		deletedCount++
 	}
 
 	terminal.Printf("deleted %d of %d local bundles in %q\n", deletedCount, len(bundleEntries), manager.localTempDirPath)

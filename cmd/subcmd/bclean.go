@@ -96,13 +96,16 @@ func (bclean *BcleanCommand) Process() error {
 
 	// run
 	for _, targetPath := range bclean.targetPaths {
-		bclean.cleanOne(targetPath)
+		err = bclean.cleanOne(targetPath)
+		if err != nil {
+			return errors.Wrapf(err, "failed to clean bundles for %q", targetPath)
+		}
 	}
 
 	return nil
 }
 
-func (bclean *BcleanCommand) cleanOne(targetPath string) {
+func (bclean *BcleanCommand) cleanOne(targetPath string) error {
 	cwd := config.GetCWD()
 	home := config.GetHomeDir()
 	zone := bclean.account.ClientZone
@@ -116,6 +119,15 @@ func (bclean *BcleanCommand) cleanOne(targetPath string) {
 
 	bundleManager := bundle.NewBundleManager(bclean.bundleTransferFlagValues.MinFileNumInBundle, bclean.bundleTransferFlagValues.MaxFileNumInBundle, bclean.bundleTransferFlagValues.MaxBundleFileSize, bclean.bundleTransferFlagValues.LocalTempPath, stagingPath)
 
-	bundleManager.ClearLocalBundles()
-	bundleManager.ClearIRODSBundles(bclean.filesystem, true)
+	err := bundleManager.ClearLocalBundles()
+	if err != nil {
+		return errors.Wrapf(err, "failed to clear local bundle files")
+	}
+
+	err = bundleManager.ClearIRODSBundles(bclean.filesystem, true)
+	if err != nil {
+		return errors.Wrapf(err, "failed to clear iRODS bundle files")
+	}
+
+	return nil
 }
