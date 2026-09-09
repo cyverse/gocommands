@@ -254,6 +254,20 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 		}
 	}
 
+	if systemConfig := config.GetSystemConfig(); systemConfig != nil {
+		environmentConfig, err := systemConfig.GetIRODSConfig()
+		if err != nil {
+			return false, errors.Wrap(err, "failed to apply system iRODS configuration")
+		}
+		if _, err := os.Stat(environmentManager.EnvironmentFilePath); err == nil {
+			environmentConfig, err = irodsclient_config.NewConfigFromFile(environmentConfig, environmentManager.EnvironmentFilePath)
+			if err != nil {
+				return false, errors.Wrapf(err, "failed to apply configuration file %q to system defaults", environmentManager.EnvironmentFilePath)
+			}
+		}
+		environmentManager.Environment = environmentConfig
+	}
+
 	// load config from env
 	envConfig, err := irodsclient_config.NewConfigFromEnv(environmentManager.Environment)
 	if err != nil {
@@ -262,13 +276,6 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 
 	// overwrite
 	environmentManager.Environment = envConfig
-	if systemConfig := config.GetSystemConfig(); systemConfig != nil {
-		envConfig, err = systemConfig.ApplyIRODSConfigOverrides(envConfig)
-		if err != nil {
-			return false, errors.Wrap(err, "failed to apply system iRODS configuration")
-		}
-		environmentManager.Environment = envConfig
-	}
 
 	sessionConfig, err := environmentManager.GetSessionConfig()
 	if err != nil {

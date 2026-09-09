@@ -99,12 +99,7 @@ func NewSystemConfig() (*SystemConfig, error) {
 }
 
 func (sysConfig *SystemConfig) GetIRODSConfig() (*irodsclient_config.Config, error) {
-	return sysConfig.ApplyIRODSConfigOverrides(irodsclient_config.GetDefaultConfig())
-}
-
-// ApplyIRODSConfigOverrides applies only the iRODS values explicitly set in the
-// system configuration, preserving the remaining values in irodsConfig.
-func (sysConfig *SystemConfig) ApplyIRODSConfigOverrides(irodsConfig *irodsclient_config.Config) (*irodsclient_config.Config, error) {
+	irodsConfig := irodsclient_config.GetDefaultConfig()
 	if sysConfig == nil || len(sysConfig.IRODSConfig) == 0 {
 		return irodsConfig, nil
 	}

@@ -6,25 +6,25 @@ import (
 	irodsclient_config "github.com/cyverse/go-irodsclient/config"
 )
 
-func TestApplyIRODSConfigOverridesPreservesUnspecifiedValues(t *testing.T) {
+func TestSystemIRODSConfigProvidesDefaultsForEnvironmentFile(t *testing.T) {
 	systemConfig := &SystemConfig{
 		IRODSConfig: map[string]interface{}{
 			"irods_host": "system.example.org",
 			"irods_port": 1247,
 		},
 	}
-	baseConfig := irodsclient_config.GetDefaultConfig()
-	baseConfig.Host = "user.example.org"
-	baseConfig.Port = 9999
-	baseConfig.Username = "user"
 
-	updatedConfig, err := systemConfig.ApplyIRODSConfigOverrides(baseConfig)
+	baseConfig, err := systemConfig.GetIRODSConfig()
 	if err != nil {
-		t.Fatalf("ApplyIRODSConfigOverrides() error = %v", err)
+		t.Fatalf("GetIRODSConfig() error = %v", err)
+	}
+	updatedConfig, err := irodsclient_config.NewConfigFromJSON(baseConfig, []byte(`{"irods_host":"user.example.org","irods_user_name":"user"}`))
+	if err != nil {
+		t.Fatalf("NewConfigFromJSON() error = %v", err)
 	}
 
-	if updatedConfig.Host != "system.example.org" || updatedConfig.Port != 1247 {
-		t.Errorf("system overrides = %q:%d, want system.example.org:1247", updatedConfig.Host, updatedConfig.Port)
+	if updatedConfig.Host != "user.example.org" || updatedConfig.Port != 1247 {
+		t.Errorf("environment and system values = %q:%d, want user.example.org:1247", updatedConfig.Host, updatedConfig.Port)
 	}
 	if updatedConfig.Username != "user" {
 		t.Errorf("Username = %q, want user", updatedConfig.Username)
@@ -36,7 +36,7 @@ func TestApplyIRODSConfigOverridesReturnsInvalidTypeError(t *testing.T) {
 		IRODSConfig: map[string]interface{}{"irods_port": "not-a-port"},
 	}
 
-	if _, err := systemConfig.ApplyIRODSConfigOverrides(irodsclient_config.GetDefaultConfig()); err == nil {
-		t.Fatal("ApplyIRODSConfigOverrides() error = nil, want error for invalid port type")
+	if _, err := systemConfig.GetIRODSConfig(); err == nil {
+		t.Fatal("GetIRODSConfig() error = nil, want error for invalid port type")
 	}
 }
