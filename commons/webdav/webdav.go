@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/tls"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -52,9 +53,25 @@ func NewWebDAVClient(filesystem *irodsclient_fs.FileSystem, baseURL string, user
 func (client *WebDAVClient) initWebDAV() error {
 	webdav := gowebdav.NewClient(client.baseURL, client.username, client.password)
 
+	webdav.SetTransport(newWebDAVTransport())
+	err := webdav.Connect()
+	if err != nil {
+		if httpStatusErr, ok := client.getWebDAVErrorCode(err); ok {
+			return types.NewWebDAVError(client.baseURL, int(httpStatusErr))
+		}
+
+		return types.NewWebDAVError(client.baseURL, http.StatusServiceUnavailable)
+	}
+
+	client.webdav = webdav
+	return nil
+}
+
+func newWebDAVTransport() *http.Transport {
 	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS10,
 		CipherSuites: []uint16{
-			// TLS 1.0 - 1.2 cipher suites.
+			// TLS 1.0 - 1.2 cipher suites, retained for iRODS WebDAV compatibility.
 			tls.TLS_RSA_WITH_RC4_128_SHA,
 			tls.TLS_RSA_WITH_3DES_EDE_CBC_SHA,
 			tls.TLS_RSA_WITH_AES_128_CBC_SHA,
@@ -77,29 +94,28 @@ func (client *WebDAVClient) initWebDAV() error {
 			tls.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
 			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
 			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
-			// TLS 1.3 cipher suites.
+			// TLS 1.3 cipher suites are not configurable in Go, but are kept for
+			// compatibility with the previous configuration.
 			tls.TLS_AES_128_GCM_SHA256,
 			tls.TLS_AES_256_GCM_SHA384,
 			tls.TLS_CHACHA20_POLY1305_SHA256,
 		},
 	}
 
-	transport := &http.Transport{
-		TLSClientConfig: tlsConfig,
+	return &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		TLSClientConfig:       tlsConfig,
 	}
-
-	webdav.SetTransport(transport)
-	err := webdav.Connect()
-	if err != nil {
-		if httpStatusErr, ok := client.getWebDAVErrorCode(err); ok {
-			return types.NewWebDAVError(client.baseURL, int(httpStatusErr))
-		}
-
-		return types.NewWebDAVError(client.baseURL, http.StatusServiceUnavailable)
-	}
-
-	client.webdav = webdav
-	return nil
 }
 
 func (client *WebDAVClient) getWebDAVErrorCode(err error) (int, bool) {
