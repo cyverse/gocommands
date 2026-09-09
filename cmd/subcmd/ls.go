@@ -1154,6 +1154,9 @@ func (ls *LsCommand) getDataObjectSortFunction(entries []*irodsclient_types.IROD
 
 func (ls *LsCommand) getDataObjectModifyTime(object *irodsclient_types.IRODSDataObject) time.Time {
 	// ModifyTime of data object is considered to be ModifyTime of replica modified most recently
+	if len(object.Replicas) == 0 {
+		return time.Time{}
+	}
 	maxTime := object.Replicas[0].ModifyTime
 	for _, t := range object.Replicas[1:] {
 		if t.ModifyTime.After(maxTime) {
