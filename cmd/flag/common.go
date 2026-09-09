@@ -262,6 +262,13 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 
 	// overwrite
 	environmentManager.Environment = envConfig
+	if systemConfig := config.GetSystemConfig(); systemConfig != nil {
+		envConfig, err = systemConfig.ApplyIRODSConfigOverrides(envConfig)
+		if err != nil {
+			return false, errors.Wrap(err, "failed to apply system iRODS configuration")
+		}
+		environmentManager.Environment = envConfig
+	}
 
 	sessionConfig, err := environmentManager.GetSessionConfig()
 	if err != nil {

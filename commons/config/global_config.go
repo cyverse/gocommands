@@ -37,7 +37,11 @@ func InitEnvironmentManagerFromSystemConfig() error {
 	}
 
 	if systemConfig != nil {
-		environmentManager.Environment = systemConfig.GetIRODSConfig()
+		environmentConfig, err := systemConfig.GetIRODSConfig()
+		if err != nil {
+			return errors.Wrap(err, "failed to apply system iRODS configuration")
+		}
+		environmentManager.Environment = environmentConfig
 	} else {
 		environmentManager.Environment = irodsclient_config.GetDefaultConfig()
 	}

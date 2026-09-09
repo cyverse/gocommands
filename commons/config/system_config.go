@@ -98,19 +98,27 @@ func NewSystemConfig() (*SystemConfig, error) {
 	return &systemConfig, nil
 }
 
-func (sysConfig *SystemConfig) GetIRODSConfig() *irodsclient_config.Config {
-	irodsConfig := irodsclient_config.GetDefaultConfig()
+func (sysConfig *SystemConfig) GetIRODSConfig() (*irodsclient_config.Config, error) {
+	return sysConfig.ApplyIRODSConfigOverrides(irodsclient_config.GetDefaultConfig())
+}
+
+// ApplyIRODSConfigOverrides applies only the iRODS values explicitly set in the
+// system configuration, preserving the remaining values in irodsConfig.
+func (sysConfig *SystemConfig) ApplyIRODSConfigOverrides(irodsConfig *irodsclient_config.Config) (*irodsclient_config.Config, error) {
+	if sysConfig == nil || len(sysConfig.IRODSConfig) == 0 {
+		return irodsConfig, nil
+	}
 
 	// convert struct to map
 	jsonConfig, err := json.Marshal(irodsConfig)
 	if err != nil {
-		return irodsConfig
+		return nil, errors.Wrap(err, "failed to marshal iRODS configuration")
 	}
 
 	mapConfig := map[string]interface{}{}
 	err = json.Unmarshal(jsonConfig, &mapConfig)
 	if err != nil {
-		return irodsConfig
+		return nil, errors.Wrap(err, "failed to convert iRODS configuration to a map")
 	}
 
 	for k, v := range sysConfig.IRODSConfig {
@@ -120,13 +128,14 @@ func (sysConfig *SystemConfig) GetIRODSConfig() *irodsclient_config.Config {
 	// convert map to struct
 	jsonConfig, err = json.Marshal(mapConfig)
 	if err != nil {
-		return irodsConfig
+		return nil, errors.Wrap(err, "failed to marshal system iRODS configuration overrides")
 	}
 
-	err = json.Unmarshal(jsonConfig, irodsConfig)
+	updatedConfig := &irodsclient_config.Config{}
+	err = json.Unmarshal(jsonConfig, updatedConfig)
 	if err != nil {
-		return irodsConfig
+		return nil, errors.Wrap(err, "failed to apply system iRODS configuration overrides")
 	}
 
-	return irodsConfig
+	return updatedConfig, nil
 }
