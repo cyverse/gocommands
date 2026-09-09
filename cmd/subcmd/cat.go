@@ -137,18 +137,29 @@ func (cat *CatCommand) catOne(sourcePath string) error {
 	}
 	defer fh.Close()
 
-	buf := make([]byte, 10240) // 10KB buffer
-	for {
-		readLen, err := fh.Read(buf)
-		if readLen > 0 {
-			terminal.Printf("%s", string(buf[:readLen]))
-		}
-
-		if err == io.EOF {
-			// EOF
-			break
-		}
+	err = readContent(fh, func(content []byte) {
+		terminal.Printf("%s", content)
+	})
+	if err != nil {
+		return errors.Wrapf(err, "failed to read %q", sourcePath)
 	}
 
 	return nil
+}
+
+func readContent(reader io.Reader, write func([]byte)) error {
+	buf := make([]byte, 10240) // 10KB buffer
+	for {
+		readLen, err := reader.Read(buf)
+		if readLen > 0 {
+			write(buf[:readLen])
+		}
+
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
 }
