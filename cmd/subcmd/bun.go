@@ -1,7 +1,6 @@
 package subcmd
 
 import (
-	"path"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -151,15 +150,15 @@ func (bun *BunCommand) getDataType(irodsPath string, dataType string) (irodsclie
 	}
 
 	// auto
-	ext := path.Ext(irodsPath)
-	switch strings.ToLower(ext) {
-	case ".tar":
-		return irodsclient_types.TAR_FILE_DT, nil
-	case ".tar.gz":
+	filename := strings.ToLower(irodsPath)
+	switch {
+	case strings.HasSuffix(filename, ".tar.gz"):
 		return irodsclient_types.GZIP_TAR_DT, nil
-	case ".tar.bz2":
+	case strings.HasSuffix(filename, ".tar.bz2"):
 		return irodsclient_types.BZIP2_TAR_DT, nil
-	case ".zip":
+	case strings.HasSuffix(filename, ".tar"):
+		return irodsclient_types.TAR_FILE_DT, nil
+	case strings.HasSuffix(filename, ".zip"):
 		return irodsclient_types.ZIP_FILE_DT, nil
 	default:
 		return irodsclient_types.TAR_FILE_DT, nil
