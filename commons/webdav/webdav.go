@@ -168,11 +168,13 @@ func (client *WebDAVClient) DownloadFile(sourceEntry *irodsclient_fs.Entry, loca
 
 	if sourceEntry.Size == 0 {
 		// zero size file, just create an empty file
-		f, err := os.OpenFile(localPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		f, err := os.OpenFile(localFilePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 		if err != nil {
-			return fileTransferResult, errors.Wrapf(err, "failed to create a local file %q", localPath)
+			return fileTransferResult, errors.Wrapf(err, "failed to create a local file %q", localFilePath)
 		}
-		f.Close()
+		if err := f.Close(); err != nil {
+			return fileTransferResult, errors.Wrapf(err, "failed to close a local file %q", localFilePath)
+		}
 
 		fileTransferResult.LocalCheckSumAlgorithm = sourceEntry.CheckSumAlgorithm
 		fileTransferResult.LocalCheckSum = sourceEntry.CheckSum
