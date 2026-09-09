@@ -1,6 +1,8 @@
 package subcmd
 
 import (
+	"crypto/rand"
+	"fmt"
 	"path"
 
 	"github.com/cockroachdb/errors"
@@ -10,6 +12,7 @@ import (
 	"github.com/cyverse/gocommands/commons/config"
 	"github.com/cyverse/gocommands/commons/irods"
 	commons_path "github.com/cyverse/gocommands/commons/path"
+	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/cyverse/gocommands/commons/types"
 	"github.com/cyverse/gocommands/commons/wildcard"
 	log "github.com/sirupsen/logrus"
@@ -28,6 +31,7 @@ var mvCmd = &cobra.Command{
 func AddMvCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(mvCmd, false)
+	flag.SetForceFlags(mvCmd, false)
 	flag.SetWildcardSearchFlags(mvCmd)
 
 	rootCmd.AddCommand(mvCmd)
@@ -47,6 +51,7 @@ type MvCommand struct {
 	wildcardSearchFlagValues *flag.WildcardSearchFlagValues
 
 	commonFlagValues *flag.CommonFlagValues
+	forceFlagValues  *flag.ForceFlagValues
 
 	account    *irodsclient_types.IRODSAccount
 	filesystem *irodsclient_fs.FileSystem
@@ -59,6 +64,7 @@ func NewMvCommand(command *cobra.Command, args []string) (*MvCommand, error) {
 	mv := &MvCommand{
 		command:                  command,
 		commonFlagValues:         flag.GetCommonFlagValues(command),
+		forceFlagValues:          flag.GetForceFlagValues(),
 		wildcardSearchFlagValues: flag.GetWildcardSearchFlagValues(),
 	}
 
@@ -201,19 +207,54 @@ func (mv *MvCommand) moveFile(sourceEntry *irodsclient_fs.Entry, targetPath stri
 		return types.NewNotFileError(targetPath)
 	}
 
-	// overwrite
-	err = mv.filesystem.RemoveFile(targetPath, true)
+	overwrite := false
+	if mv.forceFlagValues.Force || mv.commonFlagValues.YesAll {
+		overwrite = true
+	} else if !mv.commonFlagValues.NoAll {
+		overwrite = terminal.InputYN(fmt.Sprintf("Overwriting data object %q?", targetPath))
+	}
+	if !overwrite {
+		terminal.Printf("skip moving %q to %q because the target already exists\n", sourceEntry.Path, targetPath)
+		return nil
+	}
+
+	backupPath, err := makeMoveBackupPath(targetPath)
 	if err != nil {
-		return errors.Wrapf(err, "failed to remove %q for overwriting", targetPath)
+		return errors.Wrapf(err, "failed to create a temporary backup path for %q", targetPath)
+	}
+
+	err = mv.filesystem.RenameFileToFile(targetPath, backupPath)
+	if err != nil {
+		return errors.Wrapf(err, "failed to move existing target %q to a temporary backup", targetPath)
 	}
 
 	logger.Debug("renaming a data object")
 	err = mv.filesystem.RenameFileToFile(sourceEntry.Path, targetPath)
 	if err != nil {
-		return errors.Wrapf(err, "failed to rename %q to %q", sourceEntry.Path, targetPath)
+		restoreErr := mv.filesystem.RenameFileToFile(backupPath, targetPath)
+		if restoreErr != nil {
+			return errors.Join(
+				errors.Wrapf(err, "failed to rename %q to %q", sourceEntry.Path, targetPath),
+				errors.Wrapf(restoreErr, "failed to restore original target %q from temporary backup %q", targetPath, backupPath),
+			)
+		}
+		return errors.Wrapf(err, "failed to rename %q to %q; restored the original target", sourceEntry.Path, targetPath)
+	}
+
+	err = mv.filesystem.RemoveFile(backupPath, true)
+	if err != nil {
+		return errors.Wrapf(err, "moved %q to %q but failed to remove temporary backup %q", sourceEntry.Path, targetPath, backupPath)
 	}
 
 	return nil
+}
+
+func makeMoveBackupPath(targetPath string) (string, error) {
+	token := make([]byte, 8)
+	if _, err := rand.Read(token); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s.gocmd-mv-backup-%x", targetPath, token), nil
 }
 
 func (mv *MvCommand) moveDir(sourceEntry *irodsclient_fs.Entry, targetPath string) error {
