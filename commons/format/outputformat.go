@@ -100,6 +100,9 @@ func (of *OutputFormatter) Render(format OutputFormat) {
 		for header := range ofTable.Header {
 			isEmpty := true
 			for _, row := range ofTable.Rows {
+				if header >= len(row) {
+					continue
+				}
 				if row[header] != "" && row[header] != nil {
 					isEmpty = false
 					break
