@@ -12,7 +12,6 @@ import (
 
 	"github.com/cockroachdb/errors"
 	irodsclient_fs "github.com/cyverse/go-irodsclient/fs"
-	irodsclient_irodsfs "github.com/cyverse/go-irodsclient/irods/fs"
 	"github.com/cyverse/gocommands/commons/config"
 	"github.com/cyverse/gocommands/commons/encryption"
 	commons_path "github.com/cyverse/gocommands/commons/path"
@@ -462,95 +461,4 @@ func EnsureStagingDirPath(fs *irodsclient_fs.FileSystem, stagingPath string) (bo
 	}
 
 	return true, nil
-}
-
-///
-
-func GetResourceServersForDir(fs *irodsclient_fs.FileSystem, targetDir string) ([]string, error) {
-	connection, err := fs.GetMetadataConnection(true)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get connection")
-	}
-	defer fs.ReturnMetadataConnection(connection)
-
-	dirCreated := false
-	if !fs.ExistsDir(targetDir) {
-		err := fs.MakeDir(targetDir, true)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to make a collection %q", targetDir)
-		}
-		dirCreated = true
-	}
-
-	// write a new temp file and check resource server info
-	testFilePath := path.Join(targetDir, "staging_test.txt")
-
-	filehandle, err := fs.CreateFile(testFilePath, "", "w+")
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to create data object %q", testFilePath)
-	}
-
-	_, err = filehandle.Write([]byte("resource server test\n"))
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to write to data object %q", testFilePath)
-	}
-
-	err = filehandle.Close()
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to close data object %q", testFilePath)
-	}
-
-	// data object
-	entry, err := irodsclient_irodsfs.GetDataObject(connection, testFilePath)
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get data-object %q", testFilePath)
-	}
-
-	resourceServers := []string{}
-	for _, replica := range entry.Replicas {
-		resourceNames := strings.Split(replica.ResourceHierarchy, ";")
-		if len(resourceNames) > 0 {
-			resourceServers = append(resourceServers, resourceNames[0])
-		}
-	}
-
-	fs.RemoveFile(testFilePath, true)
-
-	if dirCreated {
-		fs.RemoveDir(targetDir, true, true)
-	}
-
-	return resourceServers, nil
-}
-
-func IsSameResourceServer(fs *irodsclient_fs.FileSystem, path1 string, path2 string) (bool, error) {
-	logger := log.WithFields(log.Fields{
-		"path1": path1,
-		"path2": path2,
-	})
-
-	path1RS, err := GetResourceServersForDir(fs, path1)
-	if err != nil {
-		return false, errors.Wrapf(err, "failed to get resource servers for %q", path1)
-	}
-
-	logger.Debugf("resource servers for path1 - %v", path1RS)
-
-	path2RS, err := GetResourceServersForDir(fs, path2)
-	if err != nil {
-		return false, errors.Wrapf(err, "failed to get resource servers for %q", path2)
-	}
-
-	logger.Debugf("resource servers for path2 - %v", path2RS)
-
-	for _, stagingResourceServer := range path2RS {
-		for _, targetResourceServer := range path1RS {
-			if stagingResourceServer == targetResourceServer {
-				// same resource server
-				return true, nil
-			}
-		}
-	}
-
-	return false, nil
 }
