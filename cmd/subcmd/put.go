@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/avast/retry-go"
@@ -108,7 +109,7 @@ type PutCommand struct {
 	updatedPathMap                map[string]bool
 	mutex                         sync.RWMutex // mutex for updatedPathMap
 
-	totalUploadedFiles int
+	totalUploadedFiles int64
 	totalUploadedBytes int64
 	startTime          time.Time
 }
@@ -279,10 +280,11 @@ func (put *PutCommand) Process() error {
 	// print final summary
 	if put.progressFlagValues.ShowProgress {
 		timeTaken := time.Since(put.startTime).Seconds()
-		totalUploadedSize := types.SizeString(put.totalUploadedBytes)
-		bps := float64(put.totalUploadedBytes) / timeTaken
+		totalUploadedFiles, totalUploadedBytes := put.uploadedTotals()
+		totalUploadedSize := types.SizeString(totalUploadedBytes)
+		bps := float64(totalUploadedBytes) / timeTaken
 		bpsString := fmt.Sprintf("%s/s", types.SizeString(int64(bps)))
-		terminal.Printf("Uploaded %d files, %s in total, time taken: %.2f seconds, average speed: %s\n", put.totalUploadedFiles, totalUploadedSize, timeTaken, bpsString)
+		terminal.Printf("Uploaded %d files, %s in total, time taken: %.2f seconds, average speed: %s\n", totalUploadedFiles, totalUploadedSize, timeTaken, bpsString)
 	}
 
 	return nil
@@ -551,8 +553,7 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 			return errors.Wrapf(retryErr, "failed to upload %q to %q after %d attempts", sourcePath, targetPath, retryNum+1)
 		}
 
-		put.totalUploadedFiles++
-		put.totalUploadedBytes += sourceStat.Size()
+		put.addUploaded(1, sourceStat.Size())
 
 		reportTransfer(uploadResult, nil, notes...)
 
@@ -563,6 +564,15 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 
 	put.parallelTransferJobManager.Schedule(sourcePath, putTask, threadsRequired, progress.UnitsBytes)
 	logger.Debugf("scheduled a file upload, %d threads", threadsRequired)
+}
+
+func (put *PutCommand) addUploaded(files int64, bytes int64) {
+	atomic.AddInt64(&put.totalUploadedFiles, files)
+	atomic.AddInt64(&put.totalUploadedBytes, bytes)
+}
+
+func (put *PutCommand) uploadedTotals() (int64, int64) {
+	return atomic.LoadInt64(&put.totalUploadedFiles), atomic.LoadInt64(&put.totalUploadedBytes)
 }
 
 func (put *PutCommand) scheduleDeleteFileOnSuccess(sourcePath string) {

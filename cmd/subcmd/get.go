@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/avast/retry-go"
@@ -112,7 +113,7 @@ type GetCommand struct {
 	updatedPathMap        map[string]bool
 	mutex                 sync.RWMutex // mutex for updatedPathMap
 
-	totalDownloadedFiles int
+	totalDownloadedFiles int64
 	totalDownloadedBytes int64
 	startTime            time.Time
 }
@@ -292,10 +293,11 @@ func (get *GetCommand) Process() error {
 	// print final summary
 	if get.progressFlagValues.ShowProgress {
 		timeTaken := time.Since(get.startTime).Seconds()
-		totalDownloadedSize := types.SizeString(get.totalDownloadedBytes)
-		bps := float64(get.totalDownloadedBytes) / timeTaken
+		totalDownloadedFiles, totalDownloadedBytes := get.downloadedTotals()
+		totalDownloadedSize := types.SizeString(totalDownloadedBytes)
+		bps := float64(totalDownloadedBytes) / timeTaken
 		bpsString := fmt.Sprintf("%s/s", types.SizeString(int64(bps)))
-		terminal.Printf("Downloaded %d files, %s in total, time taken: %.2f seconds, average speed: %s\n", get.totalDownloadedFiles, totalDownloadedSize, timeTaken, bpsString)
+		terminal.Printf("Downloaded %d files, %s in total, time taken: %.2f seconds, average speed: %s\n", totalDownloadedFiles, totalDownloadedSize, timeTaken, bpsString)
 	}
 
 	return nil
@@ -522,8 +524,7 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 			return errors.Wrapf(retryErr, "failed to download %q to %q after %d attempts", sourceEntry.Path, targetPath, retryNum+1)
 		}
 
-		get.totalDownloadedFiles++
-		get.totalDownloadedBytes += sourceEntry.Size
+		get.addDownloaded(sourceEntry.Size)
 
 		// decrypt
 		if get.requireDecryption(sourceEntry.Path) {
@@ -549,6 +550,15 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 
 	get.parallelTransferJobManager.Schedule(sourceEntry.Path, getTask, threadsRequired, progress.UnitsBytes)
 	logger.Debugf("scheduled a data object download, %d threads", threadsRequired)
+}
+
+func (get *GetCommand) addDownloaded(bytes int64) {
+	atomic.AddInt64(&get.totalDownloadedFiles, 1)
+	atomic.AddInt64(&get.totalDownloadedBytes, bytes)
+}
+
+func (get *GetCommand) downloadedTotals() (int64, int64) {
+	return atomic.LoadInt64(&get.totalDownloadedFiles), atomic.LoadInt64(&get.totalDownloadedBytes)
 }
 
 func (get *GetCommand) scheduleDeleteFileOnSuccess(sourcePath string) {

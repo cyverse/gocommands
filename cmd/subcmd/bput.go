@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/avast/retry-go"
@@ -110,7 +111,7 @@ type BputCommand struct {
 	updatedPathMap                map[string]bool
 	mutex                         sync.RWMutex // mutex for updatedPathMap
 
-	totalUploadedFiles int
+	totalUploadedFiles int64
 	totalUploadedBytes int64
 	startTime          time.Time
 }
@@ -316,10 +317,11 @@ func (bput *BputCommand) Process() error {
 	// print final summary
 	if bput.progressFlagValues.ShowProgress {
 		timeTaken := time.Since(bput.startTime).Seconds()
-		totalUploadedSize := types.SizeString(bput.totalUploadedBytes)
-		bps := float64(bput.totalUploadedBytes) / timeTaken
+		totalUploadedFiles, totalUploadedBytes := bput.uploadedTotals()
+		totalUploadedSize := types.SizeString(totalUploadedBytes)
+		bps := float64(totalUploadedBytes) / timeTaken
 		bpsString := fmt.Sprintf("%s/s", types.SizeString(int64(bps)))
-		terminal.Printf("Uploaded %d files, %s in total, time taken: %.2f seconds, average speed: %s\n", bput.totalUploadedFiles, totalUploadedSize, timeTaken, bpsString)
+		terminal.Printf("Uploaded %d files, %s in total, time taken: %.2f seconds, average speed: %s\n", totalUploadedFiles, totalUploadedSize, timeTaken, bpsString)
 	}
 
 	return nil
@@ -693,14 +695,22 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 
 		logger.Debug("removed a tarball")
 
-		bput.totalUploadedFiles += bun.GetEntryNumber()
-		bput.totalUploadedBytes += bun.GetSize()
+		bput.addUploaded(int64(bun.GetEntryNumber()), bun.GetSize())
 
 		return nil
 	}
 
 	bput.parallelTransferJobManager.Schedule(bun.GetBundleFilename(), bundleTask, threadsRequired, progress.UnitsBytes)
 	logger.Debugf("scheduled a bundle file upload (with %d files), %d threads", bun.GetEntryNumber(), threadsRequired)
+}
+
+func (bput *BputCommand) addUploaded(files int64, bytes int64) {
+	atomic.AddInt64(&bput.totalUploadedFiles, files)
+	atomic.AddInt64(&bput.totalUploadedBytes, bytes)
+}
+
+func (bput *BputCommand) uploadedTotals() (int64, int64) {
+	return atomic.LoadInt64(&bput.totalUploadedFiles), atomic.LoadInt64(&bput.totalUploadedBytes)
 }
 
 func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleEntry) {
