@@ -9,6 +9,7 @@ import (
 	"github.com/cyverse/gocommands/commons/config"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 var syncCmd = &cobra.Command{
@@ -162,15 +163,8 @@ func (sync *SyncCommand) getNewCommandArgs() ([]string, error) {
 	newArgs := []string{}
 
 	commandName := sync.command.CalledAs()
-	commandIdx := -1
-
 	osArgs := os.Args[1:]
-	for argIdx, arg := range osArgs {
-		if arg == commandName {
-			commandIdx = argIdx
-			break
-		}
-	}
+	commandIdx := findCommandIndex(osArgs, commandName, sync.command.Root().Flags())
 
 	if commandIdx < 0 {
 		return nil, errors.Errorf("failed to find command location")
@@ -183,6 +177,41 @@ func (sync *SyncCommand) getNewCommandArgs() ([]string, error) {
 	newArgs = append(newArgs, osArgs[commandIdx+1:]...)
 
 	return newArgs, nil
+}
+
+func findCommandIndex(args []string, commandName string, flags *pflag.FlagSet) int {
+	for argIdx := 0; argIdx < len(args); argIdx++ {
+		arg := args[argIdx]
+		if arg == commandName {
+			return argIdx
+		}
+
+		if arg == "--" {
+			break
+		}
+
+		flagName := ""
+		if strings.HasPrefix(arg, "--") {
+			flagName = strings.SplitN(strings.TrimPrefix(arg, "--"), "=", 2)[0]
+		} else if strings.HasPrefix(arg, "-") && len(arg) == 2 {
+			flagName = arg[1:]
+		}
+		if flagName == "" {
+			continue
+		}
+
+		var commandFlag *pflag.Flag
+		if strings.HasPrefix(arg, "--") {
+			commandFlag = flags.Lookup(flagName)
+		} else {
+			commandFlag = flags.ShorthandLookup(flagName)
+		}
+		if commandFlag != nil && commandFlag.NoOptDefVal == "" && !strings.Contains(arg, "=") {
+			argIdx++
+		}
+	}
+
+	return -1
 }
 
 func (sync *SyncCommand) syncLocalToIRODS() error {
