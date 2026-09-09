@@ -94,6 +94,10 @@ type ParallelJobManager struct {
 
 // NewParallelJobManager creates a new ParallelJobManager
 func NewParallelJobManager(weightCapacity int, showProgress bool, showFullPath bool, stopOnError bool) *ParallelJobManager {
+	if weightCapacity < 1 {
+		weightCapacity = 1
+	}
+
 	manager := &ParallelJobManager{
 		nextJobIndex:            0,
 		pendingJobs:             list.New(),
@@ -228,6 +232,13 @@ func (manager *ParallelJobManager) removeRunningJob(job *ParallelJob) {
 func (manager *ParallelJobManager) Schedule(name string, task ParallelJobTask, weight int, progressUnit progress.Units) {
 	manager.mutex.Lock()
 	defer manager.mutex.Unlock()
+
+	if weight < 1 {
+		weight = 1
+	}
+	if weight > manager.weightCapacity {
+		weight = manager.weightCapacity
+	}
 
 	job := newParallelJob(manager, name, task, weight, progressUnit)
 

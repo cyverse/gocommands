@@ -62,6 +62,10 @@ func GetParallelTransferFlagValues() *ParallelTransferFlagValues {
 		parallelTransferFlagValues.ThreadNumberPerFile = 1
 	}
 
+	if parallelTransferFlagValues.ThreadNumberPerFile > parallelTransferFlagValues.ThreadNumber {
+		parallelTransferFlagValues.ThreadNumberPerFile = parallelTransferFlagValues.ThreadNumber
+	}
+
 	if parallelTransferFlagValues.SingleThread {
 		parallelTransferFlagValues.ThreadNumber = 1
 		parallelTransferFlagValues.ThreadNumberPerFile = 1
