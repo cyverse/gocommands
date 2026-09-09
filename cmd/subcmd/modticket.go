@@ -223,7 +223,7 @@ func (modTicket *ModTicketCommand) modTicketRemoveAllowedUsers(ticketName string
 
 func (modTicket *ModTicketCommand) modTicketAddAllowedGroups(ticketName string, addGroups []string) error {
 	for _, addGroup := range addGroups {
-		err := modTicket.filesystem.AddTicketAllowedUser(ticketName, addGroup)
+		err := modTicket.filesystem.AddTicketAllowedGroup(ticketName, addGroup)
 		if err != nil {
 			return errors.Wrapf(err, "failed to mod ticket (add allowed group) %q", ticketName)
 		}
@@ -233,7 +233,7 @@ func (modTicket *ModTicketCommand) modTicketAddAllowedGroups(ticketName string, 
 
 func (modTicket *ModTicketCommand) modTicketRemoveAllowedGroups(ticketName string, rmGroups []string) error {
 	for _, rmGroup := range rmGroups {
-		err := modTicket.filesystem.RemoveTicketAllowedUser(ticketName, rmGroup)
+		err := modTicket.filesystem.RemoveTicketAllowedGroup(ticketName, rmGroup)
 		if err != nil {
 			return errors.Wrapf(err, "failed to mod ticket (remove allowed group) %q", ticketName)
 		}
