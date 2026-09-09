@@ -63,8 +63,6 @@ func GetVersionParts(version string) (int, int, int) {
 		return 0, 0, 0
 	}
 
-	version = version[1:]
-
 	version = strings.ToLower(version)
 	version = strings.TrimPrefix(version, "v")
 
