@@ -3,6 +3,7 @@ package encryption
 import (
 	"crypto/rsa"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/cockroachdb/errors"
 )
@@ -54,8 +55,12 @@ func DetectEncryptionMode(p string) EncryptionMode {
 }
 
 func IsCorrectFilename(filename []byte) bool {
+	if !utf8.Valid(filename) {
+		return false
+	}
+
 	for _, c := range filename {
-		if c < 32 || c >= 126 {
+		if c < 32 || c == 127 {
 			return false
 		}
 	}
