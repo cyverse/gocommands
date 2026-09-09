@@ -186,12 +186,17 @@ func (client *WebDAVClient) DownloadFile(sourceEntry *irodsclient_fs.Entry, loca
 		return fileTransferResult, nil
 	}
 
-	// resume from partial download if the file already exists
 	offset := int64(0)
+	resumed := false
 	if partialStat, statErr := os.Stat(localFilePath); statErr == nil {
 		if partialStat.Size() > 0 && partialStat.Size() < sourceEntry.Size {
-			offset = partialStat.Size()
-			logger.Debugf("resuming download of %q from offset %d", irodsSrcPath, offset)
+			if len(sourceEntry.CheckSum) > 0 {
+				offset = partialStat.Size()
+				resumed = true
+				logger.Debugf("resuming download of %q from offset %d", irodsSrcPath, offset)
+			} else {
+				logger.Warnf("checksum for %q is not available; restarting instead of using an unverifiable local partial file", irodsSrcPath)
+			}
 		}
 	}
 
@@ -209,19 +214,37 @@ func (client *WebDAVClient) DownloadFile(sourceEntry *irodsclient_fs.Entry, loca
 
 	fileTransferResult.LocalSize = offset
 
-	if verifyChecksum {
-		localHash, err := client.calculateLocalFileHash(localPath, sourceEntry.CheckSumAlgorithm, callback)
+	if verifyChecksum || resumed {
+		localHash, err := client.calculateLocalFileHash(localFilePath, sourceEntry.CheckSumAlgorithm, callback)
 		if err != nil {
-			return fileTransferResult, errors.Wrapf(err, "failed to calculate hash of local file %q with alg %s", localPath, sourceEntry.CheckSumAlgorithm)
+			return fileTransferResult, errors.Wrapf(err, "failed to calculate hash of local file %q with alg %s", localFilePath, sourceEntry.CheckSumAlgorithm)
 		}
 
 		fileTransferResult.LocalCheckSumAlgorithm = sourceEntry.CheckSumAlgorithm
 		fileTransferResult.LocalCheckSum = localHash
 
 		if !bytes.Equal(sourceEntry.CheckSum, localHash) {
-			// remove the corrupted file so the next retry starts from offset 0
+			if resumed {
+				logger.Warnf("checksum verification failed after resuming %q; downloading the file again from the beginning", irodsSrcPath)
+				newOffset, downloadErr = client.downloadToLocalWithTrackerCallBack(irodsSrcPath, localFilePath, ticket, 0, sourceEntry.Size, sourceEntry.Size, callback)
+				if downloadErr != nil {
+					return fileTransferResult, errors.Wrapf(downloadErr, "failed to re-download file %q from the beginning after checksum verification failed", irodsSrcPath)
+				}
+				fileTransferResult.LocalSize = newOffset
+
+				localHash, err = client.calculateLocalFileHash(localFilePath, sourceEntry.CheckSumAlgorithm, callback)
+				if err != nil {
+					return fileTransferResult, errors.Wrapf(err, "failed to calculate hash of local file %q with alg %s", localFilePath, sourceEntry.CheckSumAlgorithm)
+				}
+				fileTransferResult.LocalCheckSum = localHash
+				if bytes.Equal(sourceEntry.CheckSum, localHash) {
+					fileTransferResult.EndTime = time.Now()
+					return fileTransferResult, nil
+				}
+			}
+
 			os.Remove(localFilePath)
-			return fileTransferResult, errors.Errorf("checksum verification failed for local file %q, download failed", localPath)
+			return fileTransferResult, errors.Errorf("checksum verification failed for local file %q, download failed", localFilePath)
 		}
 	}
 
