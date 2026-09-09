@@ -207,23 +207,19 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	logger.Debugf("use sessionID - %d", myCommonFlagValues.SessionID)
 	environmentManager.SetPPID(myCommonFlagValues.SessionID)
 
-	configFilePath := ""
-
-	// user defined config file
-	if len(myCommonFlagValues.ConfigFilePath) > 0 {
-		configFilePath = myCommonFlagValues.ConfigFilePath
+	configFilePath, configPathSpecified, err := getConfigFile(command, myCommonFlagValues)
+	if err != nil {
+		return false, err
 	}
 
 	// load config
 	if len(configFilePath) > 0 {
-		configFilePath, err = path.ExpandLocalHomeDirPath(configFilePath)
-		if err != nil {
-			return false, errors.Wrapf(err, "failed to expand home directory for %q", configFilePath)
-		}
-
 		status, err := os.Stat(configFilePath)
 		if err != nil {
 			if os.IsNotExist(err) {
+				if configPathSpecified {
+					return false, errors.Errorf("specified configuration path %q does not exist", configFilePath)
+				}
 				logger.Debugf("failed to find config path %q as it does not exist", configFilePath)
 			} else {
 				return false, errors.Wrapf(err, "failed to stat %q", configFilePath)
@@ -286,6 +282,20 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	}
 
 	return true, nil // continue
+}
+
+func getConfigFile(command *cobra.Command, commonFlagValues *CommonFlagValues) (string, bool, error) {
+	configPathSpecified := command.Flags().Changed("config") || command.Root().Flags().Changed("config")
+	configFilePath := commonFlagValues.ConfigFilePath
+	if len(configFilePath) == 0 {
+		return "", configPathSpecified, nil
+	}
+
+	expandedPath, err := path.ExpandLocalHomeDirPath(configFilePath)
+	if err != nil {
+		return "", configPathSpecified, errors.Wrapf(err, "failed to expand home directory for %q", configFilePath)
+	}
+	return expandedPath, configPathSpecified, nil
 }
 
 func printVersion() error {
