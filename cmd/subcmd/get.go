@@ -923,8 +923,12 @@ func (get *GetCommand) getFile(sourceEntry *irodsclient_fs.Entry, tempPath strin
 		}
 	}
 
-	// check transfer status file
-	if get.hasTransferStatusFile(targetPath) {
+	// check transfer status file next to the actual download target
+	transferPath := targetPath
+	if len(tempPath) > 0 {
+		transferPath = tempPath
+	}
+	if get.hasTransferStatusFile(transferPath) {
 		// incomplete file - resume downloading
 		terminal.Printf("resume downloading a data object %q\n", targetPath)
 		logger.Debug("resume downloading a data object")
