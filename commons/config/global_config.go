@@ -183,7 +183,11 @@ func InputMissingFields() (bool, error) {
 	password := environmentManager.Environment.Password
 	pamToken := environmentManager.Environment.PAMToken
 	if len(password) == 0 && len(pamToken) == 0 && environmentManager.Environment.Username != "anonymous" {
-		environmentManager.Environment.Password = terminal.InputPassword("iRODS Password")
+		password, passwordErr := terminal.InputPassword("iRODS Password")
+		if passwordErr != nil {
+			return updated, errors.Wrap(passwordErr, "failed to read iRODS password")
+		}
+		environmentManager.Environment.Password = password
 		updated = true
 	}
 
@@ -289,7 +293,10 @@ func InputFieldsForInit() (bool, error) {
 		}
 	}
 
-	newPassword := terminal.InputPassword("iRODS Password")
+	newPassword, passwordErr := terminal.InputPassword("iRODS Password")
+	if passwordErr != nil {
+		return updated, errors.Wrap(passwordErr, "failed to read iRODS password")
+	}
 	updated = true
 
 	environmentManager.Environment.Password = newPassword

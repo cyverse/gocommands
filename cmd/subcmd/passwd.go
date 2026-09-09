@@ -102,7 +102,10 @@ func (passwd *PasswdCommand) changePassword() error {
 
 	pass := false
 	for i := 0; i < 3; i++ {
-		currentPassword := terminal.InputPassword("Current iRODS Password")
+		currentPassword, err := terminal.InputPassword("Current iRODS Password")
+		if err != nil {
+			return errors.Wrap(err, "failed to read current iRODS password")
+		}
 		if currentPassword == passwd.account.Password {
 			pass = true
 			break
@@ -118,8 +121,12 @@ func (passwd *PasswdCommand) changePassword() error {
 
 	pass = false
 	newPassword := ""
+	var readErr error
 	for i := 0; i < 3; i++ {
-		newPassword = terminal.InputPassword("New iRODS Password")
+		newPassword, readErr = terminal.InputPassword("New iRODS Password")
+		if readErr != nil {
+			return errors.Wrap(readErr, "failed to read new iRODS password")
+		}
 		if newPassword != passwd.account.Password {
 			pass = true
 			break
@@ -133,7 +140,10 @@ func (passwd *PasswdCommand) changePassword() error {
 		return errors.Errorf("invalid password provided")
 	}
 
-	newPasswordConfirm := terminal.InputPassword("Confirm New iRODS Password")
+	newPasswordConfirm, readErr := terminal.InputPassword("Confirm New iRODS Password")
+	if readErr != nil {
+		return errors.Wrap(readErr, "failed to read confirmation iRODS password")
+	}
 	if newPassword != newPasswordConfirm {
 		return errors.Errorf("password mismatched")
 	}
