@@ -157,11 +157,10 @@ func DecryptFileWinSCP(source string, target string, key []byte) error {
 
 	header := make([]byte, 16)
 
-	readLen, err := sourceFileHandle.Read(header)
-	if err == io.EOF && readLen == 0 {
+	_, err = io.ReadFull(sourceFileHandle, header)
+	if err == io.EOF {
 		return nil
 	}
-
 	if err != nil {
 		return errors.Wrapf(err, "failed to read AES CTR header")
 	}
@@ -171,13 +170,9 @@ func DecryptFileWinSCP(source string, target string, key []byte) error {
 	}
 
 	salt := make([]byte, AesSaltLen)
-	readLen, err = sourceFileHandle.Read(salt)
+	_, err = io.ReadFull(sourceFileHandle, salt)
 	if err != nil {
 		return errors.Wrapf(err, "failed to read salt")
-	}
-
-	if readLen != AesSaltLen {
-		return errors.Wrapf(err, "failed to read salt, read len %d", readLen)
 	}
 
 	err = DecryptAESCTRReaderWriter(sourceFileHandle, targetFileHandle, salt, key)
