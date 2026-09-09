@@ -193,7 +193,7 @@ func (addMeta *AddMetaCommand) addMetaToResource(resource string, attribute stri
 
 	logger.Debug("add metadata to resource")
 
-	err := addMeta.filesystem.AddUserMetadata(resource, addMeta.account.ClientZone, attribute, value, unit)
+	err := addMeta.filesystem.AddResourceMetadata(resource, attribute, value, unit)
 	if err != nil {
 		return errors.Wrapf(err, "failed to add metadata to resource %q (attr %q, value %q, unit %q)", resource, attribute, value, unit)
 	}
