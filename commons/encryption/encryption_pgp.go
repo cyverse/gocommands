@@ -35,14 +35,11 @@ func EncryptFilePGP(source string, target string, key []byte) error {
 		return errors.Wrapf(err, "failed to open file %q", source)
 	}
 
-	defer sourceFileHandle.Close()
-
 	targetFileHandle, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
+		sourceFileHandle.Close()
 		return errors.Wrapf(err, "failed to create file %q", target)
 	}
-
-	defer targetFileHandle.Close()
 
 	encryptionConfig := &packet.Config{
 		DefaultCipher: packet.CipherAES256,
@@ -50,14 +47,29 @@ func EncryptFilePGP(source string, target string, key []byte) error {
 
 	writeHandle, err := openpgp.SymmetricallyEncrypt(targetFileHandle, key, nil, encryptionConfig)
 	if err != nil {
+		targetFileHandle.Close()
+		sourceFileHandle.Close()
 		return errors.Wrapf(err, "failed to create a encrypt writer for %q", target)
 	}
 
-	defer writeHandle.Close()
-
 	_, err = io.Copy(writeHandle, sourceFileHandle)
 	if err != nil {
+		writeHandle.Close()
+		targetFileHandle.Close()
+		sourceFileHandle.Close()
 		return errors.Wrapf(err, "failed to encrypt data")
+	}
+	if err := writeHandle.Close(); err != nil {
+		targetFileHandle.Close()
+		sourceFileHandle.Close()
+		return errors.Wrapf(err, "failed to finalize encrypted file %q", target)
+	}
+	if err := targetFileHandle.Close(); err != nil {
+		sourceFileHandle.Close()
+		return errors.Wrapf(err, "failed to close file %q", target)
+	}
+	if err := sourceFileHandle.Close(); err != nil {
+		return errors.Wrapf(err, "failed to close file %q", source)
 	}
 
 	return nil
