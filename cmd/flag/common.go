@@ -181,8 +181,8 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	}
 
 	if myCommonFlagValues.ShowVersion {
-		printVersion()
-		return false, nil // stop here
+		err := printVersion()
+		return false, err
 	}
 
 	if len(myCommonFlagValues.LogFile) > 0 {
