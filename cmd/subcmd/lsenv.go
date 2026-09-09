@@ -105,7 +105,7 @@ func (lsenv *LsenvCommand) printEnvironments() error {
 		"Host",
 		"Port",
 		"Zone",
-		"Home",
+		"Username",
 		"Authentication Scheme",
 	})
 
@@ -140,7 +140,6 @@ func (lsenv *LsenvCommand) printEnvironments() error {
 		if envFilePath == irodsclient_config.GetDefaultEnvironmentFilePath() {
 			environmentName += " (current)"
 		}
-
 		outputFormatterTable.AppendRow([]interface{}{
 			environmentName,
 			envFilePath,
