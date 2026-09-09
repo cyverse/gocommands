@@ -1,10 +1,82 @@
 package config
 
 import (
+	"os"
 	"testing"
 
 	irodsclient_config "github.com/cyverse/go-irodsclient/config"
 )
+
+func TestInputMissingFieldsFromStdinPreservesConfiguredValues(t *testing.T) {
+	if err := InitEnvironmentManager(); err != nil {
+		t.Fatalf("InitEnvironmentManager() error = %v", err)
+	}
+	environmentManager.Environment.Host = "configured.example.org"
+	environmentManager.Environment.Port = 1247
+	environmentManager.Environment.ZoneName = "configuredZone"
+	environmentManager.Environment.Username = "configuredUser"
+	environmentManager.Environment.Password = "configuredPassword"
+
+	stdin, err := os.CreateTemp(t.TempDir(), "stdin")
+	if err != nil {
+		t.Fatalf("CreateTemp() error = %v", err)
+	}
+	defer stdin.Close()
+	originalStdin := os.Stdin
+	os.Stdin = stdin
+	defer func() { os.Stdin = originalStdin }()
+
+	if err := InputMissingFieldsFromStdin(); err != nil {
+		t.Fatalf("InputMissingFieldsFromStdin() error = %v", err)
+	}
+	if environmentManager.Environment.Host != "configured.example.org" ||
+		environmentManager.Environment.Port != 1247 ||
+		environmentManager.Environment.ZoneName != "configuredZone" ||
+		environmentManager.Environment.Username != "configuredUser" ||
+		environmentManager.Environment.Password != "configuredPassword" {
+		t.Fatal("InputMissingFieldsFromStdin() replaced configured values with empty stdin values")
+	}
+}
+
+func TestInputMissingFieldsFromStdinAppliesProvidedValues(t *testing.T) {
+	if err := InitEnvironmentManager(); err != nil {
+		t.Fatalf("InitEnvironmentManager() error = %v", err)
+	}
+	environmentManager.Environment.Host = "configured.example.org"
+	environmentManager.Environment.Port = 1247
+	environmentManager.Environment.ZoneName = "configuredZone"
+	environmentManager.Environment.Username = "configuredUser"
+	environmentManager.Environment.Password = "configuredPassword"
+
+	stdin, err := os.CreateTemp(t.TempDir(), "stdin")
+	if err != nil {
+		t.Fatalf("CreateTemp() error = %v", err)
+	}
+	if _, err := stdin.WriteString("irods_host: stdin.example.org\nirods_port: 2000\nirods_user_name: stdinUser\n"); err != nil {
+		stdin.Close()
+		t.Fatalf("WriteString() error = %v", err)
+	}
+	if _, err := stdin.Seek(0, 0); err != nil {
+		stdin.Close()
+		t.Fatalf("Seek() error = %v", err)
+	}
+	defer stdin.Close()
+	originalStdin := os.Stdin
+	os.Stdin = stdin
+	defer func() { os.Stdin = originalStdin }()
+
+	if err := InputMissingFieldsFromStdin(); err != nil {
+		t.Fatalf("InputMissingFieldsFromStdin() error = %v", err)
+	}
+	if environmentManager.Environment.Host != "stdin.example.org" ||
+		environmentManager.Environment.Port != 2000 ||
+		environmentManager.Environment.Username != "stdinUser" {
+		t.Fatal("InputMissingFieldsFromStdin() did not apply provided stdin values")
+	}
+	if environmentManager.Environment.ZoneName != "configuredZone" || environmentManager.Environment.Password != "configuredPassword" {
+		t.Fatal("InputMissingFieldsFromStdin() replaced fields omitted from stdin")
+	}
+}
 
 func TestSystemIRODSConfigProvidesDefaultsForEnvironmentFile(t *testing.T) {
 	systemConfig := &SystemConfig{

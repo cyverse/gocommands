@@ -213,11 +213,21 @@ func InputMissingFieldsFromStdin() error {
 		return errors.Wrapf(err, "failed to read missing config values from stdin")
 	}
 
-	environmentManager.Environment.Host = configTypeIn.Host
-	environmentManager.Environment.Port = configTypeIn.Port
-	environmentManager.Environment.ZoneName = configTypeIn.ZoneName
-	environmentManager.Environment.Username = configTypeIn.Username
-	environmentManager.Environment.Password = configTypeIn.Password
+	if len(configTypeIn.Host) > 0 {
+		environmentManager.Environment.Host = configTypeIn.Host
+	}
+	if configTypeIn.Port > 0 {
+		environmentManager.Environment.Port = configTypeIn.Port
+	}
+	if len(configTypeIn.ZoneName) > 0 {
+		environmentManager.Environment.ZoneName = configTypeIn.ZoneName
+	}
+	if len(configTypeIn.Username) > 0 {
+		environmentManager.Environment.Username = configTypeIn.Username
+	}
+	if len(configTypeIn.Password) > 0 {
+		environmentManager.Environment.Password = configTypeIn.Password
+	}
 
 	environmentManager.FixAuthConfiguration()
 
