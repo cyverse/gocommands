@@ -132,6 +132,10 @@ func (rm *RmCommand) removeOne(targetPath string) error {
 
 	targetEntry, err := rm.filesystem.Stat(targetPath)
 	if err != nil {
+		if !irodsclient_types.IsFileNotFoundError(err) {
+			return errors.Wrapf(err, "failed to stat %q", targetPath)
+		}
+
 		logger.Debug("failed to find a data object, but trying to remove")
 		err = rm.filesystem.RemoveFile(targetPath, rm.forceFlagValues.Force)
 		if err != nil {
