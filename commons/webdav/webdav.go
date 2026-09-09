@@ -17,6 +17,7 @@ import (
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/go-irodsclient/irods/util"
 	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
+	"github.com/cyverse/gocommands/commons/terminal"
 	"github.com/cyverse/gocommands/commons/types"
 	log "github.com/sirupsen/logrus"
 	"github.com/studio-b12/gowebdav"
@@ -309,7 +310,10 @@ func (client *WebDAVClient) UploadFile(localPath string, irodsPath string, ticke
 	fileTransferResult.IRODSSize = entry.Size
 
 	if verifyChecksum {
-		if len(entry.CheckSum) > 0 {
+		if len(entry.CheckSum) == 0 {
+			logger.Warnf("checksum for uploaded file %q is not available yet; skipping checksum verification", irodsFilePath)
+			terminal.PrintErrorf("Warning: checksum for uploaded file %q is not available yet; skipping checksum verification\n", irodsFilePath)
+		} else {
 			localHash, err := client.calculateLocalFileHash(localSrcPath, entry.CheckSumAlgorithm, callback)
 			if err != nil {
 				return fileTransferResult, errors.Wrapf(err, "failed to calculate hash of local file %q with alg %s", localSrcPath, entry.CheckSumAlgorithm)
@@ -318,8 +322,9 @@ func (client *WebDAVClient) UploadFile(localPath string, irodsPath string, ticke
 			fileTransferResult.LocalCheckSumAlgorithm = entry.CheckSumAlgorithm
 			fileTransferResult.LocalCheckSum = localHash
 
-			if !bytes.Equal(entry.CheckSum, localHash) {
-				return fileTransferResult, errors.Errorf("checksum verification failed for iRODS file %q, upload failed", irodsFilePath)
+			err = validateUploadedChecksum(client.filesystem, irodsFilePath, entry.CheckSum, localHash)
+			if err != nil {
+				return fileTransferResult, err
 			}
 		}
 	}
@@ -327,6 +332,24 @@ func (client *WebDAVClient) UploadFile(localPath string, irodsPath string, ticke
 	fileTransferResult.EndTime = time.Now()
 
 	return fileTransferResult, nil
+}
+
+type remoteFileRemover interface {
+	RemoveFile(irodsPath string, force bool) error
+}
+
+func validateUploadedChecksum(filesystem remoteFileRemover, irodsFilePath string, expected []byte, actual []byte) error {
+	if len(expected) == 0 {
+		return nil
+	}
+	if bytes.Equal(expected, actual) {
+		return nil
+	}
+
+	if err := filesystem.RemoveFile(irodsFilePath, true); err != nil {
+		return errors.Wrapf(err, "checksum verification failed for iRODS file %q and failed to remove the corrupted file", irodsFilePath)
+	}
+	return errors.Errorf("checksum verification failed for iRODS file %q, removed corrupted file", irodsFilePath)
 }
 
 func (client *WebDAVClient) calculateLocalFileHash(localPath string, algorithm irodsclient_types.ChecksumAlgorithm, processCallback irodsclient_common.TransferTrackerCallback) ([]byte, error) {
