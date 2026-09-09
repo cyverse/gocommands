@@ -91,15 +91,6 @@ func SetCommonFlagsWithoutResource(command *cobra.Command) {
 }
 
 func GetCommonFlagValues(command *cobra.Command) *CommonFlagValues {
-	if len(commonFlagValues.logLevelInput) > 0 {
-		lvl, err := log.ParseLevel(commonFlagValues.logLevelInput)
-		if err != nil {
-			lvl = log.InfoLevel
-		}
-		commonFlagValues.LogLevel = lvl
-		commonFlagValues.LogLevelUpdated = true
-	}
-
 	if command.Flags().Changed("resource") {
 		commonFlagValues.ResourceUpdated = true
 	}
@@ -136,8 +127,16 @@ func getLogrusLogLevel(irodsLogLevel int) log.Level {
 	return log.TraceLevel
 }
 
-func setLogLevel(command *cobra.Command) {
+func setLogLevel(command *cobra.Command) error {
 	myCommonFlagValues := GetCommonFlagValues(command)
+	if len(myCommonFlagValues.logLevelInput) > 0 {
+		level, err := log.ParseLevel(myCommonFlagValues.logLevelInput)
+		if err != nil {
+			return errors.Wrapf(err, "invalid log level %q", myCommonFlagValues.logLevelInput)
+		}
+		myCommonFlagValues.LogLevel = level
+		myCommonFlagValues.LogLevelUpdated = true
+	}
 
 	if myCommonFlagValues.Quiet {
 		log.SetLevel(log.FatalLevel)
@@ -148,6 +147,7 @@ func setLogLevel(command *cobra.Command) {
 			log.SetLevel(myCommonFlagValues.LogLevel)
 		}
 	}
+	return nil
 }
 
 func getLogWriter(logFile string) io.WriteCloser {
@@ -171,7 +171,9 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 
 	myCommonFlagValues := GetCommonFlagValues(command)
 
-	setLogLevel(command)
+	if err := setLogLevel(command); err != nil {
+		return false, err
+	}
 
 	if myCommonFlagValues.ShowHelp {
 		command.Usage()
@@ -288,7 +290,9 @@ func ProcessCommonFlags(command *cobra.Command) (bool, error) {
 	}
 
 	// prioritize log level user set via command-line argument
-	setLogLevel(command)
+	if err := setLogLevel(command); err != nil {
+		return false, err
+	}
 
 	if myCommonFlagValues.ResourceUpdated {
 		environmentManager.Environment.DefaultResource = myCommonFlagValues.Resource

@@ -1,6 +1,10 @@
 package flag
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/spf13/cobra"
+)
 
 func TestGetParallelTransferFlagValuesCapsThreadsPerFile(t *testing.T) {
 	original := parallelTransferFlagValues
@@ -44,5 +48,18 @@ func TestGetParallelTransferFlagValuesRejectsLargeBufferSize(t *testing.T) {
 	parallelTransferFlagValues.tcpBufferSizeInput = "101M"
 	if _, err := GetParallelTransferFlagValues(); err == nil {
 		t.Fatal("GetParallelTransferFlagValues() error = nil, want oversized buffer error")
+	}
+}
+
+func TestSetLogLevelRejectsInvalidLevel(t *testing.T) {
+	original := commonFlagValues
+	defer func() {
+		commonFlagValues = original
+	}()
+
+	command := &cobra.Command{}
+	commonFlagValues.logLevelInput = "not-a-level"
+	if err := setLogLevel(command); err == nil {
+		t.Fatal("setLogLevel() error = nil, want invalid level error")
 	}
 }
