@@ -52,11 +52,15 @@ type MkTicketCommand struct {
 }
 
 func NewMkTicketCommand(command *cobra.Command, args []string) (*MkTicketCommand, error) {
+	ticketFlagValues, err := flag.GetTicketFlagValues()
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid ticket flag")
+	}
 	mkTicket := &MkTicketCommand{
 		command: command,
 
 		commonFlagValues: flag.GetCommonFlagValues(command),
-		ticketFlagValues: flag.GetTicketFlagValues(),
+		ticketFlagValues: ticketFlagValues,
 	}
 
 	// path

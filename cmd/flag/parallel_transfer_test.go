@@ -63,3 +63,15 @@ func TestSetLogLevelRejectsInvalidLevel(t *testing.T) {
 		t.Fatal("setLogLevel() error = nil, want invalid level error")
 	}
 }
+
+func TestGetTicketFlagValuesRejectsInvalidType(t *testing.T) {
+	original := ticketFlagValues
+	defer func() {
+		ticketFlagValues = original
+	}()
+
+	ticketFlagValues.typeInput = "writ"
+	if _, err := GetTicketFlagValues(); err == nil {
+		t.Fatal("GetTicketFlagValues() error = nil, want invalid ticket type error")
+	}
+}

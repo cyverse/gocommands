@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
 	"github.com/cyverse/gocommands/commons/types"
 	"github.com/rs/xid"
@@ -61,7 +62,7 @@ func SetTicketFlags(command *cobra.Command) {
 	command.Flags().StringVarP(&ticketFlagValues.typeInput, "type", "t", "read", "Specify the ticket type (read or write)")
 }
 
-func GetTicketFlagValues() *TicketFlagValues {
+func GetTicketFlagValues() (*TicketFlagValues, error) {
 	if len(ticketFlagValues.Name) == 0 {
 		ticketFlagValues.Name = xid.New().String()
 	}
@@ -72,10 +73,10 @@ func GetTicketFlagValues() *TicketFlagValues {
 	case "write", "w", "rw", "readwrite", "read-write":
 		ticketFlagValues.Type = irodsclient_types.TicketTypeWrite
 	default:
-		ticketFlagValues.Type = irodsclient_types.TicketTypeRead
+		return nil, errors.Errorf("invalid ticket type %q: must be read or write", ticketFlagValues.typeInput)
 	}
 
-	return &ticketFlagValues
+	return &ticketFlagValues, nil
 }
 
 func SetTicketUpdateFlags(command *cobra.Command) {
