@@ -153,11 +153,13 @@ func (t *Tar) CreateTarball(targetPath string, callback TarTrackerCallBack) erro
 			return errors.Wrapf(err, "failed to open tar file %q", entry.sourcePath)
 		}
 
-		defer file.Close()
-
-		_, err = io.Copy(tarWriter, file)
-		if err != nil {
-			return errors.Wrapf(err, "failed to write tar file %q", entry.sourcePath)
+		_, copyErr := io.Copy(tarWriter, file)
+		closeErr := file.Close()
+		if copyErr != nil {
+			return errors.Wrapf(copyErr, "failed to write tar file %q", entry.sourcePath)
+		}
+		if closeErr != nil {
+			return errors.Wrapf(closeErr, "failed to close tar file %q", entry.sourcePath)
 		}
 
 		currentSize += entry.sourceStat.Size()
