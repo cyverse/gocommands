@@ -9,7 +9,7 @@ Be sure to download a binary for your target system architecture.
 
 For Linux & Mac OS:
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cyverse/gocommands/main/install_gocmd.sh | bash
+curl -fsSL https://raw.githubusercontent.com/cyverse/gocommands/main/install.sh | bash
 ```
 
 For Windows on Intel CPU (windows-amd64, windows Cmd):
