@@ -75,31 +75,8 @@ func (init *InitCommand) Process() error {
 	}
 
 	init.environmentManager = config.GetEnvironmentManager()
-
-	// The credentials loaded from the authentication file (~/.irods/.irodsA) are
-	// outdated when re-initializing. Clear them, so that the user can re-enter
-	// them.
-	if irodsclient_util.ExistFile(init.environmentManager.PasswordFilePath) {
-		init.environmentManager.Environment.Password = ""
-		init.environmentManager.Environment.PAMToken = ""
-
-		// The authentication file overwrites credentials given in the configuration
-		// file, so read those again.
-		if init.command.Flags().Changed("config") {
-			fileConfig, err := irodsclient_config.NewConfigFromFile(nil, init.environmentManager.EnvironmentFilePath)
-			if err == nil {
-				init.environmentManager.Environment.Password = fileConfig.Password
-				init.environmentManager.Environment.PAMToken = fileConfig.PAMToken
-			}
-		}
-
-		// Allow environment variables to override password values.
-		envConfig, err := irodsclient_config.NewConfigFromEnv(init.environmentManager.Environment)
-		if err != nil {
-			return errors.Wrapf(err, "failed to load config from environment")
-		}
-
-		init.environmentManager.Environment = envConfig
+	if err := refreshCredentialsForInit(init.environmentManager, init.command.Flags().Changed("config")); err != nil {
+		return err
 	}
 
 	// handle local flags
@@ -164,6 +141,42 @@ func (init *InitCommand) Process() error {
 		}
 	}
 
+	return nil
+}
+
+// refreshCredentialsForInit prevents a credential read from .irodsA from
+// suppressing the password prompt during initialization. A password explicitly
+// supplied in a config file or environment variable remains available for
+// non-interactive native authentication. PAM tokens are intentionally cleared:
+// init obtains a fresh token after authenticating with the password.
+func refreshCredentialsForInit(manager *irodsclient_config.ICommandsEnvironmentManager, configSpecified bool) error {
+	// The credentials loaded from the authentication file (~/.irods/.irodsA) are
+	// outdated when re-initializing. Clear them, so that the user can re-enter
+	// them.
+	if !irodsclient_util.ExistLocalFile(manager.PasswordFilePath) {
+		return nil
+	}
+
+	manager.Environment.Password = ""
+	manager.Environment.PAMToken = ""
+
+	// The authentication file overwrites credentials given in the configuration
+	// file, so read an explicit native password again.
+	if configSpecified {
+		fileConfig, err := irodsclient_config.NewConfigFromFile(nil, manager.EnvironmentFilePath)
+		if err == nil {
+			manager.Environment.Password = fileConfig.Password
+		}
+	}
+
+	// Allow environment variables to override password values.
+	envConfig, err := irodsclient_config.NewConfigFromEnv(manager.Environment)
+	if err != nil {
+		return errors.Wrapf(err, "failed to load config from environment")
+	}
+
+	envConfig.PAMToken = ""
+	manager.Environment = envConfig
 	return nil
 }
 
