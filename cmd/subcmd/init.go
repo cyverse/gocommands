@@ -11,6 +11,7 @@ import (
 
 	irodsclient_config "github.com/cyverse/go-irodsclient/config"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
 )
 
 var initCmd = &cobra.Command{
@@ -74,6 +75,9 @@ func (init *InitCommand) Process() error {
 	}
 
 	init.environmentManager = config.GetEnvironmentManager()
+	if err := refreshCredentialsForInit(init.environmentManager, init.command.Flags().Changed("config")); err != nil {
+		return err
+	}
 
 	// handle local flags
 	updated := false
@@ -137,6 +141,42 @@ func (init *InitCommand) Process() error {
 		}
 	}
 
+	return nil
+}
+
+// refreshCredentialsForInit prevents a credential read from .irodsA from
+// suppressing the password prompt during initialization. A password explicitly
+// supplied in a config file or environment variable remains available for
+// non-interactive native authentication. PAM tokens are intentionally cleared:
+// init obtains a fresh token after authenticating with the password.
+func refreshCredentialsForInit(manager *irodsclient_config.ICommandsEnvironmentManager, configSpecified bool) error {
+	// The credentials loaded from the authentication file (~/.irods/.irodsA) are
+	// outdated when re-initializing. Clear them, so that the user can re-enter
+	// them.
+	if !irodsclient_util.ExistLocalFile(manager.PasswordFilePath) {
+		return nil
+	}
+
+	manager.Environment.Password = ""
+	manager.Environment.PAMToken = ""
+
+	// The authentication file overwrites credentials given in the configuration
+	// file, so read an explicit native password again.
+	if configSpecified {
+		fileConfig, err := irodsclient_config.NewConfigFromFile(nil, manager.EnvironmentFilePath)
+		if err == nil {
+			manager.Environment.Password = fileConfig.Password
+		}
+	}
+
+	// Allow environment variables to override password values.
+	envConfig, err := irodsclient_config.NewConfigFromEnv(manager.Environment)
+	if err != nil {
+		return errors.Wrapf(err, "failed to load config from environment")
+	}
+
+	envConfig.PAMToken = ""
+	manager.Environment = envConfig
 	return nil
 }
 
