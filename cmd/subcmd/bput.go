@@ -1054,7 +1054,7 @@ func (bput *BputCommand) scheduleDeleteExtraFile(targetPath string) {
 	logger.Debug("scheduled an extra data object deletion")
 }
 
-func (bput *BputCommand) scheduleDeleteExtraDir(targetPath string) {
+func (bput *BputCommand) scheduleDeleteExtraDir(targetPath string, recursive bool) {
 	logger := log.WithFields(log.Fields{
 		"target_path": targetPath,
 	})
@@ -1096,7 +1096,7 @@ func (bput *BputCommand) scheduleDeleteExtraDir(targetPath string) {
 		job.Progress("delete", 0, 1, false)
 
 		startTime := time.Now()
-		removeErr := bput.filesystem.RemoveDir(targetPath, false, false)
+		removeErr := bput.filesystem.RemoveDir(targetPath, recursive, recursive)
 		endTime := time.Now()
 		report(startTime, endTime, removeErr)
 
@@ -1736,7 +1736,19 @@ func (bput *BputCommand) deleteExtraDir(targetPath string) error {
 		bput.transferReportManager.AddFile(reportFile)
 	}
 
-	// scan recursively
+	bput.mutex.RLock()
+	isExtra := !bput.updatedPathMap[targetPath]
+	bput.mutex.RUnlock()
+
+	// An unmarked directory cannot contain an updated descendant: every updated
+	// path marks itself and all of its parents. In non-interactive deletion modes,
+	// remove the whole extra subtree with one iRODS operation.
+	if isExtra && (bput.forceFlagValues.Force || bput.commonFlagValues.YesAll) {
+		bput.scheduleDeleteExtraDir(targetPath, true)
+		return nil
+	}
+
+	// Preserve per-entry prompts in interactive mode.
 	entries, err := bput.filesystem.List(targetPath)
 	if err != nil {
 		reportSimple(err)
@@ -1760,13 +1772,6 @@ func (bput *BputCommand) deleteExtraDir(targetPath string) error {
 	}
 
 	// delete the directory itself
-	bput.mutex.RLock()
-	isExtra := false
-	if _, ok := bput.updatedPathMap[targetPath]; !ok {
-		isExtra = true
-	}
-	bput.mutex.RUnlock()
-
 	if isExtra {
 		// extra dir
 		logger.Debug("removing an extra collection")
@@ -1781,7 +1786,7 @@ func (bput *BputCommand) deleteExtraDir(targetPath string) error {
 		}
 
 		if overwrite {
-			bput.scheduleDeleteExtraDir(targetPath)
+			bput.scheduleDeleteExtraDir(targetPath, false)
 			return nil
 		} else {
 			// do not remove

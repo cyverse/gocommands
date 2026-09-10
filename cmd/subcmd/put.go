@@ -759,7 +759,7 @@ func (put *PutCommand) scheduleDeleteExtraFile(targetPath string) {
 	logger.Debug("scheduled an extra data object deletion")
 }
 
-func (put *PutCommand) scheduleDeleteExtraDir(targetPath string) {
+func (put *PutCommand) scheduleDeleteExtraDir(targetPath string, recursive bool) {
 	logger := log.WithFields(log.Fields{
 		"target_path": targetPath,
 	})
@@ -801,7 +801,7 @@ func (put *PutCommand) scheduleDeleteExtraDir(targetPath string) {
 		job.Progress("delete", 0, 1, false)
 
 		startTime := time.Now()
-		removeErr := put.filesystem.RemoveDir(targetPath, false, false)
+		removeErr := put.filesystem.RemoveDir(targetPath, recursive, recursive)
 		endTime := time.Now()
 		report(startTime, endTime, removeErr)
 
@@ -1435,7 +1435,19 @@ func (put *PutCommand) deleteExtraDir(targetPath string) error {
 		put.transferReportManager.AddFile(reportFile)
 	}
 
-	// scan recursively
+	put.mutex.RLock()
+	isExtra := !put.updatedPathMap[targetPath]
+	put.mutex.RUnlock()
+
+	// An unmarked directory cannot contain an updated descendant: every updated
+	// path marks itself and all of its parents. In non-interactive deletion modes,
+	// remove the whole extra subtree with one iRODS operation.
+	if isExtra && (put.forceFlagValues.Force || put.commonFlagValues.YesAll) {
+		put.scheduleDeleteExtraDir(targetPath, true)
+		return nil
+	}
+
+	// Preserve per-entry prompts in interactive mode.
 	entries, err := put.filesystem.List(targetPath)
 	if err != nil {
 		reportSimple(err)
@@ -1459,13 +1471,6 @@ func (put *PutCommand) deleteExtraDir(targetPath string) error {
 	}
 
 	// delete the directory itself
-	put.mutex.RLock()
-	isExtra := false
-	if _, ok := put.updatedPathMap[targetPath]; !ok {
-		isExtra = true
-	}
-	put.mutex.RUnlock()
-
 	if isExtra {
 		// extra dir
 		logger.Debug("removing an extra collection")
@@ -1480,7 +1485,7 @@ func (put *PutCommand) deleteExtraDir(targetPath string) error {
 		}
 
 		if overwrite {
-			put.scheduleDeleteExtraDir(targetPath)
+			put.scheduleDeleteExtraDir(targetPath, false)
 			return nil
 		} else {
 			// do not remove

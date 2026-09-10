@@ -1399,7 +1399,19 @@ func (get *GetCommand) deleteExtraDir(targetPath string) error {
 		get.transferReportManager.AddFile(reportFile)
 	}
 
-	// scan recursively
+	get.mutex.RLock()
+	isExtra := !get.updatedPathMap[targetPath]
+	get.mutex.RUnlock()
+
+	// An unmarked directory cannot contain an updated descendant: every updated
+	// path marks itself and all of its parents. In non-interactive deletion modes,
+	// remove the whole extra subtree with one local filesystem operation.
+	if isExtra && (get.forceFlagValues.Force || get.commonFlagValues.YesAll) {
+		get.scheduleDeleteExtraDir(targetPath)
+		return nil
+	}
+
+	// Preserve per-entry prompts in interactive mode.
 	entries, err := os.ReadDir(targetPath)
 	if err != nil {
 		reportSimple(err)
@@ -1425,13 +1437,6 @@ func (get *GetCommand) deleteExtraDir(targetPath string) error {
 	}
 
 	// delete the directory itself
-	get.mutex.RLock()
-	isExtra := false
-	if _, ok := get.updatedPathMap[targetPath]; !ok {
-		isExtra = true
-	}
-	get.mutex.RUnlock()
-
 	if isExtra {
 		// extra dir
 		logger.Debug("removing an extra directory")
