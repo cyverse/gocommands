@@ -1,7 +1,9 @@
 package encryption
 
 import (
+	"bytes"
 	"encoding/hex"
+	"io"
 	"os"
 	"testing"
 
@@ -11,6 +13,26 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type readerWithDataAndEOF struct {
+	data []byte
+	read bool
+}
+
+func (reader *readerWithDataAndEOF) Read(buffer []byte) (int, error) {
+	if reader.read {
+		return 0, io.EOF
+	}
+
+	reader.read = true
+	return copy(buffer, reader.data), io.EOF
+}
+
+type shortWriter struct{}
+
+func (shortWriter) Write([]byte) (int, error) {
+	return 0, nil
+}
+
 func TestEncrypt(t *testing.T) {
 	t.Run("test EncryptFilenamePGP", testEncryptFilenamePGP)
 	t.Run("test EncryptFilenameWinSCP", testEncryptFilenameWinSCP)
@@ -19,6 +41,45 @@ func TestEncrypt(t *testing.T) {
 	t.Run("test EncryptFilePGP", testEncryptFilePGP)
 	t.Run("test EncryptFileWinSCP", testEncryptFileWinSCP)
 	t.Run("test EncryptFileSSH", testEncryptFileSSH)
+}
+
+func TestAESCTRReaderWriter(t *testing.T) {
+	key := bytes.Repeat([]byte{0x11}, 32)
+	salt := bytes.Repeat([]byte{0x22}, AesSaltLen)
+	data := makeFixedContentTestDataBuf(aesCTRBufferSize + 7)
+
+	var encrypted bytes.Buffer
+	err := EncryptAESCTRReaderWriter(bytes.NewReader(data), &encrypted, salt, key)
+	assert.NoError(t, err)
+	assert.Len(t, encrypted.Bytes(), len(data))
+
+	var decrypted bytes.Buffer
+	err = DecryptAESCTRReaderWriter(&encrypted, &decrypted, salt, key)
+	assert.NoError(t, err)
+	assert.Equal(t, data, decrypted.Bytes())
+}
+
+func TestAESCTRReaderWriterPreservesDataReturnedWithEOF(t *testing.T) {
+	key := bytes.Repeat([]byte{0x11}, 32)
+	salt := bytes.Repeat([]byte{0x22}, AesSaltLen)
+	data := []byte("data returned with EOF must be encrypted")
+
+	var encrypted bytes.Buffer
+	err := EncryptAESCTRReaderWriter(&readerWithDataAndEOF{data: data}, &encrypted, salt, key)
+	assert.NoError(t, err)
+
+	var decrypted bytes.Buffer
+	err = DecryptAESCTRReaderWriter(&encrypted, &decrypted, salt, key)
+	assert.NoError(t, err)
+	assert.Equal(t, data, decrypted.Bytes())
+}
+
+func TestAESCTRReaderWriterReturnsShortWrite(t *testing.T) {
+	key := bytes.Repeat([]byte{0x11}, 32)
+	salt := bytes.Repeat([]byte{0x22}, AesSaltLen)
+
+	err := EncryptAESCTRReaderWriter(bytes.NewReader([]byte("data")), shortWriter{}, salt, key)
+	assert.ErrorIs(t, err, io.ErrShortWrite)
 }
 
 func makeFixedContentTestDataBuf(size int64) []byte {

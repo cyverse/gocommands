@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	AesSaltLen int = 16
+	AesSaltLen       int = 16
+	aesCTRBufferSize     = 1024 * 1024 // 1 MiB
 )
 
 func PadPkcs7(data []byte, blocksize int) []byte {
@@ -56,29 +57,11 @@ func EncryptAESCTRReaderWriter(reader io.Reader, writer io.Writer, salt []byte, 
 		return errors.Wrapf(err, "failed to create AES cipher")
 	}
 
-	decrypter := cipher.NewCTR(block, salt)
+	streamCipher := cipher.NewCTR(block, salt)
+	streamWriter := &cipher.StreamWriter{S: streamCipher, W: writer}
 
-	buf := make([]byte, block.BlockSize())
-	destBuf := make([]byte, block.BlockSize())
-	for {
-		readLen, err := reader.Read(buf)
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-
-		decrypter.XORKeyStream(destBuf, buf[:readLen])
-		writeLen, err := writer.Write(destBuf[:readLen])
-		if err != nil {
-			return err
-		}
-
-		if writeLen != readLen {
-			return errors.Errorf("failed to write")
-		}
-	}
+	_, err = io.CopyBuffer(streamWriter, reader, make([]byte, aesCTRBufferSize))
+	return err
 }
 
 func DecryptAESCTRReaderWriter(reader io.Reader, writer io.Writer, salt []byte, key []byte) error {
@@ -88,27 +71,9 @@ func DecryptAESCTRReaderWriter(reader io.Reader, writer io.Writer, salt []byte, 
 		return errors.Wrapf(err, "failed to create AES cipher")
 	}
 
-	decrypter := cipher.NewCTR(block, salt)
+	streamCipher := cipher.NewCTR(block, salt)
+	streamWriter := &cipher.StreamWriter{S: streamCipher, W: writer}
 
-	buf := make([]byte, block.BlockSize())
-	destBuf := make([]byte, block.BlockSize())
-	for {
-		readLen, err := reader.Read(buf)
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-
-		decrypter.XORKeyStream(destBuf, buf[:readLen])
-		writeLen, err := writer.Write(destBuf[:readLen])
-		if err != nil {
-			return err
-		}
-
-		if writeLen != readLen {
-			return errors.Errorf("failed to write")
-		}
-	}
+	_, err = io.CopyBuffer(streamWriter, reader, make([]byte, aesCTRBufferSize))
+	return err
 }
