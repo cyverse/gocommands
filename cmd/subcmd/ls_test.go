@@ -8,6 +8,22 @@ import (
 	"github.com/cyverse/gocommands/commons/format"
 )
 
+func TestIndexAccessesByPathPreservesOrder(t *testing.T) {
+	first := &irodsclient_types.IRODSAccess{Path: "/zone/a", UserName: "first"}
+	other := &irodsclient_types.IRODSAccess{Path: "/zone/b", UserName: "other"}
+	second := &irodsclient_types.IRODSAccess{Path: "/zone/a", UserName: "second"}
+
+	indexed := indexAccessesByPath([]*irodsclient_types.IRODSAccess{first, other, second})
+	accessesForA := indexed["/zone/a"]
+	if len(accessesForA) != 2 || accessesForA[0] != first || accessesForA[1] != second {
+		t.Errorf("accesses for /zone/a = %#v, want [%#v %#v]", accessesForA, first, second)
+	}
+
+	if accessesForMissingPath := indexed["/zone/missing"]; len(accessesForMissingPath) != 0 {
+		t.Errorf("accesses for missing path = %#v, want none", accessesForMissingPath)
+	}
+}
+
 func TestGetDataObjectModifyTimeWithoutReplicas(t *testing.T) {
 	ls := &LsCommand{}
 	modifiedAt := ls.getDataObjectModifyTime(&irodsclient_types.IRODSDataObject{})

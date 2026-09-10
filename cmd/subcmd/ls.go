@@ -415,6 +415,11 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 		pathTitle = "Path"
 	}
 
+	accessesByPath := map[string][]*irodsclient_types.IRODSAccess{}
+	if ls.listFlagValues.Access {
+		accessesByPath = indexAccessesByPath(accesses)
+	}
+
 	// access is optional
 	if ls.listFlagValues.Format == format.ListFormatNormal {
 		if ls.listFlagValues.Access {
@@ -495,12 +500,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 			}
 
 			if ls.listFlagValues.Access {
-				accessesForEntry := []*irodsclient_types.IRODSAccess{}
-				for _, access := range accesses {
-					if access.Path == entry.Path {
-						accessesForEntry = append(accessesForEntry, access)
-					}
-				}
+				accessesForEntry := accessesByPath[entry.Path]
 
 				accessString := ""
 				if len(accessesForEntry) > 0 {
@@ -554,12 +554,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 			modifyTime := types.MakeDateTimeStringHM(entry.ModifyTime)
 
 			if ls.listFlagValues.Access {
-				accessesForEntry := []*irodsclient_types.IRODSAccess{}
-				for _, access := range accesses {
-					if access.Path == entry.Path {
-						accessesForEntry = append(accessesForEntry, access)
-					}
-				}
+				accessesForEntry := accessesByPath[entry.Path]
 
 				accessString := ""
 				if len(accessesForEntry) > 0 {
@@ -772,12 +767,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 
 			accessString := ""
 			if ls.listFlagValues.Access {
-				accessesForEntry := []*irodsclient_types.IRODSAccess{}
-				for _, access := range accesses {
-					if access.Path == replica.DataObject.Path {
-						accessesForEntry = append(accessesForEntry, access)
-					}
-				}
+				accessesForEntry := accessesByPath[replica.DataObject.Path]
 
 				if len(accessesForEntry) > 0 {
 					if ls.outputFormatFlagValues.Format == format.OutputFormatLegacy {
@@ -1164,6 +1154,15 @@ func (ls *LsCommand) getDataObjectModifyTime(object *irodsclient_types.IRODSData
 		}
 	}
 	return maxTime
+}
+
+func indexAccessesByPath(accesses []*irodsclient_types.IRODSAccess) map[string][]*irodsclient_types.IRODSAccess {
+	accessesByPath := make(map[string][]*irodsclient_types.IRODSAccess, len(accesses))
+	for _, access := range accesses {
+		accessesByPath[access.Path] = append(accessesByPath[access.Path], access)
+	}
+
+	return accessesByPath
 }
 
 func (ls *LsCommand) getAccessesString(accesses []*irodsclient_types.IRODSAccess, separater string) string {
