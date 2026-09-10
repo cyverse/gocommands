@@ -11,6 +11,7 @@ import (
 
 	irodsclient_config "github.com/cyverse/go-irodsclient/config"
 	irodsclient_types "github.com/cyverse/go-irodsclient/irods/types"
+	irodsclient_util "github.com/cyverse/go-irodsclient/irods/util"
 )
 
 var initCmd = &cobra.Command{
@@ -74,6 +75,32 @@ func (init *InitCommand) Process() error {
 	}
 
 	init.environmentManager = config.GetEnvironmentManager()
+
+	// The credentials loaded from the authentication file (~/.irods/.irodsA) are
+	// outdated when re-initializing. Clear them, so that the user can re-enter
+	// them.
+	if irodsclient_util.ExistFile(init.environmentManager.PasswordFilePath) {
+		init.environmentManager.Environment.Password = ""
+		init.environmentManager.Environment.PAMToken = ""
+
+		// The authentication file overwrites credentials given in the configuration
+		// file, so read those again.
+		if init.command.Flags().Changed("config") {
+			fileConfig, err := irodsclient_config.NewConfigFromFile(nil, init.environmentManager.EnvironmentFilePath)
+			if err == nil {
+				init.environmentManager.Environment.Password = fileConfig.Password
+				init.environmentManager.Environment.PAMToken = fileConfig.PAMToken
+			}
+		}
+
+		// Allow environment variables to override password values.
+		envConfig, err := irodsclient_config.NewConfigFromEnv(init.environmentManager.Environment)
+		if err != nil {
+			return errors.Wrapf(err, "failed to load config from environment")
+		}
+
+		init.environmentManager.Environment = envConfig
+	}
 
 	// handle local flags
 	updated := false
