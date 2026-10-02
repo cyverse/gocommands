@@ -197,7 +197,7 @@ func (put *PutCommand) Process() error {
 		timeout = put.commonFlagValues.Timeout
 	}
 
-	put.filesystem, err = irods.GetIRODSFSClientForLargeFileIO(put.account, put.maxConnectionNum, put.parallelTransferFlagValues.TCPBufferSize, true, timeout)
+	put.filesystem, err = irods.GetIRODSFSClientForLargeFileIO(put.account, put.maxConnectionNum, put.parallelTransferFlagValues.TCPSendBufferSize, put.parallelTransferFlagValues.TCPRecvBufferSize, true, timeout)
 	if err != nil {
 		return errors.Wrap(err, "failed to get iRODS FS Client")
 	}

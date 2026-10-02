@@ -17,7 +17,8 @@ var (
 type AdditionalSystemConfig struct {
 	TransferMode             string `json:"transfer_mode,omitempty" yaml:"transfer_mode,omitempty"`
 	BputForSync              bool   `json:"bput_for_sync,omitempty" yaml:"bput_for_sync,omitempty"`
-	TCPBufferSize            string `json:"tcp_buffer_size,omitempty" yaml:"tcp_buffer_size,omitempty"`
+	TCPSendBufferSize        string `json:"tcp_send_buffer_size,omitempty" yaml:"tcp_send_buffer_size,omitempty"`
+	TCPRecvBufferSize        string `json:"tcp_recv_buffer_size,omitempty" yaml:"tcp_recv_buffer_size,omitempty"`
 	TransferThreadNum        int    `json:"transfer_thread_num,omitempty" yaml:"transfer_thread_num,omitempty"`
 	TransferThreadNumPerFile int    `json:"transfer_thread_num_per_file,omitempty" yaml:"transfer_thread_num_per_file,omitempty"`
 	VerifyChecksum           bool   `json:"verify_checksum,omitempty" yaml:"verify_checksum,omitempty"`

@@ -121,7 +121,8 @@ Use `i:<path>` to specify an iRODS path. Local paths do not require a prefix.
 | `-s, --session int`   | Specify session identifier for tracking operations (default 94807).         |
 | `--show_path`         | Show full file paths in progress bars.                                       |
 | `--single_threaded`   | Force single-threaded file transfer.                                         |
-| `--tcp_buffer_size string` | Set the TCP socket buffer size (default "1MB").                        |
+| `--tcp_recv_buffer_size string` | Set the TCP socket receive buffer size (default "0", sized by the system). |
+| `--tcp_send_buffer_size string` | Set the TCP socket send buffer size (default "0", sized by the system). |
 | `--thread_num int`    | Set the number of transfer threads (default 5).                            |
 | `-K, --verify_checksum` | Calculate and verify checksums to ensure data integrity after transfer (default true). |
 | `-v, --version`       | Display version information.                                                |

@@ -21,8 +21,10 @@ func GetIRODSFSClient(account *irodsclient_types.IRODSAccount, infiniteCache boo
 	fsConfig.IOConnection.LongOperationTimeout = config.LongFilesystemTimeout
 
 	// set tcp buffer size
-	fsConfig.MetadataConnection.TcpBufferSize = config.GetDefaultTCPBufferSize()
-	fsConfig.IOConnection.TcpBufferSize = config.GetDefaultTCPBufferSize()
+	fsConfig.MetadataConnection.TcpSendBufferSize = config.GetDefaultTCPSendBufferSize()
+	fsConfig.MetadataConnection.TcpRecvBufferSize = config.GetDefaultTCPRecvBufferSize()
+	fsConfig.IOConnection.TcpSendBufferSize = config.GetDefaultTCPSendBufferSize()
+	fsConfig.IOConnection.TcpRecvBufferSize = config.GetDefaultTCPRecvBufferSize()
 
 	// set connection management
 	fsConfig.MetadataConnection.WaitConnection = true
@@ -49,7 +51,7 @@ func GetIRODSFSClient(account *irodsclient_types.IRODSAccount, infiniteCache boo
 }
 
 // GetIRODSFSClientForLargeFileIO returns a file system client
-func GetIRODSFSClientForLargeFileIO(account *irodsclient_types.IRODSAccount, maxIOConnection int, tcpBufferSize int, infiniteCache bool, timeout int) (*irodsclient_fs.FileSystem, error) {
+func GetIRODSFSClientForLargeFileIO(account *irodsclient_types.IRODSAccount, maxIOConnection int, tcpSendBufferSize int, tcpRecvBufferSize int, infiniteCache bool, timeout int) (*irodsclient_fs.FileSystem, error) {
 	fsConfig := irodsclient_fs.NewFileSystemConfig(config.ClientProgramName)
 
 	if infiniteCache {
@@ -78,8 +80,10 @@ func GetIRODSFSClientForLargeFileIO(account *irodsclient_types.IRODSAccount, max
 	fsConfig.IOConnection.WaitConnection = true
 
 	// set tcp buffer size
-	fsConfig.MetadataConnection.TcpBufferSize = tcpBufferSize
-	fsConfig.IOConnection.TcpBufferSize = tcpBufferSize
+	fsConfig.MetadataConnection.TcpSendBufferSize = tcpSendBufferSize
+	fsConfig.MetadataConnection.TcpRecvBufferSize = tcpRecvBufferSize
+	fsConfig.IOConnection.TcpSendBufferSize = tcpSendBufferSize
+	fsConfig.IOConnection.TcpRecvBufferSize = tcpRecvBufferSize
 
 	if timeout > 0 {
 		duration := time.Duration(timeout) * time.Second

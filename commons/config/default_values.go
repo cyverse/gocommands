@@ -15,7 +15,8 @@ const (
 	LongFilesystemTimeout           irodsclient_types.Duration = irodsclient_types.Duration(10 * time.Minute) // exceptionally long timeout for listing dirs or users
 	transferThreadNumDefault        int                        = 5
 	transferThreadNumPerFileDefault int                        = 5
-	tcpBufferSizeStringDefault      string                     = "0"
+	tcpSendBufferSizeStringDefault  string                     = "0"
+	tcpRecvBufferSizeStringDefault  string                     = "0"
 	bputForSyncDefaut               bool                       = false
 
 	MinFileNumInBundleDefault  int   = 3
@@ -28,22 +29,40 @@ func GetDefaultFilesystemTimeoutInSeconds() int {
 	return int(FilesystemTimeout / irodsclient_types.Duration(time.Second))
 }
 
-func GetDefaultTCPBufferSize() int {
-	size, _ := types.ParseSize(GetDefaultTCPBufferSizeString())
+func GetDefaultTCPSendBufferSize() int {
+	size, _ := types.ParseSize(GetDefaultTCPSendBufferSizeString())
 	return int(size)
 }
 
-func GetDefaultTCPBufferSizeString() string {
+func GetDefaultTCPSendBufferSizeString() string {
 	// get from sysconfig
 	sysConfig := GetSystemConfig()
 
 	if sysConfig != nil && sysConfig.AdditionalConfig != nil {
-		if sysConfig.AdditionalConfig.TCPBufferSize != "" {
-			return sysConfig.AdditionalConfig.TCPBufferSize
+		if sysConfig.AdditionalConfig.TCPSendBufferSize != "" {
+			return sysConfig.AdditionalConfig.TCPSendBufferSize
 		}
 	}
 
-	return tcpBufferSizeStringDefault
+	return tcpSendBufferSizeStringDefault
+}
+
+func GetDefaultTCPRecvBufferSize() int {
+	size, _ := types.ParseSize(GetDefaultTCPRecvBufferSizeString())
+	return int(size)
+}
+
+func GetDefaultTCPRecvBufferSizeString() string {
+	// get from sysconfig
+	sysConfig := GetSystemConfig()
+
+	if sysConfig != nil && sysConfig.AdditionalConfig != nil {
+		if sysConfig.AdditionalConfig.TCPRecvBufferSize != "" {
+			return sysConfig.AdditionalConfig.TCPRecvBufferSize
+		}
+	}
+
+	return tcpRecvBufferSizeStringDefault
 }
 
 func GetDefaultTransferThreadNum() int {

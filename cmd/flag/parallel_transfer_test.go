@@ -13,9 +13,10 @@ func TestGetParallelTransferFlagValuesCapsThreadsPerFile(t *testing.T) {
 	}()
 
 	parallelTransferFlagValues = ParallelTransferFlagValues{
-		ThreadNumber:        4,
-		ThreadNumberPerFile: 16,
-		tcpBufferSizeInput:  "0",
+		ThreadNumber:           4,
+		ThreadNumberPerFile:    16,
+		tcpSendBufferSizeInput: "0",
+		tcpRecvBufferSizeInput: "0",
 	}
 
 	values, err := GetParallelTransferFlagValues()
@@ -33,7 +34,14 @@ func TestGetParallelTransferFlagValuesRejectsInvalidBufferSize(t *testing.T) {
 		parallelTransferFlagValues = original
 	}()
 
-	parallelTransferFlagValues.tcpBufferSizeInput = ""
+	parallelTransferFlagValues.tcpSendBufferSizeInput = ""
+	parallelTransferFlagValues.tcpRecvBufferSizeInput = "0"
+	if _, err := GetParallelTransferFlagValues(); err == nil {
+		t.Fatal("GetParallelTransferFlagValues() error = nil, want invalid send size error")
+	}
+
+	parallelTransferFlagValues.tcpSendBufferSizeInput = "0"
+	parallelTransferFlagValues.tcpRecvBufferSizeInput = ""
 	if _, err := GetParallelTransferFlagValues(); err == nil {
 		t.Fatal("GetParallelTransferFlagValues() error = nil, want invalid size error")
 	}
@@ -45,7 +53,14 @@ func TestGetParallelTransferFlagValuesRejectsLargeBufferSize(t *testing.T) {
 		parallelTransferFlagValues = original
 	}()
 
-	parallelTransferFlagValues.tcpBufferSizeInput = "101M"
+	parallelTransferFlagValues.tcpSendBufferSizeInput = "101M"
+	parallelTransferFlagValues.tcpRecvBufferSizeInput = "0"
+	if _, err := GetParallelTransferFlagValues(); err == nil {
+		t.Fatal("GetParallelTransferFlagValues() error = nil, want oversized send buffer error")
+	}
+
+	parallelTransferFlagValues.tcpSendBufferSizeInput = "0"
+	parallelTransferFlagValues.tcpRecvBufferSizeInput = "101M"
 	if _, err := GetParallelTransferFlagValues(); err == nil {
 		t.Fatal("GetParallelTransferFlagValues() error = nil, want oversized buffer error")
 	}

@@ -202,7 +202,7 @@ func (get *GetCommand) Process() error {
 		timeout = get.commonFlagValues.Timeout
 	}
 
-	get.filesystem, err = irods.GetIRODSFSClientForLargeFileIO(get.account, get.maxConnectionNum, get.parallelTransferFlagValues.TCPBufferSize, true, timeout)
+	get.filesystem, err = irods.GetIRODSFSClientForLargeFileIO(get.account, get.maxConnectionNum, get.parallelTransferFlagValues.TCPSendBufferSize, get.parallelTransferFlagValues.TCPRecvBufferSize, true, timeout)
 	if err != nil {
 		return errors.Wrap(err, "failed to get iRODS FS Client")
 	}

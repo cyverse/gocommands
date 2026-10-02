@@ -8,14 +8,16 @@ import (
 )
 
 type ParallelTransferFlagValues struct {
-	SingleThread        bool
-	ThreadNumber        int
-	ThreadNumberPerFile int
-	TCPBufferSize       int
-	tcpBufferSizeInput  string
-	Icat                bool
-	WebDAV              bool
-	StopOnError         bool
+	SingleThread           bool
+	ThreadNumber           int
+	ThreadNumberPerFile    int
+	TCPSendBufferSize      int
+	TCPRecvBufferSize      int
+	tcpSendBufferSizeInput string
+	tcpRecvBufferSizeInput string
+	Icat                   bool
+	WebDAV                 bool
+	StopOnError            bool
 }
 
 const maxTCPBufferSize = 100 * types.MegaBytes
@@ -27,7 +29,8 @@ var (
 func SetParallelTransferFlags(command *cobra.Command, hideParallelConfig bool, hideSingleThread bool) {
 	command.Flags().IntVar(&parallelTransferFlagValues.ThreadNumber, "thread_num", config.GetDefaultTransferThreadNum(), "Set the total number of transfer threads")
 	command.Flags().IntVar(&parallelTransferFlagValues.ThreadNumberPerFile, "thread_num_per_file", config.GetDefaultTransferThreadNumPerFile(), "Set the number of transfer threads for each file")
-	command.Flags().StringVar(&parallelTransferFlagValues.tcpBufferSizeInput, "tcp_buffer_size", config.GetDefaultTCPBufferSizeString(), "Set the TCP socket buffer size")
+	command.Flags().StringVar(&parallelTransferFlagValues.tcpSendBufferSizeInput, "tcp_send_buffer_size", config.GetDefaultTCPSendBufferSizeString(), "Set the TCP socket send buffer size")
+	command.Flags().StringVar(&parallelTransferFlagValues.tcpRecvBufferSizeInput, "tcp_recv_buffer_size", config.GetDefaultTCPRecvBufferSizeString(), "Set the TCP socket receive buffer size")
 	command.Flags().BoolVar(&parallelTransferFlagValues.Icat, "icat", false, "Use iCAT for file transfers")
 	command.Flags().BoolVar(&parallelTransferFlagValues.SingleThread, "single_threaded", false, "Force single-threaded file transfer")
 	command.Flags().BoolVar(&parallelTransferFlagValues.WebDAV, "webdav", false, "Use WebDAV protocol (HTTP) for transfer")
@@ -36,7 +39,8 @@ func SetParallelTransferFlags(command *cobra.Command, hideParallelConfig bool, h
 	if hideParallelConfig {
 		command.Flags().MarkHidden("thread_num")
 		command.Flags().MarkHidden("thread_num_per_file")
-		command.Flags().MarkHidden("tcp_buffer_size")
+		command.Flags().MarkHidden("tcp_send_buffer_size")
+		command.Flags().MarkHidden("tcp_recv_buffer_size")
 		command.Flags().MarkHidden("icat")
 		command.Flags().MarkHidden("single_threaded")
 		command.Flags().MarkHidden("webdav")
@@ -50,14 +54,17 @@ func SetParallelTransferFlags(command *cobra.Command, hideParallelConfig bool, h
 }
 
 func GetParallelTransferFlagValues() (*ParallelTransferFlagValues, error) {
-	size, err := types.ParseSize(parallelTransferFlagValues.tcpBufferSizeInput)
+	sendSize, err := parseTCPBufferSize(parallelTransferFlagValues.tcpSendBufferSizeInput, "send")
 	if err != nil {
 		return nil, err
 	}
-	if size > maxTCPBufferSize {
-		return nil, errors.Errorf("tcp buffer size must not exceed %dMB", maxTCPBufferSize/types.MegaBytes)
+	parallelTransferFlagValues.TCPSendBufferSize = sendSize
+
+	recvSize, err := parseTCPBufferSize(parallelTransferFlagValues.tcpRecvBufferSizeInput, "receive")
+	if err != nil {
+		return nil, err
 	}
-	parallelTransferFlagValues.TCPBufferSize = int(size)
+	parallelTransferFlagValues.TCPRecvBufferSize = recvSize
 
 	if parallelTransferFlagValues.ThreadNumber < 1 {
 		parallelTransferFlagValues.ThreadNumber = 1
@@ -81,4 +88,15 @@ func GetParallelTransferFlagValues() (*ParallelTransferFlagValues, error) {
 	}
 
 	return &parallelTransferFlagValues, nil
+}
+
+func parseTCPBufferSize(input string, direction string) (int, error) {
+	size, err := types.ParseSize(input)
+	if err != nil {
+		return 0, errors.Wrapf(err, "invalid tcp %s buffer size", direction)
+	}
+	if size > maxTCPBufferSize {
+		return 0, errors.Errorf("tcp %s buffer size must not exceed %dMB", direction, maxTCPBufferSize/types.MegaBytes)
+	}
+	return int(size), nil
 }
