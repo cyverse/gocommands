@@ -112,6 +112,7 @@ gocmd bput [flags] <local-files-or-dir>... <dest-collection>
 | `--no_root`                     | Avoid creating the root directory at the destination during operation.      |
 | `--progress`                    | Show progress bars during transfer.                                         |
 | `-q, --quiet`                   | Suppress all non-error output messages.                                     |
+| `--redirect`                    | Connect to resource servers directly for transfer.                          |
 | `--report string`               | Create a transfer report; specify the path for file output. An empty string or '-' outputs to stdout. |
 | `-R, --resource string`         | Target specific iRODS resource server for operations.                       |
 | `--retry int`                   | Set the number of retry attempts (default 3).                               |

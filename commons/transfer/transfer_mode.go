@@ -5,8 +5,9 @@ import "strings"
 type TransferMode string
 
 const (
-	TransferModeICAT   TransferMode = "icat"
-	TransferModeWebDAV TransferMode = "webdav"
+	TransferModeICAT               TransferMode = "icat"
+	TransferModeWebDAV             TransferMode = "webdav"
+	TransferModeRedirectToResource TransferMode = "redirect-to-resource"
 )
 
 // GetTransferMode returns transfer mode
@@ -16,13 +17,15 @@ func GetTransferMode(mode string) TransferMode {
 		return TransferModeICAT
 	case string(TransferModeWebDAV), "http", "web":
 		return TransferModeWebDAV
+	case string(TransferModeRedirectToResource), "redirect":
+		return TransferModeRedirectToResource
 	default:
 		return TransferModeICAT
 	}
 }
 
 func (t TransferMode) Valid() bool {
-	if t == TransferModeICAT || t == TransferModeWebDAV {
+	if t == TransferModeICAT || t == TransferModeWebDAV || t == TransferModeRedirectToResource {
 		return true
 	}
 	return false

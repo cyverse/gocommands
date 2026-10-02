@@ -545,6 +545,8 @@ func (put *PutCommand) schedulePut(sourceStat fs.FileInfo, sourcePath string, te
 			switch transferMode {
 			case transfer.TransferModeWebDAV:
 				uploadResult, uploadErr = put.webdavClient.UploadFile(uploadSourcePath, targetPath, "", put.checksumFlagValues.VerifyChecksum, progressCallbackPut)
+			case transfer.TransferModeRedirectToResource:
+				uploadResult, uploadErr = put.filesystem.UploadFileRedirectToResource(uploadSourcePath, targetPath, "", threadsRequired, false, put.checksumFlagValues.VerifyChecksum, progressCallbackPut)
 			case transfer.TransferModeICAT:
 				fallthrough
 			default:
@@ -1577,6 +1579,9 @@ func (put *PutCommand) determineTransferMethod(size int64) (transfer.TransferMod
 
 		logger.Info("using WebDAV for uploading a data object")
 		return transfer.TransferModeWebDAV, 1
+	} else if put.parallelTransferFlagValues.RedirectToResource {
+		logger.Info("using resource server redirection for uploading a data object")
+		return transfer.TransferModeRedirectToResource, threads
 	}
 
 	// sysconfig

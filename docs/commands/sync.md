@@ -117,6 +117,7 @@ Use `i:<path>` to specify an iRODS path. Local paths do not require a prefix.
 | `--no_root`                     | Avoid creating the root directory at the destination during operation.      |
 | `--progress`                    | Show progress bars during transfer.                                         |
 | `-q, --quiet`                   | Suppress all non-error output messages.                                     |
+| `--redirect`                    | Connect to resource servers directly for transfer.                          |
 | `-R, --resource string`         | Target specific iRODS resource server for operations.                       |
 | `--retry int`                   | Set the number of retry attempts (default 3).                               |
 | `--retry_interval int`          | Set the interval between retry attempts in seconds (default 5).             |

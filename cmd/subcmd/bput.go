@@ -664,6 +664,8 @@ func (bput *BputCommand) scheduleBundleTransfer(bun *bundle.Bundle) {
 			switch transferMode {
 			case transfer.TransferModeWebDAV:
 				uploadResult, uploadErr = bput.webdavClient.UploadFile(tarballPath, stagingTargetPath, "", bput.checksumFlagValues.VerifyChecksum, progressCallbackPut)
+			case transfer.TransferModeRedirectToResource:
+				uploadResult, uploadErr = bput.filesystem.UploadFileRedirectToResource(tarballPath, stagingTargetPath, "", threadsRequired, false, bput.checksumFlagValues.VerifyChecksum, progressCallbackPut)
 			case transfer.TransferModeICAT:
 				fallthrough
 			default:
@@ -765,7 +767,11 @@ func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleE
 		bput.transferReportManager.AddTransfer(result, transfer.TransferMethodPut, err, newNotes)
 	}
 
-	_, threadsRequired := bput.determineTransferMethod(bundleEntry.Size)
+	transferMode, threadsRequired := bput.determineTransferMethod(bundleEntry.Size)
+	if transferMode != transfer.TransferModeRedirectToResource {
+		// files that do not go into a bundle are uploaded through iCAT, not WebDAV
+		transferMode = transfer.TransferModeICAT
+	}
 
 	putTask := func(job *parallel.ParallelJob) error {
 		if job.IsCanceled() {
@@ -823,7 +829,7 @@ func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleE
 			return errors.Wrapf(statErr, "failed to stat %q", parentTargetPath)
 		}
 
-		notes = append(notes, "icat", fmt.Sprintf("%d threads", threadsRequired))
+		notes = append(notes, string(transferMode), fmt.Sprintf("%d threads", threadsRequired))
 
 		var uploadResult *irodsclient_fs.FileTransferResult
 		var uploadErr error
@@ -837,7 +843,11 @@ func (bput *BputCommand) scheduleBundleEntryTransfer(bundleEntry *bundle.BundleE
 			if entryAttempt > 1 {
 				logger.Debugf("retrying upload attempt %d/%d for %q", entryAttempt, entryRetryNum+1, bundleEntry.LocalPath)
 			}
-			uploadResult, uploadErr = bput.filesystem.UploadFileParallel(uploadSourcePath, bundleEntry.IRODSPath, "", threadsRequired, false, bput.checksumFlagValues.VerifyChecksum, progressCallbackPut)
+			if transferMode == transfer.TransferModeRedirectToResource {
+				uploadResult, uploadErr = bput.filesystem.UploadFileRedirectToResource(uploadSourcePath, bundleEntry.IRODSPath, "", threadsRequired, false, bput.checksumFlagValues.VerifyChecksum, progressCallbackPut)
+			} else {
+				uploadResult, uploadErr = bput.filesystem.UploadFileParallel(uploadSourcePath, bundleEntry.IRODSPath, "", threadsRequired, false, bput.checksumFlagValues.VerifyChecksum, progressCallbackPut)
+			}
 			return uploadErr
 		}, retry.Attempts(uint(entryRetryNum+1)), retry.Delay(entryRetryInterval), retry.LastErrorOnly(true))
 
@@ -1874,6 +1884,9 @@ func (bput *BputCommand) determineTransferMethod(size int64) (transfer.TransferM
 
 		logger.Info("using WebDAV for uploading a data object")
 		return transfer.TransferModeWebDAV, 1
+	} else if bput.parallelTransferFlagValues.RedirectToResource {
+		logger.Info("using resource server redirection for uploading a data object")
+		return transfer.TransferModeRedirectToResource, threads
 	}
 
 	// sysconfig
@@ -1911,6 +1924,9 @@ func (bput *BputCommand) determineTransferMethodForBundle(bun *bundle.Bundle) (t
 
 		logger.Info("using WebDAV for uploading a data object")
 		return transfer.TransferModeWebDAV, 1
+	} else if bput.parallelTransferFlagValues.RedirectToResource {
+		logger.Info("using resource server redirection for uploading a data object")
+		return transfer.TransferModeRedirectToResource, threads
 	}
 
 	// sysconfig

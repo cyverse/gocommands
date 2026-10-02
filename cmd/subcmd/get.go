@@ -515,6 +515,9 @@ func (get *GetCommand) scheduleGet(sourceEntry *irodsclient_fs.Entry, tempPath s
 			case transfer.TransferModeWebDAV:
 				downloadResult, downloadErr = get.webdavClient.DownloadFile(sourceEntry, downloadPath, "", get.checksumFlagValues.VerifyChecksum, progressCallbackGet)
 				notes = append(notes, "webdav")
+			case transfer.TransferModeRedirectToResource:
+				downloadResult, downloadErr = get.filesystem.DownloadFileRedirectToResource(sourceEntry.Path, "", downloadPath, threadsRequired, get.checksumFlagValues.VerifyChecksum, progressCallbackGet)
+				notes = append(notes, "redirect", fmt.Sprintf("%d threads", threadsRequired))
 			case transfer.TransferModeICAT:
 				fallthrough
 			default:
@@ -1553,6 +1556,9 @@ func (get *GetCommand) determineTransferMethod(size int64) (transfer.TransferMod
 
 		logger.Info("using WebDAV for downloading a data object")
 		return transfer.TransferModeWebDAV, 1
+	} else if get.parallelTransferFlagValues.RedirectToResource {
+		logger.Info("using resource server redirection for downloading a data object")
+		return transfer.TransferModeRedirectToResource, threads
 	}
 
 	// sysconfig
