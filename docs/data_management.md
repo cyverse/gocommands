@@ -156,7 +156,7 @@ By default, after configuring GoCommands, your current working collection is set
 
 5. **Upload and verify checksum:**
    ```sh
-   gocmd put -K /local/path/important_data.txt /myZone/home/myUser/
+   gocmd put -k /local/path/important_data.txt /myZone/home/myUser/
    ```
 
    This command uploads the file and verifies its integrity by calculating a checksum during transfer.
@@ -205,7 +205,7 @@ By default, after configuring GoCommands, your current working collection is set
 
 5. **Download and verify checksum:**
    ```sh
-   gocmd get -K /myZone/home/myUser/important_data.txt .
+   gocmd get -k /myZone/home/myUser/important_data.txt .
    ```
 
    This command downloads the file and verifies its integrity by calculating the checksum after download and comparing it with the original in iRODS. This ensures data consistency and detects any corruption during transfer.

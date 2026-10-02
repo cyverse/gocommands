@@ -24,14 +24,22 @@ gocmd touch [flags]
 
 ## All Available Flags
 
-| Flag                  | Description                                                                 |
-|-----------------------|-----------------------------------------------------------------------------|
-| `-c, --config string` | Specify custom iRODS configuration file or directory path (default "/home/myUser/.irods"). |
-| `-d, --debug`         | Enable verbose debug output for troubleshooting.                            |
-| `-h, --help`          | Display help information about available commands and options.              |
-| `--log_level string`  | Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG).               |
-| `--no_create`         | Skip creation of the data object. |
-| `-q, --quiet`         | Suppress all non-error output messages.                                     |
-| `-R, --resource string` | Target specific iRODS resource server for operations.                     |
-| `-s, --session int`   | Specify session identifier for tracking operations (default 42938).         |
-| `-v, --version`       | Display version information.                                                |
+| Flag                        | Description                                                                 |
+|-----------------------------|-----------------------------------------------------------------------------|
+| `-c, --config string`       | Specify custom iRODS configuration file or directory path (default "/home/myUser/.irods"). |
+| `-d, --debug`               | Enable verbose debug output for troubleshooting.                            |
+| `-h, --help`                | Display help information about available commands and options.              |
+| `--log_file string`         | Specify file path for logging output.                                       |
+| `--log_level string`        | Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG).               |
+| `--log_terminal`            | Enable logging to terminal.                                                 |
+| `-N, --no`                  | No to all questions.                                                        |
+| `--no_create`               | Skip creation of the data object.                                           |
+| `-q, --quiet`               | Suppress all non-error output messages.                                     |
+| `-r, --reference string`    | Use the modification time of the data object given instead of the current time. Cannot be used with -s. |
+| `-n, --replica int`         | The replica number of the replica to update. Cannot be used with -R.        |
+| `-R, --resource string`     | Target specific iRODS resource server for operations.                       |
+| `--seconds-since-epoch int` | Use the modification time given in seconds since epoch instead of the current time. Cannot be used with -r. |
+| `-s, --session int`         | Specify session identifier for tracking operations (default: parent process ID). |
+| `--timeout int`             | Specify timeout duration in seconds (default 300).                          |
+| `-v, --version`             | Display version information.                                                |
+| `-Y, --yes`                 | Yes to all questions.                                                       |

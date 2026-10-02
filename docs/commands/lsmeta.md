@@ -44,19 +44,27 @@ gocmd lsmeta [flags] <irods-object>...
 
 ## All Available Flags
 
-| Flag                                | Description                                                                 |
-|-------------------------------------|-----------------------------------------------------------------------------|
-| `-c, --config string`               | Set config file or directory (default "/home/iychoi/.irods").               |
-| `-d, --debug`                       | Enable debug mode.                                                          |
-| `-h, --help`                        | Print help.                                                                 |
-| `--log_level string`                | Set log level.                                                              |
-| `-l, --long`                        | Display results in long format with additional details.                     |
-| `-P, --path`                        | Specify that the target is a data object or collection path.                |
-| `-q, --quiet`                       | Suppress usual output messages.                                             |
-| `-R, --resource`                    | Specify that the target is a resource.                                      |
-| `--reverse_sort`                    | Sort results in reverse order.                                              |
-| `-s, --session int`                 | Set session ID (default 256579).                                            |
-| `-S, --sort string`                 | Sort results by: name, size, time, or ext (default "name").                 |
-| `-U, --user`                        | Specify that the target is a user.                                          |
-| `-v, --version`                     | Print version.                                                              |
-| `-L, --verylong`                    | Display results in very long format with comprehensive information.         |
+| Flag                  | Description                                                                 |
+|-----------------------|-----------------------------------------------------------------------------|
+| `-c, --config string` | Set config file or directory (default "/home/myUser/.irods").               |
+| `-d, --debug`         | Enable debug mode.                                                          |
+| `-h, --help`          | Print help.                                                                 |
+| `--log_file string`   | Specify file path for logging output.                                       |
+| `--log_level string`  | Set log level.                                                              |
+| `--log_terminal`      | Enable logging to terminal.                                                 |
+| `-l, --long`          | Display results in long format with additional details.                     |
+| `-N, --no`            | No to all questions.                                                        |
+| `--output_csv`        | Display results in CSV format.                                              |
+| `--output_json`       | Display results in JSON format.                                             |
+| `--output_tsv`        | Display results in TSV format.                                              |
+| `-P, --path`          | Specify that the target is a data object or collection path.                |
+| `-q, --quiet`         | Suppress usual output messages.                                             |
+| `-R, --resource`      | Specify that the target is a resource.                                      |
+| `--reverse_sort`      | Sort results in reverse order.                                              |
+| `-s, --session int`   | Set session ID (default: parent process ID).                                |
+| `-S, --sort string`   | Sort results by: name, size, time, or ext (default "name").                 |
+| `--timeout int`       | Specify timeout duration in seconds (default 300).                          |
+| `-U, --user`          | Specify that the target is a user.                                          |
+| `-v, --version`       | Print version.                                                              |
+| `-L, --verylong`      | Display results in very long format with comprehensive information.         |
+| `-Y, --yes`           | Yes to all questions.                                                       |

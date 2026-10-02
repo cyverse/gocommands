@@ -93,36 +93,43 @@ Use `i:<path>` to specify an iRODS path. Local paths do not require a prefix.
 
 ## All Available Flags
 
-| Flag                  | Description                                                                 |
-|-----------------------|-----------------------------------------------------------------------------|
-| `--age int`           | Exclude files older than the specified age in minutes.                      |
-| `--bulk_upload`       | Enable bulk upload for synchronization.                                     |
-| `-k, --checksum`      | Generate checksum on the server side after data upload (default true).      |
-| `--clear`             | Remove stale bundle files from temporary directories.                       |
-| `-c, --config string` | Specify custom iRODS configuration file or directory path (default "/home/myUser/.irods"). |
-| `-d, --debug`         | Enable verbose debug output for troubleshooting.                            |
-| `--delete`            | Delete extra files in the destination directory.                             |
-| `-h, --help`          | Display help information about available commands and options.              |
-| `--icat`              | Use iCAT for file transfers.                                                 |
-| `--irods_temp string` | iRODS collection path for temporary bundle file uploads.                     |
-| `--local_temp string` | Local directory path for temporary bundle file creation (default "/tmp").    |
-| `--log_level string`  | Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG).               |
-| `--max_file_num int`  | Maximum number of files to include in a single bundle (default 50).          |
-| `--max_file_size string` | Maximum size limit for a single bundle file (default "2147483648").      |
-| `--min_file_num int`  | Minimum number of files to include in a single bundle (default 3).           |
-| `--no_bulk_reg`       | Disable bulk registration of bundle files.                                  |
-| `--no_hash`           | Use file size and modification time instead of hash for file comparison when using '--diff'. |
-| `--no_root`           | Avoid creating the root directory at the destination during operation.       |
-| `--progress`          | Show progress bars during transfer.                                          |
-| `-q, --quiet`         | Suppress all non-error output messages.                                     |
-| `-R, --resource string` | Target specific iRODS resource server for operations.                     |
-| `--retry int`         | Set the number of retry attempts.                                            |
-| `--retry_interval int` | Set the interval between retry attempts in seconds (default 60).            |
-| `-s, --session int`   | Specify session identifier for tracking operations (default 94807).         |
-| `--show_path`         | Show full file paths in progress bars.                                       |
-| `--single_threaded`   | Force single-threaded file transfer.                                         |
-| `--tcp_recv_buffer_size string` | Set the TCP socket receive buffer size (default "0", sized by the system). |
-| `--tcp_send_buffer_size string` | Set the TCP socket send buffer size (default "0", sized by the system). |
-| `--thread_num int`    | Set the number of transfer threads (default 5).                            |
-| `-K, --verify_checksum` | Calculate and verify checksums to ensure data integrity after transfer (default true). |
-| `-v, --version`       | Display version information.                                                |
+| Flag                            | Description                                                                 |
+|---------------------------------|-----------------------------------------------------------------------------|
+| `--age int`                     | Exclude files older than the specified age in minutes.                      |
+| `--bulk_upload`                 | Enable bulk upload for synchronization.                                     |
+| `--clear`                       | Remove stale bundle files from temporary directories.                       |
+| `-c, --config string`           | Specify custom iRODS configuration file or directory path (default "/home/myUser/.irods"). |
+| `-d, --debug`                   | Enable verbose debug output for troubleshooting.                            |
+| `--delete`                      | Delete extra files in the destination directory.                            |
+| `-h, --help`                    | Display help information about available commands and options.              |
+| `--icat`                        | Use iCAT for file transfers.                                                |
+| `--irods_temp string`           | iRODS collection path for temporary bundle file uploads.                    |
+| `--local_temp string`           | Local directory path for temporary bundle file creation (default "/tmp").   |
+| `--log_file string`             | Specify file path for logging output.                                       |
+| `--log_level string`            | Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG).               |
+| `--log_terminal`                | Enable logging to terminal.                                                 |
+| `--max_bundle_size string`      | Maximum size limit for a single bundle file (default "2147483648").         |
+| `--max_file_num int`            | Maximum number of files to include in a single bundle (default 50).         |
+| `--min_file_num int`            | Minimum number of files to include in a single bundle (default 3).          |
+| `-N, --no`                      | No to all questions.                                                        |
+| `--no_bulk_reg`                 | Disable bulk registration of bundle files.                                  |
+| `--no_hash`                     | Use file size and modification time instead of hash for file comparison when using '--diff'. |
+| `--no_root`                     | Avoid creating the root directory at the destination during operation.      |
+| `--progress`                    | Show progress bars during transfer.                                         |
+| `-q, --quiet`                   | Suppress all non-error output messages.                                     |
+| `-R, --resource string`         | Target specific iRODS resource server for operations.                       |
+| `--retry int`                   | Set the number of retry attempts (default 3).                               |
+| `--retry_interval int`          | Set the interval between retry attempts in seconds (default 5).             |
+| `-s, --session int`             | Specify session identifier for tracking operations (default: parent process ID). |
+| `--show_path`                   | Show full file paths in progress bars.                                      |
+| `--single_threaded`             | Force single-threaded file transfer.                                        |
+| `--stop_on_error`               | Stop all transfers immediately when an error occurs.                        |
+| `--tcp_recv_buffer_size string` | Set the TCP socket receive buffer size (default "0").                       |
+| `--tcp_send_buffer_size string` | Set the TCP socket send buffer size (default "0").                          |
+| `--thread_num int`              | Set the total number of transfer threads (default 5).                       |
+| `--thread_num_per_file int`     | Set the number of transfer threads for each file (default 5).               |
+| `--timeout int`                 | Specify timeout duration in seconds (default 300).                          |
+| `-k, --verify_checksum`         | Calculate and verify checksums to ensure data integrity after transfer.     |
+| `-v, --version`                 | Display version information.                                                |
+| `--webdav`                      | Use WebDAV protocol (HTTP) for transfer.                                    |
+| `-Y, --yes`                     | Yes to all questions.                                                       |

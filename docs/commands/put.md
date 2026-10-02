@@ -44,7 +44,7 @@ gocmd put [flags] <local-files-or-dir>... <dest-data-object-or-collection>
 
 6. **Upload and verify checksum:**
     ```sh
-    gocmd put -K /local/path/important_data.txt /myZone/home/myUser/
+    gocmd put -k /local/path/important_data.txt /myZone/home/myUser/
     ```
 
     This command uploads the file and verifies its integrity by calculating a checksum during transfer.
@@ -86,41 +86,48 @@ gocmd put [flags] <local-files-or-dir>... <dest-data-object-or-collection>
 
 ## All Available Flags
 
-| Flag                  | Description                                                                 |
-|-----------------------|-----------------------------------------------------------------------------|
-| `--age int`           | Exclude files older than the specified age in minutes.                      |
-| `-k, --checksum`      | Generate checksum on the server side after data upload.                     |
-| `-c, --config string` | Specify custom iRODS configuration file or directory path (default "/home/myUser/.irods"). |
-| `-d, --debug`         | Enable verbose debug output for troubleshooting.                            |
-| `--delete`            | Delete extra files in the destination directory.                            |
-| `--delete_on_success` | Delete the source file after a successful transfer.                         |
-| `--diff`              | Only transfer files that have different content than existing destination files. |
-| `--encrypt`           | Enable file encryption.                                                     |
-| `--encrypt_key string` | Specify the encryption key for 'winscp' and 'pgp' mode.                    |
-| `--encrypt_mode string` | Specify encryption mode ('winscp', 'pgp', or 'ssh') (default "ssh").      |
-| `--encrypt_pub_key string` | Provide the encryption public (or private) key for 'ssh' mode (default "/home/myUser/.ssh/id_rsa.pub"). |
-| `--encrypt_temp string` | Set a temporary directory path for file encryption (default "/tmp").      |
-| `--exclude_hidden_files` | Skip files and directories that start with '.'.                          |
-| `-f, --force`         | Run operation forcefully, bypassing safety checks.                          |
-| `-h, --help`          | Display help information about available commands and options.              |
-| `--icat`              | Use iCAT for file transfers.                                                |
-| `--ignore_meta`       | Ignore encryption config via metadata.                                      |
-| `--log_level string`  | Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG).               |
-| `--no_encrypt`        | Disable file encryption forcefully.                                         |
-| `--no_hash`           | Use file size and modification time instead of hash for file comparison when using '--diff'. |
-| `--no_root`           | Avoid creating the root directory at the destination during operation.      |
-| `--progress`          | Show progress bars during transfer.                                         |
-| `-q, --quiet`         | Suppress all non-error output messages.                                     |
-| `--report string`     | Create a transfer report; specify the path for file output. An empty string or '-' outputs to stdout. |
-| `-R, --resource string` | Target specific iRODS resource server for operations.                     |
-| `--retry int`         | Set the number of retry attempts.                                           |
-| `--retry_interval int` | Set the interval between retry attempts in seconds (default 60).           |
-| `-s, --session int`   | Specify session identifier for tracking operations (default 94807).         |
-| `--show_path`         | Show full file paths in progress bars.                                      |
-| `--single_threaded`   | Force single-threaded file transfer.                                        |
-| `--tcp_recv_buffer_size string` | Set the TCP socket receive buffer size (default "0", sized by the system). |
-| `--tcp_send_buffer_size string` | Set the TCP socket send buffer size (default "0", sized by the system). |
-| `--thread_num int`    | Set the number of transfer threads (default 5).                             |
-| `-T, --ticket string` | Specify the name of the ticket.                                             |
-| `-K, --verify_checksum` | Calculate and verify checksums to ensure data integrity after transfer.   |
-| `-v, --version`       | Display version information.                                                |
+| Flag                            | Description                                                                 |
+|---------------------------------|-----------------------------------------------------------------------------|
+| `--age int`                     | Exclude files older than the specified age in minutes.                      |
+| `-c, --config string`           | Specify custom iRODS configuration file or directory path (default "/home/myUser/.irods"). |
+| `-d, --debug`                   | Enable verbose debug output for troubleshooting.                            |
+| `--delete`                      | Delete extra files in the destination directory.                            |
+| `--delete_on_success`           | Delete the source file after a successful transfer.                         |
+| `--diff`                        | Only transfer files that have different content than existing destination files. |
+| `--encrypt`                     | Enable file encryption.                                                     |
+| `--encrypt_key string`          | Specify the encryption key for 'winscp' and 'pgp' mode.                     |
+| `--encrypt_mode string`         | Specify encryption mode ('winscp', 'pgp', or 'ssh') (default "ssh").        |
+| `--encrypt_pub_key string`      | Provide the encryption public (or private) key for 'ssh' mode (default "/home/myUser/.ssh/id_rsa.pub"). |
+| `--encrypt_temp string`         | Set a temporary directory path for file encryption (default "/tmp").        |
+| `--exclude_hidden_files`        | Skip files and directories that start with '.'.                             |
+| `-f, --force`                   | Run operation forcefully, bypassing safety checks.                          |
+| `-h, --help`                    | Display help information about available commands and options.              |
+| `--icat`                        | Use iCAT for file transfers.                                                |
+| `--ignore_meta`                 | Ignore encryption config via metadata.                                      |
+| `--log_file string`             | Specify file path for logging output.                                       |
+| `--log_level string`            | Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG).               |
+| `--log_terminal`                | Enable logging to terminal.                                                 |
+| `-N, --no`                      | No to all questions.                                                        |
+| `--no_encrypt`                  | Disable file encryption forcefully.                                         |
+| `--no_hash`                     | Use file size and modification time instead of hash for file comparison when using '--diff'. |
+| `--no_root`                     | Avoid creating the root directory at the destination during operation.      |
+| `--progress`                    | Show progress bars during transfer.                                         |
+| `-q, --quiet`                   | Suppress all non-error output messages.                                     |
+| `--report string`               | Create a transfer report; specify the path for file output. An empty string or '-' outputs to stdout. |
+| `-R, --resource string`         | Target specific iRODS resource server for operations.                       |
+| `--retry int`                   | Set the number of retry attempts (default 3).                               |
+| `--retry_interval int`          | Set the interval between retry attempts in seconds (default 5).             |
+| `-s, --session int`             | Specify session identifier for tracking operations (default: parent process ID). |
+| `--show_path`                   | Show full file paths in progress bars.                                      |
+| `--single_threaded`             | Force single-threaded file transfer.                                        |
+| `--stop_on_error`               | Stop all transfers immediately when an error occurs.                        |
+| `--tcp_recv_buffer_size string` | Set the TCP socket receive buffer size (default "0").                       |
+| `--tcp_send_buffer_size string` | Set the TCP socket send buffer size (default "0").                          |
+| `--thread_num int`              | Set the total number of transfer threads (default 5).                       |
+| `--thread_num_per_file int`     | Set the number of transfer threads for each file (default 5).               |
+| `-T, --ticket string`           | Specify the name of the ticket.                                             |
+| `--timeout int`                 | Specify timeout duration in seconds (default 300).                          |
+| `-k, --verify_checksum`         | Calculate and verify checksums to ensure data integrity after transfer.     |
+| `-v, --version`                 | Display version information.                                                |
+| `--webdav`                      | Use WebDAV protocol (HTTP) for transfer.                                    |
+| `-Y, --yes`                     | Yes to all questions.                                                       |

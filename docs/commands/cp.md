@@ -55,27 +55,34 @@ gocmd cp [flags] <source-data-object-or-collection>... <target-data-object-or-co
 
 ## All Available Flags
 
-| Flag                                | Description                                                                 |
-|-------------------------------------|-----------------------------------------------------------------------------|
-| `--age int`                          | Exclude files older than the specified age in minutes.                     |
-| `-c, --config string`               | Specify custom iRODS configuration file or directory path (default "/home/myUser/.irods"). |
-| `-d, --debug`                        | Enable verbose debug output for troubleshooting.                           |
-| `--delete`                           | Delete extra files in the destination directory.                            |
-| `--diff`                             | Only transfer files that have different content than existing destination files. |
-| `--exclude_hidden_files`             | Skip files and directories that start with '.'.                             |
-| `-f, --force`                        | Run operation forcefully, bypassing safety checks.                          |
-| `-h, --help`                         | Display help information about available commands and options.             |
-| `--log_level string`                 | Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG).              |
-| `--no_hash`                          | Use file size and modification time instead of hash for file comparison when using '--diff'. |
-| `--no_root`                          | Avoid creating the root directory at the destination during operation.    |
-| `--progress`                         | Show progress bars during transfer.                                       |
-| `-q, --quiet`                        | Suppress all non-error output messages.                                    |
-| `-r, --recursive`                    | Recursively process operations for collections and their contents.        |
-| `--report string`                    | Create a transfer report; specify the path for file output. An empty string or '-' outputs to stdout. |
-| `-R, --resource string`               | Target specific iRODS resource server for operations.                     |
-| `--retry int`                        | Set the number of retry attempts.                                          |
-| `--retry_interval int`                | Set the interval between retry attempts in seconds (default 60).          |
-| `-s, --session int`                  | Specify session identifier for tracking operations (default 42938).        |
-| `--show_path`                        | Show full file paths in progress bars.                                     |
-| `-v, --version`                      | Display version information.                                                |
-| `-w, --wildcard`                     | Enable wildcard expansion to search for source files.                      |
+| Flag                     | Description                                                                 |
+|--------------------------|-----------------------------------------------------------------------------|
+| `--age int`              | Exclude files older than the specified age in minutes.                      |
+| `-c, --config string`    | Specify custom iRODS configuration file or directory path (default "/home/myUser/.irods"). |
+| `-d, --debug`            | Enable verbose debug output for troubleshooting.                            |
+| `--delete`               | Delete extra files in the destination directory.                            |
+| `--diff`                 | Only transfer files that have different content than existing destination files. |
+| `--exclude_hidden_files` | Skip files and directories that start with '.'.                             |
+| `-f, --force`            | Run operation forcefully, bypassing safety checks.                          |
+| `-h, --help`             | Display help information about available commands and options.              |
+| `--log_file string`      | Specify file path for logging output.                                       |
+| `--log_level string`     | Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG).               |
+| `--log_terminal`         | Enable logging to terminal.                                                 |
+| `-N, --no`               | No to all questions.                                                        |
+| `--no_hash`              | Use file size and modification time instead of hash for file comparison when using '--diff'. |
+| `--no_root`              | Avoid creating the root directory at the destination during operation.      |
+| `--progress`             | Show progress bars during transfer.                                         |
+| `-q, --quiet`            | Suppress all non-error output messages.                                     |
+| `-r, --recursive`        | Recursively process operations for collections and their contents.          |
+| `--report string`        | Create a transfer report; specify the path for file output. An empty string or '-' outputs to stdout. |
+| `-R, --resource string`  | Target specific iRODS resource server for operations.                       |
+| `--retry int`            | Set the number of retry attempts (default 3).                               |
+| `--retry_interval int`   | Set the interval between retry attempts in seconds (default 5).             |
+| `-s, --session int`      | Specify session identifier for tracking operations (default: parent process ID). |
+| `--show_path`            | Show full file paths in progress bars.                                      |
+| `--stop_on_error`        | Stop all transfers immediately when an error occurs.                        |
+| `--timeout int`          | Specify timeout duration in seconds (default 300).                          |
+| `-k, --verify_checksum`  | Calculate and verify checksums to ensure data integrity after transfer.     |
+| `-v, --version`          | Display version information.                                                |
+| `-w, --wildcard`         | Enable wildcard expansion to search for source files.                       |
+| `-Y, --yes`              | Yes to all questions.                                                       |

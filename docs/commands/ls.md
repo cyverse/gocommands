@@ -223,27 +223,36 @@ gocmd ls [flags] <data-object-or-collection>...
 
 ## All Available Flags
 
-| Flag                                | Description                                                                 |
-|-------------------------------------|-----------------------------------------------------------------------------|
-| `-A, --access`                      | Display access control lists for data-objects and collections.              |
-| `-c, --config string`               | Specify custom iRODS configuration file or directory path (default "/home/myUser/.irods"). |
-| `-d, --debug`                       | Enable verbose debug output for troubleshooting.                            |
-| `--decrypt`                         | Enable file decryption (default true).                                      |
-| `--decrypt_key string`              | Specify the decryption key for 'winscp' or 'pgp' modes.                     |
-| `--decrypt_priv_key string`         | Provide the decryption private key for 'ssh' mode (default "/home/myUser/.ssh/id_rsa"). |
-| `--decrypt_temp string`             | Set a temporary directory for file decryption (default "/tmp").             |
-| `--exclude_hidden_files`            | Skip files and directories that start with '.'.                             |
-| `-h, --help`                        | Display help information about available commands and options.              |
-| `-H, --human_readable`              | Show file sizes in human-readable units (KB, MB, GB).                       |
-| `--log_level string`                | Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG).               |
-| `-l, --long`                        | Display results in long format with additional details.                     |
-| `--no_decrypt`                      | Disable file decryption forcefully.                                         |
-| `-q, --quiet`                       | Suppress all non-error output messages.                                     |
-| `-R, --resource string`             | Target specific iRODS resource server for operations.                       |
-| `--reverse_sort`                    | Sort results in reverse order.                                              |
-| `-s, --session int`                 | Specify session identifier for tracking operations (default 313985).        |
-| `-S, --sort string`                 | Sort results by: name, size, time, or ext (default "name").                 |
-| `-T, --ticket string`               | Specify the name of the ticket.                                             |
-| `-v, --version`                     | Display version information.                                                |
-| `-L, --verylong`                    | Display results in very long format with comprehensive information.         |
-| `-w, --wildcard`                    | Enable wildcard expansion to search for source files.                       |
+| Flag                        | Description                                                                 |
+|-----------------------------|-----------------------------------------------------------------------------|
+| `-A, --access`              | Display access control lists for data-objects and collections.              |
+| `-c, --config string`       | Specify custom iRODS configuration file or directory path (default "/home/myUser/.irods"). |
+| `-d, --debug`               | Enable verbose debug output for troubleshooting.                            |
+| `--decrypt`                 | Enable file decryption (default true).                                      |
+| `--decrypt_key string`      | Specify the decryption key for 'winscp' or 'pgp' modes.                     |
+| `--decrypt_priv_key string` | Provide the decryption private key for 'ssh' mode (default "/home/myUser/.ssh/id_rsa"). |
+| `--decrypt_temp string`     | Set a temporary directory for file decryption (default "/tmp").             |
+| `--exclude_hidden_files`    | Skip files and directories that start with '.'.                             |
+| `-h, --help`                | Display help information about available commands and options.              |
+| `-H, --human_readable`      | Show file sizes in human-readable units (KB, MB, GB).                       |
+| `--log_file string`         | Specify file path for logging output.                                       |
+| `--log_level string`        | Set logging verbosity level (e.g., INFO, WARN, ERROR, DEBUG).               |
+| `--log_terminal`            | Enable logging to terminal.                                                 |
+| `-l, --long`                | Display results in long format with additional details.                     |
+| `-N, --no`                  | No to all questions.                                                        |
+| `--no_decrypt`              | Disable file decryption forcefully.                                         |
+| `--output_csv`              | Display results in CSV format.                                              |
+| `--output_json`             | Display results in JSON format.                                             |
+| `--output_legacy`           | Display results in old-iCommands format.                                    |
+| `--output_tsv`              | Display results in TSV format.                                              |
+| `-q, --quiet`               | Suppress all non-error output messages.                                     |
+| `-R, --resource string`     | Target specific iRODS resource server for operations.                       |
+| `--reverse_sort`            | Sort results in reverse order.                                              |
+| `-s, --session int`         | Specify session identifier for tracking operations (default: parent process ID). |
+| `-S, --sort string`         | Sort results by: name, size, time, or ext (default "name").                 |
+| `-T, --ticket string`       | Specify the name of the ticket.                                             |
+| `--timeout int`             | Specify timeout duration in seconds (default 300).                          |
+| `-v, --version`             | Display version information.                                                |
+| `-L, --verylong`            | Display results in very long format with comprehensive information.         |
+| `-w, --wildcard`            | Enable wildcard expansion to search for source files.                       |
+| `-Y, --yes`                 | Yes to all questions.                                                       |

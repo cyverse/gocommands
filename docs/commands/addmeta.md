@@ -46,15 +46,20 @@ gocmd addmeta [flags] <irods-object> <metadata-name> <metadata-value> [metadata-
 
 ## All Available Flags
 
-| Flag                                | Description                                                                 |
-|-------------------------------------|-----------------------------------------------------------------------------|
-| `-c, --config string`               | Set config file or directory (default "/home/iychoi/.irods").               |
-| `-d, --debug`                       | Enable debug mode.                                                          |
-| `-h, --help`                        | Print help.                                                                 |
-| `--log_level string`                | Set log level.                                                              |
-| `-P, --path`                        | Specify that the target is a data object or collection path.                |
-| `-q, --quiet`                       | Suppress usual output messages.                                             |
-| `-R, --resource`                    | Specify that the target is a resource.                                      |
-| `-s, --session int`                 | Set session ID (default 256579).                                            |
-| `-U, --user`                        | Specify that the target is a user.                                          |
-| `-v, --version`                     | Print version.                                                              |
+| Flag                  | Description                                                                 |
+|-----------------------|-----------------------------------------------------------------------------|
+| `-c, --config string` | Set config file or directory (default "/home/myUser/.irods").               |
+| `-d, --debug`         | Enable debug mode.                                                          |
+| `-h, --help`          | Print help.                                                                 |
+| `--log_file string`   | Specify file path for logging output.                                       |
+| `--log_level string`  | Set log level.                                                              |
+| `--log_terminal`      | Enable logging to terminal.                                                 |
+| `-N, --no`            | No to all questions.                                                        |
+| `-P, --path`          | Specify that the target is a data object or collection path.                |
+| `-q, --quiet`         | Suppress usual output messages.                                             |
+| `-R, --resource`      | Specify that the target is a resource.                                      |
+| `-s, --session int`   | Set session ID (default: parent process ID).                                |
+| `--timeout int`       | Specify timeout duration in seconds (default 300).                          |
+| `-U, --user`          | Specify that the target is a user.                                          |
+| `-v, --version`       | Print version.                                                              |
+| `-Y, --yes`           | Yes to all questions.                                                       |
