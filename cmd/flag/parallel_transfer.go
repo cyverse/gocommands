@@ -47,7 +47,6 @@ func SetParallelTransferFlags(command *cobra.Command, hideParallelConfig bool, h
 		command.Flags().MarkHidden("single_threaded")
 		command.Flags().MarkHidden("webdav")
 		command.Flags().MarkHidden("redirect")
-		command.Flags().MarkHidden("redirect")
 	}
 
 	if hideSingleThread {
