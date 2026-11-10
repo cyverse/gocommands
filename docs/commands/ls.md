@@ -195,7 +195,7 @@ gocmd ls [flags] <data-object-or-collection>...
       C- /myZone/home/myUser/mydata_sort/Radish
     ```
 
-10. **List the contents of a collection with wildcard expansion to search.**
+11. **List the contents of a collection with wildcard expansion to search.**
     ```sh
     gocmd ls -w /myZone/home/myUser/mydata_sort/*a*
     ```
@@ -220,6 +220,25 @@ gocmd ls [flags] <data-object-or-collection>...
       - `*`: Matches any number of characters.
       - `[abc]`: Matches any one of the specified characters.
 
+
+12. **List the contents of a collection, with quoting to make whitespace in names more visible**
+
+    ```sh
+    gocmd ls -Q /testZone/home/research-project/dir
+    ```
+
+    This command lists data objects and collections within `dir`, and quotes the names in a way
+    that makes it easier to spot unusual whitespaces, such as trailing spaces and newlines. This
+    is somewhat similar to the `-Q` option of the GNU coreutils `ls` command.
+
+    ```sh
+    TYPE        PATH
+    collection  /testZone/home/research-project/dir
+
+    data-object  "file\tname\twithtab.txt"        0     rods                2026-11-10.22:04
+    data-object  "file\nwith\nnewline.txt"        0     rods                2026-11-10.22:00
+    data-object  "file-with-trailing-space.txt "  0     rods                2026-11-10.22:01
+    ```
 
 ## All Available Flags
 
@@ -246,6 +265,7 @@ gocmd ls [flags] <data-object-or-collection>...
 | `--output_legacy`           | Display results in old-iCommands format.                                    |
 | `--output_tsv`              | Display results in TSV format.                                              |
 | `-q, --quiet`               | Suppress all non-error output messages.                                     |
+| `-Q, --quote_names`         | Quote data object and collection names in C style.                          |
 | `-R, --resource string`     | Target specific iRODS resource server for operations.                       |
 | `--reverse_sort`            | Sort results in reverse order.                                              |
 | `-s, --session int`         | Specify session identifier for tracking operations (default: parent process ID). |
