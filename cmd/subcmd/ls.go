@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -45,7 +46,7 @@ func AddLsCommand(rootCmd *cobra.Command) {
 	// attach common flags
 	flag.SetCommonFlags(lsCmd, false)
 	flag.SetOutputFormatFlags(lsCmd, false)
-	flag.SetListFlags(lsCmd, false, false)
+	flag.SetListFlags(lsCmd, false, false, false)
 	flag.SetTicketAccessFlags(lsCmd)
 	flag.SetDecryptionFlags(lsCmd)
 	flag.SetHiddenFileFlags(lsCmd)
@@ -467,6 +468,7 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 			}
 
 			desc := ""
+
 			if ls.requireDecryption(entry.Path) {
 				// need to decrypt
 				encryptionMode := encryption.DetectEncryptionMode(newName)
@@ -485,6 +487,10 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 						desc = "(" + desc + ")"
 					}
 				}
+			}
+
+			if ls.listFlagValues.QuoteNames {
+				newName = ls.quoteName(newName)
 			}
 
 			size := fmt.Sprintf("%v", entry.Size)
@@ -548,6 +554,9 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 			newName := entry.Name
 			if showFullPath {
 				newName = entry.Path
+			}
+			if ls.listFlagValues.QuoteNames {
+				newName = ls.quoteName(newName)
 			}
 
 			owner := entry.Owner
@@ -760,6 +769,10 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 				}
 			}
 
+			if ls.listFlagValues.QuoteNames {
+				newName = ls.quoteName(newName)
+			}
+
 			size := fmt.Sprintf("%v", replica.DataObject.Size)
 			if ls.listFlagValues.HumanReadableSizes {
 				size = humanize.Bytes(uint64(replica.DataObject.Size))
@@ -901,6 +914,10 @@ func (ls *LsCommand) printDataObjectsAndCollections(outputFormatter *format.Outp
 			newName := entry.Name
 			if showFullPath {
 				newName = entry.Path
+			}
+
+			if ls.listFlagValues.QuoteNames {
+				newName = ls.quoteName(newName)
 			}
 
 			switch ls.listFlagValues.Format {
@@ -1254,4 +1271,8 @@ func (ls *LsCommand) getStatusMark(status string, simple bool) string {
 		}
 		return "Unknown"
 	}
+}
+
+func (ls *LsCommand) quoteName(input string) string {
+	return strconv.QuoteToGraphic(input)
 }
